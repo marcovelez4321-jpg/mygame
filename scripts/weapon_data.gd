@@ -76,3 +76,13 @@ enum ReloadStyle {
 @export var muzzle_offset: Vector3 = Vector3(0.0, 0.02, -0.35)
 ## Colour of the stand-in block used until a real model is assigned.
 @export var placeholder_color: Color = Color(0.7, 0.7, 0.7)
+
+@export_group("Sound")
+## Played (non-positional, see sound_player.gd's play_2d) each time this
+## weapon fires. One weapon, one SoundEvent -- no code needed to give a new
+## weapon its own gunshot, just fill in its .tres.
+@export var fire_sound: SoundEvent
+@export var reload_sound: SoundEvent
+## Plays when switching TO this weapon (not away from it) -- skipped for the
+## very first weapon at spawn, see weapon_sound.gd's _on_weapon_switched().
+@export var switch_sound: SoundEvent

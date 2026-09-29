@@ -1,9 +1,21 @@
+class_name PlayerMovement
 extends CharacterBody3D
 
 ## Quake 3 strafe-jumping movement. Locked to a single style (no more
 ## CPMA/Hybrid presets) so every constant here is a real, final competitive
 ## number a networked build has to reproduce exactly on the server -- not a
 ## design option to keep re-deriving later.
+
+## Presentation-only events for sound (player_sound.gd) -- fired at the exact
+## points the existing camera shake/kick calls already mark as "this
+## happened" (see _simulate_movement()'s jump branch, _start_dash(),
+## _wall_jump()). Nothing in simulation reads these back; they exist purely
+## so a listener can react, the same reason weapon_controller.gd has
+## shot_fired/hit_confirmed.
+signal jumped
+signal dashed
+signal wall_jumped
+signal mantled
 
 @export_group("Mouse")
 @export var mouse_sensitivity: float = 0.0025
@@ -83,6 +95,29 @@ extends CharacterBody3D
 @export var wall_jump_look_speed: float = 5.0
 @export var wall_jump_up_velocity: float = 11.0
 
+@export_group("Mantle")
+## Turns mantling on/off entirely.
+@export var mantle_enabled: bool = true
+## How far ahead (meters) the wall-detection probe reaches -- short on
+## purpose, this is "is there a ledge basically right in front of my face",
+## not a long-range grapple.
+@export var mantle_forward_distance: float = 1.0
+## Ledge height range (meters), measured from the player's feet, that counts
+## as mantleable. Below mantle_min_height, _try_step_up() already carries you
+## up silently with no space press needed -- keep this at or above
+## step_height so there's no dead zone between the two systems. Above
+## mantle_max_height it's just out of reach.
+@export var mantle_min_height: float = 0.6
+@export var mantle_max_height: float = 2.1
+## How long the pull-up itself takes once triggered.
+@export var mantle_duration: float = 0.35
+## Rule 3 (competitive balance): a mantle is a MOVEMENT tool, not free
+## verticality -- it reaches ledges you could otherwise only get to with a
+## jump/dash/wall-jump combo, it doesn't let you skip needing one. Revisit
+## mantle_max_height if playtesting shows it trivializing a height an
+## opponent has to actually work for.
+@export var mantle_cooldown: float = 0.4
+
 @export_group("Enemy Stomp")
 ## Hitting an enemy while airborne at at least this total speed (m/s, the
 ## full 3D velocity, not just horizontal) counts as a stomp instead of just
@@ -122,6 +157,16 @@ class PlayerInput:
 	var reload: bool = false
 	var grab: bool = false
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
+
+## Result of _find_mantle_ledge(): whether a valid ledge was found, and where
+## its landing spot is. A plain bool return can't also carry a position
+## cleanly, and Vector3.ZERO is a real, reachable world position (unlike
+## _find_wall_behind()'s use of it for a normal, which is never zero-length
+## when valid) -- so this is its own tiny result type instead, same idea as
+## PlayerInput itself.
+class MantleTarget:
+	var found: bool = false
+	var position: Vector3 = Vector3.ZERO
 
 @onready var head: Node3D = $Head
 @onready var camera: CameraJuice = $Head/Camera3D
@@ -164,6 +209,13 @@ var _dash_dir: Vector3 = Vector3.ZERO
 ## Reset to false wherever landing and dashing already happen (see
 ## is_on_floor() branch below and _start_dash()), set true in _wall_jump().
 var _wall_jumped_since_reset := false
+
+## Seconds left in an in-progress mantle; <= 0 means not mantling. The actual
+## climb is driven by a Tween (see _start_mantle()) animating global_position
+## directly; this timer just gates "skip normal movement" in
+## _simulate_movement() for the same span, so the two can't drift apart.
+var _mantle_time_left: float = 0.0
+var _mantle_cooldown_left: float = 0.0
 
 # Reused every tick instead of allocating new ones (Rule 2: no per-frame
 # allocations in the physics loop).
@@ -263,6 +315,28 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	_pitch = clamp(_pitch - input.look_delta.y, deg_to_rad(-89.0), deg_to_rad(89.0))
 	head.rotation.x = _pitch
 
+	_mantle_cooldown_left = maxf(_mantle_cooldown_left - delta, 0.0)
+
+	# Already mid-mantle: run the scripted pull-up and skip everything else
+	# below (gravity, ground/air movement, wall jump) until it finishes --
+	# see _update_mantle()'s own comment for why this is a direct position
+	# move rather than velocity + move_and_slide like the rest of this file.
+	if _mantle_time_left > 0.0:
+		_update_mantle(delta)
+		_finish_tick(input, delta)
+		return
+
+	# A fresh space press: check for a mantleable ledge BEFORE falling through
+	# to the normal jump/wall-jump handling below, so a successful mantle
+	# consumes the press instead of also triggering a jump this same tick.
+	var fresh_jump: bool = input.want_jump and not _jump_held_prev
+	if fresh_jump and mantle_enabled and _mantle_cooldown_left <= 0.0:
+		var ledge := _find_mantle_ledge()
+		if ledge.found:
+			_start_mantle(ledge.position)
+			_finish_tick(input, delta)
+			return
+
 	_update_stamina(delta)
 	_dash_cooldown_left = maxf(_dash_cooldown_left - delta, 0.0)
 	_dash_time_left = maxf(_dash_time_left - delta, 0.0)
@@ -283,6 +357,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
 		if do_jump:
 			velocity.y = jump_velocity
+			jumped.emit()
 		_try_step_up(delta)
 	else:
 		velocity.y -= gravity * delta
@@ -298,7 +373,9 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		# whatever direction you're holding. Only one per ground touch/dash
 		# (_wall_jumped_since_reset) -- otherwise you could just ping-pong
 		# between two walls forever and never actually fall.
-		var fresh_jump: bool = input.want_jump and not _jump_held_prev
+		# fresh_jump was already computed above (before the mantle check), and
+		# _jump_held_prev doesn't change until _finish_tick() at the end of
+		# this same tick, so it's still valid to reuse here.
 		if fresh_jump and not _wall_jumped_since_reset:
 			var wall_normal := _find_wall_behind()
 			if wall_normal != Vector3.ZERO and _spend_stamina():
@@ -307,9 +384,6 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	if _dash_time_left > 0.0:
 		velocity.x = _dash_dir.x * dash_speed
 		velocity.z = _dash_dir.z * dash_speed
-
-	_jump_held_prev = input.want_jump
-	_dash_held_prev = input.want_dash
 
 	# Captured right before move_and_slide() changes anything, so the stomp
 	# check below judges the speed that actually went INTO the hit, not
@@ -320,6 +394,18 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 
 	if was_airborne:
 		_check_enemy_stomp(pre_slide_speed)
+
+	_finish_tick(input, delta)
+
+
+## Shared tail end of a tick: remembers this tick's held-button state for
+## next tick's "fresh press" checks, then hands off to weapons/grabber. Every
+## exit point of _simulate_movement() (normal movement, and the two early
+## mantle returns above) goes through this so none of them can forget a step
+## the others do.
+func _finish_tick(input: PlayerInput, delta: float) -> void:
+	_jump_held_prev = input.want_jump
+	_dash_held_prev = input.want_dash
 
 	# Aim comes from the player's own state (head position and facing), not
 	# from the camera, so a server can rebuild the same shot (Rule 1).
@@ -371,6 +457,7 @@ func _start_dash(wishdir: Vector3) -> void:
 
 	camera.shake(2.0)
 	camera.kick_fov(12.0)
+	dashed.emit()
 
 
 ## Kicks off the wall found at our back, toward wherever we're actually
@@ -395,6 +482,7 @@ func _wall_jump(wall_normal: Vector3) -> void:
 	_wall_jumped_since_reset = true
 	camera.shake(3.0)
 	camera.kick_fov(6.0)
+	wall_jumped.emit()
 
 
 ## Is there a wall at our BACK? A position check, not "am I actively
@@ -431,6 +519,107 @@ func _find_wall_behind() -> Vector3:
 		if not result.is_empty():
 			return result.normal
 	return Vector3.ZERO
+
+
+## Looks for a ledge worth pulling yourself up onto: a roughly vertical wall
+## in front of you, with a flat surface within mantle range just above it.
+## Only called on a fresh jump press (see _simulate_movement()), so like
+## _find_wall_behind() it's fine to allocate fresh query objects here rather
+## than reuse the cached _step_params/_step_result -- this never runs in a
+## hot per-tick path.
+##
+## Two-ray probe, the standard mantle technique: a forward ray finds the
+## wall, then a downward ray from above it finds where the wall stops being
+## a wall (its top surface).
+func _find_mantle_ledge() -> MantleTarget:
+	var result := MantleTarget.new()
+	var space := get_world_3d().direct_space_state
+
+	# The camera's OWN look direction, pitch included -- not just the body's
+	# horizontal facing. This is what makes "you have to be looking at the
+	# ledge" literally true: aim down at your feet or up at the sky and this
+	# ray simply won't find a wall to grab.
+	var look_dir := -head.global_transform.basis.z
+	var eye := head.global_position
+
+	var wall_query := PhysicsRayQueryParameters3D.create(eye, eye + look_dir * mantle_forward_distance)
+	wall_query.exclude = [get_rid()]
+	wall_query.collision_mask = 1
+	var wall_hit := space.intersect_ray(wall_query)
+	if wall_hit.is_empty():
+		return result
+	# Reject floor/steep-slope hits (looking down) and ceiling hits (looking
+	# up) -- a mantleable ledge is a roughly VERTICAL wall, not a ramp.
+	var wall_normal: Vector3 = wall_hit.normal
+	if absf(wall_normal.y) > 0.3:
+		return result
+
+	# From above and just past the wall, straight down, to find its top --
+	# the second half of the two-ray probe.
+	var flat_look := Vector3(look_dir.x, 0.0, look_dir.z).normalized()
+	var probe_xz: Vector3 = (wall_hit.position as Vector3) + flat_look * 0.2
+	var probe_top := Vector3(probe_xz.x, global_position.y + mantle_max_height, probe_xz.z)
+	var probe_bottom := Vector3(probe_xz.x, global_position.y + mantle_min_height, probe_xz.z)
+	var top_query := PhysicsRayQueryParameters3D.create(probe_top, probe_bottom)
+	top_query.exclude = [get_rid()]
+	top_query.collision_mask = 1
+	var top_hit := space.intersect_ray(top_query)
+	if top_hit.is_empty():
+		return result # nothing to stand on within mantle range -- too tall, or open air past the wall
+	if (top_hit.normal as Vector3).y < 0.7:
+		return result # not flat enough to land on
+
+	var landing: Vector3 = top_hit.position
+	landing.y += 0.05 # small clearance so the capsule doesn't spawn embedded in the surface
+
+	# Clearance check: does the player's own shape actually fit there? Same
+	# body_test_motion technique _try_step_up() uses -- catches a ledge too
+	# shallow or a low ceiling that would otherwise mantle you INTO geometry.
+	var landing_transform := global_transform
+	landing_transform.origin = landing
+	_step_params.from = landing_transform
+	_step_params.motion = Vector3.UP * 0.01
+	if PhysicsServer3D.body_test_motion(get_rid(), _step_params, _step_result):
+		return result
+
+	result.found = true
+	result.position = landing
+	return result
+
+
+## Kicks off the scripted pull-up: a Tween animates global_position straight
+## to the ledge over mantle_duration, eased out (fast start, soft landing) so
+## it reads as a climb, not a teleport-slide -- the same Tween-driven
+## animate-a-property approach viewmodel.gd already uses for its switch/
+## reload animations and hud.gd uses for its fades, rather than hand-rolled
+## per-tick lerp math (Rule 2: reuse what the codebase already reaches for).
+## Tied to the physics step (TWEEN_PROCESS_PHYSICS) since that's what drives
+## every other movement in this file, and a direct position move rather than
+## velocity + move_and_slide because the target is a specific point that has
+## to be reached exactly, not a direction to accelerate toward and slide
+## against -- the same reasoning _try_step_up() uses for its own direct
+## position nudge, just sustained over the Tween's span instead of one tick.
+## Untested at time of writing (no Godot executable available in this
+## environment -- same caveat _try_step_up() shipped with).
+func _start_mantle(target: Vector3) -> void:
+	_mantle_time_left = mantle_duration
+	velocity = Vector3.ZERO
+	mantled.emit()
+
+	var tween := create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tween.tween_property(self, "global_position", target, mantle_duration) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+## Just the gating timer -- see its own comment. The Tween started in
+## _start_mantle() is independently animating global_position over this same
+## span and always lands exactly on target, so there's nothing left to do
+## here but start the cooldown once it's run out.
+func _update_mantle(delta: float) -> void:
+	_mantle_time_left = maxf(_mantle_time_left - delta, 0.0)
+	if _mantle_time_left <= 0.0:
+		_mantle_cooldown_left = mantle_cooldown
 
 
 ## Mario-stomp/skip-off-an-enemy, Quake-movement style: hit an enemy while

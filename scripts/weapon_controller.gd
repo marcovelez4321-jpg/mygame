@@ -35,6 +35,14 @@ signal reload_started(duration: float)
 ## Any kill (artery or otherwise) landed close enough to splash blood on the
 ## player's own screen. Presentation only (hud.gd's screen droplets).
 signal gory_kill_nearby
+## An artery (neck) hit finished someone off. Presentation only
+## (weapon_sound.gd's distinct kill sound) -- fires alongside hit_confirmed
+## (true), not instead of it. Carries the neck bone itself (not just a
+## position) so a listener can attach a SOUND to it the same way
+## _spawn_artery_spurt() below attaches the blood particles -- it keeps
+## following the spurt as the ragdoll falls and settles, instead of playing
+## from one fixed point in empty air.
+signal artery_kill(bone: Node3D)
 
 ## Everything the host needs to judge one shot.
 class Shot:
@@ -353,6 +361,7 @@ func _spawn_artery_spurt(collider: Node) -> void:
 	for bone in own_bones:
 		exclude_rids.append((bone as PhysicalBone3D).get_rid())
 	BloodFX.spawn_artery_spurt(neck_bone, 7.0, exclude_rids)
+	artery_kill.emit(neck_bone)
 
 
 ## Same trick as player_movement.gd's _hit_stop(): briefly slows the whole

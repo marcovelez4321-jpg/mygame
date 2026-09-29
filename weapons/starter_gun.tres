@@ -2,6 +2,9 @@
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://i02bor72sm53" path="res://art/weapons/PSX_Guns/FBX/Pistol.fbx" id="2_uyk3g"]
+[ext_resource type="Resource" path="res://audio/events/weapon_fire_default.tres" id="3_fire"]
+[ext_resource type="Resource" path="res://audio/events/weapon_reload_default.tres" id="4_reload"]
+[ext_resource type="Resource" path="res://audio/events/weapon_switch_default.tres" id="5_switch"]
 
 [resource]
 script = ExtResource("1")
@@ -12,3 +15,6 @@ viewmodel_position = Vector3(0.13848448, -0.14979507, -0.25312716)
 viewmodel_rotation_degrees = Vector3(0, -95.03305, 0)
 muzzle_offset = Vector3(-0.08218318, 0.05347711, 0.033439215)
 placeholder_color = Color(0.85, 0.75, 0.3, 1)
+fire_sound = ExtResource("3_fire")
+reload_sound = ExtResource("4_reload")
+switch_sound = ExtResource("5_switch")

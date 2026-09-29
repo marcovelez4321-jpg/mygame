@@ -14,6 +14,12 @@
 [ext_resource type="Animation" uid="uid://cwr0l6fv2mgoe" path="res://art/animations/Walk3.res" id="11_5woo5"]
 [ext_resource type="Script" uid="uid://bpwwcfd6be8dy" path="res://scripts/enemy_ragdoll.gd" id="13_dtxhd"]
 [ext_resource type="Animation" uid="uid://trmk3k85ioja" path="res://art/animations/Run.res" id="14_run"]
+[ext_resource type="Script" path="res://scripts/enemy_sound.gd" id="30_snd"]
+[ext_resource type="Resource" path="res://audio/events/enemy_idle.tres" id="31_idle"]
+[ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="32_hurt"]
+[ext_resource type="Resource" path="res://audio/events/enemy_death.tres" id="33_death"]
+[ext_resource type="Resource" path="res://audio/events/enemy_attack.tres" id="34_atk"]
+[ext_resource type="Resource" path="res://audio/events/enemy_footstep.tres" id="35_step"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_tt7e2"]
 radius = 0.4
@@ -504,5 +510,13 @@ angular_damping = 1.0
 path_desired_distance = 0.5
 target_desired_distance = 0.5
 radius = 0.4
+
+[node name="EnemySound" type="Node" parent="." unique_id=900001004]
+script = ExtResource("30_snd")
+idle_sound = ExtResource("31_idle")
+hurt_sound = ExtResource("32_hurt")
+death_sound = ExtResource("33_death")
+attack_sound = ExtResource("34_atk")
+footstep_sound = ExtResource("35_step")
 
 [editable path="Model"]

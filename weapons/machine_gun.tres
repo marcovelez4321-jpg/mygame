@@ -2,6 +2,9 @@
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://doj6tojorb7yi" path="res://art/weapons/PSX_Guns/FBX/UZI.fbx" id="2_5umog"]
+[ext_resource type="Resource" path="res://audio/events/weapon_fire_default.tres" id="3_fire"]
+[ext_resource type="Resource" path="res://audio/events/weapon_reload_default.tres" id="4_reload"]
+[ext_resource type="Resource" path="res://audio/events/weapon_switch_default.tres" id="5_switch"]
 
 [resource]
 script = ExtResource("1")
@@ -20,3 +23,6 @@ viewmodel_rotation_degrees = Vector3(1.9469497, 83.96987, -0.0009519756)
 viewmodel_scale = 1.21703299951959
 muzzle_offset = Vector3(0.23075956, 0.055910334, -0.021475445)
 placeholder_color = Color(0.3, 0.5, 0.85, 1)
+fire_sound = ExtResource("3_fire")
+reload_sound = ExtResource("4_reload")
+switch_sound = ExtResource("5_switch")

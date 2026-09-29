@@ -30,6 +30,14 @@ const SCREEN_BLOOD_FADE_TIME := 0.7
 @onready var health_label: Label = $HealthLabel
 @onready var death_label: Label = $DeathLabel
 @onready var crosshair: ColorRect = $Crosshair
+## Quake 2-style hit indicator: thin ticks at the crosshair's four sides that
+## flash red on a confirmed hit. Modeled as its own effect, separate from the
+## crosshair's own color tint below -- Quake 2's HUD options list "hit
+## indicator" (red ticks in the crosshair) as a DISTINCT toggle from
+## "hitmarker" (a separate marker near the crosshair), so this is its own
+## fade rather than folded into the crosshair flash (Rule 6: grounded in
+## that actual convention, not just guessed at).
+@onready var hit_ticks: Array[ColorRect] = [$HitTickTop, $HitTickBottom, $HitTickLeft, $HitTickRight]
 @onready var damage_flash: ColorRect = $DamageFlash
 @onready var weapon_wheel: Control = $WeaponWheel
 @onready var pickup_label: Label = $PickupLabel
@@ -43,6 +51,7 @@ var player: CharacterBody3D
 var _player_health: Health
 var _default_crosshair_color: Color
 var _hit_tween: Tween
+var _tick_tween: Tween
 var _flash_tween: Tween
 var _pickup_tween: Tween
 
@@ -158,6 +167,19 @@ func _on_hit_confirmed(killed: bool) -> void:
 	crosshair.color = KILL_COLOR if killed else HIT_COLOR
 	_hit_tween = create_tween()
 	_hit_tween.tween_property(crosshair, "color", _default_crosshair_color, HIT_MARKER_TIME)
+	_flash_hit_ticks()
+
+
+## Snaps all four ticks to full red, then fades them back out over the same
+## HIT_MARKER_TIME the crosshair's own flash uses, so both reads as one event.
+func _flash_hit_ticks() -> void:
+	if _tick_tween:
+		_tick_tween.kill()
+	_tick_tween = create_tween()
+	_tick_tween.set_parallel(true)
+	for tick in hit_ticks:
+		tick.color.a = 1.0
+		_tick_tween.tween_property(tick, "color:a", 0.0, HIT_MARKER_TIME)
 
 
 ## Quick red flash over the whole screen when the player takes damage.
