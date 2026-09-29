@@ -1,0 +1,130 @@
+Asset lists :
+
+
+> Bottle Crate
+
+> Box
+
+> Blackboard
+
+> Newspaper Stand
+
+> Beer Stand
+
+> Speaker
+
+> Tire
+
+> AC Vent A
+
+> AC Vent B
+
+> CCTV A
+
+> CCTV B
+
+> Fire Alarm
+
+> Smoke Detector
+
+> Fire Extinguisher
+
+> Pallet A,B,C,D
+
+> Cabinet A
+
+> Cabinet B
+
+> Chair A
+
+> Chair B
+
+> Chair C
+
+> Foldable Chair
+
+> Roundtable
+
+> Desk
+
+> Lamp
+
+> Bottle A
+
+> Wrench
+
+> Tire Wrench
+
+> Power Drill
+
+> Pencil
+
+> Pencil's Box
+
+> Scissors
+
+> Box Cutter
+
+> Bow Saw
+
+> Padlock
+
+> Ashtray
+
+> Mug
+
+> Duct Tape
+
+> Album Frame
+
+> Hanger
+
+> Ceiling Fan
+
+> Bed
+
+> Blanket
+
+> Pillow
+
+> Window Blinds
+
+> Shelf
+
+> 00.Shelf
+
+> 01.Shelf
+
+> Drawer
+
+> Books A
+
+> Bools B
+
+> Fridge
+
+> Vending Machine
+
+> Generator
+
+> Trash Container
+
+> Panel Box
+
+> First Aid Box
+
+> Bathtub
+
+> Basin
+
+> Mirror
+
+> Urinals
+
+> Toilet Paper
+
+> Toilet
+
+ 
+
+License : The models in this package are under the CC0 license, you can find more information about the license here.

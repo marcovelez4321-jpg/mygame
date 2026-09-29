@@ -1,0 +1,64 @@
+[gd_scene format=3 uid="uid://djmeis3phxch8"]
+
+[ext_resource type="Script" uid="uid://b5s8a7hpssyqm" path="res://scripts/player_movement.gd" id="1"]
+[ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_dovo2"]
+[ext_resource type="Script" uid="uid://dqwcx08lmpo6s" path="res://scripts/weapon_controller.gd" id="3_wc"]
+[ext_resource type="Resource" uid="uid://dcj7mfnghmmj5" path="res://weapons/starter_gun.tres" id="4_sg"]
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="5_0owmy"]
+[ext_resource type="Script" uid="uid://tgadday71xt4" path="res://scripts/shot_tracer.gd" id="5_tr"]
+[ext_resource type="Script" uid="uid://djr8ub72le0rl" path="res://scripts/viewmodel.gd" id="6_vm"]
+[ext_resource type="Script" uid="uid://dw038d55lfgyp" path="res://scripts/physics_grabber.gd" id="9_pg"]
+[ext_resource type="Script" uid="uid://dboj4h0l2eide" path="res://scripts/camera_juice.gd" id="10_cj"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_1"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.2, 0.6, 1, 1)
+
+[node name="Player" type="CharacterBody3D" unique_id=1710340998]
+script = ExtResource("1")
+wall_behind_ray_count = 4
+wall_jump_push = 4.5
+wall_jump_up_velocity = 13.5
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=210825356]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="Body" type="MeshInstance3D" parent="." unique_id=1925189009]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("CapsuleMesh_1")
+surface_material_override/0 = SubResource("StandardMaterial3D_1")
+
+[node name="Head" type="Node3D" parent="." unique_id=357934096]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head" unique_id=69507297]
+current = true
+fov = 90.0
+script = ExtResource("10_cj")
+
+[node name="Viewmodel" type="Node3D" parent="Head/Camera3D" unique_id=616962905]
+script = ExtResource("6_vm")
+weapons_path = NodePath("../../../WeaponController")
+
+[node name="Health" type="Node" parent="." unique_id=182433073]
+script = ExtResource("2_dovo2")
+max_health = 50.0
+metadata/_custom_type_script = "uid://nnai8cso0red"
+
+[node name="WeaponController" type="Node" parent="." unique_id=1120857251]
+script = ExtResource("3_wc")
+starting_weapons = Array[ExtResource("5_0owmy")]([ExtResource("4_sg")])
+
+[node name="ShotTracer" type="Node" parent="." unique_id=1041867928]
+script = ExtResource("5_tr")
+
+[node name="PhysicsGrabber" type="Node" parent="." unique_id=-367812494]
+script = ExtResource("9_pg")

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+classname = "info_player_start"
+description = "Where the player spawns. Place exactly one per map."
+node_class = "Marker3D"
+node_groups = Array[String](["player_start"])
+meta_properties = {
+"size": AABB(-8, -8, -8, 16, 16, 16),
+"color": Color(0.2, 0.8, 0.3, 1)
+}

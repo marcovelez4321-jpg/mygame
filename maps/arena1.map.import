@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://depepfchmgltt"
+path="res://.godot/imported/arena1.map-09ea21b976df285baa47609d26949c7b.tres"
+
+[deps]
+
+source_file="res://maps/arena1.map"
+dest_files=["res://.godot/imported/arena1.map-09ea21b976df285baa47609d26949c7b.tres"]
+
+[params]
+

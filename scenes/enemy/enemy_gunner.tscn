@@ -1,0 +1,24 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" uid="uid://c4wyibydlt1yd" path="res://scenes/enemy/enemy.tscn" id="1"]
+
+[node name="Enemy" instance=ExtResource("1")]
+move_speed = 3.5
+gravity = 30.0
+sight_range = 22.0
+attack_range = 12.0
+attack_damage = 8.0
+attack_interval = 1.1
+attack_windup = 0.35
+attack_recovery = 0.15
+pain_time = 0.3
+corpse_time = 15.0
+can_shoot = true
+shoot_min_range = 5.0
+shoot_impact_force = 6.0
+burst_shot_count = 3
+burst_shot_interval = 0.15
+memory_time = 4.0
+
+[node name="Health" parent="." index="1"]
+max_health = 45.0

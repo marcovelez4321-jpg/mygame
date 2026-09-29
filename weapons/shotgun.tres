@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://brchhi77bg3bk"]
+
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://tp0htaqch10f" path="res://art/weapons/PSX_Guns/FBX/Shotgun.fbx" id="2_yi04f"]
+
+[resource]
+script = ExtResource("1")
+weapon_name = "Shotgun"
+damage = 8.0
+fire_interval = 0.9
+ammo_type = 1
+max_range = 40.0
+pellets = 8
+spread_degrees = 5.0
+impact_force = 1.5
+magazine_size = 1
+reload_time = 1.0
+reload_style = 1
+recoil_kick_distance = 0.2
+recoil_kick_rotation_degrees = 16.0
+draw_time = 0.6
+viewmodel_scene = ExtResource("2_yi04f")
+viewmodel_position = Vector3(0.16505145, -0.21453339, -0.18045466)
+viewmodel_rotation_degrees = Vector3(-6.1223407, 86.735466, 0)
+viewmodel_scale = 1.2960939373946962
+muzzle_offset = Vector3(0.39170688, 0.08010229, -0.035429858)

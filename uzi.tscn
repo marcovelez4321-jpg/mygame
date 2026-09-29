@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://cb34omqrqsaty"]
+
+[ext_resource type="PackedScene" uid="uid://doj6tojorb7yi" path="res://art/weapons/PSX_Guns/FBX/UZI.fbx" id="1_f36hi"]
+
+[node name="UZI" unique_id=1119965643 instance=ExtResource("1_f36hi")]
+
+[node name="UZI" parent="." index="0" unique_id=1221978759]
+transform = Transform3D(-1, 0, -1.509958e-07, 0, 1, 0, 1.509958e-07, 0, -1, 0, 0, 0)

@@ -1,0 +1,111 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/pause_menu.gd" id="1"]
+
+[node name="PauseMenu" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.6)
+
+[node name="MenuPanel" type="Panel" parent="Dim"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -230.0
+offset_right = 230.0
+offset_bottom = 230.0
+
+[node name="VBox" type="VBoxContainer" parent="Dim/MenuPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="Dim/MenuPanel/VBox"]
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+text = "Paused"
+
+[node name="ResolutionRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
+
+[node name="ResolutionLabel" type="Label" parent="Dim/MenuPanel/VBox/ResolutionRow"]
+custom_minimum_size = Vector2(160, 0)
+text = "Resolution"
+
+[node name="ResolutionOption" type="OptionButton" parent="Dim/MenuPanel/VBox/ResolutionRow"]
+size_flags_horizontal = 3
+
+[node name="WindowModeRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
+
+[node name="WindowModeLabel" type="Label" parent="Dim/MenuPanel/VBox/WindowModeRow"]
+custom_minimum_size = Vector2(160, 0)
+text = "Window Mode"
+
+[node name="WindowModeOption" type="OptionButton" parent="Dim/MenuPanel/VBox/WindowModeRow"]
+size_flags_horizontal = 3
+
+[node name="VSyncRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
+
+[node name="VSyncLabel" type="Label" parent="Dim/MenuPanel/VBox/VSyncRow"]
+custom_minimum_size = Vector2(160, 0)
+text = "VSync"
+
+[node name="VSyncCheck" type="CheckButton" parent="Dim/MenuPanel/VBox/VSyncRow"]
+
+[node name="SensitivityRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
+
+[node name="SensitivityLabel" type="Label" parent="Dim/MenuPanel/VBox/SensitivityRow"]
+custom_minimum_size = Vector2(160, 0)
+text = "Sensitivity"
+
+[node name="SensitivitySlider" type="HSlider" parent="Dim/MenuPanel/VBox/SensitivityRow"]
+custom_minimum_size = Vector2(160, 0)
+size_flags_horizontal = 3
+min_value = 0.5
+max_value = 10.0
+step = 0.1
+value = 2.5
+
+[node name="SensitivityValueLabel" type="Label" parent="Dim/MenuPanel/VBox/SensitivityRow"]
+custom_minimum_size = Vector2(48, 0)
+horizontal_alignment = 2
+text = "2.5"
+
+[node name="DebugLabel" type="Label" parent="Dim/MenuPanel/VBox"]
+theme_override_font_sizes/font_size = 16
+text = "Debug"
+
+[node name="InfiniteAmmoRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
+
+[node name="InfiniteAmmoLabel" type="Label" parent="Dim/MenuPanel/VBox/InfiniteAmmoRow"]
+custom_minimum_size = Vector2(160, 0)
+text = "Infinite Ammo"
+
+[node name="InfiniteAmmoCheck" type="CheckButton" parent="Dim/MenuPanel/VBox/InfiniteAmmoRow"]
+
+[node name="Spacer" type="Control" parent="Dim/MenuPanel/VBox"]
+custom_minimum_size = Vector2(0, 12)
+
+[node name="ButtonsRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="ResumeButton" type="Button" parent="Dim/MenuPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(120, 36)
+text = "Resume"
+
+[node name="QuitButton" type="Button" parent="Dim/MenuPanel/VBox/ButtonsRow"]
+custom_minimum_size = Vector2(120, 36)
+text = "Quit"

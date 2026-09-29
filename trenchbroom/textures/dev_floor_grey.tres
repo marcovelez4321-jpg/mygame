@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=3 format=3 uid="uid://dohscp5ysccee"]
+
+[ext_resource type="Texture2D" uid="uid://f0ss66hn7y3i" path="res://trenchbroom/textures/dev_floor_grey.png" id="1_7mffk"]
+[ext_resource type="Shader" path="res://shaders/ps1.gdshader" id="2_ps1"]
+
+[resource]
+shader = ExtResource("2_ps1")
+shader_parameter/snap_resolution = 160.0
+shader_parameter/albedo_texture = ExtResource("1_7mffk")
+shader_parameter/albedo_color = Color(1, 1, 1, 1)

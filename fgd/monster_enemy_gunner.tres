@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/enemy_gunner.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "monster_enemy_gunner"
+description = "Ranged enemy, HL2 Combine-style: keeps its distance, fires in bursts, and searches your last-seen position if it loses sight of you."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-16, -16, -16, 32, 32, 32),
+"color": Color(0.2, 0.5, 0.95, 1)
+}

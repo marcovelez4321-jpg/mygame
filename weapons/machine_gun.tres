@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://d28tnfcfttyin"]
+
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://doj6tojorb7yi" path="res://art/weapons/PSX_Guns/FBX/UZI.fbx" id="2_5umog"]
+
+[resource]
+script = ExtResource("1")
+weapon_name = "Machine Gun"
+damage = 8.0
+fire_interval = 0.1
+max_range = 80.0
+spread_degrees = 1.5
+impact_force = 1.0
+magazine_size = 20
+reload_time = 1.6
+draw_time = 0.5
+viewmodel_scene = ExtResource("2_5umog")
+viewmodel_position = Vector3(0.19199963, -0.22829789, -0.44069076)
+viewmodel_rotation_degrees = Vector3(1.9469497, 83.96987, -0.0009519756)
+viewmodel_scale = 1.21703299951959
+muzzle_offset = Vector3(0.23075956, 0.055910334, -0.021475445)
+placeholder_color = Color(0.3, 0.5, 0.85, 1)

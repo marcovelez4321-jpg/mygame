@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://cjq3nncckshqs"]
+
+[ext_resource type="Script" uid="uid://cfw0a3yffr1n1" path="res://scripts/enemy.gd" id="1_tt7e2"]
+[ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_2hac7"]
+[ext_resource type="PackedScene" uid="uid://bvarn6elqaxqx" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_05.fbx" id="3_e6d4v"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_tt7e2"]
+radius = 0.4
+height = 2.3027833
+
+[node name="Enemy" type="CharacterBody3D" unique_id=775488530]
+script = ExtResource("1_tt7e2")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1873091499]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0977296, 0)
+shape = SubResource("CapsuleShape3D_tt7e2")
+
+[node name="Health" type="Node" parent="." unique_id=1184086269]
+script = ExtResource("2_2hac7")
+max_health = 60.0
+metadata/_custom_type_script = "uid://nnai8cso0red"
+
+[node name="Model" parent="." unique_id=1788697101 instance=ExtResource("3_e6d4v")]
+transform = Transform3D(0.45, 0, 0, 0, 0.45, 0, 0, 0, 0.45, 0.06706673, 0, 0)

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDFile" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_file.gd" id="1"]
+[ext_resource type="Resource" uid="uid://crgpdahjaj" path="res://addons/func_godot/fgd/func_godot_fgd.tres" id="2"]
+[ext_resource type="Resource" path="res://fgd/info_player_start.tres" id="3"]
+[ext_resource type="Resource" path="res://fgd/monster_enemy.tres" id="4"]
+[ext_resource type="Resource" path="res://fgd/monster_enemy_rusher.tres" id="5"]
+[ext_resource type="Resource" path="res://fgd/monster_enemy_gunner.tres" id="6"]
+[ext_resource type="Resource" path="res://fgd/item_weapon_starter_gun.tres" id="7"]
+[ext_resource type="Resource" path="res://fgd/item_weapon_machine_gun.tres" id="8"]
+[ext_resource type="Resource" path="res://fgd/item_ammo.tres" id="9"]
+
+[resource]
+script = ExtResource("1")
+fgd_name = "game_entities"
+base_fgd_files = Array[Resource]([ExtResource("2")])
+entity_definitions = Array[Resource]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9")])

@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://cr20c33w8lvp1"
+path="res://.godot/imported/retro_props.obj-671ab36a38cb7ca4bab433073549f017.mesh"
+
+[deps]
+
+files=["res://.godot/imported/retro_props.obj-671ab36a38cb7ca4bab433073549f017.mesh"]
+
+source_file="res://art/props/retro_props/Models/retro_props.obj"
+dest_files=["res://.godot/imported/retro_props.obj-671ab36a38cb7ca4bab433073549f017.mesh", "res://.godot/imported/retro_props.obj-671ab36a38cb7ca4bab433073549f017.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

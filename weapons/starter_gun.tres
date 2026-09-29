@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://dd2w6ofsbor3k"]
+
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://i02bor72sm53" path="res://art/weapons/PSX_Guns/FBX/Pistol.fbx" id="2_uyk3g"]
+
+[resource]
+script = ExtResource("1")
+weapon_name = "Starter Gun"
+magazine_size = 7
+viewmodel_scene = ExtResource("2_uyk3g")
+viewmodel_position = Vector3(0.13848448, -0.14979507, -0.25312716)
+viewmodel_rotation_degrees = Vector3(0, -95.03305, 0)
+muzzle_offset = Vector3(-0.08218318, 0.05347711, 0.033439215)
+placeholder_color = Color(0.85, 0.75, 0.3, 1)

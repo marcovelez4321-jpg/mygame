@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://lui1ovefw3kb"]
+
+[ext_resource type="PackedScene" uid="uid://civasxl857u5o" path="res://art/weapons/PSX_Guns/GLB/Shotgun.glb" id="1_1m0gy"]
+
+[node name="Shotgun2" unique_id=1760761018 instance=ExtResource("1_1m0gy")]
+
+[node name="Shotgun" parent="." index="0" unique_id=772174646]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.034, 0)

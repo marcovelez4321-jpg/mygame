@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://c4wyibydlt1yd" path="res://scenes/enemy/enemy.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "monster_enemy"
+description = "An enemy. Placing one in TrenchBroom drops in a fully working enemy.tscn instance on map build -- no extra spawn code needed."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-16, -16, -16, 32, 32, 32),
+"color": Color(0.9, 0.2, 0.2, 1)
+}

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "monster_enemy_rusher"
+description = "Fast, low-health, aggressive melee enemy. Closes distance quickly and hits often -- punishes standing still."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-16, -16, -16, 32, 32, 32),
+"color": Color(0.95, 0.55, 0.1, 1)
+}
