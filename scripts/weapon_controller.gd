@@ -14,13 +14,18 @@ extends Node
 ## host decides what was hit (and its random pellet spread). That is also
 ## where lag compensation goes: the host rewinds targets to shot.tick.
 
+## Where on the body a hit landed. ARTERY is the neck (instant kill + spurt),
+## HEADSHOT multiplies damage; see _hit_kind() for how they're told apart.
+enum HitKind { NORMAL, HEADSHOT, ARTERY }
+
 signal shot_fired
 ## Emitted for every resolved ray with where it started and ended, and whether
 ## it hit something with Health. Presentation only (tracer lines).
 signal shot_resolved(from: Vector3, to: Vector3, hit_target: bool)
 ## Emitted when a ray hit something with Health. Presentation only (hit
-## marker); `killed` is true if that hit finished the target off.
-signal hit_confirmed(killed: bool)
+## marker, camera kick, hit sounds); `killed` is true if that hit finished the
+## target off, `kind` says whether it was a headshot or artery hit.
+signal hit_confirmed(killed: bool, kind: HitKind)
 ## The equipped weapon changed. draw_time is 0 for the very first weapon.
 signal weapon_switched(weapon: WeaponData, draw_time: float)
 ## The list of owned weapons changed.
@@ -35,9 +40,9 @@ signal reload_started(duration: float)
 ## Any kill (artery or otherwise) landed close enough to splash blood on the
 ## player's own screen. Presentation only (hud.gd's screen droplets).
 signal gory_kill_nearby
-## An artery (neck) hit finished someone off. Presentation only
-## (weapon_sound.gd's distinct kill sound) -- fires alongside hit_confirmed
-## (true), not instead of it. Carries the neck bone itself (not just a
+## An artery (neck) hit landed -- a kill too unless artery_instant_kill is off.
+## Presentation only (weapon_sound.gd's artery sounds) -- fires alongside
+## hit_confirmed, not instead of it. Carries the neck bone itself (not just a
 ## position) so a listener can attach a SOUND to it the same way
 ## _spawn_artery_spurt() below attaches the blood particles -- it keeps
 ## following the spurt as the ragdoll falls and settles, instead of playing
@@ -57,11 +62,6 @@ class Shot:
 ## How far past a hit body to check for a wall to splatter blood onto --
 ## "the wall behind them," not any wall anywhere down the shot's path.
 const WALL_SPLATTER_MAX_DISTANCE := 3.0
-## How close a shot has to land to the live neck bone to count as an artery
-## hit. Generous enough to actually hit reliably at combat ranges/spread,
-## tight enough that it still reads as "the neck specifically," not "the
-## upper body in general."
-const ARTERY_HIT_RADIUS := 0.375 # 0.5 - 25%
 ## Brief global time_scale dip on an artery kill -- same "hit stop" trick
 ## player_movement.gd's stomp kill uses, so a clean artery kill feels just as
 ## impactful. See player_movement.gd's own stomp_hit_stop_scale for the
@@ -71,6 +71,11 @@ const ARTERY_HIT_STOP_TIME := 0.06
 ## How close an artery kill has to land to the player to splash blood on
 ## their own screen (hud.gd's gory_kill_nearby handler).
 const CLOSE_KILL_RANGE := 4.0
+## Roughly how far the surface of the skull is from the middle of the head,
+## in meters -- where a headshot wound gets placed (see _spawn_headshot_bleed()).
+const HEAD_WOUND_RADIUS := 0.1
+## Seconds an artery wound keeps spurting.
+const ARTERY_BLEED_TIME := 7.0
 
 const TEST_WEAPON_PATHS := [
 	"res://weapons/starter_gun.tres",
@@ -83,6 +88,28 @@ const TEST_WEAPON_PATHS := [
 ## Test ammo until pickups exist.
 @export var starting_bullets: int = 50
 @export var starting_shells: int = 16
+
+@export_group("Hit Zones")
+## Damage per hit = the weapon's own damage (set per weapon in weapons/*.tres)
+## times the multiplier for where it landed. Rule 3: these apply to every
+## weapon and every target, players included once PvP exists -- tune with that
+## in mind.
+## Plain body hits.
+@export var body_damage_multiplier: float = 1.0
+## How close (meters) a shot has to land to the center of the head to count
+## as a headshot.
+@export var headshot_radius: float = 0.18
+@export var headshot_damage_multiplier: float = 2.0
+## How close (meters) a shot has to land to the neck bone to count as an
+## artery hit (blood spurt). 0.2625 = the old 0.375 shrunk 30%. Keep it small
+## and skill-rewarding, especially while it's an instant kill.
+@export var artery_hit_radius: float = 0.2625
+## On: an artery hit kills outright, whatever health is left. Off: it does the
+## weapon's damage times artery_damage_multiplier instead.
+@export var artery_instant_kill: bool = true
+@export var artery_damage_multiplier: float = 3.0
+## Seconds a headshot wound keeps pouring blood (the artery pours for 7).
+@export var headshot_bleed_time: float = 4.0
 
 ## Debug toggle (pause menu): firing never drains the magazine, so reload is
 ## effectively never needed. Runtime-only, not saved -- resets to off on
@@ -284,22 +311,11 @@ func resolve_shot(shot: Shot) -> void:
 				BloodFX.spawn_bullet_hole(_body.get_tree().current_scene, result.position, result.normal)
 				break # world geometry always stops it, penetration or not
 
-			# Artery hit: land a shot near the live skeleton's own neck bone and
-			# it's an instant, dramatic kill regardless of remaining health --
-			# checked against the actual bone position rather than a separate
-			# hitbox, since a live enemy only has one hitbox capsule right now.
-			var is_artery := not health.is_dead and _is_artery_hit(result.collider, result.position)
-			var damage: float = health.current_health if is_artery else shot.weapon.damage
+			var kind: HitKind = _hit_kind(result.collider, result.position) if not health.is_dead else HitKind.NORMAL
+			var damage := _damage_for(shot.weapon, kind, health)
 			health.take_damage(damage, shot.attacker_id, direction, result.position, shot.weapon.impact_force)
-			hit_confirmed.emit(health.is_dead)
-			_spawn_blood(space, result, direction)
-			if is_artery and health.is_dead:
-				_spawn_artery_spurt(result.collider)
-				_hit_stop(ARTERY_HIT_STOP_SCALE, ARTERY_HIT_STOP_TIME)
-			# ANY kill close enough splashes the screen, not just artery ones --
-			# see CLOSE_KILL_RANGE's own comment.
-			if health.is_dead and _body.global_position.distance_to(result.position) <= CLOSE_KILL_RANGE:
-				gory_kill_nearby.emit()
+			hit_confirmed.emit(health.is_dead, kind)
+			_play_hit_effects(space, result, direction, kind, health.is_dead)
 
 			if penetrations_left <= 0:
 				break
@@ -307,6 +323,38 @@ func resolve_shot(shot: Shot) -> void:
 			range_left -= ray_origin.distance_to(result.position)
 			exclude.append((result.collider as CollisionObject3D).get_rid())
 			ray_origin = result.position + direction * 0.01 # past the hit surface, so the next cast doesn't re-hit it
+
+
+## The weapon's own damage times the multiplier for where it landed (the Hit
+## Zones exports), or everything the target has left for an instant-kill artery.
+func _damage_for(weapon: WeaponData, kind: HitKind, health: Health) -> float:
+	match kind:
+		HitKind.HEADSHOT:
+			return weapon.damage * headshot_damage_multiplier
+		HitKind.ARTERY:
+			return health.current_health if artery_instant_kill else weapon.damage * artery_damage_multiplier
+	return weapon.damage * body_damage_multiplier
+
+
+## Every cosmetic effect of one confirmed hit, in one place -- nothing here
+## touches health or gameplay. Rule 1 (co-op): resolve_shot() only runs on the
+## host, so this is the hook for the other player: the host will send the hit
+## (target, position, normal, direction, kind, killed) and each client calls
+## this same function to bleed its own copy of the enemy locally.
+func _play_hit_effects(space: PhysicsDirectSpaceState3D, hit: Dictionary, direction: Vector3, kind: HitKind, killed: bool) -> void:
+	_spawn_blood(space, hit, direction)
+	if kind == HitKind.HEADSHOT:
+		_spawn_headshot_bleed(hit.collider, hit.position)
+	# The spurt follows the neck whether the hit killed or not (it only can't
+	# kill when artery_instant_kill is off); the hit stop is for kills only.
+	if kind == HitKind.ARTERY:
+		_spawn_artery_spurt(hit.collider)
+		if killed:
+			_hit_stop(ARTERY_HIT_STOP_SCALE, ARTERY_HIT_STOP_TIME)
+	# ANY kill close enough splashes the screen, not just artery ones --
+	# see CLOSE_KILL_RANGE's own comment.
+	if killed and _body.global_position.distance_to(hit.position) <= CLOSE_KILL_RANGE:
+		gory_kill_nearby.emit()
 
 
 ## Blood off the body that got hit, plus a splatter decal on any wall caught
@@ -329,20 +377,48 @@ func _spawn_blood(space: PhysicsDirectSpaceState3D, hit: Dictionary, direction: 
 		BloodFX.spawn_splatter(world, behind_result.position, behind_result.normal, 0.6)
 
 
-## Whether `hit_position` landed close to `collider`'s own live neck bone.
-## Measured against the actual skeleton rather than a separate hitbox --
-## a live enemy only has one hitbox capsule right now, so this reads the
-## real, currently-animating bone position instead of needing a second
-## collision shape just for this.
-func _is_artery_hit(collider: Node, hit_position: Vector3) -> bool:
+## Artery, headshot, or a plain body hit. Measured against the live,
+## currently-animating skeleton rather than separate hitboxes -- a live enemy
+## only has one capsule, so this reads where the neck and head actually are
+## this frame. The two zones overlap around the jaw; whichever spot the shot
+## landed closer to wins, so the neck doesn't swallow shots to the face.
+## Runs only where resolve_shot() runs -- the host, in co-op (Rule 1).
+func _hit_kind(collider: Node, hit_position: Vector3) -> HitKind:
 	var skeleton := collider.find_child("*Skeleton*", true, false) as Skeleton3D
 	if skeleton == null:
-		return false
-	var neck_idx := skeleton.find_bone("Neck")
-	if neck_idx < 0:
-		return false
-	var neck_pos: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(neck_idx).origin
-	return neck_pos.distance_to(hit_position) <= ARTERY_HIT_RADIUS
+		return HitKind.NORMAL
+
+	var artery_distance := INF
+	var neck := skeleton.find_bone("Neck")
+	if neck >= 0:
+		artery_distance = _bone_position(skeleton, neck).distance_to(hit_position)
+
+	var head_distance := INF
+	var head := skeleton.find_bone("Head")
+	if head >= 0:
+		head_distance = _head_center(skeleton, head).distance_to(hit_position)
+
+	var in_artery := artery_distance <= artery_hit_radius
+	var in_head := head_distance <= headshot_radius
+	if in_artery and (not in_head or artery_distance <= head_distance):
+		return HitKind.ARTERY
+	if in_head:
+		return HitKind.HEADSHOT
+	return HitKind.NORMAL
+
+
+func _bone_position(skeleton: Skeleton3D, bone: int) -> Vector3:
+	return skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin
+
+
+## The Head bone sits at the base of the skull; the middle of the head is
+## halfway to its child bone (the top of the head, HeadTop_End on these rigs).
+func _head_center(skeleton: Skeleton3D, head: int) -> Vector3:
+	var base := _bone_position(skeleton, head)
+	var children := skeleton.get_bone_children(head)
+	if children.is_empty():
+		return base
+	return base.lerp(_bone_position(skeleton, children[0]), 0.5)
 
 
 ## Called right after an artery hit kills the target -- by this point
@@ -353,15 +429,53 @@ func _spawn_artery_spurt(collider: Node) -> void:
 	var neck_bone := collider.find_child("Physical Bone Neck", true, false) as Node3D
 	if neck_bone == null:
 		return # no physical skeleton on this target (e.g. a test target) -- nothing to attach to
-	# This body's OWN bones, so BloodFX can exclude just them -- the spray can
-	# still land on a different nearby corpse, just never the one it's coming
-	# out of. See BloodFX.spawn_artery_spurt()'s own comment.
-	var own_bones := collider.find_children("Physical Bone *", "PhysicalBone3D", true, false)
-	var exclude_rids: Array[RID] = []
-	for bone in own_bones:
-		exclude_rids.append((bone as PhysicalBone3D).get_rid())
-	BloodFX.spawn_artery_spurt(neck_bone, 7.0, exclude_rids)
+	if _already_bleeding(neck_bone, ARTERY_BLEED_TIME):
+		return
+	BloodFX.spawn_artery_spurt(neck_bone, ARTERY_BLEED_TIME, _own_body_rids(collider))
 	artery_kill.emit(neck_bone)
+
+
+## A headshot wound that pours like the artery, from the spot on the skull
+## that was hit, attached to the head's physical bone so it follows the head
+## -- animating while the enemy is alive, ragdolling once it's dead. The shot
+## hits the enemy's single body capsule, which sits further out than the
+## actual skull, so the wound is pulled in to HEAD_WOUND_RADIUS from the head's
+## middle, and the spray points straight out through it.
+func _spawn_headshot_bleed(collider: Node, hit_position: Vector3) -> void:
+	var head_bone := collider.find_child("Physical Bone Head", true, false) as Node3D
+	if head_bone == null or _already_bleeding(head_bone, headshot_bleed_time):
+		return
+	var outward := hit_position - head_bone.global_position
+	if outward.length_squared() < 0.0001:
+		outward = -head_bone.global_transform.basis.z
+	var wound := head_bone.global_position + outward.limit_length(HEAD_WOUND_RADIUS)
+	var to_local := head_bone.global_transform.affine_inverse()
+	BloodFX.spawn_artery_spurt(head_bone, headshot_bleed_time, _own_body_rids(collider),
+			to_local * wound, (to_local.basis * outward).normalized())
+
+
+## One wound per bone at a time: a shotgun blast is up to 8 pellets, and 8
+## overlapping spurts on one head cost 8x the particles and landing traces for
+## no visible difference (Rule 2). Returns true if `bone` is still bleeding;
+## otherwise marks it as bleeding for `duration` and returns false.
+func _already_bleeding(bone: Node, duration: float) -> bool:
+	var now := Time.get_ticks_msec()
+	if now < int(bone.get_meta(&"bleeding_until_msec", 0)):
+		return true
+	bone.set_meta(&"bleeding_until_msec", now + int(duration * 1000.0))
+	return false
+
+
+## This body's own collision RIDs (its capsule and every ragdoll bone), so a
+## spurt's landing check can splat another nearby corpse or the floor, but
+## never the body the blood is coming out of.
+func _own_body_rids(collider: Node) -> Array[RID]:
+	var rids: Array[RID] = []
+	if collider is CollisionObject3D:
+		rids.append((collider as CollisionObject3D).get_rid())
+	for bone in collider.find_children("Physical Bone *", "PhysicalBone3D", true, false):
+		rids.append((bone as PhysicalBone3D).get_rid())
+	return rids
 
 
 ## Same trick as player_movement.gd's _hit_stop(): briefly slows the whole

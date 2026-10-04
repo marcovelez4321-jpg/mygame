@@ -17,8 +17,10 @@ extends Node
 @export_group("Sounds")
 @export var hit_marker_sound: SoundEvent
 @export var kill_confirm_sound: SoundEvent
+## Plays on top of the hit/kill sound when the shot was a headshot.
+@export var headshot_sound: SoundEvent
 ## The instant, dramatic neck-shot kill sting (see weapon_controller.gd's
-## ARTERY_HIT_RADIUS/_spawn_artery_spurt) -- distinct from a normal kill so it
+## artery_hit_radius/_spawn_artery_spurt) -- distinct from a normal kill so it
 ## reads as the special case it is. Non-positional, like the rest of this
 ## file's sounds (see the class comment on why).
 @export var artery_kill_sound: SoundEvent
@@ -68,8 +70,10 @@ func _on_weapon_switched(weapon: WeaponData, draw_time: float) -> void:
 		SoundPlayer.play_2d(weapon.switch_sound)
 
 
-func _on_hit_confirmed(killed: bool) -> void:
+func _on_hit_confirmed(killed: bool, kind: WeaponController.HitKind) -> void:
 	SoundPlayer.play_2d(kill_confirm_sound if killed else hit_marker_sound)
+	if kind == WeaponController.HitKind.HEADSHOT:
+		SoundPlayer.play_2d(headshot_sound)
 
 
 func _on_artery_kill(bone: Node3D) -> void:

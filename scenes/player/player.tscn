@@ -24,6 +24,7 @@
 [ext_resource type="Resource" path="res://audio/events/artery_kill.tres" id="32_artery"]
 [ext_resource type="Resource" path="res://audio/events/pickup.tres" id="33_pick"]
 [ext_resource type="Resource" path="res://audio/events/artery_spurt.tres" id="34_spurt"]
+[ext_resource type="Resource" path="res://audio/events/headshot.tres" id="35_headshot"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -93,6 +94,7 @@ gory_kill_sound = ExtResource("29_gory")
 script = ExtResource("21_wsnd")
 hit_marker_sound = ExtResource("30_hitm")
 kill_confirm_sound = ExtResource("31_killc")
+headshot_sound = ExtResource("35_headshot")
 artery_kill_sound = ExtResource("32_artery")
 pickup_sound = ExtResource("33_pick")
 artery_spurt_sound = ExtResource("34_spurt")

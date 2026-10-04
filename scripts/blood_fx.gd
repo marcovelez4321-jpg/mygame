@@ -2,8 +2,9 @@ class_name BloodFX
 extends RefCounted
 
 ## Shared blood visual effects: a particle spray off a hit body, a splatter
-## decal on any wall caught behind that hit, and a pool that fades in on the
-## ground once a ragdoll settles. No texture assets needed -- the splat
+## decal on any wall caught behind that hit, a sustained spurt (artery or
+## headshot wound) that splats wherever its stream lands, and a pool that
+## fades in on the ground once a ragdoll settles. No texture assets needed -- the splat
 ## shape is generated once in code the first time it's needed and reused for
 ## every spray/pool/splatter after that (Rule 2: regenerating it per-instance
 ## would be pure wasted work for a shape that's identical every time).
@@ -13,17 +14,31 @@ extends RefCounted
 
 const SPLAT_TEXTURE_SIZE := 128
 const BLOOD_COLOR := Color(0.35, 0.02, 0.02)
-## How often spawn_artery_spurt() re-checks where the spray is currently
-## landing, in seconds -- frequent enough to paint a believable pool as the
-## body thrashes and the neck bone swings around, not one static splat.
-const ARTERY_POOL_INTERVAL := 0.2
-## How far that landing check reaches (floor first, then a nearby wall) from
-## the bone's current position.
-const ARTERY_POOL_REACH := 3.0
+## The spurt's physics, shared by the visible GPU droplets AND the invisible
+## traced droplets that decide where blood lands -- one source of truth, so
+## splats end up where the spray visibly comes down.
+const SPURT_SPREAD_DEGREES := 25.0
+const SPURT_SPEED_MIN := 4.5
+const SPURT_SPEED_MAX := 8.5
+## Stronger than real gravity on purpose -- pulls the stream into a pronounced
+## curve within its flight time instead of a flat, ballistic-looking spray.
+const SPURT_GRAVITY := Vector3(0.0, -14.0, 0.0)
+## Longer-lived droplets travel further along their arc before vanishing --
+## with the speed above, that's what makes the stream read as long.
+const SPURT_LIFETIME := 1.6
+## Seconds between traced landing droplets (each one leaves a splat).
+const SPURT_LANDING_INTERVAL := 0.2
+## Ray segments per traced droplet arc. More = follows the curve more tightly.
+const SPURT_TRACE_STEPS := 8
+
+## Tunable streak look for spurts -- see BloodTrailSettings.
+const TRAIL_SETTINGS_PATH := "res://fx/blood_trail.tres"
 
 static var _splat_texture: ImageTexture
 static var _bullet_hole_texture: ImageTexture
 static var _impact_mesh: BoxMesh
+static var _trail_settings: BloodTrailSettings
+static var _trail_mesh: TubeTrailMesh
 
 
 ## A short, one-shot particle burst at a hit point, kicked out along the
@@ -66,34 +81,34 @@ static func spawn_impact(world: Node, position: Vector3, normal: Vector3) -> voi
 ## that Enemy's own PhysicalBone3D children) -- fed into the landing-pool
 ## raycast below so the spray can paint another nearby corpse or a wall/floor,
 ## but never the very body it's spraying out of.
-static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Array[RID] = []) -> void:
+## `local_offset`/`local_direction` place the wound and aim the spray in the
+## bone's own space -- the artery uses the defaults (bone center, straight
+## out), the headshot bleed passes the spot on the skull that was hit.
+## Droplets drag streaks behind them (fx/blood_trail.tres, BloodTrailSettings).
+static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Array[RID] = [],
+		local_offset: Vector3 = Vector3.ZERO, local_direction: Vector3 = Vector3.UP) -> void:
 	var particles := GPUParticles3D.new()
-	# More, smaller droplets read as a finer, denser mist/stream instead of a
+	# More, smaller droplets read as a finer, denser stream instead of a
 	# handful of chunky flecks.
 	particles.amount = 45
-	# Longer-lived particles travel further along their arc before vanishing
-	# -- combined with the velocity below, that's what makes the stream read
-	# as long, not just fast.
-	particles.lifetime = 1.6
+	particles.lifetime = SPURT_LIFETIME
 	particles.one_shot = false
 	particles.explosiveness = 0.3
-	particles.draw_pass_1 = _get_impact_mesh()
+	_apply_trail(particles)
 
 	var mat := ParticleProcessMaterial.new()
-	mat.direction = Vector3.UP
-	mat.spread = 25.0
-	mat.initial_velocity_min = 4.5
-	mat.initial_velocity_max = 8.5
-	# Stronger than real gravity on purpose -- pulls the stream down into a
-	# more pronounced curve within its flight time instead of a flatter,
-	# more ballistic-looking spray.
-	mat.gravity = Vector3(0.0, -14.0, 0.0)
+	mat.direction = local_direction
+	mat.spread = SPURT_SPREAD_DEGREES
+	mat.initial_velocity_min = SPURT_SPEED_MIN
+	mat.initial_velocity_max = SPURT_SPEED_MAX
+	mat.gravity = SPURT_GRAVITY
 	mat.scale_min = 0.3
 	mat.scale_max = 0.65
 	mat.color = BLOOD_COLOR
 	particles.process_material = mat
 
 	bone.add_child(particles)
+	particles.position = local_offset
 	particles.emitting = true
 
 	var tree := bone.get_tree()
@@ -109,50 +124,96 @@ static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Arr
 		)
 	)
 
-	_pool_landing_spot(bone, tree, duration, exclude)
+	_trace_landing(particles, local_direction, tree, duration, exclude)
 
 
-## Approximates where the spray is currently landing and leaves blood there
-## as it goes -- not a true per-particle physics trace (GPU particles don't
-## expose that cheaply), just a periodic raycast from the bone's current
-## position: straight down for a floor, or outward for a nearby wall if
-## there's no floor in reach. Re-checks every ARTERY_POOL_INTERVAL for the
-## spurt's whole duration, so as the body thrashes and the neck bone swings
-## around, the blood on the ground/wall spreads to follow it instead of being
-## one static splat.
+## Puts blood where the spray actually comes down. GPU particles can't report
+## where they land, so every SPURT_LANDING_INTERVAL one invisible droplet is
+## launched from the wound with the same speed, spread and gravity as the
+## visible ones and traced along its arc; a splat goes wherever it hits --
+## floor, wall, or another corpse. As the body falls and thrashes, the splats
+## follow the stream around.
 ##
-## Mask includes EnemyRagdoll.WORLD_MASK (world geometry AND the ragdoll
-## layer, not just world) so the spray CAN land on another nearby corpse, not
-## only floors/walls -- `exclude` is what stops it from ever hitting the very
-## body it's spraying out of, which world-only masking used to do as an (in
-## hindsight, overly broad) side effect.
-static func _pool_landing_spot(bone: Node3D, tree: SceneTree, time_left: float, exclude: Array[RID]) -> void:
-	if not is_instance_valid(bone) or time_left <= 0.0:
+## Mask is EnemyRagdoll.WORLD_MASK (world + ragdoll layer) so blood can land on
+## another nearby corpse; `exclude` stops it hitting the body it comes from.
+## Rule 1 (co-op): cosmetic and local -- each player's game traces its own
+## random droplets, so splat positions differ slightly between players, which
+## nobody can tell and nothing in gameplay reads.
+static func _trace_landing(emitter: Node3D, local_direction: Vector3, tree: SceneTree, time_left: float, exclude: Array[RID]) -> void:
+	if not is_instance_valid(emitter) or time_left <= 0.0:
 		return
-
-	var world := bone.get_tree().current_scene
-	var space := bone.get_world_3d().direct_space_state
-	var origin := bone.global_position
-
-	var down_query := PhysicsRayQueryParameters3D.create(origin, origin + Vector3.DOWN * ARTERY_POOL_REACH)
-	down_query.collision_mask = EnemyRagdoll.WORLD_MASK
-	down_query.exclude = exclude
-	var down_result := space.intersect_ray(down_query)
-	if not down_result.is_empty():
-		spawn_splatter(world, down_result.position, Vector3.UP, 0.5)
-	else:
-		# No floor in reach (e.g. hanging over an edge) -- try outward for a wall.
-		var outward := bone.global_transform.basis.z
-		var wall_query := PhysicsRayQueryParameters3D.create(origin, origin + outward * ARTERY_POOL_REACH)
-		wall_query.collision_mask = EnemyRagdoll.WORLD_MASK
-		wall_query.exclude = exclude
-		var wall_result := space.intersect_ray(wall_query)
-		if not wall_result.is_empty():
-			spawn_splatter(world, wall_result.position, wall_result.normal, 0.5)
-
-	tree.create_timer(ARTERY_POOL_INTERVAL).timeout.connect(func() -> void:
-		_pool_landing_spot(bone, tree, time_left - ARTERY_POOL_INTERVAL, exclude)
+	var direction := (emitter.global_transform.basis * local_direction).normalized()
+	var velocity := _random_in_cone(direction, SPURT_SPREAD_DEGREES) * randf_range(SPURT_SPEED_MIN, SPURT_SPEED_MAX)
+	var hit := _trace_arc(emitter.get_world_3d().direct_space_state, emitter.global_position, velocity, exclude)
+	if not hit.is_empty():
+		spawn_splatter(tree.current_scene, hit.position, hit.normal, randf_range(0.25, 0.4))
+	tree.create_timer(SPURT_LANDING_INTERVAL).timeout.connect(func() -> void:
+		_trace_landing(emitter, local_direction, tree, time_left - SPURT_LANDING_INTERVAL, exclude)
 	)
+
+
+## Follows one droplet's arc in SPURT_TRACE_STEPS straight ray segments and
+## returns the first hit, or {} if it never lands within its lifetime.
+static func _trace_arc(space: PhysicsDirectSpaceState3D, origin: Vector3, velocity: Vector3, exclude: Array[RID]) -> Dictionary:
+	var step := SPURT_LIFETIME / SPURT_TRACE_STEPS
+	var point := origin
+	for _step_index in SPURT_TRACE_STEPS:
+		var next := point + velocity * step + SPURT_GRAVITY * (0.5 * step * step)
+		var query := PhysicsRayQueryParameters3D.create(point, next)
+		query.collision_mask = EnemyRagdoll.WORLD_MASK
+		query.exclude = exclude
+		var hit := space.intersect_ray(query)
+		if not hit.is_empty():
+			return hit
+		velocity += SPURT_GRAVITY * step
+		point = next
+	return {}
+
+
+## `direction` nudged randomly inside a cone of `degrees` half-angle -- the
+## same shape ParticleProcessMaterial.spread uses for the visible droplets.
+static func _random_in_cone(direction: Vector3, degrees: float) -> Vector3:
+	var up := Vector3.UP if absf(direction.y) < 0.99 else Vector3.RIGHT
+	var aim := Basis.looking_at(direction, up) # -Z of this basis is `direction`
+	var jitter := Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).limit_length(1.0)
+	var offset := jitter * tan(deg_to_rad(degrees))
+	return (aim * Vector3(offset.x, offset.y, -1.0)).normalized()
+
+
+## Droplets drag streaks behind them, tuned in fx/blood_trail.tres. The trail
+## mesh is built once and shared by every spurt.
+static func _apply_trail(particles: GPUParticles3D) -> void:
+	var settings := _get_trail_settings()
+	if not settings.enabled:
+		particles.draw_pass_1 = _get_impact_mesh()
+		return
+	particles.trail_enabled = true
+	particles.trail_lifetime = settings.lifetime
+	particles.draw_pass_1 = _get_trail_mesh(settings)
+
+
+static func _get_trail_settings() -> BloodTrailSettings:
+	if _trail_settings == null:
+		_trail_settings = load(TRAIL_SETTINGS_PATH) as BloodTrailSettings
+		if _trail_settings == null:
+			_trail_settings = BloodTrailSettings.new() # file missing: use the defaults
+	return _trail_settings
+
+
+## A TubeTrailMesh bends along each droplet's recent path; its material needs
+## use_particle_trails or the tube renders as a straight, unbent stick.
+static func _get_trail_mesh(settings: BloodTrailSettings) -> TubeTrailMesh:
+	if _trail_mesh == null:
+		_trail_mesh = TubeTrailMesh.new()
+		_trail_mesh.radius = settings.radius
+		_trail_mesh.radial_steps = settings.radial_steps
+		_trail_mesh.sections = settings.sections
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = settings.color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.use_particle_trails = true
+		_trail_mesh.material = mat
+	return _trail_mesh
 
 
 ## A blood decal stuck to whatever surface is at `position`, facing away

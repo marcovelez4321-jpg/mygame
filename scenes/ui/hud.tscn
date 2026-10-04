@@ -1,7 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/hud.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/weapon_wheel.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/hit_marker.gd" id="3"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1")
@@ -26,57 +27,14 @@ offset_bottom = 2.0
 mouse_filter = 2
 color = Color(1, 1, 1, 0.9)
 
-[node name="HitTickTop" type="ColorRect" parent="."]
+[node name="HitMarker" type="Control" parent="."]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -1.0
-offset_top = -14.0
-offset_right = 1.0
-offset_bottom = -4.0
 mouse_filter = 2
-color = Color(1, 0.15, 0.15, 0)
-
-[node name="HitTickBottom" type="ColorRect" parent="."]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -1.0
-offset_top = 4.0
-offset_right = 1.0
-offset_bottom = 14.0
-mouse_filter = 2
-color = Color(1, 0.15, 0.15, 0)
-
-[node name="HitTickLeft" type="ColorRect" parent="."]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -14.0
-offset_top = -1.0
-offset_right = -4.0
-offset_bottom = 1.0
-mouse_filter = 2
-color = Color(1, 0.15, 0.15, 0)
-
-[node name="HitTickRight" type="ColorRect" parent="."]
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 4.0
-offset_top = -1.0
-offset_right = 14.0
-offset_bottom = 1.0
-mouse_filter = 2
-color = Color(1, 0.15, 0.15, 0)
+script = ExtResource("3")
 
 [node name="StaminaBar" type="Control" parent="."]
 anchors_preset = 8

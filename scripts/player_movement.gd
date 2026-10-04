@@ -692,7 +692,7 @@ func _on_shot_fired() -> void:
 	camera.kick_fov(4.0)
 
 
-func _on_hit_confirmed(killed: bool) -> void:
+func _on_hit_confirmed(killed: bool, _kind: WeaponController.HitKind) -> void:
 	camera.shake(3.0 if killed else 1.5)
 	camera.kick_fov(8.0 if killed else 3.0)
 
