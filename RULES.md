@@ -94,6 +94,39 @@ torn up later. In practice:
 
 ---
 
+## Creative Direction — what the game IS
+
+Working title: **Grandma's Boy**. New enemies, weapons, levels, sounds and UI
+get checked against this the same way code gets checked against the rules
+above.
+
+- **Setting.** You live at Grandma's suburban house (the hub). Her portals drop
+  you into a **lawless city** — not a post-apocalypse or a wasteland, but a
+  living, rotten, Gotham-style city where the cops gave up and nobody's in
+  charge. Alleys, rooftops, fire escapes, corner stores, trap houses, subway
+  tunnels. It should feel like a real place gone wrong, not a ruin.
+- **Enemies.** Crackheads and the city's lowlifes: tweakers, junkies,
+  scavengers, petty crime crews. Exaggerated caricatures played for dark
+  comedy — twitchy, unpredictable, desperate, occasionally pathetic, dangerous
+  in a crowd.
+- **The player.** Inspired by the Postal Dude: deadpan, unbothered, a little
+  unhinged — the straight man in a city that's lost its mind, and just as much
+  a target of the joke as everyone else.
+- **Tone.** Doesn't take itself seriously, but takes its craft seriously.
+  GTA / Postal-style satire: gory and shocking in a fun way, never grim. The
+  violence is the punchline — artery sprays, ragdolls and stomp kills should
+  land as slapstick.
+- **Look.** Grimy and dirty, through an old-school PS1 lens: low-poly models,
+  low-res textures, dithering (PS1Dither autoload), low internal render scale.
+  Grime comes from texture and color (stains, trash, graffiti, sodium-orange
+  streetlights, sickly greens, nicotine yellows), not from modern effects —
+  no realistic PBR wear, no film grain stacks, nothing that breaks the PS1
+  illusion.
+- **Feel.** Old-school boomer-shooter movement: fast, VQ3 strafe-jumping, dash,
+  wall jump, mantle.
+
+---
+
 ## Notes log
 A running list of decisions made against these rules, so we don't relitigate
 them:
@@ -295,3 +328,7 @@ them:
 - 2026-09-28: Ragdolls now react to the killing blow. Health.take_damage() takes optional hit direction/position/impact_force and remembers the last blow (last_hit_impulse, last_hit_position; blows within 100 ms merge so shotgun pellets add up). WeaponData.impact_force is per weapon (pistol 2.0 default, machine gun 1.0, shotgun 1.5 per pellet). EnemyRagdoll gives the bone nearest the impact the full push and every bone ody_share of it, plus a small upward pop. Cosmetic only; in co-op the host will send the hit info with the death message. Corpses still ignore shots (gun ray uses mask 1), so shooting an already-dead body does nothing yet.
 
 - 2026-09-28: **Decision: adopt Box3D** (osimuka/box3d-godot binding, its own node types: Box3DWorld, Box3DBody, Box3DCharacterBody, Box3DCollisionShape, joints) for ragdolls and physics props, after side-by-side testing in a separate copy of their demo project. User's verdict: 'way more realistic... love it a lot more than what we have' vs our Jolt PhysicalBone3D ragdoll. Confirmed working on Godot 4.7.2. Known integration cost (not yet started): this is NOT a drop-in replacement like the other Box3D extension -- it's a SECOND physics world alongside Godot's own, so using it means (1) mirroring level collision into a Box3DWorld, (2) a player stand-in body so it can push Box3D props, (3) shots checked against both worlds, (4) ragdolls need a bridge that reads each Box3DBody's transform every frame and applies it to the matching Skeleton3D bone, since Box3D's own ragdoll sample drives its own plain mannequin mesh, not an arbitrary imported character skeleton. Plan: start with physics PROPS (crates etc, no skeleton bridge needed, immediate Half-Life-style win), then build the ragdoll skeleton-bridge as its own step. Test files live in C:\Users\qtres\GodotProjects\2v-2-box3d-test and two extracted copies of the demo at C:\Users\qtres\box3d\ and C:\Users\qtres\box3d-godot-main\ (the latter has no .godot cache and can be deleted once the former is confirmed working).
+
+- 2026-09-29: **Sound system, hit ticks, mantle.** Sound: `SoundEvent` resource (list of clips + volume/pitch variance + bus; a random clip per play) and `SoundPlayer` static helper (`play_2d` / `play_3d` / `play_loop_3d`), same shape as BloodFX. Presentation-only listener nodes (`EnemySound`, `PlayerSound`, `WeaponSound`) hook signals that already existed, plus new `jumped`/`dashed`/`wall_jumped`/`mantled` on PlayerMovement and `artery_kill(bone)` on WeaponController. Per-weapon fire/reload/switch sounds live on WeaponData. Every slot points at a stub `.tres` in `audio/events/`; drag audio into its `clips` in the Inspector. The artery spurt sound is parented to the neck bone so it follows the ragdoll. Buses default to "SFX" and fall back to Master until an SFX bus exists. Hit ticks: four thin red lines at the crosshair's sides flash on a hit (Quake 2 "hit indicator"). Mantle: press space while LOOKING at a ledge (camera ray, not body facing) between `mantle_min_height` and `mantle_max_height`; a forward ray finds the wall, a downward ray finds its top, a body_test_motion clearance check guards the landing; the climb is a physics-process Tween on global_position. Rule 3 flag: watch `mantle_max_height` so it doesn't trivialize heights opponents must work for in PvP. Untested at time of writing (no Godot executable in that environment). Known gap: `enemy_gunner.tscn` inherits the base melee `attack_sound`; give its EnemySound its own gunshot event.
+
+- 2026-10-04: **Creative direction locked in** (see the Creative Direction section above). Supersedes the 2026-09-28 "demon realm/dungeon" destination: Grandma's portals now lead to a lawless Gotham-style city; enemies are crackheads and lowlifes; the protagonist is Postal Dude-inspired; tone is GTA/Postal satire; look is grimy and dirty through a PS1 lens. The suburban hub, Grandma's mission select and the portals are unchanged. Next: an IK-driven enemy using the IKModifier3D nodes Godot brought back in 4.6 (TwoBoneIK3D, SplineIK3D, FABRIK3D, CCDIK3D, JacobianIK3D). Rule 1 note: TwoBoneIK3D and SplineIK3D are deterministic (no dependence on the previous frame), so in co-op each client computes the same pose from the same replicated target with no pose data sent; the iterative solvers may drift slightly between clients, which is fine for cosmetic limbs only.
