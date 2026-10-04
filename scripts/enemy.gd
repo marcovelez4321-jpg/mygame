@@ -109,20 +109,6 @@ signal attack_started
 ## which instead governs the pause BETWEEN bursts.
 @export var burst_shot_interval: float = 0.15
 
-@export_group("Approach Prediction")
-## Leads a moving target instead of walking straight at their literal current
-## position -- the "smarter" read L4D-style chase AI is known for. This is a
-## general, well-established game-AI technique (target leading / intercept
-## prediction), built from scratch here -- not anything decompiled or
-## referenced from an actual L4D build, which isn't something I have access
-## to. Seconds of lead time; 0 disables it entirely (chases the real position).
-@export var prediction_time: float = 0.4
-## Caps how far ahead the prediction can reach. A player dashing, wall-
-## jumping, or getting launched off a stomp kill shouldn't send the enemy
-## charging at a point way off in empty space -- it just clamps back toward
-## their actual position instead.
-@export var prediction_max_offset: float = 4.0
-
 @onready var health: Health = $Health
 ## Optional -- routes chase movement around walls/corners via the level's
 ## baked NavigationMesh (see map_level.gd's _bake_navigation()) instead of a
@@ -232,11 +218,7 @@ func _think_chase() -> void:
 		# Backing off just negates the approach direction rather than pathing
 		# a real retreat route -- a crude but fine approximation for a short
 		# "get some distance" step, not true flee-pathfinding.
-		# Leads a currently-visible target instead of walking straight at
-		# their literal position (see prediction_time's own comment) -- no
-		# velocity to lead with once they're only a last-seen memory spot.
-		var nav_target: Vector3 = _predicted_position(_target) if can_see_now else aim_pos
-		var shoot_dir := _nav_direction_to(nav_target)
+		var shoot_dir := _nav_direction_to(aim_pos)
 		if can_see_now and shoot_distance < shoot_min_range:
 			shoot_dir = -shoot_dir
 		velocity.x = shoot_dir.x * move_speed
@@ -264,18 +246,16 @@ func _think_chase() -> void:
 		_lunge_timer = lunge_telegraph_time
 		# The lunge itself stays a straight committed line, not nav-routed --
 		# see _think_lunge()'s own comment for why re-aiming mid-burst would
-		# defeat the point of the telegraph. It DOES still lead the target
-		# (set again, with prediction, right as the burst actually commits).
+		# defeat the point of the telegraph. It's re-aimed once more right as
+		# the burst actually commits.
 		_lunge_direction = _flat_direction_to_position(aim_pos)
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
 
-	# Leads a currently-visible target instead of walking straight at their
-	# literal position (see prediction_time's own comment) -- no velocity to
-	# lead with once they're only a last-seen memory spot.
-	var nav_target: Vector3 = _predicted_position(_target) if can_see_now else aim_pos
-	var direction := _nav_direction_to(nav_target)
+	# Straight at the target (or its last-seen spot), routed around walls by
+	# the navmesh -- no leading/prediction, by design: simple and readable.
+	var direction := _nav_direction_to(aim_pos)
 	velocity.x = direction.x * move_speed
 	velocity.z = direction.z * move_speed
 
@@ -297,11 +277,9 @@ func _think_lunge(delta: float) -> void:
 			# telegraph merely started -- otherwise up to lunge_telegraph_time
 			# seconds of the target moving goes unaccounted for and the burst
 			# fires at where they USED to be, then visibly "snaps" back onto
-			# them the instant it falls back to CHASE afterward. Leads their
-			# CURRENT velocity too -- an intercept dash toward where they're
-			# headed, not just their position at this exact instant.
+			# them the instant it falls back to CHASE afterward.
 			if _target:
-				_lunge_direction = _flat_direction_to_position(_predicted_position(_target))
+				_lunge_direction = _flat_direction_to(_target)
 		return
 
 	velocity.x = _lunge_direction.x * lunge_speed
@@ -500,19 +478,6 @@ func _can_see(target: Node3D) -> bool:
 	var result := get_world_3d().direct_space_state.intersect_ray(query)
 	return result.is_empty() or result.collider == target
 
-
-## Where `target` will likely be shortly, based on its CURRENT velocity --
-## not its true current position. Real players are CharacterBody3D with a
-## real velocity to read; anything else (or a target with prediction_time at
-## 0) just returns its actual position, unled.
-func _predicted_position(target: Node3D) -> Vector3:
-	var body := target as CharacterBody3D
-	if body == null or prediction_time <= 0.0:
-		return target.global_position
-	var offset: Vector3 = body.velocity * prediction_time
-	offset.y = 0.0
-	offset = offset.limit_length(prediction_max_offset)
-	return target.global_position + offset
 
 
 ## Direction to walk RIGHT NOW to make progress toward `destination`, routed

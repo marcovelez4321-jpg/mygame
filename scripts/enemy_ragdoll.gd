@@ -198,6 +198,7 @@ func _ready() -> void:
 		push_warning("EnemyRagdoll: the model on %s has no humanoid bones -- was it imported with art/animations/mixamo_bonemap.tres? No ragdoll." % _enemy.name)
 		return
 	_enemy.state_changed.connect(_on_state_changed)
+	print("EnemyRagdoll: %s ready with %d ragdoll bones" % [_enemy.name, _bones.size()]) # TEMPORARY diagnostic
 
 
 ## A model can still ship its own hand-made ragdoll (Skeleton3D > "Create
@@ -234,6 +235,7 @@ func _on_state_changed(state: Enemy.State) -> void:
 
 
 func _start_ragdoll() -> void:
+	print("EnemyRagdoll: %s died, starting ragdoll (animation player found: %s)" % [_enemy.name, _animation_player != null]) # TEMPORARY diagnostic
 	# Stop the animation so it doesn't fight the physics for control of the bones.
 	if _animation_player:
 		_animation_player.stop(true)
