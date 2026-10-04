@@ -682,9 +682,9 @@ func _stomp(enemy: Enemy, impact_speed: float) -> void:
 ## makes `duration` mean real seconds even while time_scale itself is down.
 func _hit_stop(scale: float, duration: float) -> void:
 	Engine.time_scale = scale
-	get_tree().create_timer(duration, true, false, true).timeout.connect(func() -> void:
-		Engine.time_scale = 1.0
-	)
+	# Engine's own setter, not a lambda: the lambda would belong to this node,
+	# and a level restart mid-hit-stop would free it before the timer fires.
+	get_tree().create_timer(duration, true, false, true).timeout.connect(Engine.set_time_scale.bind(1.0))
 
 
 func _on_shot_fired() -> void:

@@ -82,11 +82,13 @@ func _on_artery_kill(bone: Node3D) -> void:
 	var spurt_player := SoundPlayer.play_loop_3d(artery_spurt_sound, bone)
 	if spurt_player == null:
 		return # stub event, no audio assigned yet
-	get_tree().create_timer(artery_spurt_duration).timeout.connect(func() -> void:
-		if is_instance_valid(spurt_player):
-			spurt_player.stop()
-			spurt_player.queue_free()
-	)
+	# Straight to the player's own methods, not a lambda: if the corpse is
+	# removed first, the sound player is freed with it and these connections
+	# vanish instead of firing into a freed node. stop() doesn't emit
+	# `finished`, so the loop doesn't restart itself before queue_free().
+	var timer := get_tree().create_timer(artery_spurt_duration)
+	timer.timeout.connect(spurt_player.stop)
+	timer.timeout.connect(spurt_player.queue_free)
 
 
 func _on_picked_up(_weapon: WeaponData, _ammo_type: WeaponData.AmmoType, _ammo_amount: int) -> void:

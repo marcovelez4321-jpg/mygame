@@ -482,9 +482,9 @@ func _own_body_rids(collider: Node) -> Array[RID]:
 ## game to `scale` for `duration` REAL (unscaled) seconds, then snaps back.
 func _hit_stop(scale: float, duration: float) -> void:
 	Engine.time_scale = scale
-	get_tree().create_timer(duration, true, false, true).timeout.connect(func() -> void:
-		Engine.time_scale = 1.0
-	)
+	# Engine's own setter, not a lambda: the lambda would belong to this node,
+	# and a level restart mid-hit-stop would free it before the timer fires.
+	get_tree().create_timer(duration, true, false, true).timeout.connect(Engine.set_time_scale.bind(1.0))
 
 
 ## `direction` nudged by a random amount inside a cone of `spread_degrees`.

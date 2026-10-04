@@ -247,10 +247,13 @@ func _spawn_muzzle_flash() -> void:
 	_model.add_child(glow)
 	glow.position = offset
 
-	get_tree().create_timer(MUZZLE_FLASH_TIME).timeout.connect(func() -> void:
-		light.queue_free()
-		glow.queue_free()
-	)
+	# Connected straight to the nodes' own queue_free, not a lambda: if the gun
+	# is swapped (or the level restarts) before this fires, freed nodes drop
+	# their connections automatically, while a lambda would still fire with
+	# freed captures ("Lambda capture at index 0 was freed").
+	var timer := get_tree().create_timer(MUZZLE_FLASH_TIME)
+	timer.timeout.connect(light.queue_free)
+	timer.timeout.connect(glow.queue_free)
 
 
 func _show_weapon(weapon: WeaponData) -> void:

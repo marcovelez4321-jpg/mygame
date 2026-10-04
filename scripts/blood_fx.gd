@@ -114,17 +114,14 @@ static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Arr
 	var tree := bone.get_tree()
 	if tree == null:
 		return
-	tree.create_timer(duration).timeout.connect(func() -> void:
-		if not is_instance_valid(particles):
-			return
-		particles.emitting = false
-		tree.create_timer(particles.lifetime).timeout.connect(func() -> void:
-			if is_instance_valid(particles):
-				particles.queue_free()
-		)
-	)
+	# Stop emitting after `duration`, free once the last droplets have landed.
+	# Connected to the particles' own methods rather than lambdas, so if the
+	# corpse is removed (or the level restarts) first, the connections vanish
+	# with it instead of firing into a freed node.
+	tree.create_timer(duration).timeout.connect(particles.set.bind(&"emitting", false))
+	tree.create_timer(duration + particles.lifetime).timeout.connect(particles.queue_free)
 
-	_trace_landing(particles, local_direction, tree, duration, exclude)
+	_start_landing_trace(particles, local_direction, duration, exclude)
 
 
 ## Puts blood where the spray actually comes down. GPU particles can't report
@@ -139,17 +136,31 @@ static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Arr
 ## Rule 1 (co-op): cosmetic and local -- each player's game traces its own
 ## random droplets, so splat positions differ slightly between players, which
 ## nobody can tell and nothing in gameplay reads.
-static func _trace_landing(emitter: Node3D, local_direction: Vector3, tree: SceneTree, time_left: float, exclude: Array[RID]) -> void:
-	if not is_instance_valid(emitter) or time_left <= 0.0:
-		return
+##
+## Driven by a Timer node parented to the emitter, not get_tree().create_timer():
+## if the body is freed mid-spurt, the Timer is freed with it and simply stops,
+## instead of a scene-tree timer firing later into a freed emitter.
+static func _start_landing_trace(emitter: Node3D, local_direction: Vector3, duration: float, exclude: Array[RID]) -> void:
+	_trace_one_droplet(emitter, local_direction, exclude)
+	var timer := Timer.new()
+	timer.wait_time = SPURT_LANDING_INTERVAL
+	timer.autostart = true
+	emitter.add_child(timer)
+	var stop_msec := Time.get_ticks_msec() + int(duration * 1000.0)
+	timer.timeout.connect(func() -> void:
+		if Time.get_ticks_msec() >= stop_msec:
+			timer.queue_free()
+			return
+		_trace_one_droplet(emitter, local_direction, exclude)
+	)
+
+
+static func _trace_one_droplet(emitter: Node3D, local_direction: Vector3, exclude: Array[RID]) -> void:
 	var direction := (emitter.global_transform.basis * local_direction).normalized()
 	var velocity := _random_in_cone(direction, SPURT_SPREAD_DEGREES) * randf_range(SPURT_SPEED_MIN, SPURT_SPEED_MAX)
 	var hit := _trace_arc(emitter.get_world_3d().direct_space_state, emitter.global_position, velocity, exclude)
 	if not hit.is_empty():
-		spawn_splatter(tree.current_scene, hit.position, hit.normal, randf_range(0.25, 0.4))
-	tree.create_timer(SPURT_LANDING_INTERVAL).timeout.connect(func() -> void:
-		_trace_landing(emitter, local_direction, tree, time_left - SPURT_LANDING_INTERVAL, exclude)
-	)
+		spawn_splatter(emitter.get_tree().current_scene, hit.position, hit.normal, randf_range(0.25, 0.4))
 
 
 ## Follows one droplet's arc in SPURT_TRACE_STEPS straight ray segments and
