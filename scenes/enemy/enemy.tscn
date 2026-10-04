@@ -75,10 +75,12 @@ hurt_animations = Array[String](["moves/Hurt"])
 
 [node name="EnemyRagdoll" type="Node" parent="." unique_id=1636364065]
 script = ExtResource("13_dtxhd")
-bone_length_scale = 0.8
+body_share = 0.75
+bone_length_scale = 0.5
 bone_radius_scale = 0.95
 linear_damping = 0.1
-angular_damping = 1.0
+angular_damping = 2.0
+bone_gravity_scale = 3.0
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=2144887400]
 path_desired_distance = 0.5
