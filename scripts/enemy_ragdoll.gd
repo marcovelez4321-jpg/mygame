@@ -2,8 +2,9 @@ class_name EnemyRagdoll
 extends Node
 
 ## Turns the enemy's body into a ragdoll when it dies. Attach as a child of
-## the Enemy. The physical bones themselves are created once in the editor
-## (Skeleton3D > "Create physical skeleton"); this script switches them on.
+## the Enemy. The physical bones are built at spawn by RagdollBuilder from
+## whatever model EnemyModel picked (see _find_or_build_simulator()); this
+## script switches them on.
 ##
 ## While the enemy is alive its physical bones have NO collision at all. They
 ## sit inside the enemy's own capsule, so if they collided, the enemy would be
@@ -168,11 +169,9 @@ var _character_right: Vector3 = Vector3.RIGHT
 
 
 func _ready() -> void:
-	var simulators := _enemy.find_children("*", "PhysicalBoneSimulator3D", true, false)
-	if simulators.is_empty():
-		push_warning("EnemyRagdoll: no PhysicalBoneSimulator3D found. In enemy.tscn, select the Skeleton3D and use 'Create physical skeleton'.")
+	_simulator = _find_or_build_simulator()
+	if _simulator == null:
 		return
-	_simulator = simulators[0] as PhysicalBoneSimulator3D
 	_animation_player = _enemy.find_child("AnimationPlayer", true, false) as AnimationPlayer
 
 	for child in _simulator.get_children():
@@ -195,7 +194,25 @@ func _ready() -> void:
 			_shrink_shapes(bone)
 			_bones.append(bone)
 
+	if _bones.is_empty():
+		push_warning("EnemyRagdoll: the model on %s has no humanoid bones -- was it imported with art/animations/mixamo_bonemap.tres? No ragdoll." % _enemy.name)
+		return
 	_enemy.state_changed.connect(_on_state_changed)
+
+
+## A model can still ship its own hand-made ragdoll (Skeleton3D > "Create
+## physical skeleton" saved in its scene) -- that wins if present. Otherwise one
+## is built from whatever skeleton the model has, which is what lets
+## EnemyModel swap models without breaking the ragdoll.
+func _find_or_build_simulator() -> PhysicalBoneSimulator3D:
+	var simulators := _enemy.find_children("*", "PhysicalBoneSimulator3D", true, false)
+	if not simulators.is_empty():
+		return simulators[0] as PhysicalBoneSimulator3D
+	var skeletons := _enemy.find_children("*", "Skeleton3D", true, false)
+	if skeletons.is_empty():
+		push_warning("EnemyRagdoll: no Skeleton3D under %s -- no ragdoll." % _enemy.name)
+		return null
+	return RagdollBuilder.build(skeletons[0] as Skeleton3D)
 
 
 ## Shrinks a bone's capsule around its centre (length and thickness). The
