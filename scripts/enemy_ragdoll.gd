@@ -205,15 +205,22 @@ func _ready() -> void:
 ## physical skeleton" saved in its scene) -- that wins if present. Otherwise one
 ## is built from whatever skeleton the model has, which is what lets
 ## EnemyModel swap models without breaking the ragdoll.
+##
+## Looks only at the skeleton's normal children on purpose: every Skeleton3D
+## also creates a hidden, empty, inactive PhysicalBoneSimulator3D of its own
+## (Skeleton3D::setup_simulator(), kept for pre-4.3 compatibility), and
+## find_children() includes hidden internal nodes. Grabbing that empty one is
+## what left every enemy with "no humanoid bones" and no ragdoll.
 func _find_or_build_simulator() -> PhysicalBoneSimulator3D:
-	var simulators := _enemy.find_children("*", "PhysicalBoneSimulator3D", true, false)
-	if not simulators.is_empty():
-		return simulators[0] as PhysicalBoneSimulator3D
 	var skeletons := _enemy.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
 		push_warning("EnemyRagdoll: no Skeleton3D under %s -- no ragdoll." % _enemy.name)
 		return null
-	return RagdollBuilder.build(skeletons[0] as Skeleton3D)
+	var skeleton := skeletons[0] as Skeleton3D
+	for child in skeleton.get_children(): # excludes internal nodes by default
+		if child is PhysicalBoneSimulator3D:
+			return child as PhysicalBoneSimulator3D
+	return RagdollBuilder.build(skeleton)
 
 
 ## Shrinks a bone's capsule around its centre (length and thickness). The

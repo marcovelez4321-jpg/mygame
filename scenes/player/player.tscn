@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://b5s8a7hpssyqm" path="res://scripts/player_movement.gd" id="1"]
 [ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_dovo2"]
 [ext_resource type="Script" uid="uid://dqwcx08lmpo6s" path="res://scripts/weapon_controller.gd" id="3_wc"]
-[ext_resource type="Resource" uid="uid://dcj7mfnghmmj5" path="res://weapons/starter_gun.tres" id="4_sg"]
+[ext_resource type="Resource" uid="uid://dd2w6ofsbor3k" path="res://weapons/starter_gun.tres" id="4_sg"]
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="5_0owmy"]
 [ext_resource type="Script" uid="uid://tgadday71xt4" path="res://scripts/shot_tracer.gd" id="5_tr"]
 [ext_resource type="Script" uid="uid://djr8ub72le0rl" path="res://scripts/viewmodel.gd" id="6_vm"]

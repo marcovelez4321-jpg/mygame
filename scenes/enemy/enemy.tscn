@@ -69,7 +69,7 @@ variants = Array[PackedScene]([ExtResource("21_killer"), ExtResource("22_killer0
 script = ExtResource("4_tjssy")
 animation_library = SubResource("AnimationLibrary_13gj6")
 idle_animations = Array[String](["moves/Idle", "moves/Idle2"])
-walk_animations = Array[String](["moves/a", "moves/Walk2", "moves/Walk3"])
+walk_animations = Array[String](["moves/Walk", "moves/Walk2", "moves/Walk3"])
 attack_animations = Array[String](["moves/Attack", "moves/Attack2"])
 hurt_animations = Array[String](["moves/Hurt"])
 
