@@ -63,6 +63,20 @@ Each friend does this once, on their own machine:
 5. **File → New Map**, and **2v-2** should now show up as a choice. If it
    doesn't, double-check step 3's folder name and step 4's Game Path.
 
+## 2b. Testing your own map (no Godot needed)
+
+1. Open the game in your browser: https://marcovelez4321-jpg.github.io/mygame/
+   (first load takes a bit -- it's downloading the whole game).
+2. Click into the game, press **Esc**, then **Load Test Map**, and pick your
+   `.map` file (it's wherever you saved it from TrenchBroom). You can also
+   just drag the `.map` file onto the game.
+3. You spawn at your `info_player_start` with your enemies and pickups.
+   Changed something in TrenchBroom? Save, then **Esc → Load Test Map**
+   again.
+
+Nothing gets uploaded -- the map stays on your computer. Any texture that
+isn't in the kit shows up as a placeholder; send that PNG along with the map.
+
 ## 3. Making a map and sending it back
 
 1. Friend: **File → New Map → 2v-2**, block it out, place entities

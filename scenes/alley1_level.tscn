@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://cyg2snr1w5xw5" path="res://addons/func_godot/textures/default_texture.png" id="4_bt7t5"]
 [ext_resource type="PackedScene" uid="uid://basaei4sy2ydl" path="res://scenes/starter_gun_pickup.tscn" id="6_apfex"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/enemy_gunner.tscn" id="7_61sim"]
-[ext_resource type="PackedScene" uid="uid://c4noyug3r67ag" path="res://scenes/enemy/enemy_rusher.tscn" id="8_ovf1o"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="8_ovf1o"]
 [ext_resource type="PackedScene" uid="uid://djmeis3phxch8" path="res://scenes/player/player.tscn" id="8_svhs4"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="9_kkskc"]
 

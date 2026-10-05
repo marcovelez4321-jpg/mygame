@@ -23,6 +23,7 @@ extends CanvasLayer
 @onready var menu_panel: Panel = $Dim/MenuPanel
 @onready var audio_button: Button = $Dim/MenuPanel/VBox/AudioButton
 @onready var character_option: OptionButton = $Dim/MenuPanel/VBox/CharacterRow/CharacterOption
+@onready var test_map_button: Button = $Dim/MenuPanel/VBox/TestMapButton
 
 ## On-screen names for GameSettings.AUDIO_BUSES, one slider each.
 const AUDIO_BUS_LABELS := {
@@ -81,6 +82,12 @@ func _ready() -> void:
 	_build_audio_panel()
 	_populate_character_options()
 	character_option.item_selected.connect(_on_character_selected)
+
+	# Play a TrenchBroom .map from your own computer (see TestMapLoader).
+	var test_map_loader := TestMapLoader.new()
+	add_child(test_map_loader)
+	test_map_button.pressed.connect(test_map_loader.pick)
+	test_map_loader.map_ready.connect(_open_test_map)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -269,6 +276,13 @@ func _on_character_selected(index: int) -> void:
 		var model := player.get_node_or_null("PlayerModel") as PlayerModel
 		if model:
 			model.set_character(_characters[index])
+
+
+## Reloads even when already in the test level, so re-picking an edited map
+## rebuilds it.
+func _open_test_map() -> void:
+	close()
+	get_tree().change_scene_to_file(TestMapLevel.SCENE_PATH)
 
 
 func _on_vsync_toggled(enabled: bool) -> void:

@@ -1,0 +1,82 @@
+# Builds the web version of the game and publishes it to GitHub Pages
+# (https://marcovelez4321-jpg.github.io/mygame/) every time you push to main.
+# Nothing to run by hand: push from GitHub Desktop, wait a few minutes, and
+# the site updates. Watch progress on the repo's "Actions" tab on github.com.
+#
+# GODOT_VERSION must match the Godot you edit the project with.
+
+name: Publish web build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # also adds a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Godot + its web export templates are a big download, so keep them
+      # between runs.
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-web
+
+      - name: Download Godot and web export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          TEMPLATES=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p ~/godot "$TEMPLATES"
+          cd ~/godot
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          unzip -q -j Godot_v${GODOT_VERSION}-stable_export_templates.tpz 'templates/web_*' 'templates/version.txt' -d "$TEMPLATES"
+          rm -f *.zip *.tpz
+
+      # Imports every asset (the .godot folder isn't in the repo). Godot can
+      # report harmless import warnings as a failure, so don't stop here --
+      # a real problem makes the export step below fail instead.
+      - name: Import assets
+        run: ~/godot/godot --headless --path . --import || true
+
+      - name: Export web build
+        run: |
+          mkdir -p build/web
+          ~/godot/godot --headless --path . --export-release "Web" build/web/index.html
+          test -f build/web/index.pck
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

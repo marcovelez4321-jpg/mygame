@@ -1,3 +1,5 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+# Local web exports -- GitHub builds and publishes its own (.github/workflows/publish-web.yml)
+/build/

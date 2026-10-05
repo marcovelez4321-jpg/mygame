@@ -1,0 +1,40 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/test_map_level.gd" id="1_level"]
+[ext_resource type="Script" path="res://addons/func_godot/src/map/func_godot_map.gd" id="2_map"]
+[ext_resource type="Resource" path="res://addons/func_godot/func_godot_default_map_settings.tres" id="3_settings"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="4_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="5_hud"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.25, 0.45, 0.75, 1)
+sky_horizon_color = Color(0.65, 0.65, 0.7, 1)
+ground_bottom_color = Color(0.3, 0.28, 0.25, 1)
+ground_horizon_color = Color(0.55, 0.5, 0.42, 1)
+
+[sub_resource type="Sky" id="Sky1"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Env1"]
+background_mode = 2
+sky = SubResource("Sky1")
+ambient_light_source = 3
+
+[node name="TestMapLevel" type="Node3D"]
+script = ExtResource("1_level")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7071, -0.7071, 0, 0.7071, 0.7071, 0, 10, 0)
+shadow_enabled = true
+
+[node name="FuncGodotMap" type="Node3D" parent="."]
+script = ExtResource("2_map")
+map_settings = ExtResource("3_settings")
+
+[node name="Player" parent="." instance=ExtResource("4_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+
+[node name="HUD" parent="." instance=ExtResource("5_hud")]
