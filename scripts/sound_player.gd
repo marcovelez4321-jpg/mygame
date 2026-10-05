@@ -47,7 +47,9 @@ static func play_2d(event: SoundEvent) -> AudioStreamPlayer:
 ## LOCATE by ear -- enemy sounds, world impacts, eventually other players'
 ## guns -- which matters in a shooter (you should be able to tell an enemy is
 ## behind you before you see it).
-static func play_3d(event: SoundEvent, position: Vector3, world: Node) -> AudioStreamPlayer3D:
+## `volume_scale` (0..1) is an extra linear gain on top of the event's own
+## volume -- physics impacts use it to play quieter the softer the hit.
+static func play_3d(event: SoundEvent, position: Vector3, world: Node, volume_scale: float = 1.0) -> AudioStreamPlayer3D:
 	if event == null:
 		return null
 	var clip := event.pick_clip()
@@ -56,7 +58,7 @@ static func play_3d(event: SoundEvent, position: Vector3, world: Node) -> AudioS
 
 	var player := AudioStreamPlayer3D.new()
 	player.stream = clip
-	player.volume_db = event.roll_volume_db()
+	player.volume_db = event.roll_volume_db() + linear_to_db(volume_scale)
 	player.pitch_scale = event.roll_pitch_scale()
 	player.bus = _resolve_bus(event.bus)
 

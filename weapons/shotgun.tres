@@ -27,6 +27,7 @@ viewmodel_position = Vector3(0.16505145, -0.21453339, -0.18045466)
 viewmodel_rotation_degrees = Vector3(-6.1223407, 86.735466, 0)
 viewmodel_scale = 1.2960939373946962
 muzzle_offset = Vector3(0.39170688, 0.08010229, -0.035429858)
+muzzle_flash_time = 0.15
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")
 switch_sound = ExtResource("5_switch")

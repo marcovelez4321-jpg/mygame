@@ -11,7 +11,11 @@ extends Node
 ## should call take_damage(), so clients can't hurt each other by cheating.
 
 signal damaged(amount: float, attacker_id: int)
-signal died(attacker_id: int)
+## is_critical carries through whatever the attacker considered a "clean,
+## finishing" blow (e.g. weapon_controller.gd's artery hit) -- Health itself
+## has no idea what that means for any particular attacker, it just forwards
+## the flag so a listener (e.g. enemy.gd's mutation chance) can react to it.
+signal died(attacker_id: int, is_critical: bool)
 
 ## Attacker id meaning "no one" (fall damage, a trap, the level itself).
 const NO_ATTACKER := 0
@@ -40,7 +44,7 @@ func _ready() -> void:
 ## hit_direction, hit_position and impact_force are optional and only describe
 ## the blow for cosmetic reactions. A melee hit or a trap can leave them out.
 func take_damage(amount: float, attacker_id: int = NO_ATTACKER, hit_direction: Vector3 = Vector3.ZERO,
-		hit_position: Vector3 = Vector3.ZERO, impact_force: float = 0.0) -> void:
+		hit_position: Vector3 = Vector3.ZERO, impact_force: float = 0.0, is_critical: bool = false) -> void:
 	if is_dead or amount <= 0.0:
 		return
 	_record_hit(hit_direction * impact_force, hit_position)
@@ -48,7 +52,7 @@ func take_damage(amount: float, attacker_id: int = NO_ATTACKER, hit_direction: V
 	damaged.emit(amount, attacker_id)
 	if current_health <= 0.0:
 		is_dead = true
-		died.emit(attacker_id)
+		died.emit(attacker_id, is_critical)
 
 
 func _record_hit(impulse: Vector3, position: Vector3) -> void:

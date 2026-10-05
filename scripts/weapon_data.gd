@@ -74,6 +74,11 @@ enum ReloadStyle {
 ## tuning, M to switch to muzzle tuning (a green marker shows exactly where
 ## this is), arrows/PageUp/PageDown to move it, F3 to save.
 @export var muzzle_offset: Vector3 = Vector3(0.0, 0.02, -0.35)
+## Seconds the muzzle flash (light + glow quad) stays visible after a shot.
+## Kept short by default so a fast-firing weapon's flashes don't overlap into
+## one continuous glow; a slower-firing weapon can afford a longer, punchier
+## flash since there's no next shot arriving to collide with it.
+@export var muzzle_flash_time: float = 0.05
 ## Colour of the stand-in block used until a real model is assigned.
 @export var placeholder_color: Color = Color(0.7, 0.7, 0.7)
 

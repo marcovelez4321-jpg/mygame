@@ -1,6 +1,6 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://basaei4sy2ydl"]
 
-[ext_resource type="Script" path="res://scripts/weapon_pickup.gd" id="1"]
+[ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
 [ext_resource type="Resource" uid="uid://dd2w6ofsbor3k" path="res://weapons/starter_gun.tres" id="2"]
 [ext_resource type="PackedScene" uid="uid://i02bor72sm53" path="res://art/weapons/PSX_Guns/FBX/Pistol.fbx" id="3"]
 
@@ -8,23 +8,25 @@
 radius = 0.6
 
 [sub_resource type="BoxShape3D" id="PhysicalShape"]
-size = Vector3(0.3, 0.25, 0.5)
+size = Vector3(0.20579834, 0.13415527, 0.056274414)
 
 [node name="WeaponPickup" type="RigidBody3D" unique_id=1]
-mass = 1.0
 script = ExtResource("1")
 weapon = ExtResource("2")
 
-[node name="PickupArea" type="Area3D" parent="."]
+[node name="PickupArea" type="Area3D" parent="." unique_id=1051371908]
 collision_layer = 0
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea" unique_id=765626040]
 shape = SubResource("PickupZoneShape")
 
-[node name="Pistol" parent="." instance=ExtResource("3")]
+[node name="Pistol" parent="." unique_id=1516354344 instance=ExtResource("3")]
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+[node name="Pistol" parent="Pistol" index="0" unique_id=858175727]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.02)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2059118136]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0053649917, -0.0021606386, -0.0154418945)
 shape = SubResource("PhysicalShape")
 
 [editable path="Pistol"]

@@ -87,7 +87,7 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 	SoundPlayer.play_2d(damage_sound)
 
 
-func _on_died(_attacker_id: int) -> void:
+func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	SoundPlayer.play_2d(death_sound)
 
 

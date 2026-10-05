@@ -5,11 +5,14 @@ extends CharacterBody3D
 ## meaning the enemy is always in exactly one state and each state decides
 ## what it does and when to switch.
 ##
-##   IDLE   - waits until it can see a player
-##   CHASE  - walks straight toward the nearest living player
-##   ATTACK - close enough: hits the player on a cooldown
-##   PAIN   - brief stagger after being hit
-##   DEAD   - stops, disappears after a moment
+##   IDLE      - waits until it can see a player
+##   CHASE     - walks straight toward the nearest living player
+##   ATTACK    - close enough: hits the player on a cooldown
+##   PAIN      - brief stagger after being hit
+##   DEAD      - stops, disappears after a moment
+##   SPAWNING  - just been born from a mutation explosion; inert until
+##               spawning_time elapses, then drops into IDLE like any other
+##               enemy. See the Mutation export group below.
 ##
 ## Rule 1 (co-op): only the host runs the AI (offline you ARE the host, so
 ## nothing changes now). It picks its target from the list of players instead
@@ -27,7 +30,7 @@ extends CharacterBody3D
 ##               instead of always closing in (the "gunner", HL2-Combine-
 ##               style keep-your-distance-and-shoot). See _land_hit()/_fire_shot().
 
-enum State { IDLE, CHASE, LUNGE, ATTACK, PAIN, DEAD }
+enum State { IDLE, CHASE, LUNGE, ATTACK, PAIN, DEAD, SPAWNING }
 
 ## Emitted whenever the state changes. Animation (and later, sound) listens
 ## to this. In co-op the host will send its state to the other player, whose
@@ -109,6 +112,40 @@ signal attack_started
 ## which instead governs the pause BETWEEN bursts.
 @export var burst_shot_interval: float = 0.15
 
+@export_group("Mutation")
+## Dying to anything OTHER than a clean/critical kill (e.g. weapon_controller
+## .gd's artery hit) rolls a chance to mutate instead of just dying -- Doom's
+## Pain Elemental and Painkiller's exploding fatties are the reference point
+## here (Rule 6): failing to finish something off cleanly makes it WORSE, not
+## just delayed. The mutant is a fresh copy of this same enemy scene wearing
+## the same model (see spawn_mutant()), so a mutated rusher is still a rusher,
+## just red, tougher and faster -- no separate mutant scene to keep in sync.
+@export var can_mutate: bool = true
+## Chance (0..1) a non-critical kill mutates rather than just dying outright.
+@export_range(0.0, 1.0, 0.05) var mutate_chance: float = 0.5
+## What the mutant gets on top of being a copy of this enemy. Rule 3: these
+## multiply this enemy's own numbers, so each type's mutant scales with it.
+@export var mutant_tint: Color = Color(0.82464653, 0.0, 0.1482195, 1.0)
+@export var mutant_health_multiplier: float = 2.0
+@export var mutant_speed_multiplier: float = 1.2
+## How long a freshly-spawned mutant sits inert (no AI, no movement) before
+## joining the fight -- a hook for a spawn animation, not implemented yet
+## (see enemy_animator.gd's spawn_animations, currently an empty stub list
+## same as die_animations). 0 skips straight to IDLE.
+@export var spawning_time: float = 0.6
+## Multiplies every mesh's albedo color -- a cheap, permanent recolor that
+## reads instantly as "not the same enemy", unlike hit_flash.gd's overlay
+## trick (that one's a brief FLASH and would fight this for the same
+## property). White (1,1,1,1) means "no tint, leave the model as imported".
+@export var tint_color: Color = Color(1.0, 1.0, 1.0, 1.0)
+
+## Set right before entering State.DEAD (see _on_died()) so EnemyRagdoll can
+## read it the same tick, before it decides between a normal death reaction
+## and the mutation twitch. Public: EnemyRagdoll reads it directly, the same
+## way it already reads health/corpse_time.
+var will_mutate: bool = false
+var _spawning_time_left: float = 0.0
+
 @onready var health: Health = $Health
 ## Optional -- routes chase movement around walls/corners via the level's
 ## baked NavigationMesh (see map_level.gd's _bake_navigation()) instead of a
@@ -155,11 +192,56 @@ func _ready() -> void:
 	add_to_group("enemies")
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
+	_apply_tint()
+
+
+## Multiplies every MeshInstance3D's material albedo by tint_color. Duplicates
+## each material first (StandardMaterial3D is a shared resource by default --
+## editing it in place would tint every OTHER enemy using the same imported
+## model too, not just this one).
+func _apply_tint() -> void:
+	if tint_color == Color(1.0, 1.0, 1.0, 1.0):
+		return
+	for mesh in _find_mesh_instances(self):
+		for i in mesh.get_surface_override_material_count():
+			var mat := mesh.get_active_material(i)
+			if mat is StandardMaterial3D:
+				var tinted := (mat as StandardMaterial3D).duplicate() as StandardMaterial3D
+				tinted.albedo_color *= tint_color
+				mesh.set_surface_override_material(i, tinted)
+
+
+func _find_mesh_instances(node: Node) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	if node is MeshInstance3D:
+		result.append(node)
+	for child in node.get_children():
+		result.append_array(_find_mesh_instances(child))
+	return result
+
+
+## Starts a freshly-spawned mutant inert for spawning_time before it joins the
+## fight -- called on the new mutant by spawn_mutant() (see EnemyRagdoll's
+## _explode_and_spawn_mutant()), never by this enemy on itself.
+func start_spawning() -> void:
+	if spawning_time <= 0.0:
+		return
+	_state = State.SPAWNING
+	_spawning_time_left = spawning_time
 
 
 func _physics_process(delta: float) -> void:
 	# Only the host thinks. Offline, multiplayer.is_server() is true.
 	if not multiplayer.is_server() or _state == State.DEAD:
+		return
+
+	if _state == State.SPAWNING:
+		_spawning_time_left -= delta
+		if _spawning_time_left <= 0.0:
+			_state = State.IDLE
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		move_and_slide()
 		return
 
 	_attack_cooldown = maxf(_attack_cooldown - delta, 0.0)
@@ -436,12 +518,51 @@ func _update_memory(found: Node3D) -> void:
 		_has_seen_target = false
 
 
-func _on_died(_attacker_id: int) -> void:
+func _on_died(_attacker_id: int, is_critical: bool) -> void:
+	# Rolled and stored BEFORE entering State.DEAD: the state setter emits
+	# state_changed synchronously, which EnemyRagdoll is listening for to
+	# kick off its own death reaction right then -- it needs will_mutate
+	# already decided by the time that happens, not after.
+	will_mutate = can_mutate and not scene_file_path.is_empty() and not is_critical and randf() < mutate_chance
 	_state = State.DEAD
 	velocity = Vector3.ZERO
 	# Turn off collision so shots and players pass through the body.
 	$CollisionShape3D.set_deferred("disabled", true)
-	get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+	# A mutating corpse isn't removed on the usual timer -- EnemyRagdoll's
+	# mutation sequence frees it itself once the explosion spawns the mutant
+	# (see spawn_mutant() below), whenever that ends up being.
+	if not will_mutate:
+		get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+
+
+## Called by EnemyRagdoll once its twitch/enlarge/explode sequence finishes
+## (see _explode_and_spawn_mutant()) -- replaces this corpse with the mutant
+## at the explosion's center, facing the way this enemy was facing, then
+## removes this corpse. Spawning stays here rather than in EnemyRagdoll
+## because it's a real gameplay entity, not a cosmetic effect (Rule 1: will
+## eventually need to be host-authoritative and replicated, same as any other
+## enemy spawn).
+##
+## Everything is set BEFORE add_child: EnemyModel picks its model in
+## _enter_tree() and Health fills up from max_health in _ready(), both of
+## which run inside add_child. Handing over this enemy's model_seed makes the
+## mutant roll the exact same model from the same variants list.
+func spawn_mutant(at_position: Vector3) -> void:
+	var mutant := (load(scene_file_path) as PackedScene).instantiate() as Enemy
+	mutant.can_mutate = false
+	mutant.tint_color = mutant_tint
+	mutant.move_speed = move_speed * mutant_speed_multiplier
+	var mutant_health := mutant.get_node("Health") as Health
+	mutant_health.max_health = health.max_health * mutant_health_multiplier
+	var model := get_node_or_null("Model") as EnemyModel
+	var mutant_model := mutant.get_node_or_null("Model") as EnemyModel
+	if model and mutant_model:
+		mutant_model.model_seed = model.model_seed
+	get_tree().current_scene.add_child(mutant)
+	mutant.global_position = at_position
+	mutant.global_rotation.y = global_rotation.y
+	mutant.start_spawning()
+	queue_free()
 
 
 ## Read-only access to the current state, for the animator.

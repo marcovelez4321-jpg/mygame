@@ -11,3 +11,4 @@
 script = ExtResource("2_ns6ah")
 game_name = "2v-2"
 fgd_file = ExtResource("1_8u1vq")
+default_uv_scale = Vector2(0.125, 0.125)

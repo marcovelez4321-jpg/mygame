@@ -20,6 +20,12 @@ const BLOOD_COLOR := Color(0.35, 0.02, 0.02)
 const SPURT_SPREAD_DEGREES := 25.0
 const SPURT_SPEED_MIN := 4.5
 const SPURT_SPEED_MAX := 8.5
+## The artery's shape instead (spawn_artery_stream()): a tight cone and a
+## narrow speed range, so every droplet follows nearly the same arc and the
+## whole thing reads as one flowing line of blood rather than a radial spray.
+const STREAM_SPREAD_DEGREES := 12.0
+const STREAM_SPEED_MIN := 6.0
+const STREAM_SPEED_MAX := 7.0
 ## Stronger than real gravity on purpose -- pulls the stream into a pronounced
 ## curve within its flight time instead of a flat, ballistic-looking spray.
 const SPURT_GRAVITY := Vector3(0.0, -14.0, 0.0)
@@ -33,6 +39,15 @@ const SPURT_TRACE_STEPS := 8
 
 ## Tunable streak look for spurts -- see BloodTrailSettings.
 const TRAIL_SETTINGS_PATH := "res://fx/blood_trail.tres"
+
+## How many outward blood streaks/arcs a mutation explosion throws -- see
+## spawn_mutation_explosion().
+const MUTATION_ARC_COUNT := 9
+const MUTATION_ARC_MIN_DISTANCE := 1.5
+const MUTATION_ARC_MAX_DISTANCE := 4.5
+## Brighter and more saturated than BLOOD_COLOR, just for the core blast --
+## it needs to read as a burst of fresh blood, not another dark pool.
+const MUTATION_BLAST_COLOR := Color(0.75, 0.05, 0.05)
 
 static var _splat_texture: ImageTexture
 static var _bullet_hole_texture: ImageTexture
@@ -54,8 +69,8 @@ static func spawn_impact(world: Node, position: Vector3, normal: Vector3) -> voi
 	var mat := ParticleProcessMaterial.new()
 	mat.direction = normal
 	mat.spread = 35.0
-	mat.initial_velocity_min = 2.125 # 2.5 - 15%
-	mat.initial_velocity_max = 5.1   # 6.0 - 15%
+	mat.initial_velocity_min = 2.125
+	mat.initial_velocity_max = 5.1
 	mat.gravity = Vector3(0.0, -9.8, 0.0)
 	mat.scale_min = 0.25
 	mat.scale_max = 0.6
@@ -87,23 +102,40 @@ static func spawn_impact(world: Node, position: Vector3, normal: Vector3) -> voi
 ## Droplets drag streaks behind them (fx/blood_trail.tres, BloodTrailSettings).
 static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Array[RID] = [],
 		local_offset: Vector3 = Vector3.ZERO, local_direction: Vector3 = Vector3.UP) -> void:
+	_spawn_spurt(bone, duration, exclude, local_offset, local_direction, false)
+
+
+## The artery: one steady, narrow line of blood instead of the headshot's
+## wider spray -- see STREAM_SPREAD_DEGREES. Same trails, same landing trace.
+static func spawn_artery_stream(bone: Node3D, duration: float, exclude: Array[RID] = []) -> void:
+	_spawn_spurt(bone, duration, exclude, Vector3.ZERO, Vector3.UP, true)
+
+
+static func _spawn_spurt(bone: Node3D, duration: float, exclude: Array[RID],
+		local_offset: Vector3, local_direction: Vector3, narrow: bool) -> void:
+	var spread := STREAM_SPREAD_DEGREES if narrow else SPURT_SPREAD_DEGREES
+	var speed_min := STREAM_SPEED_MIN if narrow else SPURT_SPEED_MIN
+	var speed_max := STREAM_SPEED_MAX if narrow else SPURT_SPEED_MAX
+
 	var particles := GPUParticles3D.new()
 	# More, smaller droplets read as a finer, denser stream instead of a
 	# handful of chunky flecks.
 	particles.amount = 45
 	particles.lifetime = SPURT_LIFETIME
 	particles.one_shot = false
-	particles.explosiveness = 0.3
+	# 0 = droplets released evenly, one after another -- that's what joins
+	# them into a continuous line. The wider spray keeps a bit of clumping.
+	particles.explosiveness = 0.0 if narrow else 0.3
 	_apply_trail(particles)
 
 	var mat := ParticleProcessMaterial.new()
 	mat.direction = local_direction
-	mat.spread = SPURT_SPREAD_DEGREES
-	mat.initial_velocity_min = SPURT_SPEED_MIN
-	mat.initial_velocity_max = SPURT_SPEED_MAX
+	mat.spread = spread
+	mat.initial_velocity_min = speed_min
+	mat.initial_velocity_max = speed_max
 	mat.gravity = SPURT_GRAVITY
-	mat.scale_min = 0.3
-	mat.scale_max = 0.65
+	mat.scale_min = 0.4 if narrow else 0.3
+	mat.scale_max = 0.55 if narrow else 0.65
 	mat.color = BLOOD_COLOR
 	particles.process_material = mat
 
@@ -121,7 +153,7 @@ static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Arr
 	tree.create_timer(duration).timeout.connect(particles.set.bind(&"emitting", false))
 	tree.create_timer(duration + particles.lifetime).timeout.connect(particles.queue_free)
 
-	_start_landing_trace(particles, local_direction, duration, exclude)
+	_start_landing_trace(particles, local_direction, duration, exclude, spread, speed_min, speed_max)
 
 
 ## Puts blood where the spray actually comes down. GPU particles can't report
@@ -140,8 +172,9 @@ static func spawn_artery_spurt(bone: Node3D, duration: float = 7.0, exclude: Arr
 ## Driven by a Timer node parented to the emitter, not get_tree().create_timer():
 ## if the body is freed mid-spurt, the Timer is freed with it and simply stops,
 ## instead of a scene-tree timer firing later into a freed emitter.
-static func _start_landing_trace(emitter: Node3D, local_direction: Vector3, duration: float, exclude: Array[RID]) -> void:
-	_trace_one_droplet(emitter, local_direction, exclude)
+static func _start_landing_trace(emitter: Node3D, local_direction: Vector3, duration: float, exclude: Array[RID],
+		spread: float, speed_min: float, speed_max: float) -> void:
+	_trace_one_droplet(emitter, local_direction, exclude, spread, speed_min, speed_max)
 	var timer := Timer.new()
 	timer.wait_time = SPURT_LANDING_INTERVAL
 	timer.autostart = true
@@ -151,13 +184,14 @@ static func _start_landing_trace(emitter: Node3D, local_direction: Vector3, dura
 		if Time.get_ticks_msec() >= stop_msec:
 			timer.queue_free()
 			return
-		_trace_one_droplet(emitter, local_direction, exclude)
+		_trace_one_droplet(emitter, local_direction, exclude, spread, speed_min, speed_max)
 	)
 
 
-static func _trace_one_droplet(emitter: Node3D, local_direction: Vector3, exclude: Array[RID]) -> void:
+static func _trace_one_droplet(emitter: Node3D, local_direction: Vector3, exclude: Array[RID],
+		spread: float, speed_min: float, speed_max: float) -> void:
 	var direction := (emitter.global_transform.basis * local_direction).normalized()
-	var velocity := _random_in_cone(direction, SPURT_SPREAD_DEGREES) * randf_range(SPURT_SPEED_MIN, SPURT_SPEED_MAX)
+	var velocity := _random_in_cone(direction, spread) * randf_range(speed_min, speed_max)
 	var hit := _trace_arc(emitter.get_world_3d().direct_space_state, emitter.global_position, velocity, exclude)
 	if not hit.is_empty():
 		spawn_splatter(emitter.get_tree().current_scene, hit.position, hit.normal, randf_range(0.25, 0.4))
@@ -225,6 +259,97 @@ static func _get_trail_mesh(settings: BloodTrailSettings) -> TubeTrailMesh:
 		mat.use_particle_trails = true
 		_trail_mesh.material = mat
 	return _trail_mesh
+
+
+## The mutation payoff: a big saturated red blast right at the explosion's
+## center, plus several longer blood streaks/arcs thrown outward at varying
+## angles and distances that each land and leave their own pool -- meant to
+## read as something violently bursting, not just a bigger version of a
+## normal kill's spray. Called once, from enemy_ragdoll.gd's
+## _explode_and_spawn_mutant().
+static func spawn_mutation_explosion(world: Node, center: Vector3) -> void:
+	_spawn_blast_core(world, center)
+	for i in MUTATION_ARC_COUNT:
+		# Evenly spaced base angle with random jitter mixed in, so the arcs
+		# fan out in every direction but don't look like a perfect,
+		# mechanical ring -- "varying", not uniform.
+		var angle: float = (TAU / MUTATION_ARC_COUNT) * i + randf_range(-0.4, 0.4)
+		var horizontal := Vector3(cos(angle), 0.0, sin(angle))
+		var distance := randf_range(MUTATION_ARC_MIN_DISTANCE, MUTATION_ARC_MAX_DISTANCE)
+		_spawn_blood_arc(world, center, horizontal, distance)
+
+
+## The central flash: bigger and brighter than a normal impact spray, thrown
+## in every direction (spread 180, no single surface normal to kick off of)
+## instead of one directional cone -- this is what reads as "burst" rather
+## than "sprayed".
+static func _spawn_blast_core(world: Node, center: Vector3) -> void:
+	var particles := GPUParticles3D.new()
+	particles.amount = 60
+	particles.lifetime = 0.6
+	particles.one_shot = true
+	particles.explosiveness = 1.0
+	particles.draw_pass_1 = _get_impact_mesh()
+
+	var mat := ParticleProcessMaterial.new()
+	mat.direction = Vector3.UP
+	mat.spread = 180.0
+	mat.initial_velocity_min = 5.0
+	mat.initial_velocity_max = 11.0
+	mat.gravity = Vector3(0.0, -9.8, 0.0)
+	mat.scale_min = 0.4
+	mat.scale_max = 0.9
+	mat.color = MUTATION_BLAST_COLOR
+	particles.process_material = mat
+
+	world.add_child(particles)
+	particles.global_position = center
+	particles.emitting = true
+	particles.finished.connect(particles.queue_free)
+
+
+## One outward streak/arc: a one-shot directional burst thrown along
+## `horizontal` and up, curving down under gravity the same way
+## spawn_artery_spurt()'s stream does, then a landing pool wherever it comes
+## down -- a straight-down raycast at the arc's landing XZ, same
+## "approximate, not a true per-particle trace" technique _pool_landing_spot()
+## uses, just a single check since this is one one-shot burst, not a
+## sustained spray to keep re-checking.
+static func _spawn_blood_arc(world: Node, center: Vector3, horizontal: Vector3, distance: float) -> void:
+	var particles := GPUParticles3D.new()
+	particles.amount = 14
+	particles.lifetime = 0.9
+	particles.one_shot = true
+	particles.explosiveness = 0.85
+	particles.draw_pass_1 = _get_impact_mesh()
+
+	var mat := ParticleProcessMaterial.new()
+	mat.direction = (horizontal + Vector3.UP * 0.6).normalized()
+	mat.spread = 12.0
+	mat.initial_velocity_min = distance * 3.0
+	mat.initial_velocity_max = distance * 4.0
+	mat.gravity = Vector3(0.0, -14.0, 0.0)
+	mat.scale_min = 0.25
+	mat.scale_max = 0.55
+	mat.color = BLOOD_COLOR
+	particles.process_material = mat
+
+	world.add_child(particles)
+	particles.global_position = center
+	particles.emitting = true
+	particles.finished.connect(particles.queue_free)
+
+	var landing_xz := center + horizontal * distance
+	# get_world_3d() lives on Node3D, not the plain Node this function (like
+	# every other spawn_*() here) takes -- `world` is always a Node3D in
+	# practice (the level root), so the cast is safe.
+	var space := (world as Node3D).get_world_3d().direct_space_state
+	var down_query := PhysicsRayQueryParameters3D.create(
+			landing_xz + Vector3.UP * 3.0, landing_xz + Vector3.DOWN * 6.0)
+	down_query.collision_mask = EnemyRagdoll.WORLD_MASK
+	var down_result := space.intersect_ray(down_query)
+	if not down_result.is_empty():
+		spawn_splatter(world, down_result.position, down_result.normal, randf_range(0.7, 1.1))
 
 
 ## A blood decal stuck to whatever surface is at `position`, facing away

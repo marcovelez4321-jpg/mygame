@@ -10,7 +10,7 @@
 [ext_resource type="PackedScene" uid="uid://gn8wbsdypt3p" path="res://scenes/ammo_pickup.tscn" id="8_apk"]
 [ext_resource type="PackedScene" path="res://scenes/starter_gun_pickup.tscn" id="9_sgp"]
 [ext_resource type="PackedScene" uid="uid://b1qyhipwwloq7" path="res://scenes/machine_gun_pickup.tscn" id="10_mgp"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="11_rusher"]
+[ext_resource type="PackedScene" uid="uid://c4noyug3r67ag" path="res://scenes/enemy/enemy_rusher.tscn" id="11_rusher"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/enemy_gunner.tscn" id="12_gunner"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
@@ -253,12 +253,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 1, 10)
 
 [node name="Enemy" parent="." unique_id=775488530 instance=ExtResource("5_psl7s")]
 gravity = 40.0
+mutate_chance = 1.0
 
 [node name="EnemyRusher" parent="." unique_id=2144887308 instance=ExtResource("11_rusher")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 10)
+mutate_chance = 1.0
 
 [node name="EnemyGunner" parent="." unique_id=2144887309 instance=ExtResource("12_gunner")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 15)
+mutate_chance = 1.0
 
 [node name="PhysicsProp" parent="." unique_id=1 instance=ExtResource("6_yvibs")]
 transform = Transform3D(0.3, 0, 0, 0, 0.3, 0, 0, 0, 0.3, 0, 0, -3.628104)

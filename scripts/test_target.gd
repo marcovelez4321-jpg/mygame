@@ -15,5 +15,5 @@ func _on_damaged(amount: float, _attacker_id: int) -> void:
 	print("Target hit for %.0f (%.0f left)" % [amount, health.current_health])
 
 
-func _on_died(_attacker_id: int) -> void:
+func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	queue_free()

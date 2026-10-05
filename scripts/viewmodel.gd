@@ -27,7 +27,10 @@ const KICK_ROTATION_TIME := 0.15
 ## Small per-shot randomization on the recoil kick (as a fraction of its own
 ## magnitude) so consecutive shots never look perfectly identical.
 const KICK_JITTER := 0.25
-const MUZZLE_FLASH_TIME := 0.05
+## Flat multiplier on every weapon's recoil_kick_distance/_rotation_degrees --
+## makes the visual kick read as twice as violent across the board without
+## having to hand-retune each weapon's own .tres numbers individually.
+const RECOIL_VISUAL_SCALE := 2.0
 
 ## -- Pump-rack reload (WeaponData.ReloadStyle.PUMP_RACK) --
 ## Turns the gun upright (muzzle pointing at the ceiling), racks it with a
@@ -200,8 +203,8 @@ func _on_shot_fired() -> void:
 	if _model == null:
 		return
 	var weapon := _weapons.current_weapon()
-	var kick_distance := weapon.recoil_kick_distance if weapon else 0.06
-	var kick_rotation := weapon.recoil_kick_rotation_degrees if weapon else 4.0
+	var kick_distance := (weapon.recoil_kick_distance if weapon else 0.06) * RECOIL_VISUAL_SCALE
+	var kick_rotation := (weapon.recoil_kick_rotation_degrees if weapon else 4.0) * RECOIL_VISUAL_SCALE
 	# Small per-shot randomization so consecutive shots don't look identical.
 	kick_distance *= randf_range(1.0 - KICK_JITTER, 1.0 + KICK_JITTER)
 	kick_rotation *= randf_range(1.0 - KICK_JITTER, 1.0 + KICK_JITTER)
@@ -220,7 +223,8 @@ func _on_shot_fired() -> void:
 
 ## A brief additive glow + a real light flash right at the equipped weapon's
 ## OWN muzzle_offset (per-weapon, tunable in-game -- see muzzle_offset's own
-## comment in weapon_data.gd). Removes itself after MUZZLE_FLASH_TIME.
+## comment in weapon_data.gd). Removes itself after the weapon's own
+## muzzle_flash_time.
 func _spawn_muzzle_flash() -> void:
 	var weapon := _weapons.current_weapon()
 	if weapon == null:
@@ -251,7 +255,7 @@ func _spawn_muzzle_flash() -> void:
 	# is swapped (or the level restarts) before this fires, freed nodes drop
 	# their connections automatically, while a lambda would still fire with
 	# freed captures ("Lambda capture at index 0 was freed").
-	var timer := get_tree().create_timer(MUZZLE_FLASH_TIME)
+	var timer := get_tree().create_timer(weapon.muzzle_flash_time)
 	timer.timeout.connect(light.queue_free)
 	timer.timeout.connect(glow.queue_free)
 

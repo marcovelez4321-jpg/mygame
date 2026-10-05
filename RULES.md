@@ -92,6 +92,23 @@ torn up later. In practice:
   reusing *principles* that are already proven to work (readability, guide
   colors, why dev-textures exist, etc.) instead of reinventing them badly.
 
+## Rule 7 — Sound design is a core pillar, not polish
+- Audio gets the same weight as code and feel. Anything that moves, hits,
+  breaks, dies or falls makes sound, and that sound reacts to *how* it
+  happened (speed, force, material) instead of one clip on repeat.
+- Immersion first, PS1 second: every sound should feel physical and
+  present, then get pushed through a shared PS1-style character (lower
+  sample rate, ADPCM-style grit, SPU-style reverb) so the whole game sounds
+  like one console.
+- Physics audio (ragdolls, props, debris) follows the Source/GMod model:
+  material-driven impact and scrape sounds scaled by impact energy, with
+  variation and voice limiting so a pile of bodies never machine-guns the
+  same clip. Ragdolls get extra layers on top of that (body drop, ground
+  layer, bone crunch). See AUDIO_DESIGN.md for the full system.
+- New sounds are data (SoundEvents), never hard-coded clips -- the owner is
+  a music producer and should be able to swap and tune any sound without
+  touching code.
+
 ---
 
 ## Creative Direction — what the game IS

@@ -14,6 +14,14 @@ extends Resource
 
 @export var clips: Array[AudioStream] = []
 
+@export_group("Folder")
+## Drop-in alternative to filling `clips` by hand: every file in this folder
+## named <clip_prefix>_<number> (impact_soft_01.wav, impact_soft_02.wav, ...)
+## joins the pool, on top of anything in `clips`. Dropping a new variation
+## into the folder is enough -- no editing this resource.
+@export_dir var clip_folder: String = ""
+@export var clip_prefix: String = ""
+
 @export_group("Variation")
 ## Randomized per play, in decibels, added to the base volume below.
 @export var volume_db: float = 0.0
@@ -25,21 +33,48 @@ extends Resource
 @export var pitch_variance: float = 0.0
 
 @export_group("Routing")
-## Which audio bus this plays on. Falls back to "Master" at playback time if
-## a bus with this name doesn't exist yet (see sound_player.gd's
-## _resolve_bus()) -- so this is safe to leave as "SFX" now and have it
-## silently do nothing extra until an SFX bus actually exists in the
-## project's Audio panel (Project Settings -> Audio Bus Layout), at which
-## point every SoundEvent already routes there for free.
+## Which audio bus this plays on. "SFX" (default_bus_layout.tres) is the
+## PS1 bus -- LoFi bit reduction then a 9 kHz low-pass -- so every sound
+## shares one console character (Rule 7). Falls back to "Master" if the
+## named bus doesn't exist (see sound_player.gd's _resolve_bus()).
 @export var bus: String = "SFX"
 
+## `clips` plus whatever clip_folder holds. Built once, on first use, so the
+## folder is only ever scanned one time per run.
+var _pool: Array[AudioStream] = []
+var _pool_built := false
 
-## A random clip from the list, or null if none are assigned yet (a stub
-## event nobody has dragged audio files into).
+
+## A random clip from the pool, or null if there's nothing yet (a stub event
+## nobody has added audio to).
 func pick_clip() -> AudioStream:
-	if clips.is_empty():
+	_build_pool()
+	if _pool.is_empty():
 		return null
-	return clips[randi() % clips.size()]
+	return _pool[randi() % _pool.size()]
+
+
+func has_clips() -> bool:
+	_build_pool()
+	return not _pool.is_empty()
+
+
+## ResourceLoader.list_directory, not DirAccess: in an exported game the
+## folder holds .import/.remap files instead of the original .wavs, and this
+## returns the original names either way.
+func _build_pool() -> void:
+	if _pool_built:
+		return
+	_pool_built = true
+	_pool.assign(clips)
+	if clip_folder.is_empty() or clip_prefix.is_empty():
+		return
+	var pattern := RegEx.create_from_string("^%s_\\d+\\.(wav|ogg|mp3)$" % clip_prefix)
+	for file in ResourceLoader.list_directory(clip_folder):
+		if pattern.search(file):
+			var stream := load(clip_folder.path_join(file)) as AudioStream
+			if stream:
+				_pool.append(stream)
 
 
 func roll_volume_db() -> float:

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SurfaceAudio" format=3]
+
+[ext_resource type="Script" path="res://scripts/surface_audio.gd" id="1"]
+[ext_resource type="Resource" path="res://audio/surfaces/flesh.tres" id="2"]
+[ext_resource type="Resource" path="res://audio/events/body/body_head_knock.tres" id="3"]
+
+[resource]
+script = ExtResource("1")
+base = ExtResource("2")
+impact_soft = ExtResource("3")
+impact_hard = ExtResource("3")
+hardness = 0.6
+hard_threshold = 0.5
+hard_min_speed = 3.0
+roughness = 0.3
+rough_threshold = 0.5

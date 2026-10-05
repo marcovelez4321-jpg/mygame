@@ -94,6 +94,13 @@ signal mantled
 ## leaping/kicking off toward your look direction instead of climbing.
 @export var wall_jump_look_speed: float = 5.0
 @export var wall_jump_up_velocity: float = 11.0
+## Same hit-stop trick as stomp_hit_stop_scale/stomp_hit_stop_time (see that
+## export's comment for the co-op caveat), but much lighter -- a wall jump
+## happens constantly during normal traversal, not just on a rare kill, so
+## this needs to read as a snappy little "oomph" and be gone before it's
+## noticed as slowdown, not a dramatic freeze-frame.
+@export_range(0.0, 1.0, 0.05) var wall_jump_hit_stop_scale: float = 0.3
+@export var wall_jump_hit_stop_time: float = 0.04
 
 @export_group("Mantle")
 ## Turns mantling on/off entirely.
@@ -109,6 +116,24 @@ signal mantled
 ## mantle_max_height it's just out of reach.
 @export var mantle_min_height: float = 0.6
 @export var mantle_max_height: float = 2.1
+## How wide a fan of rays sweeps the wall-detection probe, in degrees each
+## way, and how many rays make up that fan -- same "don't require pixel-
+## perfect aim" technique _find_wall_behind() already uses for the wall-jump
+## check. Without this, the probe was a SINGLE ray along the camera's exact
+## look direction (pitch included), so missing the ledge by even a couple
+## degrees -- or just looking slightly up/down at it, which is normal when
+## approaching one -- made detection miss entirely. That's what "inconsistent"
+## was: not a bug in the climb itself, a too-narrow, too-strict probe.
+@export_range(0.0, 45.0, 5.0) var mantle_probe_angle: float = 30.0
+@export var mantle_probe_ray_count: int = 5
+## How long, after a valid ledge was LAST seen, a space press still grabs it --
+## this is the "timing" in mantle: you get a short window, not an infinite
+## hold. Ledge detection runs every tick (see _simulate_movement()) whether or
+## not space is pressed, refreshing this timer back to full each time a valid
+## ledge is in view; a space TAP only succeeds while it's still counting down.
+## Long enough that a natural glance-then-jump doesn't whiff, short enough
+## that mashing space nowhere near a ledge never grabs one.
+@export var mantle_grace_time: float = 0.25
 ## How long the pull-up itself takes once triggered.
 @export var mantle_duration: float = 0.35
 ## Rule 3 (competitive balance): a mantle is a MOVEMENT tool, not free
@@ -216,6 +241,11 @@ var _wall_jumped_since_reset := false
 ## _simulate_movement() for the same span, so the two can't drift apart.
 var _mantle_time_left: float = 0.0
 var _mantle_cooldown_left: float = 0.0
+## Landing spot from the most recent successful _find_mantle_ledge() scan,
+## and how much of mantle_grace_time is left to still use it -- see that
+## export's comment. Position is only meaningful while the timer is > 0.
+var _last_mantle_ledge_position: Vector3 = Vector3.ZERO
+var _mantle_grace_left: float = 0.0
 
 # Reused every tick instead of allocating new ones (Rule 2: no per-frame
 # allocations in the physics loop).
@@ -261,7 +291,7 @@ func _physics_process(delta: float) -> void:
 ## Rule 1: reloading the whole scene only makes sense offline. In co-op this
 ## becomes "respawn at a spawn point" (and the level keeps running for the
 ## other player), so it's kept in this one small function.
-func _on_died(_attacker_id: int) -> void:
+func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	_is_dead = true
 	velocity = Vector3.ZERO
 	get_tree().create_timer(respawn_delay).timeout.connect(_restart_level)
@@ -326,16 +356,35 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_finish_tick(input, delta)
 		return
 
-	# A fresh space press: check for a mantleable ledge BEFORE falling through
-	# to the normal jump/wall-jump handling below, so a successful mantle
-	# consumes the press instead of also triggering a jump this same tick.
-	var fresh_jump: bool = input.want_jump and not _jump_held_prev
-	if fresh_jump and mantle_enabled and _mantle_cooldown_left <= 0.0:
+	# Scan for a mantleable ledge every tick -- not just when space is
+	# pressed -- so mantle_grace_left tracks "how recently was a valid ledge
+	# actually in view" independent of when you happen to hit the key. Cheap
+	# (a handful of raycasts, same cost class as _find_wall_behind() already
+	# runs on every wall-jump attempt), and skipped entirely on cooldown.
+	if mantle_enabled and _mantle_cooldown_left <= 0.0:
 		var ledge := _find_mantle_ledge()
 		if ledge.found:
-			_start_mantle(ledge.position)
-			_finish_tick(input, delta)
-			return
+			_last_mantle_ledge_position = ledge.position
+			_mantle_grace_left = mantle_grace_time
+		else:
+			_mantle_grace_left = maxf(_mantle_grace_left - delta, 0.0)
+	else:
+		_mantle_grace_left = 0.0
+
+	var fresh_jump: bool = input.want_jump and not _jump_held_prev
+
+	# Mantle needs a TIMED tap, not a hold -- a fresh press (this tick's
+	# want_jump wasn't already true last tick) while the grace window is
+	# still open. Holding space through the window only gets you ONE
+	# mantle at the moment you first pressed, same as it only gets you one
+	# jump; you don't get to just hold the key and let the game decide when
+	# to grab. Checked BEFORE the normal jump/wall-jump handling below, so a
+	# successful mantle consumes the tap instead of also triggering a jump
+	# this same tick.
+	if fresh_jump and mantle_enabled and _mantle_cooldown_left <= 0.0 and _mantle_grace_left > 0.0:
+		_start_mantle(_last_mantle_ledge_position)
+		_finish_tick(input, delta)
+		return
 
 	_update_stamina(delta)
 	_dash_cooldown_left = maxf(_dash_cooldown_left - delta, 0.0)
@@ -482,6 +531,7 @@ func _wall_jump(wall_normal: Vector3) -> void:
 	_wall_jumped_since_reset = true
 	camera.shake(3.0)
 	camera.kick_fov(6.0)
+	_hit_stop(wall_jump_hit_stop_scale, wall_jump_hit_stop_time)
 	wall_jumped.emit()
 
 
@@ -523,10 +573,9 @@ func _find_wall_behind() -> Vector3:
 
 ## Looks for a ledge worth pulling yourself up onto: a roughly vertical wall
 ## in front of you, with a flat surface within mantle range just above it.
-## Only called on a fresh jump press (see _simulate_movement()), so like
-## _find_wall_behind() it's fine to allocate fresh query objects here rather
-## than reuse the cached _step_params/_step_result -- this never runs in a
-## hot per-tick path.
+## Runs every tick (see _simulate_movement()), so like _find_wall_behind() it
+## reuses no cached state and just allocates fresh query objects -- still
+## just a handful of raycasts, not a hot enough path to matter.
 ##
 ## Two-ray probe, the standard mantle technique: a forward ray finds the
 ## wall, then a downward ray from above it finds where the wall stops being
@@ -535,28 +584,43 @@ func _find_mantle_ledge() -> MantleTarget:
 	var result := MantleTarget.new()
 	var space := get_world_3d().direct_space_state
 
-	# The camera's OWN look direction, pitch included -- not just the body's
-	# horizontal facing. This is what makes "you have to be looking at the
-	# ledge" literally true: aim down at your feet or up at the sky and this
-	# ray simply won't find a wall to grab.
-	var look_dir := -head.global_transform.basis.z
-	var eye := head.global_position
+	# Flat (yaw-only) forward, not the camera's full pitch-included look
+	# direction -- so glancing slightly up or down at a ledge, which is
+	# normal when approaching one, doesn't tilt the wall probe off-target.
+	# Cast from chest height on the BODY (same point _find_wall_behind()
+	# uses) rather than the head, for the same reason.
+	var flat_look := Vector3(-head.global_transform.basis.z.x, 0.0, -head.global_transform.basis.z.z).normalized()
+	var from := global_position + Vector3.UP * 0.9 # roughly chest height
 
-	var wall_query := PhysicsRayQueryParameters3D.create(eye, eye + look_dir * mantle_forward_distance)
-	wall_query.exclude = [get_rid()]
-	wall_query.collision_mask = 1
-	var wall_hit := space.intersect_ray(wall_query)
+	# Sweep a fan of rays across mantle_probe_angle, same center-out pattern
+	# as _find_wall_behind(), instead of a single ray dead ahead -- this is
+	# the forgiveness fix: you no longer have to aim pixel-perfectly at the
+	# ledge, just roughly at it.
+	var half_count: int = maxi((mantle_probe_ray_count - 1) / 2, 1)
+	var offsets: Array[int] = [0]
+	for step in range(1, half_count + 1):
+		offsets.append(-step)
+		offsets.append(step)
+
+	var wall_hit: Dictionary = {}
+	for offset in offsets:
+		var t: float = float(offset) / float(half_count)
+		var dir := flat_look.rotated(Vector3.UP, deg_to_rad(mantle_probe_angle) * t)
+		var wall_query := PhysicsRayQueryParameters3D.create(from, from + dir * mantle_forward_distance)
+		wall_query.exclude = [get_rid()]
+		wall_query.collision_mask = 1
+		var hit := space.intersect_ray(wall_query)
+		if not hit.is_empty():
+			# Reject floor/steep-slope and ceiling hits -- a mantleable ledge
+			# is a roughly VERTICAL wall, not a ramp.
+			if absf((hit.normal as Vector3).y) <= 0.3:
+				wall_hit = hit
+				break
 	if wall_hit.is_empty():
-		return result
-	# Reject floor/steep-slope hits (looking down) and ceiling hits (looking
-	# up) -- a mantleable ledge is a roughly VERTICAL wall, not a ramp.
-	var wall_normal: Vector3 = wall_hit.normal
-	if absf(wall_normal.y) > 0.3:
 		return result
 
 	# From above and just past the wall, straight down, to find its top --
 	# the second half of the two-ray probe.
-	var flat_look := Vector3(look_dir.x, 0.0, look_dir.z).normalized()
 	var probe_xz: Vector3 = (wall_hit.position as Vector3) + flat_look * 0.2
 	var probe_top := Vector3(probe_xz.x, global_position.y + mantle_max_height, probe_xz.z)
 	var probe_bottom := Vector3(probe_xz.x, global_position.y + mantle_min_height, probe_xz.z)

@@ -32,6 +32,11 @@ extends Node
 @export var hurt_animations: Array[String] = ["moves/hurt"]
 ## Leave this empty while the ragdoll handles death (EnemyRagdoll).
 @export var die_animations: Array[String] = []
+## Plays once while a mutant sits inert after spawning (see enemy.gd's
+## spawning_time/start_spawning()). Empty by default, same as die_animations
+## -- there's no clip for this yet, this is just the hook to drop one into
+## once there is.
+@export var spawn_animations: Array[String] = []
 
 @export_group("Variety")
 ## false: each enemy keeps the variant it picked at spawn.
@@ -154,4 +159,6 @@ func _animations_for(state: Enemy.State) -> Array[String]:
 			return hurt_animations
 		Enemy.State.DEAD:
 			return die_animations
+		Enemy.State.SPAWNING:
+			return spawn_animations
 	return idle_animations

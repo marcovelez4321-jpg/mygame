@@ -146,6 +146,36 @@ const WORLD_MASK := 1 | RAGDOLL_LAYER
 ## drop from death height to floor height.
 @export_range(0.5, 1.0, 0.05) var reach_landed_fraction: float = 0.9
 
+## Runs instead of the normal thrash/settle above whenever _enemy.will_mutate
+## is true (see enemy.gd's Mutation export group for the chance/eligibility
+## roll itself -- this only handles the VISUAL sequence once it's decided to
+## happen). Reuses the same limb-pair kick technique as the Death Reaction
+## group above, just driven by its own accelerating rate and duration instead
+## of thrash_time/thrash_rate, and it always runs regardless of
+## thrash_enabled -- unlike ordinary death flail, this is a deliberate,
+## always-visible mechanic, not off-by-default juice.
+##
+## Twitch goes straight to the explosion, with no swell/enlarge step in
+## between -- an earlier version tried to scale the body up first, but a
+## PhysicalBone3D's global position is set directly by the physics server,
+## completely independent of any ancestor's scale/position, and
+## physical_bones_stop_simulation() (needed to freeze the pose before
+## scaling it) doesn't freeze the ragdoll's CURRENT fallen pose at all -- it
+## hands bone control back to the Skeleton3D's own stored pose, which is
+## whatever it was at the moment of death, before the ragdoll ever fell. The
+## combination made the corpse visibly snap to a different pose and position
+## right as it grew. Not worth fighting that interaction for a step that was
+## always going to be on screen for under a second.
+@export_group("Mutation Reaction")
+## Total seconds spent twitching before it explodes.
+@export var mutate_twitch_time: float = 10.0
+## Bursts per second at the very start of the twitch.
+@export var mutate_twitch_rate_start: float = 3.0
+## Bursts per second right at the end, just before it explodes -- higher
+## than mutate_twitch_rate_start so it reads as building toward something,
+## not a constant tremor for 10 seconds straight.
+@export var mutate_twitch_rate_end: float = 18.0
+
 @onready var _enemy: Enemy = get_parent() as Enemy
 
 var _simulator: PhysicalBoneSimulator3D
@@ -166,6 +196,10 @@ var _next_thrash_time := 0.0
 ## work), tagged so legs can kick and arms can swing differently.
 var _limb_pairs: Array[Dictionary] = []
 var _character_right: Vector3 = Vector3.RIGHT
+
+var _mutating := false
+var _mutate_elapsed := 0.0
+var _next_mutate_time := 0.0
 
 
 func _ready() -> void:
@@ -300,9 +334,7 @@ func _start_death_reaction() -> void:
 
 	if result.is_empty():
 		_falling = false
-		_thrashing = thrash_enabled
-		_thrash_elapsed = 0.0
-		_next_thrash_time = 0.0
+		_start_post_fall_reaction()
 		print("EnemyRagdoll: no floor found below, skipping reach, thrash_time %.1fs" % thrash_time)
 		return
 
@@ -318,8 +350,9 @@ func _start_death_reaction() -> void:
 ## angular velocity around the character's own sideways axis -- the same
 ## limb-pair trick the thrash uses -- scaled by how close to the floor the
 ## body currently is, so the arms raise up faster the nearer it gets. Once
-## "landed" (or after reach_max_time as a safety valve), hands off to the
-## thrash for the post-impact convulsing.
+## "landed" (or after reach_max_time as a safety valve), hands off to
+## _start_post_fall_reaction() for whatever comes next (thrash, or the
+## mutation twitch).
 func _process_falling_reach(delta: float) -> void:
 	_fall_elapsed += delta
 
@@ -330,10 +363,8 @@ func _process_falling_reach(delta: float) -> void:
 
 	if closeness >= reach_landed_fraction or _fall_elapsed >= reach_max_time:
 		_falling = false
-		_thrashing = thrash_enabled
-		_thrash_elapsed = 0.0
-		_next_thrash_time = 0.0
-		print("EnemyRagdoll: landed (closeness %.2f, %.2fs), thrash starting" % [closeness, _fall_elapsed])
+		_start_post_fall_reaction()
+		print("EnemyRagdoll: landed (closeness %.2f, %.2fs)" % [closeness, _fall_elapsed])
 		return
 
 	for entry in _limb_pairs:
@@ -344,9 +375,25 @@ func _process_falling_reach(delta: float) -> void:
 			bone.angular_velocity = _character_right * reach_angular_speed * closeness
 
 
+## Whatever happens right after the body stops falling (or never had a floor
+## to fall toward in the first place): the mutation twitch if this death
+## rolled one (see enemy.gd's will_mutate), otherwise the ordinary
+## thrash_enabled-gated death flail.
+func _start_post_fall_reaction() -> void:
+	if _enemy.will_mutate:
+		_start_mutation_twitch()
+		return
+	_thrashing = thrash_enabled
+	_thrash_elapsed = 0.0
+	_next_thrash_time = 0.0
+
+
 func _physics_process(delta: float) -> void:
 	if _falling:
 		_process_falling_reach(delta)
+		return
+	if _mutating:
+		_process_mutation_twitch(delta)
 		return
 	if not _thrashing:
 		return
@@ -358,11 +405,18 @@ func _physics_process(delta: float) -> void:
 	if _thrash_elapsed < _next_thrash_time or _limb_pairs.is_empty():
 		return
 	_next_thrash_time = _thrash_elapsed + (1.0 / thrash_rate)
+	_do_limb_burst(1.0 - (_thrash_elapsed / thrash_time))
 
+
+## One kick/swing burst on a random limb pair, shared by the ordinary
+## dying-down thrash above and the mutation twitch below -- they only differ
+## in their trigger cadence and how `taper` moves over time (thrash tapers
+## DOWN toward 0 as it settles; the mutation twitch stays high and its rate
+## climbs instead, see _process_mutation_twitch()).
+func _do_limb_burst(taper: float) -> void:
 	var entry: Dictionary = _limb_pairs[randi() % _limb_pairs.size()]
 	var pair: Array = entry["bones"]
 	var is_leg: bool = entry["is_leg"]
-	var taper: float = 1.0 - (_thrash_elapsed / thrash_time)
 
 	# Legs: mostly a forward/back swing from the hip (character_right), like
 	# an actual kick, with a little randomness mixed in so both legs don't
@@ -383,7 +437,6 @@ func _physics_process(delta: float) -> void:
 		angular_speed = swing_angular_speed
 		linear_speed = swing_linear_speed
 
-	var names: Array[String] = []
 	for bone: PhysicalBone3D in pair:
 		bone.can_sleep = false # in case anything else along the way re-enabled it
 		# A real (if small) impulse first guarantees a genuine wake event via
@@ -392,8 +445,46 @@ func _physics_process(delta: float) -> void:
 		bone.apply_central_impulse(axis * 0.05)
 		bone.angular_velocity = axis * angular_speed * taper
 		bone.linear_velocity += axis * linear_speed * taper
-		names.append(bone.name)
-	print("EnemyRagdoll: %s burst on %s (taper %.2f)" % ["kick" if is_leg else "swing", names, taper]) # TEMPORARY diagnostic
+
+
+## Kicks off the mutation twitch: same limb-pair kick technique as the
+## ordinary thrash, but its OWN duration/rate (mutate_twitch_time/_rate_*)
+## and always runs, independent of thrash_enabled -- see that export's own
+## comment.
+func _start_mutation_twitch() -> void:
+	_mutating = true
+	_mutate_elapsed = 0.0
+	_next_mutate_time = 0.0
+
+
+## Rate climbs from mutate_twitch_rate_start to _rate_end over the whole
+## window -- "twitch faster and faster" right up to the moment it explodes,
+## instead of a constant tremor for mutate_twitch_time straight. taper is
+## fixed at 1.0 (not tapering down like the ordinary thrash does) -- this
+## needs to stay violent right up to the explosion, not settle.
+func _process_mutation_twitch(delta: float) -> void:
+	_mutate_elapsed += delta
+	if _mutate_elapsed >= mutate_twitch_time:
+		_mutating = false
+		_explode_and_spawn_mutant()
+		return
+	if _mutate_elapsed < _next_mutate_time or _limb_pairs.is_empty():
+		return
+	var progress := _mutate_elapsed / mutate_twitch_time
+	var rate := lerpf(mutate_twitch_rate_start, mutate_twitch_rate_end, progress)
+	_next_mutate_time = _mutate_elapsed + (1.0 / rate)
+	_do_limb_burst(1.0)
+
+
+## The payoff: a blood explosion at roughly the body's center, then the
+## mutant itself takes this corpse's place. _enemy.spawn_mutant() frees this
+## Enemy (and everything under it, including this EnemyRagdoll) once it's
+## done, so nothing here needs its own cleanup.
+func _explode_and_spawn_mutant() -> void:
+	var hips := _bones.filter(func(b): return "Hips" in b.name)
+	var center: Vector3 = hips[0].global_position if not hips.is_empty() else _enemy.global_position
+	BloodFX.spawn_mutation_explosion(_enemy.get_tree().current_scene, center)
+	_enemy.spawn_mutant(center)
 
 
 ## Waits for the corpse to settle before marking the ground, rather than

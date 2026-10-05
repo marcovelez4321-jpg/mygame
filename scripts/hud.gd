@@ -159,7 +159,7 @@ func _on_player_damaged(_amount: float, _attacker_id: int) -> void:
 	_flash_tween.tween_property(damage_flash, "color:a", 0.0, DAMAGE_FLASH_TIME)
 
 
-func _on_player_died(_attacker_id: int) -> void:
+func _on_player_died(_attacker_id: int, _is_critical: bool) -> void:
 	death_label.visible = true
 
 

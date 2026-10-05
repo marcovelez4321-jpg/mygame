@@ -15,6 +15,7 @@ extends CanvasLayer
 @onready var window_mode_option: OptionButton = $Dim/MenuPanel/VBox/WindowModeRow/WindowModeOption
 @onready var vsync_check: CheckButton = $Dim/MenuPanel/VBox/VSyncRow/VSyncCheck
 @onready var infinite_ammo_check: CheckButton = $Dim/MenuPanel/VBox/InfiniteAmmoRow/InfiniteAmmoCheck
+@onready var hit_zones_check: CheckButton = $Dim/MenuPanel/VBox/HitZonesRow/HitZonesCheck
 @onready var sensitivity_slider: HSlider = $Dim/MenuPanel/VBox/SensitivityRow/SensitivitySlider
 @onready var sensitivity_value_label: Label = $Dim/MenuPanel/VBox/SensitivityRow/SensitivityValueLabel
 @onready var resume_button: Button = $Dim/MenuPanel/VBox/ButtonsRow/ResumeButton
@@ -44,6 +45,7 @@ func _ready() -> void:
 	window_mode_option.item_selected.connect(_on_window_mode_selected)
 	vsync_check.toggled.connect(_on_vsync_toggled)
 	infinite_ammo_check.toggled.connect(_on_infinite_ammo_toggled)
+	hit_zones_check.toggled.connect(_on_hit_zones_toggled)
 	sensitivity_slider.value_changed.connect(_on_sensitivity_changed)
 	resume_button.pressed.connect(close)
 	quit_button.pressed.connect(func() -> void: get_tree().quit())
@@ -64,7 +66,9 @@ func open() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_sync_sensitivity_slider()
 	if player:
-		infinite_ammo_check.button_pressed = player.get_node("WeaponController").infinite_ammo
+		var weapons := player.get_node("WeaponController") as WeaponController
+		infinite_ammo_check.button_pressed = weapons.infinite_ammo
+		hit_zones_check.button_pressed = weapons.show_hit_zones
 
 
 func close() -> void:
@@ -129,3 +133,10 @@ func _on_infinite_ammo_toggled(enabled: bool) -> void:
 		player = get_tree().get_first_node_in_group("player")
 	if player:
 		(player.get_node("WeaponController") as WeaponController).infinite_ammo = enabled
+
+
+func _on_hit_zones_toggled(enabled: bool) -> void:
+	if not player:
+		player = get_tree().get_first_node_in_group("player")
+	if player:
+		(player.get_node("WeaponController") as WeaponController).show_hit_zones = enabled

@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://ovyol6c5ciwr"
+path="res://.godot/imported/alley1.map-b9d2bf5369c33ffb41436b28ae0e176d.tres"
+
+[deps]
+
+source_file="res://maps/alley1.map"
+dest_files=["res://.godot/imported/alley1.map-b9d2bf5369c33ffb41436b28ae0e176d.tres"]
+
+[params]
+

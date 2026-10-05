@@ -27,10 +27,15 @@ const HINGE := PhysicalBone3D.JOINT_TYPE_HINGE
 ## humanoid bone name (what the bone map renames Mixamo bones to). Bones not
 ## listed here -- fingers, toes, the head's end bone -- get no body, the same
 ## ones that were deleted by hand from the old baked ragdoll.
+## Hands are deliberately left out too: their capsules are tiny and light at
+## the end of a long chain, so the solver kept overcorrecting them and they
+## vibrated in place. Without a body, a hand just holds its pose on the forearm.
 ## cone: swing/twist spans in degrees. hinge: lower/upper limits in degrees.
 ## rotation: the joint frame's rotation in degrees (lines up a hinge's axis).
 ## The left/right differences (upper-arm swing, lower-arm rotation) are
-## carried over from the old ragdoll as-is.
+## carried over from the old ragdoll as-is. Tighter elbow/knee/head limits
+## were tried to cut down limbs folding into their neighbours, but read as
+## too stiff -- these are the old ranges.
 const JOINTS := {
 	"Hips": {"type": NONE},
 	"Spine": {"type": CONE, "swing": 20.0, "twist": 20.0},
@@ -44,8 +49,6 @@ const JOINTS := {
 	"RightUpperArm": {"type": CONE, "swing": 80.0, "twist": 45.0},
 	"LeftLowerArm": {"type": HINGE, "lower": -140.0, "upper": 0.0},
 	"RightLowerArm": {"type": HINGE, "lower": -140.0, "upper": 0.0, "rotation": Vector3(90.0, 0.0, 0.0)},
-	"LeftHand": {"type": CONE, "swing": 30.0, "twist": 20.0},
-	"RightHand": {"type": CONE, "swing": 30.0, "twist": 20.0},
 	"LeftUpperLeg": {"type": PIN},
 	"RightUpperLeg": {"type": PIN},
 	"LeftLowerLeg": {"type": HINGE, "lower": 0.0, "upper": 140.0, "rotation": Vector3(0.0, 90.0, 0.0)},

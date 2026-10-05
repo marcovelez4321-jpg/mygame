@@ -116,6 +116,22 @@ const TEST_WEAPON_PATHS := [
 ## restart. Not a WeaponData/balance number on purpose: this is a dev/testing
 ## convenience, not something a level or weapon should ever configure.
 var infinite_ammo: bool = false
+## Debug toggle (pause menu): draws every living enemy's headshot zone
+## (yellow) and artery zone (red) as see-through spheres. Placed by the same
+## _head_center()/_bone_position() calls _hit_kind() uses, at the same radii,
+## so what you see is exactly what counts. Runtime-only, like infinite_ammo.
+var show_hit_zones: bool = false:
+	set(value):
+		show_hit_zones = value
+		if not value:
+			_clear_hit_zone_debug()
+
+const HIT_ZONE_DEBUG_NAME := "HitZoneDebug"
+const HEADSHOT_ZONE_COLOR := Color(1.0, 0.85, 0.1, 0.35)
+const ARTERY_ZONE_COLOR := Color(1.0, 0.1, 0.1, 0.45)
+
+var _headshot_zone_mesh: SphereMesh
+var _artery_zone_mesh: SphereMesh
 
 var _owned: Array[WeaponData] = []
 var _current: int = 0
@@ -296,13 +312,27 @@ func resolve_shot(shot: Shot) -> void:
 			var end := ray_origin + direction * range_left
 			var query := PhysicsRayQueryParameters3D.create(ray_origin, end)
 			query.exclude = exclude
-			# Only physics layer 1: ragdoll corpses live on layer 4, so they
-			# never absorb shots meant for what's behind them.
-			query.collision_mask = 1
+			# World geometry (layer 1) AND the ragdoll layer, so a downed
+			# corpse can still be shot -- see the PhysicalBone3D branch
+			# below. Cosmetic only (no Health there to damage, no kill to
+			# land twice), but a double-tap on a body still spraying blood
+			# reads better than a shot silently passing through it.
+			query.collision_mask = EnemyRagdoll.WORLD_MASK
 			var result := space.intersect_ray(query)
 			if result.is_empty():
 				shot_resolved.emit(ray_origin, end, false)
 				break
+
+			if result.collider is PhysicalBone3D:
+				shot_resolved.emit(ray_origin, result.position, true)
+				_spawn_blood(space, result, direction)
+				if penetrations_left <= 0:
+					break
+				penetrations_left -= 1
+				range_left -= ray_origin.distance_to(result.position)
+				exclude.append((result.collider as CollisionObject3D).get_rid())
+				ray_origin = result.position + direction * 0.01
+				continue
 
 			# Anything with a Health child can be hurt: targets, monsters, players.
 			var health := (result.collider as Node).get_node_or_null("Health") as Health
@@ -313,7 +343,9 @@ func resolve_shot(shot: Shot) -> void:
 
 			var kind: HitKind = _hit_kind(result.collider, result.position) if not health.is_dead else HitKind.NORMAL
 			var damage := _damage_for(shot.weapon, kind, health)
-			health.take_damage(damage, shot.attacker_id, direction, result.position, shot.weapon.impact_force)
+			# is_critical = an artery kill, the one clean finish that rules out
+			# a mutation (see enemy.gd's Mutation group).
+			health.take_damage(damage, shot.attacker_id, direction, result.position, shot.weapon.impact_force, kind == HitKind.ARTERY)
 			hit_confirmed.emit(health.is_dead, kind)
 			_play_hit_effects(space, result, direction, kind, health.is_dead)
 
@@ -421,6 +453,94 @@ func _head_center(skeleton: Skeleton3D, head: int) -> Vector3:
 	return base.lerp(_bone_position(skeleton, children[0]), 0.5)
 
 
+func _process(_delta: float) -> void:
+	if show_hit_zones:
+		_update_hit_zone_debug()
+
+
+## One pair of spheres per living enemy, moved onto its live head and neck
+## every frame. They're parented to the enemy (top_level, so they sit in world
+## space) and get freed with it. A dead enemy hides its pair -- the zones only
+## matter on something you can still shoot.
+func _update_hit_zone_debug() -> void:
+	_sync_zone_meshes()
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var enemy := node as Enemy
+		if enemy == null:
+			continue
+		var markers := _get_zone_markers(enemy)
+		var skeleton := enemy.find_child("*Skeleton*", true, false) as Skeleton3D
+		markers.visible = skeleton != null and not enemy.health.is_dead
+		if not markers.visible:
+			continue
+		var head := skeleton.find_bone("Head")
+		var neck := skeleton.find_bone("Neck")
+		var head_marker := markers.get_child(0) as MeshInstance3D
+		var neck_marker := markers.get_child(1) as MeshInstance3D
+		head_marker.visible = head >= 0
+		neck_marker.visible = neck >= 0
+		if head >= 0:
+			head_marker.global_position = _head_center(skeleton, head)
+		if neck >= 0:
+			neck_marker.global_position = _bone_position(skeleton, neck)
+
+
+## Builds the two shared sphere meshes once, then keeps their size matched to
+## headshot_radius/artery_hit_radius, so tuning those in the Inspector while
+## playing resizes the spheres too.
+func _sync_zone_meshes() -> void:
+	if _headshot_zone_mesh == null:
+		_headshot_zone_mesh = _make_zone_mesh(HEADSHOT_ZONE_COLOR)
+		_artery_zone_mesh = _make_zone_mesh(ARTERY_ZONE_COLOR)
+	# Only on change: setting a SphereMesh's size rebuilds it.
+	if not is_equal_approx(_headshot_zone_mesh.radius, headshot_radius):
+		_headshot_zone_mesh.radius = headshot_radius
+		_headshot_zone_mesh.height = headshot_radius * 2.0
+	if not is_equal_approx(_artery_zone_mesh.radius, artery_hit_radius):
+		_artery_zone_mesh.radius = artery_hit_radius
+		_artery_zone_mesh.height = artery_hit_radius * 2.0
+
+
+## See-through and drawn on top of everything (no_depth_test) -- both zones
+## sit inside the head and neck, so they'd be hidden by the model otherwise.
+func _make_zone_mesh(color: Color) -> SphereMesh:
+	var mesh := SphereMesh.new()
+	mesh.radial_segments = 16
+	mesh.rings = 8
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	mat.albedo_color = color
+	mesh.material = mat
+	return mesh
+
+
+func _get_zone_markers(enemy: Node3D) -> Node3D:
+	var markers := enemy.get_node_or_null(HIT_ZONE_DEBUG_NAME) as Node3D
+	if markers:
+		return markers
+	markers = Node3D.new()
+	markers.name = HIT_ZONE_DEBUG_NAME
+	markers.top_level = true
+	for mesh in [_headshot_zone_mesh, _artery_zone_mesh]:
+		var marker := MeshInstance3D.new()
+		marker.mesh = mesh
+		marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		markers.add_child(marker)
+	enemy.add_child(markers)
+	return markers
+
+
+func _clear_hit_zone_debug() -> void:
+	if not is_inside_tree():
+		return
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		var markers := enemy.get_node_or_null(HIT_ZONE_DEBUG_NAME)
+		if markers:
+			markers.queue_free()
+
+
 ## Called right after an artery hit kills the target -- by this point
 ## EnemyRagdoll has already run (Health.died fires synchronously), so the
 ## neck's PhysicalBone3D already exists and is already simulating. Finds it
@@ -431,7 +551,7 @@ func _spawn_artery_spurt(collider: Node) -> void:
 		return # no physical skeleton on this target (e.g. a test target) -- nothing to attach to
 	if _already_bleeding(neck_bone, ARTERY_BLEED_TIME):
 		return
-	BloodFX.spawn_artery_spurt(neck_bone, ARTERY_BLEED_TIME, _own_body_rids(collider))
+	BloodFX.spawn_artery_stream(neck_bone, ARTERY_BLEED_TIME, _own_body_rids(collider))
 	artery_kill.emit(neck_bone)
 
 

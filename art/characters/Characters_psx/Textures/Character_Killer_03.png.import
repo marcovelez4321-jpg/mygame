@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c3ijoayfbwicr"
-path.s3tc="res://.godot/imported/Character_Killer_03.png-7ee88ceb8e6436f6a03209d1e8f675b9.s3tc.ctex"
+path.s3tc="res://.godot/imported/Character_Killer_03.png-fc8ff793322949fa9ab2c8a4cc0e73fe.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://art/characters/Characters_psx/textures/Character_Killer_03.png"
-dest_files=["res://.godot/imported/Character_Killer_03.png-7ee88ceb8e6436f6a03209d1e8f675b9.s3tc.ctex"]
+source_file="res://art/characters/Characters_psx/Textures/Character_Killer_03.png"
+dest_files=["res://.godot/imported/Character_Killer_03.png-fc8ff793322949fa9ab2c8a4cc0e73fe.s3tc.ctex"]
 
 [params]
 

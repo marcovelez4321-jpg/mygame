@@ -106,13 +106,12 @@ func _draw_slice(center: Vector2, from_angle: float, to_angle: float, color: Col
 	draw_colored_polygon(points, color)
 
 
-## The weapon's icon (if it has one) and name. The equipped weapon is brighter
-## and has a ring around it.
+## The weapon's icon (if it has one) and name. The equipped weapon is just
+## brighter (full-opacity tint) than the rest -- no ring, so it never draws
+## over the name text sitting right below it.
 func _draw_label(weapon: WeaponData, position: Vector2, equipped: bool) -> void:
 	var tint := Color.WHITE if equipped else Color(1.0, 1.0, 1.0, 0.65)
 	if weapon.icon:
 		draw_texture_rect(weapon.icon, Rect2(position - Vector2(32.0, 44.0), Vector2(64.0, 64.0)), false, tint)
-	if equipped:
-		draw_arc(position + Vector2(0.0, 8.0), 50.0, 0.0, TAU, 32, tint, 2.0)
 	draw_string(ThemeDB.fallback_font, position + Vector2(-70.0, 34.0), weapon.weapon_name,
 			HORIZONTAL_ALIGNMENT_CENTER, 140.0, 18, tint)

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SurfaceAudio" format=3]
+
+[ext_resource type="Script" path="res://scripts/surface_audio.gd" id="1"]
+[ext_resource type="Resource" path="res://audio/events/body/body_impact_soft.tres" id="2"]
+[ext_resource type="Resource" path="res://audio/events/body/body_impact_hard.tres" id="3"]
+[ext_resource type="Resource" path="res://audio/events/body/body_scrape_rough.tres" id="4"]
+[ext_resource type="Resource" path="res://audio/events/body/body_scrape_smooth.tres" id="5"]
+
+[resource]
+script = ExtResource("1")
+impact_soft = ExtResource("2")
+impact_hard = ExtResource("3")
+scrape_rough = ExtResource("4")
+scrape_smooth = ExtResource("5")
+hardness = 0.2
+hard_threshold = 0.5
+hard_min_speed = 3.0
+roughness = 0.3
+rough_threshold = 0.5
