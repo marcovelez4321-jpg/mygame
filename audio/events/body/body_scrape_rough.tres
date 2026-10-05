@@ -1,8 +1,11 @@
-[gd_resource type="Resource" script_class="SoundEvent" format=3]
+[gd_resource type="Resource" script_class="SoundEvent" format=3 uid="uid://wd51nv0t5601"]
 
-[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="Script" uid="uid://dpm4dmxv0u4h" path="res://scripts/sound_event.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
 clip_folder = "res://audio/sfx/body"
 clip_prefix = "scrape_rough_loop"
+volume_db = -5
+unit_size = 3.75
+bus = "Body"

@@ -60,6 +60,7 @@ static func play_3d(event: SoundEvent, position: Vector3, world: Node, volume_sc
 	player.stream = clip
 	player.volume_db = event.roll_volume_db() + linear_to_db(volume_scale)
 	player.pitch_scale = event.roll_pitch_scale()
+	player.unit_size = event.unit_size
 	player.bus = _resolve_bus(event.bus)
 
 	world.add_child(player)
@@ -93,9 +94,43 @@ static func play_loop_3d(event: SoundEvent, follow: Node3D) -> AudioStreamPlayer
 	player.stream = clip
 	player.volume_db = event.roll_volume_db()
 	player.pitch_scale = event.roll_pitch_scale()
+	player.unit_size = event.unit_size
 	player.bus = _resolve_bus(event.bus)
 
 	follow.add_child(player)
+	player.finished.connect(player.play)
+	player.play()
+	return player
+
+
+## A sound that belongs to one player -- their jump, their gunshot. In your
+## own ears (play_2d) if `source` is the player YOU control, positional at
+## them (play_3d) if it's someone else, so in co-op your buddy's footsteps
+## and shots come from where they actually are. Offline every node is under
+## your authority, so this is always the 2D path until networking exists.
+static func play_for_owner(event: SoundEvent, source: Node3D) -> Node:
+	if source.is_multiplayer_authority():
+		return play_2d(event)
+	return play_3d(event, source.global_position, source.get_tree().current_scene)
+
+
+## A looping, non-positional sound -- an ambience bed, later music. Parented
+## to `owner_node` so it stops with it (e.g. when the level unloads). Loops
+## the same way play_loop_3d() does.
+static func play_loop_2d(event: SoundEvent, owner_node: Node) -> AudioStreamPlayer:
+	if event == null:
+		return null
+	var clip := event.pick_clip()
+	if clip == null:
+		return null
+
+	var player := AudioStreamPlayer.new()
+	player.stream = clip
+	player.volume_db = event.roll_volume_db()
+	player.pitch_scale = event.roll_pitch_scale()
+	player.bus = _resolve_bus(event.bus)
+
+	owner_node.add_child(player)
 	player.finished.connect(player.play)
 	player.play()
 	return player

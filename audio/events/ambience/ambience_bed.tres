@@ -4,3 +4,7 @@
 
 [resource]
 script = ExtResource("1")
+clip_folder = "res://audio/sfx/ambience"
+clip_prefix = "bed_anylevel_loop"
+volume_db = -22.0
+bus = "Ambience"

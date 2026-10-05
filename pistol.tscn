@@ -3,6 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://i02bor72sm53" path="res://art/weapons/PSX_Guns/FBX/Pistol.fbx" id="1_08c3m"]
 
 [node name="Pistol" unique_id=77433400 instance=ExtResource("1_08c3m")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
 
 [node name="Pistol" parent="." index="0" unique_id=858175727]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)

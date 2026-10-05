@@ -253,9 +253,23 @@ var _step_params := PhysicsTestMotionParameters3D.new()
 var _step_result := PhysicsTestMotionResult3D.new()
 
 
+## The player THIS game client controls. In co-op the "player" group holds
+## everyone, so anything that means "me" (pause menu settings, ambience
+## around the listener) asks this instead of grabbing the first player.
+## Offline it's simply the only player.
+static func local_player(tree: SceneTree) -> PlayerMovement:
+	for node in tree.get_nodes_in_group("player"):
+		if node.is_multiplayer_authority():
+			return node as PlayerMovement
+	return null
+
+
 func _ready() -> void:
 	add_to_group("player")
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Saved sensitivity from the pause menu, if the player has ever set one.
+	if GameSettings.mouse_sensitivity > 0.0:
+		mouse_sensitivity = GameSettings.mouse_sensitivity
 	health.died.connect(_on_died)
 	stamina_charges = max_stamina_charges
 	# Camera juice is purely cosmetic feedback (Rule 1) -- driven off the same

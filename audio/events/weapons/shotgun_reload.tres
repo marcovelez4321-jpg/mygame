@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SoundEvent" format=3]
+
+[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+clip_folder = "res://audio/sfx/weapons/shotgun"
+clip_prefix = "reload"
+pitch_variance = 0.02
+bus = "Weapons"

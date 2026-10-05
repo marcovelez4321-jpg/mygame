@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://daire5omvbh4x"
-path.s3tc="res://.godot/imported/Character_Female_02.png-2d4c29be255c87e6e1c00444a4e91fea.s3tc.ctex"
+path.s3tc="res://.godot/imported/Character_Female_02.png-1dccc5bfeeef960055beec471a31731a.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://art/characters/Characters_psx/textures/Character_Female_02.png"
-dest_files=["res://.godot/imported/Character_Female_02.png-2d4c29be255c87e6e1c00444a4e91fea.s3tc.ctex"]
+source_file="res://art/characters/Characters_psx/Textures/Character_Female_02.png"
+dest_files=["res://.godot/imported/Character_Female_02.png-1dccc5bfeeef960055beec471a31731a.s3tc.ctex"]
 
 [params]
 

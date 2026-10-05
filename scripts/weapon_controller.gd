@@ -341,11 +341,12 @@ func resolve_shot(shot: Shot) -> void:
 				BloodFX.spawn_bullet_hole(_body.get_tree().current_scene, result.position, result.normal)
 				break # world geometry always stops it, penetration or not
 
-			var kind: HitKind = _hit_kind(result.collider, result.position) if not health.is_dead else HitKind.NORMAL
-			var damage := _damage_for(shot.weapon, kind, health)
-			# is_critical = an artery kill, the one clean finish that rules out
-			# a mutation (see enemy.gd's Mutation group).
-			health.take_damage(damage, shot.attacker_id, direction, result.position, shot.weapon.impact_force, kind == HitKind.ARTERY)
+			var kind: HitKind = _hit_kind(result.collider, ray_origin, direction) if not health.is_dead else HitKind.NORMAL
+			var damage := _damage_for(shot.weapon, kind, health, shot.origin.distance_to(result.position))
+			# is_critical = a headshot kill, the one clean finish that rules out
+			# a mutation. Artery and body kills can still mutate (see enemy.gd's
+			# Mutation group).
+			health.take_damage(damage, shot.attacker_id, direction, result.position, shot.weapon.impact_force, kind == HitKind.HEADSHOT)
 			hit_confirmed.emit(health.is_dead, kind)
 			_play_hit_effects(space, result, direction, kind, health.is_dead)
 
@@ -359,13 +360,17 @@ func resolve_shot(shot: Shot) -> void:
 
 ## The weapon's own damage times the multiplier for where it landed (the Hit
 ## Zones exports), or everything the target has left for an instant-kill artery.
-func _damage_for(weapon: WeaponData, kind: HitKind, health: Health) -> float:
+## `distance` (from the shooter to the hit) feeds the weapon's close-range
+## boost -- see WeaponData.close_range_multiplier(). An instant artery kill
+## ignores it; it already takes everything.
+func _damage_for(weapon: WeaponData, kind: HitKind, health: Health, distance: float) -> float:
+	var close := weapon.close_range_multiplier(distance)
 	match kind:
 		HitKind.HEADSHOT:
-			return weapon.damage * headshot_damage_multiplier
+			return weapon.damage * headshot_damage_multiplier * close
 		HitKind.ARTERY:
-			return health.current_health if artery_instant_kill else weapon.damage * artery_damage_multiplier
-	return weapon.damage * body_damage_multiplier
+			return health.current_health if artery_instant_kill else weapon.damage * artery_damage_multiplier * close
+	return weapon.damage * body_damage_multiplier * close
 
 
 ## Every cosmetic effect of one confirmed hit, in one place -- nothing here
@@ -412,10 +417,19 @@ func _spawn_blood(space: PhysicsDirectSpaceState3D, hit: Dictionary, direction: 
 ## Artery, headshot, or a plain body hit. Measured against the live,
 ## currently-animating skeleton rather than separate hitboxes -- a live enemy
 ## only has one capsule, so this reads where the neck and head actually are
-## this frame. The two zones overlap around the jaw; whichever spot the shot
-## landed closer to wins, so the neck doesn't swallow shots to the face.
+## this frame.
+##
+## The test is whether the bullet's PATH passes through a zone, not where it
+## touched the capsule: the capsule is far wider than a head (0.4 m radius), so
+## a shot dead-centre on the face touches it ~0.3 m in front of the skull --
+## outside the head zone -- and used to count as a body shot. Same two-step
+## idea as Source's hitboxes: the collision hull says "you hit this enemy",
+## then the trace is checked against the small per-bone zones inside it.
+##
+## The two zones overlap around the jaw; whichever centre the path passes
+## closer to wins, so the neck doesn't swallow shots to the face.
 ## Runs only where resolve_shot() runs -- the host, in co-op (Rule 1).
-func _hit_kind(collider: Node, hit_position: Vector3) -> HitKind:
+func _hit_kind(collider: Node, ray_origin: Vector3, direction: Vector3) -> HitKind:
 	var skeleton := collider.find_child("*Skeleton*", true, false) as Skeleton3D
 	if skeleton == null:
 		return HitKind.NORMAL
@@ -423,12 +437,12 @@ func _hit_kind(collider: Node, hit_position: Vector3) -> HitKind:
 	var artery_distance := INF
 	var neck := skeleton.find_bone("Neck")
 	if neck >= 0:
-		artery_distance = _bone_position(skeleton, neck).distance_to(hit_position)
+		artery_distance = _ray_distance(ray_origin, direction, _bone_position(skeleton, neck))
 
 	var head_distance := INF
 	var head := skeleton.find_bone("Head")
 	if head >= 0:
-		head_distance = _head_center(skeleton, head).distance_to(hit_position)
+		head_distance = _ray_distance(ray_origin, direction, _head_center(skeleton, head))
 
 	var in_artery := artery_distance <= artery_hit_radius
 	var in_head := head_distance <= headshot_radius
@@ -437,6 +451,13 @@ func _hit_kind(collider: Node, hit_position: Vector3) -> HitKind:
 	if in_head:
 		return HitKind.HEADSHOT
 	return HitKind.NORMAL
+
+
+## How close a shot travelling from ray_origin along (normalized) direction
+## passes to `point` -- never measured behind where the shot started.
+func _ray_distance(ray_origin: Vector3, direction: Vector3, point: Vector3) -> float:
+	var along := maxf((point - ray_origin).dot(direction), 0.0)
+	return (ray_origin + direction * along).distance_to(point)
 
 
 func _bone_position(skeleton: Skeleton3D, bone: int) -> Vector3:

@@ -4,3 +4,6 @@
 
 [resource]
 script = ExtResource("1")
+clip_folder = "res://audio/sfx/enemy/base"
+clip_prefix = "idle_loop"
+bus = "Enemies"

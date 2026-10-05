@@ -11,9 +11,9 @@
 [ext_resource type="Script" uid="uid://dboj4h0l2eide" path="res://scripts/camera_juice.gd" id="10_cj"]
 [ext_resource type="Script" uid="uid://cyhyhcjdo6tm1" path="res://scripts/player_sound.gd" id="20_psnd"]
 [ext_resource type="Script" uid="uid://bb00yxeqxtnlf" path="res://scripts/weapon_sound.gd" id="21_wsnd"]
-[ext_resource type="Resource" path="res://audio/events/player_jump.tres" id="22_jump"]
-[ext_resource type="Resource" path="res://audio/events/player_land.tres" id="23_land"]
-[ext_resource type="Resource" path="res://audio/events/player_footstep.tres" id="24_step"]
+[ext_resource type="Resource" uid="uid://bu1flxn06br3r" path="res://audio/events/player_jump.tres" id="22_jump"]
+[ext_resource type="Resource" uid="uid://d2ksn48yqq10c" path="res://audio/events/player_land.tres" id="23_land"]
+[ext_resource type="Resource" uid="uid://c54flptomjix7" path="res://audio/events/player_footstep.tres" id="24_step"]
 [ext_resource type="Resource" path="res://audio/events/player_dash.tres" id="25_dash"]
 [ext_resource type="Resource" path="res://audio/events/player_wall_jump.tres" id="26_wj"]
 [ext_resource type="Resource" path="res://audio/events/player_damage.tres" id="27_dmg"]
@@ -25,17 +25,12 @@
 [ext_resource type="Resource" path="res://audio/events/pickup.tres" id="33_pick"]
 [ext_resource type="Resource" path="res://audio/events/artery_spurt.tres" id="34_spurt"]
 [ext_resource type="Resource" path="res://audio/events/headshot.tres" id="35_headshot"]
+[ext_resource type="Resource" path="res://audio/events/player_mantle.tres" id="40_mantle"]
+[ext_resource type="Script" path="res://scripts/player_model.gd" id="41_pmodel"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
 height = 1.8
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_1"]
-radius = 0.4
-height = 1.8
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
-albedo_color = Color(0.2, 0.6, 1, 1)
 
 [node name="Player" type="CharacterBody3D" unique_id=1710340998]
 script = ExtResource("1")
@@ -47,10 +42,8 @@ wall_jump_up_velocity = 13.5
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_1")
 
-[node name="Body" type="MeshInstance3D" parent="." unique_id=1925189009]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
-mesh = SubResource("CapsuleMesh_1")
-surface_material_override/0 = SubResource("StandardMaterial3D_1")
+[node name="PlayerModel" type="Node3D" parent="." unique_id=900001020]
+script = ExtResource("41_pmodel")
 
 [node name="Head" type="Node3D" parent="." unique_id=357934096]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
@@ -89,6 +82,7 @@ script = ExtResource("5_tr")
 
 [node name="PhysicsGrabber" type="Node" parent="." unique_id=-367812494]
 script = ExtResource("9_pg")
+max_grab_range = 2.0
 
 [node name="PlayerSound" type="Node" parent="." unique_id=900001002]
 script = ExtResource("20_psnd")
@@ -97,6 +91,7 @@ land_sound = ExtResource("23_land")
 footstep_sound = ExtResource("24_step")
 dash_sound = ExtResource("25_dash")
 wall_jump_sound = ExtResource("26_wj")
+mantle_sound = ExtResource("40_mantle")
 damage_sound = ExtResource("27_dmg")
 death_sound = ExtResource("28_pdeath")
 gory_kill_sound = ExtResource("29_gory")

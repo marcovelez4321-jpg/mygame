@@ -12,7 +12,7 @@ extends Node
 
 signal damaged(amount: float, attacker_id: int)
 ## is_critical carries through whatever the attacker considered a "clean,
-## finishing" blow (e.g. weapon_controller.gd's artery hit) -- Health itself
+## finishing" blow (e.g. weapon_controller.gd's headshot) -- Health itself
 ## has no idea what that means for any particular attacker, it just forwards
 ## the flag so a listener (e.g. enemy.gd's mutation chance) can react to it.
 signal died(attacker_id: int, is_critical: bool)

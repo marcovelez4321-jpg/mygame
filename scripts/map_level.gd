@@ -37,6 +37,7 @@ var navigation_region: NavigationRegion3D
 
 func _ready() -> void:
 	_bake_navigation()
+	add_child(AmbiencePlayer.new())
 
 	var start := get_tree().get_first_node_in_group("player_start")
 	if start == null:

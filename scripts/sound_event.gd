@@ -21,6 +21,9 @@ extends Resource
 ## into the folder is enough -- no editing this resource.
 @export_dir var clip_folder: String = ""
 @export var clip_prefix: String = ""
+## Used when this event has no audio of its own yet -- e.g. the rusher's
+## death scream falls back to the base enemy's until it gets its own.
+@export var fallback: SoundEvent
 
 @export_group("Variation")
 ## Randomized per play, in decibels, added to the base volume below.
@@ -31,6 +34,13 @@ extends Resource
 ## for a footstep or gunshot without it sounding pitch-shifted/cartoonish.
 @export var pitch_scale: float = 1.0
 @export var pitch_variance: float = 0.0
+
+@export_group("Distance")
+## How far a 3D sound carries (Godot's AudioStreamPlayer3D.unit_size, like
+## Valve's soundlevel). Inside this many meters it plays at full volume;
+## beyond it, it fades -- halving this halves how far away it's heard.
+## 10 is Godot's default.
+@export var unit_size: float = 10.0
 
 @export_group("Routing")
 ## Which audio bus this plays on. "SFX" (default_bus_layout.tres) is the
@@ -50,13 +60,13 @@ var _pool_built := false
 func pick_clip() -> AudioStream:
 	_build_pool()
 	if _pool.is_empty():
-		return null
+		return fallback.pick_clip() if fallback != null else null
 	return _pool[randi() % _pool.size()]
 
 
 func has_clips() -> bool:
 	_build_pool()
-	return not _pool.is_empty()
+	return not _pool.is_empty() or (fallback != null and fallback.has_clips())
 
 
 ## ResourceLoader.list_directory, not DirAccess: in an exported game the
@@ -66,7 +76,11 @@ func _build_pool() -> void:
 	if _pool_built:
 		return
 	_pool_built = true
-	_pool.assign(clips)
+	# Skip empty slots -- an Inspector "+" with no file dragged in leaves a
+	# null that would otherwise silently swallow a share of the plays.
+	for clip in clips:
+		if clip != null:
+			_pool.append(clip)
 	if clip_folder.is_empty() or clip_prefix.is_empty():
 		return
 	var pattern := RegEx.create_from_string("^%s_\\d+\\.(wav|ogg|mp3)$" % clip_prefix)

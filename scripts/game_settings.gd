@@ -1,6 +1,7 @@
 extends Node
 
-## Global display settings: resolution, window mode, vsync. Autoloaded as
+## Global player settings: resolution, window mode, vsync, audio volumes and
+## mouse sensitivity, saved to user://settings.cfg. Autoloaded as
 ## "GameSettings" so any scene (pause menu, future main menu, etc.) can read
 ## or change it without needing a node reference passed around.
 ##
@@ -13,14 +14,36 @@ const SETTINGS_PATH := "user://settings.cfg"
 
 enum WindowMode { WINDOWED, BORDERLESS_FULLSCREEN, EXCLUSIVE_FULLSCREEN }
 
+## Every audio bus the pause menu's Audio panel shows a slider for, in order:
+## Master, then one per audio/sfx folder (default_bus_layout.tres).
+const AUDIO_BUSES: Array[String] = ["Master", "Body", "Surface", "Gore", "Props",
+		"Weapons", "Enemies", "Player", "Hits", "Ambience"]
+
 var resolution: Vector2i = Vector2i(1280, 720)
 var window_mode: WindowMode = WindowMode.WINDOWED
 var vsync_enabled: bool = true
+## Bus name -> linear volume (1.0 = 100%). Missing = 100%.
+var audio_volumes: Dictionary = {}
+## Saved mouse sensitivity; 0 = never set, so the player keeps its own default.
+var mouse_sensitivity: float = 0.0
+## Path of the character FBX the player wears (PlayerModel); "" = first one.
+var player_character: String = ""
 
 
 func _ready() -> void:
 	load_settings()
 	apply_all()
+
+
+func get_bus_volume(bus: String) -> float:
+	return audio_volumes.get(bus, 1.0)
+
+
+## Live: applies straight away. Saved when the pause menu closes (see
+## pause_menu.gd), not on every slider tick.
+func set_bus_volume(bus: String, linear: float) -> void:
+	audio_volumes[bus] = linear
+	_apply_bus_volume(bus)
 
 
 ## Common resolutions across common aspect ratios, filtered down to ones
@@ -70,6 +93,14 @@ func apply_all() -> void:
 	_apply_window_mode()
 	_apply_resolution()
 	_apply_vsync()
+	for bus in AUDIO_BUSES:
+		_apply_bus_volume(bus)
+
+
+func _apply_bus_volume(bus: String) -> void:
+	var index := AudioServer.get_bus_index(bus)
+	if index != -1:
+		AudioServer.set_bus_volume_db(index, linear_to_db(get_bus_volume(bus)))
 
 
 ## Resolution only means anything in windowed mode -- fullscreen/borderless
@@ -116,6 +147,12 @@ func save_settings() -> void:
 	config.set_value("display", "resolution_y", resolution.y)
 	config.set_value("display", "window_mode", window_mode)
 	config.set_value("display", "vsync", vsync_enabled)
+	for bus in audio_volumes:
+		config.set_value("audio", bus, audio_volumes[bus])
+	if mouse_sensitivity > 0.0:
+		config.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
+	if not player_character.is_empty():
+		config.set_value("player", "character", player_character)
 	config.save(SETTINGS_PATH)
 
 
@@ -128,3 +165,8 @@ func load_settings() -> void:
 	resolution = Vector2i(res_x, res_y)
 	window_mode = config.get_value("display", "window_mode", window_mode) as WindowMode
 	vsync_enabled = config.get_value("display", "vsync", vsync_enabled)
+	for bus in AUDIO_BUSES:
+		if config.has_section_key("audio", bus):
+			audio_volumes[bus] = config.get_value("audio", bus)
+	mouse_sensitivity = config.get_value("controls", "mouse_sensitivity", mouse_sensitivity)
+	player_character = config.get_value("player", "character", player_character)

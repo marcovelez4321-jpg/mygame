@@ -18,12 +18,12 @@
 [ext_resource type="PackedScene" uid="uid://bm5rnrrjjop0e" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer.fbx" id="21_killer"]
 [ext_resource type="PackedScene" uid="uid://dlg8wg31e7dfd" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_01.fbx" id="22_killer01"]
 [ext_resource type="Script" uid="uid://1aok5053f3wf" path="res://scripts/enemy_sound.gd" id="30_snd"]
-[ext_resource type="Script" path="res://scripts/ragdoll_audio.gd" id="36_rag_audio"]
 [ext_resource type="Resource" path="res://audio/events/enemy_idle.tres" id="31_idle"]
 [ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="32_hurt"]
 [ext_resource type="Resource" path="res://audio/events/enemy_death.tres" id="33_death"]
 [ext_resource type="Resource" path="res://audio/events/enemy_attack.tres" id="34_atk"]
 [ext_resource type="Resource" path="res://audio/events/enemy_footstep.tres" id="35_step"]
+[ext_resource type="Script" uid="uid://dvhw5j37ebnvh" path="res://scripts/ragdoll_audio.gd" id="36_rag_audio"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_tt7e2"]
 radius = 0.4

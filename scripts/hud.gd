@@ -48,7 +48,7 @@ func _ready() -> void:
 
 
 func _find_player() -> void:
-	player = get_tree().get_first_node_in_group("player")
+	player = PlayerMovement.local_player(get_tree())
 	if player == null:
 		return
 	player.weapons.hit_confirmed.connect(_on_hit_confirmed)

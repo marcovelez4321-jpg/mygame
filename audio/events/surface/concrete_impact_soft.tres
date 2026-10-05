@@ -7,3 +7,4 @@ script = ExtResource("1")
 clip_folder = "res://audio/sfx/surface/concrete"
 clip_prefix = "impact_soft"
 pitch_variance = 0.08
+bus = "Surface"

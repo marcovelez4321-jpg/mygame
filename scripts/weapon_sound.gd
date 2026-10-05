@@ -8,11 +8,10 @@ extends Node
 ## no new sound code -- just fill in its .tres. The sounds below aren't
 ## per-weapon, so they stay here instead.
 ##
-## Rule 1: presentation only. Your own shots/hits play non-positional
-## (play_2d -- see sound_player.gd's own comment on why). Once other players
-## exist, THEIR shots should play positional (play_3d at their muzzle)
-## instead -- flagged here for that future hookup, not built yet since
-## there's no networking to receive another player's shot event from.
+## Rule 1: presentation only, co-op ready. Gun sounds go through
+## SoundPlayer.play_for_owner(): in your ears for your own gun, positional
+## at the shooter for a remote player's. Hit/kill confirmations are feedback
+## for the shooter only, so they never play for anyone else's hits.
 
 @export_group("Sounds")
 @export var hit_marker_sound: SoundEvent
@@ -40,6 +39,8 @@ extends Node
 @export var pickup_sound: SoundEvent
 
 @onready var _weapons: WeaponController = get_parent() as WeaponController
+## The player body holding the gun -- whose ears (or position) the sounds use.
+@onready var _owner_body: Node3D = _weapons.get_parent() as Node3D
 
 
 func _ready() -> void:
@@ -54,30 +55,33 @@ func _ready() -> void:
 func _on_shot_fired() -> void:
 	var weapon := _weapons.current_weapon()
 	if weapon:
-		SoundPlayer.play_2d(weapon.fire_sound)
+		SoundPlayer.play_for_owner(weapon.fire_sound, _owner_body)
 
 
 func _on_reload_started(_duration: float) -> void:
 	var weapon := _weapons.current_weapon()
 	if weapon:
-		SoundPlayer.play_2d(weapon.reload_sound)
+		SoundPlayer.play_for_owner(weapon.reload_sound, _owner_body)
 
 
 func _on_weapon_switched(weapon: WeaponData, draw_time: float) -> void:
 	# draw_time is 0 for the very first weapon at spawn -- no switch sound
 	# for just appearing.
 	if weapon and draw_time > 0.0:
-		SoundPlayer.play_2d(weapon.switch_sound)
+		SoundPlayer.play_for_owner(weapon.switch_sound, _owner_body)
 
 
 func _on_hit_confirmed(killed: bool, kind: WeaponController.HitKind) -> void:
+	if not _owner_body.is_multiplayer_authority():
+		return
 	SoundPlayer.play_2d(kill_confirm_sound if killed else hit_marker_sound)
 	if kind == WeaponController.HitKind.HEADSHOT:
 		SoundPlayer.play_2d(headshot_sound)
 
 
 func _on_artery_kill(bone: Node3D) -> void:
-	SoundPlayer.play_2d(artery_kill_sound)
+	if _owner_body.is_multiplayer_authority():
+		SoundPlayer.play_2d(artery_kill_sound)
 
 	var spurt_player := SoundPlayer.play_loop_3d(artery_spurt_sound, bone)
 	if spurt_player == null:
@@ -92,4 +96,4 @@ func _on_artery_kill(bone: Node3D) -> void:
 
 
 func _on_picked_up(_weapon: WeaponData, _ammo_type: WeaponData.AmmoType, _ammo_amount: int) -> void:
-	SoundPlayer.play_2d(pickup_sound)
+	SoundPlayer.play_for_owner(pickup_sound, _owner_body)

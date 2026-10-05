@@ -6,3 +6,4 @@
 script = ExtResource("1")
 clip_folder = "res://audio/sfx/surface/concrete"
 clip_prefix = "scrape_smooth_loop"
+bus = "Surface"

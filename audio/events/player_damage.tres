@@ -4,3 +4,7 @@
 
 [resource]
 script = ExtResource("1")
+clip_folder = "res://audio/sfx/player"
+clip_prefix = "hurt"
+pitch_variance = 0.05
+bus = "Player"

@@ -4,3 +4,7 @@
 
 [resource]
 script = ExtResource("1")
+clip_folder = "res://audio/sfx/enemy/base"
+clip_prefix = "death"
+pitch_variance = 0.05
+bus = "Enemies"

@@ -1,6 +1,11 @@
-[gd_resource type="Resource" script_class="SoundEvent" format=3]
+[gd_resource type="Resource" script_class="SoundEvent" format=3 uid="uid://bu1flxn06br3r"]
 
-[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="Script" uid="uid://dpm4dmxv0u4h" path="res://scripts/sound_event.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
+clips = Array[AudioStream]([null])
+clip_folder = "res://audio/sfx/player"
+clip_prefix = "jump"
+pitch_variance = 0.05
+bus = "Player"

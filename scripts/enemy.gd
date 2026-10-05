@@ -113,8 +113,9 @@ signal attack_started
 @export var burst_shot_interval: float = 0.15
 
 @export_group("Mutation")
-## Dying to anything OTHER than a clean/critical kill (e.g. weapon_controller
-## .gd's artery hit) rolls a chance to mutate instead of just dying -- Doom's
+## Dying to anything OTHER than a clean/critical kill (a headshot, see
+## weapon_controller.gd -- artery and body kills both count as messy) rolls
+## a chance to mutate instead of just dying -- Doom's
 ## Pain Elemental and Painkiller's exploding fatties are the reference point
 ## here (Rule 6): failing to finish something off cleanly makes it WORSE, not
 ## just delayed. The mutant is a fresh copy of this same enemy scene wearing

@@ -1,4 +1,4 @@
-SHELL CASINGS -- spent brass bouncing on the floor
+SHELL CASINGS -- spent brass bouncing on the floor  (COMING LATER -- fine to make now)
 FORMAT: WAV, 44.1 or 48 kHz, 24-bit, MONO (sounds in the 3D world must be mono).
 No silence at the start, short fade at the end, peaks around -1 dBFS.
 Loops: seamless, cut on zero crossings.

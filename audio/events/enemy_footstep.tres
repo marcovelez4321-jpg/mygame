@@ -4,3 +4,7 @@
 
 [resource]
 script = ExtResource("1")
+clip_folder = "res://audio/sfx/surface/concrete"
+clip_prefix = "step"
+pitch_variance = 0.08
+bus = "Surface"

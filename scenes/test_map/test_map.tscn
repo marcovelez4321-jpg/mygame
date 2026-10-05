@@ -8,9 +8,9 @@
 [ext_resource type="PackedScene" uid="uid://j278ac0hm8lw" path="res://art/props/chair_prop.tscn" id="6_yvibs"]
 [ext_resource type="PackedScene" uid="uid://cuih0sutv7aw4" path="res://scenes/weapon_pickup.tscn" id="7_wpk"]
 [ext_resource type="PackedScene" uid="uid://gn8wbsdypt3p" path="res://scenes/ammo_pickup.tscn" id="8_apk"]
-[ext_resource type="PackedScene" path="res://scenes/starter_gun_pickup.tscn" id="9_sgp"]
+[ext_resource type="PackedScene" uid="uid://basaei4sy2ydl" path="res://scenes/starter_gun_pickup.tscn" id="9_sgp"]
 [ext_resource type="PackedScene" uid="uid://b1qyhipwwloq7" path="res://scenes/machine_gun_pickup.tscn" id="10_mgp"]
-[ext_resource type="PackedScene" uid="uid://c4noyug3r67ag" path="res://scenes/enemy/enemy_rusher.tscn" id="11_rusher"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="11_rusher"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/enemy_gunner.tscn" id="12_gunner"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]

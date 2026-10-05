@@ -6,10 +6,10 @@ extends Node
 ## (jumped/dashed/wall_jumped on PlayerMovement, damaged/died on Health,
 ## gory_kill_nearby on WeaponController); this file adds nothing to
 ## simulation, it only listens (Rule 1) -- exactly like camera_juice.gd
-## already does for the same events. Once other players exist, a REMOTE
-## player's sounds would need to come from their replicated state instead of
-## local signals -- noted here for that future hookup, not built yet since
-## there's no networking to receive it from.
+## already does for the same events. Co-op ready: every sound goes through
+## SoundPlayer.play_for_owner(), so the local player hears their own sounds
+## in their ears and a remote player's come from where that player stands.
+## The screen-splash sting is local-only feedback, so it only plays for you.
 ##
 ## To give the player footsteps/jump/land/etc a voice: assign the SoundEvent
 ## exports below in the Inspector.
@@ -56,40 +56,41 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	var on_floor := _player.is_on_floor()
 	if on_floor and not _was_on_floor:
-		SoundPlayer.play_2d(land_sound)
+		SoundPlayer.play_for_owner(land_sound, _player)
 	_was_on_floor = on_floor
 
 	if on_floor:
 		_distance_since_step += _player.global_position.distance_to(_last_position)
 		if _distance_since_step >= footstep_distance:
 			_distance_since_step = 0.0
-			SoundPlayer.play_2d(footstep_sound)
+			SoundPlayer.play_for_owner(footstep_sound, _player)
 	_last_position = _player.global_position
 
 
 func _on_jumped() -> void:
-	SoundPlayer.play_2d(jump_sound)
+	SoundPlayer.play_for_owner(jump_sound, _player)
 
 
 func _on_dashed() -> void:
-	SoundPlayer.play_2d(dash_sound)
+	SoundPlayer.play_for_owner(dash_sound, _player)
 
 
 func _on_wall_jumped() -> void:
-	SoundPlayer.play_2d(wall_jump_sound)
+	SoundPlayer.play_for_owner(wall_jump_sound, _player)
 
 
 func _on_mantled() -> void:
-	SoundPlayer.play_2d(mantle_sound)
+	SoundPlayer.play_for_owner(mantle_sound, _player)
 
 
 func _on_damaged(_amount: float, _attacker_id: int) -> void:
-	SoundPlayer.play_2d(damage_sound)
+	SoundPlayer.play_for_owner(damage_sound, _player)
 
 
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
-	SoundPlayer.play_2d(death_sound)
+	SoundPlayer.play_for_owner(death_sound, _player)
 
 
 func _on_gory_kill_nearby() -> void:
-	SoundPlayer.play_2d(gory_kill_sound)
+	if _player.is_multiplayer_authority():
+		SoundPlayer.play_2d(gory_kill_sound)

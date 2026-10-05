@@ -4,6 +4,10 @@
 [ext_resource type="PackedScene" uid="uid://cj0pp1yakjnfx" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_02.fbx" id="2_killer02"]
 [ext_resource type="PackedScene" uid="uid://ngqmbgo40ne6" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_03.fbx" id="3_killer03"]
 [ext_resource type="PackedScene" uid="uid://bif0pmtnrl0dt" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_06.fbx" id="4_killer06"]
+[ext_resource type="Resource" path="res://audio/events/enemy/rusher_idle.tres" id="50_snd_idle"]
+[ext_resource type="Resource" path="res://audio/events/enemy/rusher_hurt.tres" id="51_snd_hurt"]
+[ext_resource type="Resource" path="res://audio/events/enemy/rusher_death.tres" id="52_snd_death"]
+[ext_resource type="Resource" path="res://audio/events/enemy/rusher_attack.tres" id="53_snd_attack"]
 
 [node name="Enemy" instance=ExtResource("1")]
 move_speed = 7.5
@@ -25,3 +29,9 @@ variants = Array[PackedScene]([ExtResource("2_killer02"), ExtResource("3_killer0
 
 [node name="EnemyAnimator" parent="." index="3"]
 walk_animations = Array[String](["moves/Run"])
+
+[node name="EnemySound" parent="." index="6"]
+idle_sound = ExtResource("50_snd_idle")
+hurt_sound = ExtResource("51_snd_hurt")
+death_sound = ExtResource("52_snd_death")
+attack_sound = ExtResource("53_snd_attack")

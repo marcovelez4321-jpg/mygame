@@ -54,6 +54,11 @@ extends Node
 
 ## How many contacts each bone reports per physics step.
 const CONTACTS_PER_BONE := 4
+## Once every bone has stayed slower than SETTLE_SPEED (m/s) for SETTLE_TIME
+## seconds, the body has come to rest: stop listening and switch its contact
+## reports off, so a pile of settled corpses costs nothing per frame (Rule 2).
+const SETTLE_SPEED := 0.3
+const SETTLE_TIME := 1.5
 
 @onready var _enemy: Enemy = get_parent() as Enemy
 
@@ -71,9 +76,12 @@ var _last_crunch := -INF
 var _drag_player: AudioStreamPlayer3D
 var _drag_base_db := 0.0
 var _drag_last_time := -INF
+var _still_time := 0.0
 
 
 func _ready() -> void:
+	# Nothing to listen to while the enemy is alive.
+	set_physics_process(false)
 	_enemy.state_changed.connect(_on_state_changed)
 
 
@@ -95,6 +103,13 @@ func _start() -> void:
 			_hips = bone
 		PhysicsServer3D.body_set_max_contacts_reported(bone.get_rid(), CONTACTS_PER_BONE)
 	_active = not _bones.is_empty()
+	set_physics_process(_active)
+
+
+func _sleep() -> void:
+	set_physics_process(false)
+	for bone in _bones:
+		PhysicsServer3D.body_set_max_contacts_reported(bone.get_rid(), 0)
 
 
 ## Valve's $jointsurfaceprop idea: the head gets its own material, limbs
@@ -108,15 +123,17 @@ func _surface_for(bone_name: String) -> SurfaceAudio:
 	return torso_surface
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if not _active:
 		return
 	var now := Time.get_ticks_msec() / 1000.0
 	var drag_speed := 0.0
 	var drag_hit: SurfaceAudio = null
+	var fastest := 0.0
 
 	for bone: PhysicalBone3D in _bones:
 		var speed := bone.linear_velocity.length()
+		fastest = maxf(fastest, speed)
 		var prev_speed: float = _prev_speed[bone]
 		_prev_speed[bone] = speed
 		var state := PhysicsServer3D.body_get_direct_state(bone.get_rid())
@@ -157,6 +174,10 @@ func _physics_process(_delta: float) -> void:
 		_play_impact(bone, hit_object, hit_surface, impact_speed, hit_position, now)
 
 	_update_drag(drag_speed, drag_hit, now)
+
+	_still_time = _still_time + delta if fastest < SETTLE_SPEED else 0.0
+	if _still_time >= SETTLE_TIME and _drag_player == null:
+		_sleep()
 
 
 func _play_impact(bone: PhysicalBone3D, hit_object: Object, hit_surface: SurfaceAudio,

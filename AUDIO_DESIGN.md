@@ -262,7 +262,12 @@ system is built.
 3. **Built** (`ragdoll_audio.gd`). Ragdoll layers: the drop, per-bone
    variety, the ground layer, the drag loop and bone crunches.
 4. Footsteps by surface.
-5. Area reverb zones + ambience beds.
+5. Area reverb zones + ambience beds. **Ambience built**
+   (`ambience_player.gd`: random one-shots + optional bed, in every level);
+   reverb zones still to do.
+
+Also built: one audio bus per `audio/sfx` folder, each with a saved volume
+slider in the pause menu's Audio panel (`game_settings.gd`, `pause_menu.gd`).
 
 ## Sources
 - Valve SDK, `vphysics_sound.h` (impact queue, merging, hard/soft choice): <https://swarm.workshop.perforce.com/files/guest/knut_wikstrom/ValveSDKCodegame_shared/vphysics_sound.h>

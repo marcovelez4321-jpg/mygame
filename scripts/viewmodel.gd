@@ -28,9 +28,10 @@ const KICK_ROTATION_TIME := 0.15
 ## magnitude) so consecutive shots never look perfectly identical.
 const KICK_JITTER := 0.25
 ## Flat multiplier on every weapon's recoil_kick_distance/_rotation_degrees --
-## makes the visual kick read as twice as violent across the board without
+## makes the visual kick read as more violent across the board without
 ## having to hand-retune each weapon's own .tres numbers individually.
-const RECOIL_VISUAL_SCALE := 2.0
+const RECOIL_VISUAL_SCALE := 2.5
+
 
 ## -- Pump-rack reload (WeaponData.ReloadStyle.PUMP_RACK) --
 ## Turns the gun upright (muzzle pointing at the ceiling), racks it with a
@@ -80,6 +81,14 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 var _model: Node3D
 var _model_rest_position: Vector3
 var _model_rest_rotation: Vector3
+var _model_rest_transform: Transform3D
+## Your character's arms holding the gun -- a child of _model, so the kick,
+## sway, switch and reload animations all carry the hands with the gun.
+## Placed in camera space (WeaponData.arms_position) and converted into
+## _model's space in _apply_arms_transform().
+var _arms: Node3D
+var _player_model: PlayerModel
+var _tuning_arms: bool = false
 var _switch_tween: Tween
 var _kick_tween: Tween
 var _tuning: bool = false
@@ -100,6 +109,19 @@ var _has_previous_look: bool = false
 
 
 func _ready() -> void:
+	# Rule 1 (co-op): first-person arms and gun are only ever for the player
+	# you control. A remote player's copy of this node stays hidden and idle;
+	# what you see of them is their third-person body.
+	var body := _weapons.get_parent()
+	if not body.is_multiplayer_authority():
+		visible = false
+		set_process(false)
+		set_physics_process(false)
+		set_process_unhandled_key_input(false)
+		return
+	_player_model = body.get_node_or_null("PlayerModel") as PlayerModel
+	if _player_model:
+		_player_model.character_changed.connect(_on_character_changed)
 	_sway_pivot = Node3D.new()
 	add_child(_sway_pivot)
 	_weapons.weapon_switched.connect(_on_weapon_switched)
@@ -264,7 +286,8 @@ func _show_weapon(weapon: WeaponData) -> void:
 	if _kick_tween:
 		_kick_tween.kill()
 	if _model:
-		_model.queue_free()
+		_model.queue_free() # takes the old arms with it
+	_arms = null
 
 	# _model is a pivot. The weapon's position, rotation and scale are applied to
 	# it, and the gun is shifted inside it so the GUN'S CENTRE sits on the pivot.
@@ -280,6 +303,7 @@ func _show_weapon(weapon: WeaponData) -> void:
 	_model.add_child(gun)
 	_center_on_pivot(gun)
 	_apply_transform(weapon)
+	_attach_arms(weapon)
 	if _tuning_muzzle:
 		_update_muzzle_marker(weapon)
 
@@ -291,6 +315,85 @@ func _apply_transform(weapon: WeaponData) -> void:
 	_model.position = _model_rest_position
 	_model.rotation_degrees = _model_rest_rotation
 	_model.scale = Vector3.ONE * weapon.viewmodel_scale
+	_model_rest_transform = _model.transform
+	_apply_arms_transform(weapon)
+
+
+func _on_character_changed() -> void:
+	var weapon := _weapons.current_weapon()
+	if weapon and _model:
+		_attach_arms(weapon)
+
+
+## Your character's arms in the weapon's hold pose, holding the gun. A fresh
+## copy of the same character the body wears (PlayerModel), with its head and
+## legs hidden and no shadow -- the body already casts one.
+func _attach_arms(weapon: WeaponData) -> void:
+	if is_instance_valid(_arms):
+		_arms.queue_free()
+	_arms = null
+	if weapon.hold_animation == null or _player_model == null or _player_model.character_path.is_empty():
+		return
+	var scene := load(_player_model.character_path) as PackedScene
+	if scene == null:
+		return
+	_arms = scene.instantiate() as Node3D
+	_model.add_child(_arms)
+
+	# Hold the pose's first frame still, so the hands can't drift off the grip.
+	var animator := PlayerModel.animator_for(_arms)
+	var library := AnimationLibrary.new()
+	library.add_animation(&"hold", weapon.hold_animation)
+	animator.add_animation_library(&"fp", library)
+	animator.play(&"fp/hold")
+	animator.seek(0.0, true)
+	animator.pause()
+
+	var skeletons := _arms.find_children("*", "Skeleton3D", true, false)
+	var skeleton: Skeleton3D = null
+	if not skeletons.is_empty():
+		skeleton = skeletons[0] as Skeleton3D
+	if skeleton:
+		var hider := HideBonesModifier.new()
+		hider.bone_names = PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
+		skeleton.add_child(hider)
+		if weapon.arms_position == Vector3.ZERO:
+			_auto_place_arms(weapon, skeleton)
+	for node in _arms.find_children("*", "GeometryInstance3D", true, false):
+		(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_apply_arms_transform(weapon)
+
+
+## The arms' facing and size in camera space: turned to face forward (Mixamo
+## characters face +Z, the camera looks down -Z), the weapon's own tweak on
+## top, scaled to match the body (PlayerModel.model_scale).
+func _arms_basis(weapon: WeaponData) -> Basis:
+	var size := (_player_model.model_scale if _player_model else 1.0) * weapon.arms_scale
+	return Basis.from_euler(weapon.arms_rotation_degrees * (PI / 180.0)) \
+			* Basis(Vector3.UP, PI) * Basis.from_scale(Vector3.ONE * size)
+
+
+## First-time placement for a weapon that hasn't been tuned yet: puts the
+## posed right hand right on the gun. Stored on the weapon, so F3 saves it.
+func _auto_place_arms(weapon: WeaponData, skeleton: Skeleton3D) -> void:
+	var hand := skeleton.find_bone("RightHand")
+	if hand == -1:
+		return
+	# The posed hand, in the arms model's own space (it was just added at the
+	# identity transform, so this includes the FBX's internal scaling).
+	var hand_in_model := _arms.global_transform.affine_inverse() \
+			* (skeleton.global_transform * skeleton.get_bone_global_pose(hand).origin)
+	weapon.arms_position = weapon.viewmodel_position - _arms_basis(weapon) * hand_in_model
+
+
+## Puts the arms where weapon.arms_position/rotation say in CAMERA space,
+## converted into _model's space (the arms are its child). Measured against
+## _model's REST transform, so the kick and sway then move gun and arms as one.
+func _apply_arms_transform(weapon: WeaponData) -> void:
+	if not is_instance_valid(_arms):
+		return
+	var desired := Transform3D(_arms_basis(weapon), weapon.arms_position)
+	_arms.transform = _model_rest_transform.affine_inverse() * desired
 
 
 ## Shifts gun so the centre of its visible meshes sits at its parent's origin.
@@ -337,6 +440,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_save_weapon()
 	elif key.keycode == KEY_M and _tuning:
 		_tuning_muzzle = not _tuning_muzzle
+		_tuning_arms = false
+		var weapon := _weapons.current_weapon()
+		if weapon:
+			_update_muzzle_marker(weapon)
+		_update_label("")
+	elif key.keycode == KEY_H and _tuning:
+		_tuning_arms = not _tuning_arms
+		_tuning_muzzle = false
 		var weapon := _weapons.current_weapon()
 		if weapon:
 			_update_muzzle_marker(weapon)
@@ -397,6 +508,14 @@ func _process(delta: float) -> void:
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 		_update_muzzle_marker(weapon)
+	elif _tuning_arms:
+		# H mode: the same keys move/rotate/resize the arms instead of the gun.
+		if Input.is_key_pressed(KEY_SHIFT):
+			weapon.arms_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
+		else:
+			weapon.arms_position += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
+			var grow_arms := float(Input.is_key_pressed(KEY_EQUAL)) - float(Input.is_key_pressed(KEY_MINUS))
+			weapon.arms_scale = maxf(weapon.arms_scale * (1.0 + grow_arms * TUNE_SCALE_SPEED * fine * delta), 0.0001)
 	elif Input.is_key_pressed(KEY_SHIFT):
 		weapon.viewmodel_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
 	else:
@@ -455,7 +574,17 @@ func _update_label(message: String) -> void:
 	var weapon := _weapons.current_weapon()
 	if weapon == null:
 		return
+	var target := "GUN"
 	var p := weapon.viewmodel_position
 	var r := weapon.viewmodel_rotation_degrees
-	_tune_label.text = "TUNING: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer    F3 = save    F2 = off\n%s" \
-			% [weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, weapon.viewmodel_scale, message]
+	var s := weapon.viewmodel_scale
+	if _tuning_arms:
+		target = "ARMS"
+		p = weapon.arms_position
+		r = weapon.arms_rotation_degrees
+		s = weapon.arms_scale
+	elif _tuning_muzzle:
+		target = "MUZZLE"
+		p = weapon.muzzle_offset
+	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nH = arms   M = muzzle   F3 = save   F2 = off\n%s" \
+			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s, message]

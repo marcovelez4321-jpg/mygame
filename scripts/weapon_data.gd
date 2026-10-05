@@ -31,6 +31,12 @@ enum AmmoType { BULLETS, SHELLS, ROCKETS }
 ## damage) a second, but no further. World geometry always stops it outright,
 ## regardless of this value.
 @export var max_penetrations: int = 1
+## Close-range damage boost: inside this distance (meters) each pellet's
+## damage climbs the closer the target is -- normal at this distance, up to
+## close_range_max_multiplier at point blank. 0 = off. Rule 3: this will
+## apply between players too once PvP exists.
+@export var close_range_distance: float = 0.0
+@export var close_range_max_multiplier: float = 1.0
 
 enum ReloadStyle {
 	TILT,      ## The shared lower-out-of-view/raise-back-up animation every weapon uses by default.
@@ -82,6 +88,18 @@ enum ReloadStyle {
 ## Colour of the stand-in block used until a real model is assigned.
 @export var placeholder_color: Color = Color(0.7, 0.7, 0.7)
 
+@export_group("First-person arms")
+## The pose your character's arms hold this gun in: a Mixamo animation
+## (art/animations), first frame held still. Empty = no arms, just the gun.
+@export var hold_animation: Animation
+## Where the arms sit, in camera space (x = right, y = up, -z = forward).
+## Left at zero, the arms auto-place with the right hand on the gun; fine-tune
+## in-game with F2 then H (hands), and F3 to save.
+@export var arms_position: Vector3 = Vector3.ZERO
+@export var arms_rotation_degrees: Vector3 = Vector3.ZERO
+## Multiplies the arms' size on top of the character's own eye-height scale.
+@export var arms_scale: float = 1.0
+
 @export_group("Sound")
 ## Played (non-positional, see sound_player.gd's play_2d) each time this
 ## weapon fires. One weapon, one SoundEvent -- no code needed to give a new
@@ -91,3 +109,12 @@ enum ReloadStyle {
 ## Plays when switching TO this weapon (not away from it) -- skipped for the
 ## very first weapon at spawn, see weapon_sound.gd's _on_weapon_switched().
 @export var switch_sound: SoundEvent
+
+
+## Damage multiplier for a hit `distance` meters away: 1.0 outside
+## close_range_distance, rising in a straight line to
+## close_range_max_multiplier at point blank.
+func close_range_multiplier(distance: float) -> float:
+	if close_range_distance <= 0.0 or distance >= close_range_distance:
+		return 1.0
+	return lerpf(close_range_max_multiplier, 1.0, distance / close_range_distance)
