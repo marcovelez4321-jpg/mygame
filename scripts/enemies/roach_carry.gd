@@ -45,16 +45,22 @@ const GRIP_STRENGTH := 0.3
 ## 3 x 0.3 pull + 3 x 0.12 spread = 1.26x the body's weight, only just enough;
 ## six: 2.5x, easy.
 const SUPPORT_PER_ROACH := 0.12
-## How a roach works its pull (0 = slack, 1 = all it's got): it holds
-## HOVER_EFFORT to keep its part where it is, more the further below
-## CARRY_HEIGHT the part is (EFFORT_PER_METER) and less while it's already
+## How a roach works its pull (0 = slack, 1 = all it's got): just enough to
+## hold the body's weight between however many of them there are (so six
+## don't haul it up into the sky), more the further below CARRY_HEIGHT its
+## part is (EFFORT_PER_METER), less above it, and less while it's already
 ## rising (EFFORT_DAMPING per m/s) so it doesn't overshoot and bounce.
-const HOVER_EFFORT := 0.6
 const EFFORT_PER_METER := 1.5
 const EFFORT_DAMPING := 0.5
 ## Steering the body sideways (flying off with it, or holding it steady): how
 ## quickly the held parts are brought to the travel velocity, per second.
 const STEER_RATE := 3.0
+## Never carried more than this far above the floor where they picked it up
+## (on top of CARRY_HEIGHT) -- flying over a pillar or a ledge, or with no
+## floor found under it at all, it doesn't climb with it.
+const MAX_EXTRA_HEIGHT := 1.0
+## How far down to look for the floor under the body.
+const FLOOR_PROBE := 30.0
 ## The body part each grab slot holds, in the order roaches join: the first
 ## three (the minimum to lift) hold the hips and opposite corners so it rises
 ## level; later ones fill in the other hand, foot and the head.
@@ -95,6 +101,8 @@ var _bites := 0
 var _ground_check := 0.0
 var _airborne := false
 var _eating := false
+## The floor height where they started lifting it (MAX_EXTRA_HEIGHT).
+var _ground_y := 0.0
 ## How hard each grab slot's roach is pulling right now, 0..1 (strain()).
 var _strain := {}
 ## Where it's flying the body (FLY), and when to look for a quieter spot.
@@ -199,6 +207,7 @@ func _physics_process(delta: float) -> void:
 		Phase.GATHER:
 			if holding >= MIN_ROACHES:
 				phase = Phase.LIFT
+				_ground_y = _floor_under(ragdoll.body_position(), ragdoll.body_position().y - 0.2)
 				_eating = true # dig in as soon as it's coming up
 				_timer = EAT_TIME
 			elif _timer <= 0.0 or roaches.size() < MIN_ROACHES:
@@ -244,23 +253,23 @@ func strain(slot: int) -> float:
 ## parts with the most body hanging off them sag lowest.
 func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 	var hips := ragdoll.body_position()
-	var query := PhysicsRayQueryParameters3D.create(hips + Vector3.UP * 0.5, hips + Vector3.DOWN * 4.0)
-	query.collision_mask = 1
-	var floor_hit := body.get_world_3d().direct_space_state.intersect_ray(query)
-	var floor_y: float = floor_hit.position.y if not floor_hit.is_empty() else hips.y - CARRY_HEIGHT
-	var target_y := floor_y + CARRY_HEIGHT
+	var floor_y := _floor_under(hips, _ground_y)
+	var target_y := minf(floor_y, _ground_y + MAX_EXTRA_HEIGHT) + CARRY_HEIGHT
 	var delta := get_physics_process_delta_time()
 	var mass := ragdoll.total_mass()
 	var weight := mass * ragdoll.gravity_strength()
 	var grip_force := weight * GRIP_STRENGTH
 	var share := mass / maxf(holders.size(), 1.0) # the body mass each roach steers
+	# Each one's share of holding the body's weight up, after what they all
+	# bear spread over it (SUPPORT_PER_ROACH): 3 roaches about 0.7, 6 about 0.16.
+	var hover := clampf((1.0 - SUPPORT_PER_ROACH * holders.size()) / (GRIP_STRENGTH * holders.size()), 0.0, 1.0)
 	var pushes := {}
 	_strain.clear()
 	for roach in holders:
 		var bone := grip_bone(roach.carry_slot)
 		if bone == null:
 			continue
-		var effort := clampf(HOVER_EFFORT + (target_y - bone.global_position.y) * EFFORT_PER_METER \
+		var effort := clampf(hover + (target_y - bone.global_position.y) * EFFORT_PER_METER \
 				- bone.linear_velocity.y * EFFORT_DAMPING, 0.0, 1.0)
 		_strain[roach.carry_slot] = effort
 		# Sideways: bring the part to `travel` (zero = hold it steady, so it
@@ -270,6 +279,15 @@ func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 		var push: Vector3 = (Vector3.UP * grip_force * effort + steer) * delta
 		pushes[bone] = pushes.get(bone, Vector3.ZERO) + push # two roaches on one part add up
 	ragdoll.carry(pushes, maxf(1.0 - SUPPORT_PER_ROACH * holders.size(), 0.0))
+
+
+## The floor height under `at`, or `otherwise` if there's none within
+## FLOOR_PROBE (never "wherever the body is", which let it climb forever).
+func _floor_under(at: Vector3, otherwise: float) -> float:
+	var query := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.5, at + Vector3.DOWN * FLOOR_PROBE)
+	query.collision_mask = 1
+	var hit := body.get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position.y if not hit.is_empty() else otherwise
 
 
 ## Which way to fly the body this tick: toward the quietest spot nearby

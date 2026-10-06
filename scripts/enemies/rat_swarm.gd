@@ -125,7 +125,7 @@ const DRAG_GRIP_BONES := ["LeftHand", "RightHand", "LeftFoot", "RightFoot", "Hea
 ## roam_radius from home -- a new one when it gets there, or after about
 ## roam_interval seconds -- heading for any body within corpse_seek_range
 ## instead, to eat it.
-@export var roam_radius: float = 15.0
+@export var roam_radius: float = 30.0 # twice the old 15
 @export var roam_interval: float = 10.0
 @export var corpse_seek_range: float = 20.0
 

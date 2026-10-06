@@ -112,6 +112,30 @@ const SPLAT_HEIGHT := 0.35
 ## Circling speed, in turns per second around you.
 @export var circle_turn_rate: float = 0.12
 
+@export_group("Patrol")
+## Nothing to fight and nothing to eat: idle roaches near each other flock
+## (Reynolds' boids -- cohesion, separation, alignment, the same rules the rat
+## swarm runs on) and patrol together. Each flock follows one leader (the one
+## of them that's been around longest), which picks a spot within
+## patrol_radius of its home (where it spawned) and flies there at
+## patrol_speed_scale of cruise_speed, moving on after it arrives or after
+## about patrol_interval seconds. Now and then (gather_chance per new spot)
+## the leader heads for the nearest roaches outside its flock within
+## gather_range instead, so scattered groups meet up and merge.
+@export var patrol_radius: float = 14.0
+@export var patrol_interval: float = 8.0
+@export_range(0.1, 1.0, 0.05) var patrol_speed_scale: float = 0.4
+@export_range(0.0, 1.0, 0.05) var gather_chance: float = 0.3
+@export var gather_range: float = 25.0
+## Roaches within flock_radius of each other are one flock.
+@export var flock_radius: float = 8.0
+## Pull toward the flock's middle, push away from roaches closer than
+## separation_distance, and pull toward the flock's heading.
+@export var cohesion_strength: float = 0.5
+@export var separation_distance: float = 1.5
+@export var separation_strength: float = 1.5
+@export var alignment_strength: float = 0.4
+
 @export_group("Spitter")
 ## Random, Normal or Spitter -- set per placement in TrenchBroom (the
 ## monster_roach "kind" choice); Random rolls spitter_chance.
@@ -219,6 +243,15 @@ const CARRY_FLINCH_TIME := 1.0
 ## How far (m) a carrying roach bobs up and down when it's pulling flat out.
 const CARRY_BOB := 0.12
 var _time := 0.0
+## Patrolling (_think_patrol()): where it spawned, the idle roaches near it
+## (untyped: any of them may be freed between refreshes), the one it follows,
+## and the spot it's heading for if it's the leader.
+var _home := Vector3.ZERO
+var _flock: Array = []
+var _flock_leader = null
+var _flock_timer := 0.0
+var _wander_to := Vector3.ZERO
+var _patrol_timer := 0.0
 ## A dead rat in its jaws, being eaten (_eat_prey()).
 var _prey: Node3D
 var _prey_left := 0.0
@@ -249,6 +282,12 @@ func _ready() -> void:
 	# Deferred: when a map is built while the game runs, func_godot sets a
 	# mapper's "kind" choice only after this node is added.
 	_decide_kind.call_deferred()
+	_set_home.call_deferred() # once whoever spawned it has put it in place
+
+
+func _set_home() -> void:
+	_home = global_position
+	_wander_to = global_position
 
 
 ## Normal or spitter: the mapper's choice, or a spitter_chance roll.
@@ -321,7 +360,7 @@ func _physics_process(delta: float) -> void:
 			return
 
 	if _target == null:
-		_steer(_hover_correction(Vector3.ZERO), delta)
+		_think_patrol(delta)
 		return
 	var chest := Factions.aim_point(_target)
 	var can_see := _can_see(chest)
@@ -353,6 +392,88 @@ func _physics_process(delta: float) -> void:
 		return
 	var goal := chest if can_see else _path_point(chest)
 	_steer(_hover_correction(_seek(goal, cruise_speed)), delta)
+
+
+## Nothing to fight: flock with the idle roaches nearby and patrol with them
+## (see the Patrol exports).
+func _think_patrol(delta: float) -> void:
+	_flock_timer -= delta
+	if _flock_timer <= 0.0:
+		_flock_timer = randf_range(0.4, 0.6) # spread out, not every tick
+		_refresh_flock()
+	var leader = _flock_leader if is_instance_valid(_flock_leader) else self
+	if leader == self:
+		_patrol_timer -= delta
+		if _patrol_timer <= 0.0 or global_position.distance_to(_wander_to) < 1.5:
+			_patrol_timer = randf_range(patrol_interval * 0.6, patrol_interval * 1.4)
+			_pick_patrol_spot()
+	var goal: Vector3 = leader._wander_to
+	var desired := _seek(goal, cruise_speed * patrol_speed_scale)
+	var middle := Vector3.ZERO
+	var heading := Vector3.ZERO
+	var apart := Vector3.ZERO
+	var count := 0
+	for other in _flock:
+		if not is_instance_valid(other):
+			continue
+		var offset: Vector3 = global_position - other.global_position
+		var distance := offset.length()
+		if distance < separation_distance and distance > 0.01:
+			apart += offset / (distance * distance)
+		middle += other.global_position
+		heading += other.linear_velocity
+		count += 1
+	if count > 0:
+		desired += (middle / count - global_position) * cohesion_strength
+		desired += (heading / count) * alignment_strength
+		desired += apart * separation_strength
+	desired = desired.limit_length(cruise_speed * patrol_speed_scale * 1.5)
+	_turn_toward(linear_velocity if linear_velocity.length_squared() > 0.1 else facing, delta)
+	_steer(_hover_correction(desired), delta)
+
+
+## The idle roaches within flock_radius, and which of them leads: the one
+## that's been in the game longest (lowest instance id), so a merged flock
+## settles on one leader without any of them having to agree on it.
+func _refresh_flock() -> void:
+	_flock.clear()
+	_flock_leader = self
+	for node in get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.ROACH]):
+		var other := node as FlyingRoach
+		if other == null or other == self or not other.is_idle():
+			continue
+		if other.global_position.distance_to(global_position) > flock_radius:
+			continue
+		_flock.append(other)
+		if other.get_instance_id() < (_flock_leader as Object).get_instance_id():
+			_flock_leader = other
+
+
+## The leader's next spot: usually somewhere within patrol_radius of home; now
+## and then (gather_chance) toward other roaches nearby, to join them. Cut
+## short at walls, and kept hover_height off whatever floor is under it.
+func _pick_patrol_spot() -> void:
+	var spot := Vector3.INF
+	if randf() < gather_chance:
+		var nearest := gather_range
+		for node in get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.ROACH]):
+			var other := node as FlyingRoach
+			if other == null or other == self or _flock.has(other) or not other.is_idle():
+				continue
+			var distance := other.global_position.distance_to(global_position)
+			if distance > flock_radius and distance < nearest:
+				nearest = distance
+				spot = other.global_position
+	if spot == Vector3.INF:
+		var away := Vector2.from_angle(randf() * TAU) * randf_range(patrol_radius * 0.3, patrol_radius)
+		spot = _home + Vector3(away.x, 0.0, away.y)
+	var floor_hit := _ray(spot + Vector3.UP * 3.0, spot + Vector3.DOWN * 6.0)
+	if not floor_hit.is_empty():
+		spot.y = floor_hit.position.y + hover_height + randf_range(0.0, 1.0)
+	var wall := _ray(global_position, spot)
+	if not wall.is_empty():
+		spot = wall.position + (global_position - wall.position).normalized() * 1.0
+	_wander_to = spot
 
 
 ## The spitter's whole fight: hang back about keep_distance from the target
