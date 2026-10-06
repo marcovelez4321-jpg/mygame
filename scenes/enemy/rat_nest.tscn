@@ -12,3 +12,4 @@ script = ExtResource("1")
 script = ExtResource("2")
 scurry_sound = ExtResource("3")
 bite_sound = ExtResource("4")
+rat_speed = 5.565
