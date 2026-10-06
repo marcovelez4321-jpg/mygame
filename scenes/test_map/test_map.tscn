@@ -368,18 +368,18 @@ kind = 1
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, -14)
 rat_count = 30
 
-[node name="RatNest2" parent="." instance=ExtResource("27_ratnest")]
+[node name="RatNest2" parent="." unique_id=584691491 instance=ExtResource("27_ratnest")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0.1, 10)
 rat_count = 30
 
-[node name="Enemy2" parent="." instance=ExtResource("5_psl7s")]
+[node name="Enemy2" parent="." unique_id=1075543839 instance=ExtResource("5_psl7s")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, -12)
 
-[node name="Enemy3" parent="." instance=ExtResource("5_psl7s")]
+[node name="Enemy3" parent="." unique_id=278977751 instance=ExtResource("5_psl7s")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0, 6)
 
-[node name="EnemyRusher2" parent="." instance=ExtResource("11_rusher")]
+[node name="EnemyRusher2" parent="." unique_id=1856501814 instance=ExtResource("11_rusher")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, -22)
 
-[node name="EnemyRusher3" parent="." instance=ExtResource("11_rusher")]
+[node name="EnemyRusher3" parent="." unique_id=412644782 instance=ExtResource("11_rusher")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, -22)

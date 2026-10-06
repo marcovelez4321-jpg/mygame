@@ -80,9 +80,10 @@ const FAR_ANIMATION_RATE := 12.0
 ## splats into.
 @export var pool_size: float = 0.7
 @export var splat_size: float = 0.9
-## How dramatic its blood is: bursts this many times a normal hit's, so a
-## rat popping in a swarm is easy to notice.
+## How big its blood bursts are, compared with a normal hit's: while it eats
+## (gore), and when it dies -- shot, blasted or splatted (death_gore).
 @export var gore: float = 2.5
+@export var death_gore: float = 0.85
 
 ## Set by RatSwarm.
 var swarm: RatSwarm
@@ -331,7 +332,7 @@ func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 ## Shot dead: a burst of blood and a little pool where it stood.
 func _pop() -> void:
 	var world := get_tree().current_scene
-	BloodFX.spawn_impact(world, global_position + Vector3.UP * 0.1, Vector3.UP, blood_color, gore * size)
+	BloodFX.spawn_impact(world, global_position + Vector3.UP * 0.1, Vector3.UP, blood_color, death_gore * size)
 	var floor_hit := _ray(global_position + Vector3.UP * 0.2, global_position + Vector3.DOWN * 0.6)
 	if not floor_hit.is_empty():
 		BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, pool_size, blood_color)
@@ -346,7 +347,7 @@ func _splat_here() -> void:
 	var at: Vector3 = floor_hit.position if not floor_hit.is_empty() else global_position
 	var normal: Vector3 = floor_hit.normal if not floor_hit.is_empty() else Vector3.UP
 	BloodFX.spawn_splatter(world, at, normal, splat_size * size, blood_color)
-	BloodFX.spawn_impact(world, at + normal * 0.1, normal, blood_color, gore * 1.2 * size)
+	BloodFX.spawn_impact(world, at + normal * 0.1, normal, blood_color, death_gore * 1.2 * size)
 	_remove()
 
 
@@ -359,7 +360,7 @@ func _splat() -> void:
 		hit = _ray(global_position, global_position + Vector3.DOWN * 0.8)
 	if not hit.is_empty():
 		BloodFX.spawn_splatter(world, hit.position, hit.normal, splat_size * size, blood_color)
-		BloodFX.spawn_impact(world, hit.position, hit.normal, blood_color, gore * 1.2 * size)
+		BloodFX.spawn_impact(world, hit.position, hit.normal, blood_color, death_gore * 1.2 * size)
 	_remove()
 
 
