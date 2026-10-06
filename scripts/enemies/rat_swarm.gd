@@ -78,6 +78,9 @@ const CORPSE_GROUP := "corpses"
 @export_group("Summoning")
 ## Summoned rats burrow up one after another over this many seconds.
 @export var spawn_spread: float = 1.2
+## Size of the patch of floor around his feet they burrow up through
+## (1 = a tight ring; it also widens with how many come up at once).
+@export var spawn_circle_scale: float = 2.2
 
 @export_group("Eating")
 ## Not fighting: rats go and eat a corpse this close to the Bender.
@@ -124,7 +127,7 @@ func count() -> int:
 func spawn_rats(amount: int, center: Vector3, spread: float = -1.0) -> void:
 	var world := get_tree().current_scene
 	var space := get_viewport().find_world_3d().direct_space_state
-	var reach := 0.6 + 0.12 * sqrt(float(amount))
+	var reach := (0.6 + 0.12 * sqrt(float(amount))) * spawn_circle_scale
 	for i in amount:
 		var rat := RAT_SCENE.instantiate() as Rat
 		rat.swarm = self
@@ -132,7 +135,7 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0) -> void:
 		rat.slot = Vector2.from_angle(angle)
 		rat.slot_radius = randf_range(follow_radius_min, follow_radius_max)
 		rat.emerge_delay = randf() * (spawn_spread if spread < 0.0 else spread)
-		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(0.4, reach)
+		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(0.4 * spawn_circle_scale, reach)
 		# Onto the floor there (or where he stands, if there's none).
 		var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.0, spot + Vector3.DOWN * 3.0)
 		query.collision_mask = 1
