@@ -68,7 +68,7 @@ const FAR_ANIMATION_RATE := 12.0
 ## Summoned rats burrow up out of the floor: a dirt hole and a spray of dirt,
 ## then the rat squirms up from emerge_depth below over emerge_time seconds,
 ## shaking side to side (wiggle, radians) less and less as it surfaces.
-@export var emerge_time: float = 0.7
+@export var emerge_time: float = 2.1
 @export var emerge_depth: float = 0.3
 @export var wiggle: float = 0.5
 @export var hole_size: float = 0.45
