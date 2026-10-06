@@ -3,7 +3,8 @@ extends RigidBody3D
 
 ## One rat of a Rat Bender's horde (RatSwarm). A real physics object --
 ## shots and blasts shove it around -- that runs wherever its swarm says
-## (desired_velocity), bites players it touches and leap-bites on command.
+## (desired_velocity), bites players it gets to, and every so often leaps out
+## of the horde at a player's face.
 ##
 ## Deaths:
 ##   - Shot: pops into a little pool of blood and is gone.
@@ -34,9 +35,20 @@ const FAR_ANIMATION_RATE := 12.0
 @export var bite_interval: float = 0.8
 ## How close to a player's feet it has to be to bite, meters.
 @export var bite_reach: float = 0.8
+
+@export_group("Leap")
+## Swarming a player, a rat this far from them (meters) may leap: it
+## launches at their chest, nose first, bites on the way in and bounces off.
+@export var leap_range_min: float = 1.2
+@export var leap_range_max: float = 3.5
+## Chance per second each rat in range takes the leap, and its rest after.
+@export var leap_chance: float = 0.35
+@export var leap_cooldown: float = 2.5
 @export var leap_damage: float = 10.0
-@export var leap_speed: float = 7.0
-@export var leap_lift: float = 4.0
+## Flight time to the target (s) -- shorter = flatter, faster leap.
+@export var leap_time: float = 0.35
+## How far it tips nose-down/up in the air, degrees.
+@export var leap_tilt: float = 35.0
 
 @export_group("Variety")
 ## Every rat rolls its own size in this range. Bigger rats have more health
@@ -75,6 +87,7 @@ var _bite_cooldown := 0.0
 var _stuck_time := 0.0
 var _thrown_time := 0.0
 var _pop_pending := false
+var _leap_cooldown := 0.0
 var _leap_bit := false
 var _anim: AnimationPlayer
 var _anim_name := ""
@@ -113,7 +126,9 @@ func _roll_variety() -> void:
 	size = randf_range(size_min, size_max)
 	speed_scale = randf_range(1.0 - speed_variation, 1.0 + speed_variation) / sqrt(size)
 	rhythm_seed = randf() * 1000.0
-	_visual.scale *= size
+	# On the model, not Visual: Visual is the part that turns to face where
+	# it runs, and a turning node has to stay unscaled.
+	($Visual/Model as Node3D).scale *= size
 	var shape := $CollisionShape3D as CollisionShape3D
 	var box := (shape.shape as BoxShape3D).duplicate() as BoxShape3D
 	box.size *= size
@@ -135,11 +150,9 @@ func _physics_process(delta: float) -> void:
 	match _state:
 		State.RUN:
 			_run(delta)
+			_maybe_leap(delta)
 		State.LEAP:
-			_check_leap_bite()
-			if linear_velocity.y <= 0.0 and _on_ground():
-				_set_contacts(false)
-				_state = State.RUN
+			_fly_leap(delta)
 		State.THROWN:
 			_thrown_time += delta
 
@@ -168,7 +181,8 @@ func _try_bite() -> void:
 	var offset := target.global_position - global_position
 	if absf(offset.y) > 1.2 or Vector2(offset.x, offset.z).length() > bite_reach:
 		return
-	_bite_cooldown = bite_interval
+	# A Bender spell whips them into a frenzy: they bite faster.
+	_bite_cooldown = bite_interval / swarm.bite_rate()
 	_bite(target, bite_damage)
 
 
@@ -181,28 +195,51 @@ func _bite(target: Node3D, damage: float) -> void:
 		swarm.rat_bit(global_position)
 
 
-## Jump at the player and bite on the way in (the Bender's close-range spell).
+## Swarming a player and close enough: now and then, leap.
+func _maybe_leap(delta: float) -> void:
+	_leap_cooldown = maxf(_leap_cooldown - delta, 0.0)
+	if _leap_cooldown > 0.0 or swarm == null or swarm.order != RatSwarm.Order.HUNT:
+		return
+	var target := swarm.target
+	if target == null or not is_instance_valid(target):
+		return
+	var distance := global_position.distance_to(target.global_position)
+	if distance >= leap_range_min and distance <= leap_range_max and randf() < leap_chance * delta:
+		leap(target)
+
+
+## Launch at the target's chest on a ballistic arc that gets there in
+## leap_time -- velocity = gap / time, plus what gravity will take off.
 func leap(target: Node3D) -> void:
 	if _state != State.RUN or not _on_ground():
 		return
-	var direction := target.global_position - global_position
-	direction.y = 0.0
-	_face(direction, 1.0)
-	linear_velocity = direction.normalized() * leap_speed + Vector3.UP * leap_lift
-	_leap_bit = false
+	var chest := target.global_position + Vector3.UP * 1.0
+	var gap := chest - global_position
+	var gravity := ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float * gravity_scale
+	linear_velocity = gap / leap_time + Vector3.UP * 0.5 * gravity * leap_time
+	_face(gap, 1.0)
 	_state = State.LEAP
+	_leap_bit = false
+	_leap_cooldown = leap_cooldown
 	_set_contacts(true)
 	_play(ANIM_ATTACK, false)
 
 
-func _check_leap_bite() -> void:
-	if _leap_bit or swarm == null or not is_instance_valid(swarm.target):
-		return
-	var offset := swarm.target.global_position - global_position
-	if absf(offset.y) < 1.6 and Vector2(offset.x, offset.z).length() < bite_reach:
-		_leap_bit = true
-		_bite(swarm.target, leap_damage)
-
+## In the air: nose follows the arc; bites once if it reaches the target,
+## then bounces off them; lands and goes back to running.
+func _fly_leap(_delta: float) -> void:
+	var tilt := clampf(-linear_velocity.y * 6.0, -leap_tilt, leap_tilt)
+	_visual.rotation.x = deg_to_rad(tilt)
+	if not _leap_bit and swarm and is_instance_valid(swarm.target):
+		var offset := swarm.target.global_position + Vector3.UP * 0.9 - global_position
+		if offset.length() < bite_reach:
+			_leap_bit = true
+			_bite(swarm.target, leap_damage)
+			linear_velocity = Vector3(-linear_velocity.x * 0.3, 2.0, -linear_velocity.z * 0.3)
+	if linear_velocity.y <= 0.0 and _on_ground():
+		_visual.rotation.x = 0.0
+		_set_contacts(false)
+		_state = State.RUN
 
 ## Explosion.push() calls this when a blast launches it: it flies, and splats
 ## on the next thing it hits.

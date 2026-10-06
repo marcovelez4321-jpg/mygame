@@ -6,11 +6,12 @@ extends Enemy
 ##
 ##   PATROL - nobody around: wanders (orc walk) around where he started; his
 ##            rats follow at his feet and stop to eat any corpse nearby.
-##   CHASE  - runs at you, picking a spell:
-##     - you're far: RUSH (Magic Attack 01) -- the rats crowd in to him,
-##       then pour at you as one pack with a burst of speed that wears off;
-##     - you're close: LEAP (Magic Area Attack 02) -- they crowd in, then
-##       leap at you biting;
+##   CHASE  - runs at you while the horde swarms you from every side, rats
+##            darting in to bite and leaping at you. His spells:
+##     - you're far: RUSH (Magic Attack 01) -- whips the horde into a frenzy:
+##       faster, biting more, wearing off over a few seconds;
+##     - you're close: LEAP (Magic Area Attack 02) -- a frenzy, plus a wave of
+##       rats leaping at you one after another;
 ##     - short on rats: SUMMON (Spell Casting) -- new rats appear around him,
 ##       back up to the cap.
 ##   Left alone after being hurt, he heals.
@@ -40,6 +41,9 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON }
 ## LEAP when you're this close, at most every leap_cooldown s.
 @export var leap_range: float = 5.0
 @export var leap_cooldown: float = 5.0
+## The LEAP wave: rats this close to you jump, this many seconds apart.
+@export var leap_wave_range: float = 6.0
+@export var leap_wave_stagger: float = 0.05
 ## How far into a cast animation (0..1) the spell actually goes off.
 @export_range(0.1, 1.0, 0.05) var cast_release: float = 0.55
 ## The wind-up tell: orange flashes from flash_rate_start to flash_rate_end
@@ -210,8 +214,7 @@ func _think_chase_target() -> void:
 	if swarm.count() < rat_cap and _summon_cooldown_left <= 0.0 and distance > leap_range:
 		_start_cast(Mode.SUMMON)
 		return
-	if swarm.order == RatSwarm.Order.GATHER:
-		swarm.order = RatSwarm.Order.FOLLOW
+	swarm.order = RatSwarm.Order.HUNT # the horde goes for you
 	var direction := _nav_direction_to(aim)
 	_face_position(aim)
 	velocity.x = direction.x * move_speed
@@ -228,8 +231,7 @@ func _start_cast(mode: Mode) -> void:
 	_anim_name = "" # the same spell twice in a row still replays from the start
 	_play(key, false)
 	_cast_length = _anim.get_animation(LIBRARY + "/" + key).length if _anim and _anim.has_animation(LIBRARY + "/" + key) else 1.5
-	if mode != Mode.SUMMON:
-		swarm.order = RatSwarm.Order.GATHER # crowd in while he winds up
+
 	SoundPlayer.play_3d(summon_sound if mode == Mode.SUMMON else cast_sound, global_position, get_tree().current_scene)
 
 
@@ -250,10 +252,10 @@ func _release_spell() -> void:
 	match _mode:
 		Mode.CAST_RUSH:
 			_rush_cooldown_left = rush_cooldown
-			swarm.rush()
+			swarm.frenzy()
 		Mode.CAST_LEAP:
 			_leap_cooldown_left = leap_cooldown
-			swarm.leap_at_target()
+			swarm.leap_wave(leap_wave_range, leap_wave_stagger)
 		Mode.SUMMON:
 			_summon_cooldown_left = summon_cooldown
 			swarm.spawn_rats(mini(summon_batch, rat_cap - swarm.count()), global_position)

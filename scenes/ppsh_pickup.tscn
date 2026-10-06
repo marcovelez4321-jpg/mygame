@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://c3xdwbwnsmpvr"]
 
 [ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
-[ext_resource type="Resource" uid="uid://c2fxecuoqd75" path="res://weapons/ppsh.tres" id="2"]
+[ext_resource type="Resource" uid="uid://bpjpjn7wvra10" path="res://weapons/ppsh.tres" id="2"]
 [ext_resource type="PackedScene" uid="uid://crog8r7ju3cxr" path="res://art/weapons/NEWPSXWEAPONS/PPSH/PPSH.glb" id="3"]
 
 [sub_resource type="SphereShape3D" id="PickupZoneShape"]
