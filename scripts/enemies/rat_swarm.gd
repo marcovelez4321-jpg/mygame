@@ -25,6 +25,11 @@ enum Order {
 
 const RAT_SCENE := preload("res://scenes/enemy/rat.tscn")
 const CORPSE_GROUP := "corpses"
+## The body parts dragging rats bite onto, in the order they join: the hands
+## and feet first (a body hauled by its limbs), then the head, the arms and
+## legs, and the torso.
+const DRAG_GRIP_BONES := ["LeftHand", "RightHand", "LeftFoot", "RightFoot", "Head",
+		"LeftLowerArm", "RightLowerArm", "LeftLowerLeg", "RightLowerLeg", "Hips", "Spine", "Chest"]
 
 @export_group("Pack")
 @export var rat_speed: float = 5.3
@@ -136,6 +141,18 @@ const CORPSE_GROUP := "corpses"
 @export var drag_distance_min: float = 3.0
 @export var drag_distance_max: float = 6.0
 @export var drag_speed: float = 1.2
+## Hauling is a real tug against the body's weight and the floor's friction,
+## like the roaches' lift (RoachCarry): each dragging rat bites onto its own
+## body part (DRAG_GRIP_BONES: hands, feet, head, then arms, legs and torso)
+## and pulls it along with at most drag_pull of the body's weight, lifting
+## that part up to drag_limb_height off the floor with at most drag_lift (so
+## arms and legs come up off the ground while the torso scrapes along). Each
+## rat on it also bears drag_support of the weight overall. drag_speed is the
+## pace eat_min_rats haul at; more rats on it haul faster (up to 1.5x).
+@export var drag_pull: float = 0.08
+@export var drag_lift: float = 0.04
+@export var drag_support: float = 0.03
+@export var drag_limb_height: float = 0.3
 ## Hostiles within this of a spot count against hauling a body there -- they
 ## drag it toward whichever candidate spot is quietest (Factions.danger_at()).
 ## Dragged rats eat the whole way, not just once they get there.
@@ -189,6 +206,8 @@ var _drag_stuck_timer := 0.0
 var _drag_timer := 0.0
 var _drag_check := 2.0
 var _draggers: Array[Rat] = []
+## Which body part each dragger has hold of (Rat -> PhysicalBone3D).
+var _grips := {}
 var _feed_bites := 0
 ## The rats eating _corpse (at most eat_max_rats, the nearest), and where it is.
 var _eaters := {}
@@ -264,6 +283,7 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float 
 func forget(rat: Rat) -> void:
 	rats.erase(rat)
 	_draggers.erase(rat)
+	_grips.erase(rat)
 
 
 ## The middle of the pack.
@@ -676,13 +696,13 @@ func _update_drag(delta: float, center: Vector3) -> void:
 			var heading := _drag_heading()
 			# There (or out of time), a wall dead ahead, or not moving: eat it here.
 			if to.length() < 0.6 or _drag_timer <= 0.0 or _wall_ahead(heading) or _drag_stuck(delta):
-				_drag_ragdoll.drag(Vector3.ZERO)
+				_drag_ragdoll.carry({}) # let go: it lies where they got it
 				_drag_phase = DragPhase.EAT
 				_drag_timer = eat_time
 			elif _draggers_at_body() >= _draggers.size() * 0.5:
-				_drag_ragdoll.drag(heading * drag_speed)
+				_haul(heading)
 			else:
-				_drag_ragdoll.drag(Vector3.ZERO) # waiting for the stragglers
+				_drag_ragdoll.carry({}) # waiting for the stragglers
 				_drag_check_pos = _drag_body_pos # (not stuck, just waiting)
 		DragPhase.EAT:
 			if _drag_timer <= 0.0:
@@ -716,6 +736,7 @@ func _start_drag(center: Vector3) -> void:
 			var rat: Rat = by_distance[i]
 			rat.dragging = true
 			_draggers.append(rat)
+			_assign_grip(rat)
 		_drag_to = _pick_drag_spot(at)
 		_drag_path = _route(at, _drag_to)
 		_drag_phase = DragPhase.GATHER
@@ -842,6 +863,7 @@ func _join_feast() -> void:
 		if not rat.dragging and rat.global_position.distance_to(_drag_body_pos) < 6.0:
 			rat.dragging = true
 			_draggers.append(rat)
+			_assign_grip(rat)
 			if _draggers.size() >= eat_max_rats:
 				return
 
@@ -852,8 +874,9 @@ func _end_drag() -> void:
 			rat.dragging = false
 			rat.eating = false
 	_draggers.clear()
+	_grips.clear()
 	if is_instance_valid(_drag_ragdoll):
-		_drag_ragdoll.drag(Vector3.ZERO)
+		_drag_ragdoll.carry({})
 	if is_instance_valid(_drag_body):
 		_drag_body.remove_meta("dragged")
 	_drag_body = null
@@ -863,17 +886,67 @@ func _end_drag() -> void:
 
 
 func _draggers_at_body() -> int:
-	var holding := 0
+	return _holding_draggers().size()
+
+
+## The draggers with their teeth in their body part right now.
+func _holding_draggers() -> Array[Rat]:
+	var holding: Array[Rat] = []
 	for rat in _draggers:
-		if rat.global_position.distance_to(_drag_body_pos) < 0.9 * rat.size:
-			holding += 1
+		var grip := _grip_position(rat)
+		if Vector2(rat.global_position.x - grip.x, rat.global_position.z - grip.z).length() < 0.6 * rat.size:
+			holding.append(rat)
 	return holding
+
+
+## A new dragger takes the next body part along DRAG_GRIP_BONES (two rats can
+## share one once they run out); a body missing it is held by the hips.
+func _assign_grip(rat: Rat) -> void:
+	var bone_name: String = DRAG_GRIP_BONES[_grips.size() % DRAG_GRIP_BONES.size()]
+	var bone := _drag_ragdoll.bone_named(bone_name)
+	_grips[rat] = bone if bone else _drag_ragdoll.bone_named("Hips")
+
+
+## Where `rat`'s body part is (the body's middle if it has none).
+func _grip_position(rat: Rat) -> Vector3:
+	var bone = _grips.get(rat)
+	return bone.global_position if is_instance_valid(bone) else _drag_body_pos
+
+
+## One tick of hauling: every rat holding on pulls its body part along
+## `heading` and up off the floor, each within its strength, and bears its
+## share of the weight -- real forces, so the body slides and snags, limbs
+## lift and trail, and more rats move it easier.
+func _haul(heading: Vector3) -> void:
+	var holders := _holding_draggers()
+	var delta := get_physics_process_delta_time()
+	var weight := _drag_ragdoll.total_mass() * _drag_ragdoll.gravity_strength()
+	var pace := drag_speed * clampf(holders.size() / float(maxi(eat_min_rats, 1)), 0.5, 1.5)
+	var floor_y := _drag_body_pos.y - 0.15 # the hips lie about this far up
+	var pushes := {}
+	for rat in holders:
+		var bone = _grips.get(rat)
+		if not is_instance_valid(bone):
+			continue
+		var bone_body := bone as PhysicalBone3D
+		var velocity := bone_body.linear_velocity
+		# Pull hard from a standstill, ease off as it reaches the pace.
+		var along := velocity.dot(heading)
+		var pull := clampf((pace - along) / maxf(pace, 0.1) * 2.0, 0.0, 1.0)
+		var lift := clampf(0.5 + (floor_y + drag_limb_height - bone_body.global_position.y) * 3.0 - velocity.y * 0.5, 0.0, 1.0)
+		var push := (heading * drag_pull * pull + Vector3.UP * drag_lift * lift) * weight * delta
+		pushes[bone_body] = pushes.get(bone_body, Vector3.ZERO) + push
+	_drag_ragdoll.carry(pushes, maxf(1.0 - drag_support * holders.size(), 0.3))
 
 
 ## A dragger crowds in around the body (its own spot on it) -- the body
 ## moving drags them along -- and eats once they've got it where they want.
 func _steer_dragger(rat: Rat, index: int, speed: float) -> Vector3:
-	var spot := _drag_body_pos + Vector3(rat.slot.x, 0.0, rat.slot.y) * 0.45 * rat.size
+	# Its own body part: just ahead of it while hauling (pulling), or
+	# beside it while gathering and eating.
+	var lead := _drag_heading() * 0.25 * rat.size if _drag_phase == DragPhase.DRAG \
+			else Vector3(rat.slot.x, 0.0, rat.slot.y) * 0.2 * rat.size
+	var spot := _grip_position(rat) + lead
 	var to_spot := spot - _pos[index]
 	to_spot.y = 0.0
 	var distance := to_spot.length()

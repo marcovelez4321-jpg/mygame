@@ -31,6 +31,8 @@ const MAX_THRASH_TIME := 15.0
 ## being simulated. Bodies stay a minute; dozens that never sleep would cost
 ## physics time for nothing. A shot or rats dragging it wake it right up.
 const SETTLE_TIME := 6.0
+## How a held body part's pull is split between it and the two bones above it.
+const GRIP_CHAIN_SHARES := [0.5, 0.3, 0.2]
 
 ## PhysicalBone3D has no apply_torque()/apply_torque_impulse() at all --
 ## confirmed directly against the class reference after the first version of
@@ -210,6 +212,8 @@ const SETTLE_TIME := 6.0
 @onready var _enemy: Enemy = get_parent() as Enemy
 
 var _simulator: PhysicalBoneSimulator3D
+## Cached _grip_chain() results (PhysicalBone3D -> Array[PhysicalBone3D]).
+var _grip_chains := {}
 var _animation_player: AnimationPlayer
 var _bones: Array[PhysicalBone3D] = []
 
@@ -605,32 +609,52 @@ func body_position() -> Vector3:
 	return _bones[0].global_position if not _bones.is_empty() else _enemy.global_position
 
 
-## Rats dragging the corpse (RatSwarm): every bone gets the same sideways
-## velocity, so the whole body slides along as one piece -- pushing single
-## bones just makes the joints fight (see _apply_hit_impulse()). ZERO lets go.
-func drag(velocity: Vector3) -> void:
-	var dragging := velocity != Vector3.ZERO
-	for bone in _bones:
-		bone.can_sleep = _settled and not dragging
-		if dragging:
-			bone.apply_central_impulse(Vector3.UP * 0.001) # wakes a sleeping body
-		bone.linear_velocity = Vector3(velocity.x, minf(bone.linear_velocity.y, 0.5), velocity.z)
-
-
-## Roaches carrying the body by its limbs (RoachCarry): `pushes` maps each bone
-## a roach has hold of to the impulse it pulls with this tick (its force times
-## the tick), and the whole body weighs `weight` of normal (1 = full,
-## 0 = weightless) -- every roach holding on bears a share. Pushed, never
-## placed: the physics decides how high it actually gets, so a part with more
-## of the body hanging off it sags lower. Empty `pushes` lets go and restores
-## full weight.
+## Roaches lifting the body or rats hauling it by its limbs (RoachCarry,
+## RatSwarm): `pushes` maps each bone one of them has hold of to the impulse it
+## pulls with this tick (its force times the tick), and the whole body weighs
+## `weight` of normal (1 = full, 0 = weightless) -- everything holding on
+## bears a share. Pushed, never placed: the physics decides where it actually
+## goes, so a part with more of the body hanging off it sags lower and the
+## body snags and slides. Empty `pushes` lets go and restores full weight.
+##
+## Each pull is spread up the limb (GRIP_CHAIN_SHARES: the part held, then the
+## next two bones toward the hips) instead of all landing on one small bone --
+## a hard shove on a single bone makes the joints fight and stretch (the same
+## lesson as _apply_hit_impulse()'s body_share), and a real grip on a wrist
+## loads the whole arm anyway.
 func carry(pushes: Dictionary, weight: float = 1.0) -> void:
 	var holding := not pushes.is_empty()
 	for bone in _bones:
 		bone.can_sleep = _settled and not holding
 		bone.gravity_scale = bone_gravity_scale * (weight if holding else 1.0)
-		if pushes.has(bone):
-			bone.apply_central_impulse(pushes[bone])
+	for held: PhysicalBone3D in pushes:
+		var chain := _grip_chain(held)
+		for i in chain.size():
+			chain[i].apply_central_impulse(pushes[held] * GRIP_CHAIN_SHARES[i])
+
+
+## `bone` and the next physical bones up toward the hips (skipped skeleton
+## bones without a physical body, like fingers, don't count), as many as
+## GRIP_CHAIN_SHARES has; a shorter chain gives its leftover share to the top.
+func _grip_chain(bone: PhysicalBone3D) -> Array[PhysicalBone3D]:
+	if _grip_chains.has(bone):
+		return _grip_chains[bone]
+	var chain: Array[PhysicalBone3D] = [bone]
+	var skeleton := bone.get_parent().get_parent() as Skeleton3D # bone -> simulator -> skeleton
+	var by_id := {}
+	for other in _bones:
+		by_id[other.get_bone_id()] = other
+	var id := bone.get_bone_id()
+	while skeleton and chain.size() < GRIP_CHAIN_SHARES.size():
+		id = skeleton.get_bone_parent(id)
+		if id < 0:
+			break
+		if by_id.has(id):
+			chain.append(by_id[id])
+	while chain.size() < GRIP_CHAIN_SHARES.size():
+		chain.append(chain[-1]) # the top of a short chain takes the rest
+	_grip_chains[bone] = chain
+	return chain
 
 
 ## The whole ragdoll's mass (every physical bone).
