@@ -172,9 +172,11 @@ func bitten() -> void:
 	var at := ragdoll.body_position()
 	var world := get_tree().current_scene
 	BloodFX.spawn_impact(world, at, Vector3.UP, BLOOD, 2.5)
-	var roach := ROACH_SCENE.instantiate() as Node3D
+	var roach := ROACH_SCENE.instantiate() as FlyingRoach
 	world.add_child(roach)
 	roach.global_position = at + Vector3.UP * 0.3
+	roach.burst_out.call_deferred() # after its own setup: a springy pop out of the body
+	BloodFX.spawn_impact(world, at + Vector3.UP * 0.2, (Vector3.UP + Vector3(randf() - 0.5, 0.0, randf() - 0.5)).normalized(), BLOOD, 1.5)
 
 
 func _finish() -> void:

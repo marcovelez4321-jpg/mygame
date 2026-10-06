@@ -236,3 +236,13 @@ func _material(color: Color, roughness: float) -> StandardMaterial3D:
 	material.albedo_color = color
 	material.roughness = roughness
 	return material
+
+
+## Born out of a body: grows from almost nothing to full size with a little
+## springy overshoot, instead of just appearing.
+func pop_in(duration: float = 0.45) -> void:
+	if _model == null:
+		return
+	_model.scale = Vector3.ONE * model_scale * 0.05
+	create_tween().tween_property(_model, "scale", Vector3.ONE * model_scale, duration) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
