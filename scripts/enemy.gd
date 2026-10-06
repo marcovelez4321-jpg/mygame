@@ -43,6 +43,12 @@ signal state_changed(new_state: State)
 ## the other player so both screens show the swing together.
 signal attack_started
 
+## Emitted the instant a gunner's shot fires (end of the wind-up), hit or
+## miss, with where the bullet ended up -- the gunshot sound and the visible
+## bullet (EnemyWeapon) play on this. Presentation hook like the two above;
+## in co-op the host sends it so every screen sees and hears the same shots.
+signal shot_fired(end_point: Vector3)
+
 @export_group("Movement")
 @export var move_speed: float = 4.0
 @export var gravity: float = 20.0
@@ -111,6 +117,24 @@ signal attack_started
 ## Seconds between shots WITHIN a burst -- much shorter than attack_interval,
 ## which instead governs the pause BETWEEN bursts.
 @export var burst_shot_interval: float = 0.15
+## Accuracy, the Half-Life 2 way (Source SDK 2013): NPCs don't aim worse,
+## every bullet just leaves inside a random cone around where they aim (the
+## weapon's spread times the NPC's proficiency -- weapon_smg1.cpp's
+## GetProficiencyValues()). A fixed cone means misses grow with distance on
+## their own: deadly up close, wild far away. Half-angle in degrees.
+@export var shot_spread_degrees: float = 3.0
+## HL2's "defocused" first shots (ai_basenpc.cpp: ai_spread_defocused_cone_
+## multiplier 3.0, ai_spread_cone_focus_time 0.6): right after it gets a
+## clear shot at you, the cone starts this many times wider and tightens to
+## normal over shot_focus_time seconds -- the opening shots of a fight, or
+## after you break line of sight, usually miss and warn you instead.
+@export var shot_unfocused_multiplier: float = 3.0
+@export var shot_focus_time: float = 0.6
+## Its aim trails behind you by about this many seconds, so it fires at
+## where you just WERE: standing still gets you hit, strafing, dashing and
+## wall-jumping make it miss. Not from HL2 (Source NPCs aim at your current
+## position) -- added for this game's fast movement. 0 = perfect tracking.
+@export var aim_lag_time: float = 0.1
 
 @export_group("Mutation")
 ## Dying to anything OTHER than a clean/critical kill (a headshot, see
@@ -162,6 +186,8 @@ var _state: State = State.IDLE:
 		if value == _state:
 			return
 		_state = value
+		if value == State.ATTACK:
+			_time_aiming = 0.0 # a fresh shot at the target: aim starts unfocused
 		state_changed.emit(value)
 var _target: Node3D
 var _retarget_timer: float = 0.0
@@ -182,6 +208,13 @@ var _lunge_cooldown_left: float = 0.0
 ## Burst-fire progress (can_shoot only). Counts DOWN within a burst; 0 means
 ## "start a fresh burst next time we're off cooldown".
 var _burst_shots_left: int = 0
+## Seconds since this enemy last got a clear shot (entered ATTACK) -- drives
+## the defocused-first-shots spread (shot_focus_time).
+var _time_aiming: float = 0.0
+## Where a gunner is actually aiming: chases the target's chest, aim_lag_time
+## behind (see _track_aim()).
+var _aim_point: Vector3 = Vector3.ZERO
+var _has_aim_point: bool = false
 
 ## Target memory (every enemy type) -- see memory_time's own comment.
 var _last_seen_position: Vector3 = Vector3.ZERO
@@ -251,6 +284,8 @@ func _physics_process(delta: float) -> void:
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
 		_update_memory(_find_nearest_player())
+	if can_shoot:
+		_track_aim(delta)
 
 	match _state:
 		State.IDLE:
@@ -380,6 +415,7 @@ func _think_lunge(delta: float) -> void:
 func _think_attack() -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
+	_time_aiming += get_physics_process_delta_time()
 
 	# Committed to a swing/shot: it plays out completely, even if the target
 	# steps away. The hit only lands if they're still in range (melee) or in
@@ -453,26 +489,75 @@ func _land_hit() -> void:
 
 
 ## Hitscan shot at the target, fired the moment the windup completes --
-## same idea as the player's own gun (weapon_controller.gd's resolve_shot()),
-## a single ray with no spread. A miss if something (the target ducking
-## behind cover, another body) stepped into the way between windup and now.
+## same idea as the player's own gun (weapon_controller.gd's resolve_shot()):
+## aimed at where it thinks the target's chest is (a beat behind, see
+## aim_lag_time), then thrown off by the spread cone (see
+## shot_spread_degrees). A miss carries on past them and leaves a bullet hole
+## in whatever it hits -- the "they're shooting at me" warning.
 func _fire_shot() -> void:
 	if _target == null:
 		return
 	var space := get_world_3d().direct_space_state
 	var from := global_position + Vector3.UP * 1.5
-	var to := _target.global_position + Vector3.UP * 1.0
-	var direction := (to - from).normalized()
-	var query := PhysicsRayQueryParameters3D.create(from, to)
+	var aim := (_aim_point - from).normalized()
+	var direction := _spread_direction(aim, _current_spread_degrees())
+	var query := PhysicsRayQueryParameters3D.create(from, from + direction * sight_range)
 	query.exclude = [get_rid()]
 	query.collision_mask = 1 # world + players; ignore ragdoll corpses (layer 4)
 	var result := space.intersect_ray(query)
-	if result.is_empty() or result.collider != _target:
+	if result.is_empty():
+		shot_fired.emit(from + direction * sight_range)
 		return
-	var target_health := result.collider.get_node_or_null("Health") as Health
-	if target_health:
-		target_health.take_damage(attack_damage, Health.NO_ATTACKER, direction, result.position, shoot_impact_force)
+	shot_fired.emit(result.position)
+	var hit_health := (result.collider as Node).get_node_or_null("Health") as Health
+	if hit_health == null:
+		BloodFX.spawn_bullet_hole(get_tree().current_scene, result.position, result.normal)
+		return
+	if result.collider != _target:
+		return # another enemy stepped in the way -- no friendly fire
+	hit_health.take_damage(attack_damage, Health.NO_ATTACKER, direction, result.position, shoot_impact_force)
 	BloodFX.spawn_impact(get_tree().current_scene, result.position, -direction)
+
+
+## Eases _aim_point toward the target's chest every tick. An exponential
+## follow with a time constant of aim_lag_time trails a steadily moving
+## target by exactly that long -- a reaction delay, with no position history
+## to store. Snaps straight on when there's no aim point yet.
+func _track_aim(delta: float) -> void:
+	if _target == null:
+		_has_aim_point = false
+		return
+	var chest := _target.global_position + Vector3.UP * 1.0
+	if not _has_aim_point or aim_lag_time <= 0.0:
+		_aim_point = chest
+		_has_aim_point = true
+		return
+	_aim_point = _aim_point.lerp(chest, 1.0 - exp(-delta / aim_lag_time))
+
+
+## shot_spread_degrees, widened by shot_unfocused_multiplier right after it
+## got its shot and eased back to normal over shot_focus_time (HL2 eases
+## this with a spline; smoothstep is the same curve).
+func _current_spread_degrees() -> float:
+	var focus := 1.0
+	if shot_focus_time > 0.0:
+		focus = smoothstep(0.0, 1.0, _time_aiming / shot_focus_time)
+	return shot_spread_degrees * lerpf(shot_unfocused_multiplier, 1.0, focus)
+
+
+## A random direction inside a cone of `degrees` around `aim`. The distance
+## from the middle is picked evenly (not by area), so shots cluster toward
+## where it aimed and only some stray to the edge -- the same idea as HL2's
+## shot bias (shot_manipulator.h's ApplySpread()), which blends a flat spread
+## toward a centre-heavy one.
+func _spread_direction(aim: Vector3, degrees: float) -> Vector3:
+	if degrees <= 0.0:
+		return aim
+	var up := Vector3.UP if absf(aim.y) < 0.99 else Vector3.RIGHT
+	var aim_basis := Basis.looking_at(aim, up) # -Z of this basis is `aim`
+	var angle := randf() * TAU
+	var radius := randf() * tan(deg_to_rad(degrees))
+	return (aim_basis * Vector3(cos(angle) * radius, sin(angle) * radius, -1.0)).normalized()
 
 
 func _think_pain(delta: float) -> void:

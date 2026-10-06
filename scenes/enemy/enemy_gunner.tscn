@@ -1,4 +1,4 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://c2sc1shdn5nr1"]
 
 [ext_resource type="PackedScene" uid="uid://c4wyibydlt1yd" path="res://scenes/enemy/enemy.tscn" id="1"]
 [ext_resource type="PackedScene" uid="uid://gj5wbcaem12n" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_04.fbx" id="2_killer04"]
@@ -7,10 +7,13 @@
 [ext_resource type="Resource" path="res://audio/events/enemy/gunner_hurt.tres" id="51_snd_hurt"]
 [ext_resource type="Resource" path="res://audio/events/enemy/gunner_death.tres" id="52_snd_death"]
 [ext_resource type="Resource" path="res://audio/events/enemy/gunner_attack.tres" id="53_snd_attack"]
+[ext_resource type="Resource" path="res://audio/events/enemy/gunner_fire.tres" id="54_snd_fire"]
+[ext_resource type="Animation" uid="uid://bh2abvqipcdp5" path="res://art/animations/PistolIdle.res" id="60_aim"]
+[ext_resource type="Script" uid="uid://d1r4c3a3mta3j" path="res://scripts/enemy_weapon.gd" id="61_weapon"]
+[ext_resource type="PackedScene" uid="uid://i02bor72sm53" path="res://art/weapons/PSX_Guns/FBX/Pistol.fbx" id="62_pistol"]
 
-[node name="Enemy" instance=ExtResource("1")]
-move_speed = 3.5
-gravity = 30.0
+[node name="Enemy" unique_id=2107378375 instance=ExtResource("1")]
+move_speed = 4.5
 sight_range = 22.0
 attack_range = 12.0
 attack_damage = 8.0
@@ -20,20 +23,27 @@ attack_recovery = 0.15
 pain_time = 0.3
 corpse_time = 15.0
 can_shoot = true
-shoot_min_range = 5.0
-shoot_impact_force = 6.0
-burst_shot_count = 3
-burst_shot_interval = 0.15
-memory_time = 4.0
+shot_unfocused_multiplier = 3.3
 
-[node name="Health" parent="." index="1"]
+[node name="Health" parent="." index="1" unique_id=1184086269]
 max_health = 45.0
 
-[node name="Model" parent="." index="2"]
+[node name="Model" parent="." index="2" unique_id=1788697101]
 variants = Array[PackedScene]([ExtResource("2_killer04"), ExtResource("3_killer07")])
 
-[node name="EnemySound" parent="." index="6"]
+[node name="EnemyAnimator" parent="." index="3" unique_id=1038340105]
+aim_animation = ExtResource("60_aim")
+
+[node name="EnemySound" parent="." index="6" unique_id=900001004]
 idle_sound = ExtResource("50_snd_idle")
 hurt_sound = ExtResource("51_snd_hurt")
 death_sound = ExtResource("52_snd_death")
 attack_sound = ExtResource("53_snd_attack")
+shot_sound = ExtResource("54_snd_fire")
+
+[node name="EnemyWeapon" type="Node" parent="." index="8" unique_id=771107352]
+script = ExtResource("61_weapon")
+weapon_scene = ExtResource("62_pistol")
+grip_position = Vector3(0.015, 0.175, 0.065)
+grip_rotation_degrees = Vector3(15.355, 0, -85.665)
+grip_scale = 1.8

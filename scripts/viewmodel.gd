@@ -1,3 +1,4 @@
+class_name Viewmodel
 extends Node3D
 
 ## The gun you see in first person. Attach under the player's camera.
@@ -241,6 +242,16 @@ func _on_shot_fired() -> void:
 	_kick_tween.tween_property(_model, "rotation_degrees:x", _model_rest_rotation.x, KICK_ROTATION_TIME) \
 			.set_ease(Tween.EASE_OUT)
 	_spawn_muzzle_flash()
+
+
+## Where the equipped gun's muzzle is in the world right now (its
+## muzzle_offset, following the kick, sway and switch animations) -- where
+## ShotTracer starts your visible bullets.
+func muzzle_position() -> Vector3:
+	var weapon := _weapons.current_weapon()
+	if _model == null or weapon == null:
+		return global_position
+	return _model.global_transform * weapon.muzzle_offset
 
 
 ## A brief additive glow + a real light flash right at the equipped weapon's

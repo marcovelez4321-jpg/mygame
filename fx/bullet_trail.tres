@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="BulletTrailSettings" format=3 uid="uid://ckrduk2t1qkni"]
+
+[ext_resource type="Script" uid="uid://cmvdenbok3in3" path="res://scripts/bullet_trail_settings.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+trail_lifetime = 0.5
+radius = 0.025

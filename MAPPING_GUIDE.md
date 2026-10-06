@@ -32,36 +32,38 @@ this step requires them to have Godot or this repo at all.
    and click **"Export GameConfig"** in its Inspector. This writes three
    files into the folder from step 1: `icon.png`, `GameConfig.cfg`, and
    `game_entities.fgd`.
-3. **Assemble the kit folder** — anywhere on your machine, e.g. a folder
-   named `2v2_mapping_kit`, containing:
-   - `icon.png`, `GameConfig.cfg`, `game_entities.fgd` (copied from step 2's folder)
-   - a `textures` folder — copy every file from this project's
-     `trenchbroom/textures/` into it
-   - this file (`MAPPING_GUIDE.md`), so they have the reference sections too
-4. **Zip that folder** and send it however you'd normally send a file to
-   friends (Discord, Drive, email) — no GitHub involved.
+3. **Build the kit:** in File Explorer, right-click
+   `tools/build_mapping_kit.ps1` in this project → **Run with PowerShell**.
+   It makes `2v2_mapping_kit.zip` on your Desktop with the game config, every
+   texture in `trenchbroom/textures/`, this guide, and a `SETUP.bat` that
+   sets up TrenchBroom for them.
+4. Send that zip however you'd normally send a file to friends (Discord,
+   Drive, email) — no GitHub involved.
 
-Re-do steps 1–4 (well — step 2 and re-zipping) any time an entity definition
-changes (new pickup type, new enemy variant, changed properties) or you add
-new textures (section 8 covers just sending an updated `textures` folder
-without redoing the whole kit).
+Re-run step 3 (and step 2 first, if entities changed) any time an entity
+definition changes (new pickup type, new enemy variant, changed properties)
+or you add new textures, and send the new zip.
 
 ## 2. Your friends' one-time setup (no GitHub, no Godot needed)
 
 Each friend does this once, on their own machine:
 
-1. **Install [TrenchBroom](https://trenchbroom.github.io/)** (latest release).
-2. Unzip the kit you sent them, anywhere permanent (not a temp folder they'll
-   delete) — call this their **mapping folder**.
-3. Copy `icon.png`, `GameConfig.cfg`, and `game_entities.fgd` from the kit into
-   TrenchBroom's own games folder, in a `2v-2` subfolder — on Windows:
-   `%AppData%\TrenchBroom\games\2v-2\` (create it if needed).
-4. Open TrenchBroom → **Preferences → Games** → find **2v-2** in the list →
-   set its **Game Path** to their mapping folder (the one containing the
-   `textures` subfolder from the kit). This is what lets TrenchBroom actually
-   find the textures.
-5. **File → New Map**, and **2v-2** should now show up as a choice. If it
-   doesn't, double-check step 3's folder name and step 4's Game Path.
+1. **Install [TrenchBroom](https://trenchbroom.github.io/)** — the latest
+   release (older versions can't read this game config).
+2. Move the kit zip somewhere permanent, like Documents (not Downloads or a
+   temp folder), then right-click it → **Extract All**.
+3. Make sure TrenchBroom is closed, open the unzipped folder, and
+   double-click **`SETUP.bat`**. It installs the 2v-2 game config and points
+   TrenchBroom at the kit's textures. If Windows shows "Windows protected
+   your PC", click **More info → Run anyway**.
+4. Open TrenchBroom → **New map** → **2v-2**. All the textures are in the
+   texture browser.
+
+If you ever move the kit folder, run `SETUP.bat` again. **On a Mac** (no
+SETUP.bat): copy `GameConfig.cfg`, `game_entities.fgd` and `icon.png` into
+`~/Library/Application Support/TrenchBroom/games/2v-2/`, then in TrenchBroom
+→ Preferences → Games → 2v-2, set **Game Path** to the unzipped kit folder
+(the one with `textures` directly inside it).
 
 ## 2b. Testing your own map (no Godot needed)
 

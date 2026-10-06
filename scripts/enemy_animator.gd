@@ -38,6 +38,13 @@ extends Node
 ## once there is.
 @export var spawn_animations: Array[String] = []
 
+@export_group("Aiming (gunner)")
+## Held the whole time the enemy is in shooting range (ATTACK), through every
+## shot of a burst -- a gunner aims, it doesn't swing. Any Mixamo clip
+## imported with the shared bone map works (e.g. art/animations/PistolIdle.res).
+## Empty = melee behaviour: stand idle, then the attack clip on each swing.
+@export var aim_animation: Animation
+
 @export_group("Variety")
 ## false: each enemy keeps the variant it picked at spawn.
 ## true: picks a fresh random variant every time the state starts.
@@ -50,6 +57,9 @@ extends Node
 ## short, don't slow the clip: raise pain_time on the Enemy to about the
 ## clip's length instead.
 @export var hurt_speed: float = 1.0
+
+const AIM_LIBRARY := "gun"
+const AIM_NAME := "gun/aim"
 
 @onready var _enemy: Enemy = get_parent() as Enemy
 
@@ -74,6 +84,10 @@ func _ready() -> void:
 	# you still load the library by hand in a scene without it being added twice.
 	if animation_library and not _player.has_animation_library(library_name):
 		_player.add_animation_library(library_name, animation_library)
+	if aim_animation and not _player.has_animation_library(AIM_LIBRARY):
+		var aim_library := AnimationLibrary.new()
+		aim_library.add_animation(&"aim", aim_animation)
+		_player.add_animation_library(AIM_LIBRARY, aim_library)
 
 	# A fresh random seed for every enemy that spawns. Co-op hook: the host
 	# will pick this number and send it with the spawn message; the other
@@ -93,21 +107,32 @@ func _ready() -> void:
 
 func _on_state_changed(state: Enemy.State) -> void:
 	# In attack range the enemy stands ready; the swing clip plays when a
-	# swing actually begins (attack_started), once per swing.
+	# swing actually begins (attack_started), once per swing. A gunner
+	# raises its gun and holds the aim instead.
 	if state == Enemy.State.ATTACK:
-		_play(Enemy.State.IDLE)
+		if aim_animation:
+			_play_aim()
+		else:
+			_play(Enemy.State.IDLE)
 	else:
 		_play(state)
 
 
 func _on_attack_started() -> void:
+	if aim_animation:
+		return # already aiming -- each shot fires from the held aim pose
 	_play(Enemy.State.ATTACK)
 
 
 ## The swing clip is done: back to standing ready until the next swing.
 func _on_animation_finished(_animation_name: StringName) -> void:
-	if _enemy.get_state() == Enemy.State.ATTACK:
+	if _enemy.get_state() == Enemy.State.ATTACK and not aim_animation:
 		_play(Enemy.State.IDLE)
+
+
+func _play_aim() -> void:
+	_player.get_animation(AIM_NAME).loop_mode = Animation.LOOP_LINEAR
+	_player.play(AIM_NAME, blend_time)
 
 
 func _play(state: Enemy.State) -> void:

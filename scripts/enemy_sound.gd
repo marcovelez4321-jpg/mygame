@@ -25,6 +25,9 @@ extends Node
 ## own EnemySound node a distinct SoundEvent in its scene if you want the
 ## gunshot to sound different from a melee swing.
 @export var attack_sound: SoundEvent
+## A gunner's gunshot -- plays on every shot it fires (enemy.gd's shot_fired),
+## once per bullet in a burst. Unused by melee enemies.
+@export var shot_sound: SoundEvent
 ## One-shot per footstep, spaced out by distance travelled (not a timer), so
 ## it naturally speeds up/slows down with the enemy's own move_speed instead
 ## of needing separate tuning.
@@ -42,6 +45,7 @@ func _ready() -> void:
 	_last_position = _enemy.global_position
 	_enemy.state_changed.connect(_on_state_changed)
 	_enemy.attack_started.connect(_on_attack_started)
+	_enemy.shot_fired.connect(_on_shot_fired)
 	_start_idle_loop()
 
 
@@ -68,6 +72,10 @@ func _on_state_changed(state: Enemy.State) -> void:
 
 func _on_attack_started() -> void:
 	SoundPlayer.play_3d(attack_sound, _enemy.global_position, _enemy.get_tree().current_scene)
+
+
+func _on_shot_fired(_end_point: Vector3) -> void:
+	SoundPlayer.play_3d(shot_sound, _enemy.global_position, _enemy.get_tree().current_scene)
 
 
 func _start_idle_loop() -> void:
