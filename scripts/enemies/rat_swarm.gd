@@ -181,6 +181,12 @@ func frenzy() -> void:
 ## leaps at them in a quick ripple, one after another.
 func leap_wave(within: float, stagger: float) -> void:
 	frenzy()
+	leap_at(within, stagger)
+
+
+## Every rat within `within` of the target leaps at them, `stagger` seconds
+## apart (the Bender's bodyguards pounce this way, without a frenzy).
+func leap_at(within: float, stagger: float) -> void:
 	if target == null:
 		return
 	var delay := 0.0

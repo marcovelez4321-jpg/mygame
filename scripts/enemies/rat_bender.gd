@@ -15,8 +15,12 @@ extends Enemy
 ##     - short on rats: SUMMON (Spell Casting) -- new rats appear around him,
 ##       back up to the cap.
 ##   ESCORT - his whole horde has run off ahead of him: he summons a fresh
-##            swarm half its size at his feet (past the cap) -- bodyguards
-##            that stay with him and only swarm you if you come close.
+##            swarm half its size at his feet (past the cap) -- an entourage
+##            that stays with him and only swarms you if you come close.
+##   BODYGUARDS - always: a few big, tough rats hovering right at his feet.
+##            They only wander off to eat a corpse that's really close, and
+##            leap at you if you get near him. Lost ones come back with his
+##            next summon.
 ##   HEAL - hurt and left alone a moment, he stands and channels a heal
 ##          (Spell Casting, slowed), flashing green faster and faster. Health
 ##          trickles in the whole time, so knocking him out of it early (enough
@@ -89,9 +93,22 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 @export var escort_cooldown: float = 15.0
 ## The escort stays at his feet and only swarms you inside this range of him.
 @export var escort_engage_range: float = 6.0
-## Bodyguards are bigger and tougher than normal rats.
-@export var escort_rat_scale: float = 2.0
-@export var escort_health_multiplier: float = 2.0
+
+@export_group("Bodyguards")
+@export var guard_count: int = 4
+## Bodyguards are this much bigger, with this many times the health.
+@export var guard_rat_scale: float = 2.0
+@export var guard_health_multiplier: float = 2.0
+## How far from his feet they hover (at normal rat size; scaled up by
+## guard_rat_scale).
+@export var guard_radius_min: float = 0.5
+@export var guard_radius_max: float = 0.9
+## They only leave him to eat a corpse within this many meters of him.
+@export var guard_eat_range: float = 3.0
+## Get within this range of him and they go for you, leaping in a wave every
+## guard_leap_cooldown seconds while you stay close.
+@export var guard_engage_range: float = 5.0
+@export var guard_leap_cooldown: float = 3.0
 
 @export_group("Healing")
 ## Starts a heal once below this share of his health (0.75 = 75%) and not
@@ -142,6 +159,9 @@ var _summon_into: RatSwarm
 ## His bodyguard swarm, made the first time the horde runs off ahead.
 var _escort: RatSwarm
 var _escort_cooldown_left := 0.0
+## His few big bodyguard rats, always at his feet.
+var _guards: RatSwarm
+var _guard_leap_left := 0.0
 var _since_hurt := 999.0
 var _cast_time := 0.0
 var _cast_length := 1.0
@@ -176,6 +196,7 @@ func _ready() -> void:
 	_play("patrol")
 	if multiplayer.is_server():
 		swarm.spawn_rats.call_deferred(rat_cap, global_position)
+		_make_guards.call_deferred()
 
 
 func _setup_animations() -> void:
@@ -209,6 +230,7 @@ func _physics_process(delta: float) -> void:
 		_update_memory(_find_nearest_player())
 	swarm.target = _target
 	_escort_cooldown_left = maxf(_escort_cooldown_left - delta, 0.0)
+	_command_guards(delta)
 	if _escort:
 		_escort.target = _target
 		var close := _target != null and global_position.distance_to(_target.global_position) <= escort_engage_range
@@ -352,6 +374,7 @@ func _end_cast() -> void:
 	elif _mode == Mode.SUMMON:
 		if _summon_into == swarm:
 			_summon_cooldown_left = summon_cooldown
+			_top_up_guards()
 		else:
 			_escort_cooldown_left = escort_cooldown
 	_mode = Mode.CHASE if _target else Mode.PATROL
@@ -387,12 +410,7 @@ func _escort_swarm() -> RatSwarm:
 	if _escort == null:
 		_escort = swarm.duplicate() as RatSwarm
 		_escort.name = "EscortSwarm"
-		_escort.rat_scale = escort_rat_scale
-		_escort.rat_health_multiplier = escort_health_multiplier
-		# Bigger rats need more room around him and each other.
-		_escort.separation_distance *= escort_rat_scale
-		_escort.follow_radius_min *= escort_rat_scale
-		_escort.follow_radius_max *= escort_rat_scale
+
 		add_child(_escort)
 		_escort.bender = self
 	return _escort
@@ -434,11 +452,49 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 func _on_died(attacker_id: int, is_critical: bool) -> void:
 	_end_cast_look()
 	# The horde lives on without him: keep it in the world after his body goes.
-	for pack: RatSwarm in [swarm, _escort]:
+	for pack: RatSwarm in [swarm, _escort, _guards]:
 		if pack and pack.get_parent() == self:
 			pack.bender = null
 			pack.reparent.call_deferred(get_tree().current_scene)
 	super._on_died(attacker_id, is_critical)
+
+
+# ---- Bodyguards -------------------------------------------------------------
+
+## His bodyguard swarm: a copy of the horde's settings with big, tough rats
+## kept in tight around his feet.
+func _make_guards() -> void:
+	_guards = swarm.duplicate() as RatSwarm
+	_guards.name = "Bodyguards"
+	_guards.rat_scale = guard_rat_scale
+	_guards.rat_health_multiplier = guard_health_multiplier
+	_guards.separation_distance *= guard_rat_scale
+	_guards.follow_radius_min = guard_radius_min * guard_rat_scale
+	_guards.follow_radius_max = guard_radius_max * guard_rat_scale
+	_guards.eat_range = guard_eat_range
+	_guards.restless_time *= 2.0 # guards fidget less than the horde
+	add_child(_guards)
+	_guards.bender = self
+	_guards.spawn_rats(guard_count, global_position)
+
+
+## Back up to guard_count after losses -- they burrow up with his summon.
+func _top_up_guards() -> void:
+	if _guards and _guards.count() < guard_count:
+		_guards.spawn_rats(guard_count - _guards.count(), global_position)
+
+
+## At his feet unless you come close; then at you, with a leap every so often.
+func _command_guards(delta: float) -> void:
+	if _guards == null:
+		return
+	_guard_leap_left = maxf(_guard_leap_left - delta, 0.0)
+	_guards.target = _target
+	var close := _target != null and global_position.distance_to(_target.global_position) <= guard_engage_range
+	_guards.order = RatSwarm.Order.HUNT if close else RatSwarm.Order.FOLLOW
+	if close and _guard_leap_left <= 0.0:
+		_guard_leap_left = guard_leap_cooldown
+		_guards.leap_at(guard_engage_range + 2.0, 0.15)
 
 
 # ---- Look -------------------------------------------------------------------
