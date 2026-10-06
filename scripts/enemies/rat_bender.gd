@@ -14,7 +14,10 @@ extends Enemy
 ##       rats leaping at you one after another;
 ##     - short on rats: SUMMON (Spell Casting) -- new rats appear around him,
 ##       back up to the cap.
-##   Left alone after being hurt, he heals.
+##   HEAL - hurt and left alone a moment, he stands and channels a heal
+##          (Spell Casting, slowed), flashing green faster and faster. Health
+##          trickles in the whole time, so knocking him out of it early (enough
+##          damage mid-heal) still leaves him with what he got so far.
 ##
 ## Every spell has a wind-up you can read from across the room: he flashes
 ## orange, faster and faster, throbbing and swelling until it goes off --
@@ -25,7 +28,7 @@ extends Enemy
 ## Rule 1 (co-op): only the host thinks; spells are short named events
 ## (cast started / went off) that clients can play from.
 
-enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON }
+enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 
 @export_group("Patrol")
 @export var patrol_speed: float = 1.6
@@ -63,9 +66,19 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON }
 @export var summon_cooldown: float = 8.0
 
 @export_group("Healing")
-## Not hurt for this long: heals heal_per_second until full.
-@export var heal_delay: float = 5.0
-@export var heal_per_second: float = 8.0
+## Starts a heal once below this share of his health (0.75 = 75%) and not
+## hurt for heal_delay seconds; at most every heal_cooldown seconds.
+@export_range(0.0, 1.0, 0.05) var heal_below: float = 0.75
+@export var heal_delay: float = 4.0
+@export var heal_cooldown: float = 10.0
+## Health per second while channeling -- all the way through, so a heal cut
+## short still counts for what it got.
+@export var heal_per_second: float = 20.0
+## The heal animation's speed (0.5 = half speed -- a long, punishable cast).
+@export var heal_animation_speed: float = 0.5
+## Hit him for this much in total during a heal and it's cancelled.
+@export var heal_cancel_damage: float = 40.0
+@export var heal_flash_color: Color = Color(0.2, 1.0, 0.3, 0.8)
 
 @export_group("Animations")
 @export_file("*.res") var patrol_animation: String = "res://art/animations/OrcWalk.res"
@@ -74,10 +87,12 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON }
 @export_file("*.res") var rush_animation: String = "res://art/animations/MagicAttack01.res"
 @export_file("*.res") var leap_animation: String = "res://art/animations/MagicAreaAttack02.res"
 @export_file("*.res") var summon_animation: String = "res://art/animations/SpellCasting.res"
+@export_file("*.res") var heal_animation: String = "res://art/animations/SpellCasting.res"
 
 @export_group("Sound")
 @export var cast_sound: SoundEvent
 @export var summon_sound: SoundEvent
+@export var heal_sound: SoundEvent
 
 const LIBRARY := "bender"
 
@@ -88,6 +103,8 @@ var _patrol_wait := 0.0
 var _rush_cooldown_left := 0.0
 var _leap_cooldown_left := 2.0
 var _summon_cooldown_left := 0.0
+var _heal_cooldown_left := 0.0
+var _heal_damage_taken := 0.0
 var _since_hurt := 999.0
 var _cast_time := 0.0
 var _cast_length := 1.0
@@ -131,7 +148,7 @@ func _setup_animations() -> void:
 		return
 	var library := AnimationLibrary.new()
 	var paths := {"patrol": patrol_animation, "run": run_animation, "idle": idle_animation,
-			"rush": rush_animation, "leap": leap_animation, "summon": summon_animation}
+			"rush": rush_animation, "leap": leap_animation, "summon": summon_animation, "heal": heal_animation}
 	for key: String in paths:
 		var animation := load(paths[key]) as Animation if ResourceLoader.exists(paths[key]) else null
 		if animation:
@@ -147,7 +164,8 @@ func _physics_process(delta: float) -> void:
 	_rush_cooldown_left = maxf(_rush_cooldown_left - delta, 0.0)
 	_leap_cooldown_left = maxf(_leap_cooldown_left - delta, 0.0)
 	_summon_cooldown_left = maxf(_summon_cooldown_left - delta, 0.0)
-	_heal(delta)
+	_heal_cooldown_left = maxf(_heal_cooldown_left - delta, 0.0)
+	_since_hurt += delta
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
@@ -159,7 +177,7 @@ func _physics_process(delta: float) -> void:
 			_think_patrol(delta)
 		Mode.CHASE:
 			_think_chase_target()
-		Mode.CAST_RUSH, Mode.CAST_LEAP, Mode.SUMMON:
+		Mode.CAST_RUSH, Mode.CAST_LEAP, Mode.SUMMON, Mode.HEAL:
 			_think_cast(delta)
 
 	if not is_on_floor():
@@ -170,6 +188,9 @@ func _physics_process(delta: float) -> void:
 func _think_patrol(delta: float) -> void:
 	if _target and _can_see(_target):
 		_mode = Mode.CHASE
+		return
+	if _wants_heal():
+		_start_cast(Mode.HEAL)
 		return
 	if swarm.count() < rat_cap and _summon_cooldown_left <= 0.0:
 		_start_cast(Mode.SUMMON)
@@ -208,6 +229,9 @@ func _think_chase_target() -> void:
 	var can_see_now := _can_see(_target)
 	var aim := _target.global_position if can_see_now else _last_seen_position
 	var distance := _flat_distance_to_position(aim)
+	if _wants_heal():
+		_start_cast(Mode.HEAL)
+		return
 	if can_see_now and distance <= leap_range and _leap_cooldown_left <= 0.0:
 		_start_cast(Mode.CAST_LEAP)
 		return
@@ -230,12 +254,19 @@ func _start_cast(mode: Mode) -> void:
 	_cast_time = 0.0
 	_cast_released = false
 	_flash_phase = 0.0
-	var key: String = {Mode.CAST_RUSH: "rush", Mode.CAST_LEAP: "leap", Mode.SUMMON: "summon"}[mode]
+	var key: String = {Mode.CAST_RUSH: "rush", Mode.CAST_LEAP: "leap", Mode.SUMMON: "summon", Mode.HEAL: "heal"}[mode]
+	var speed := heal_animation_speed if mode == Mode.HEAL else cast_speed
 	_anim_name = "" # the same spell twice in a row still replays from the start
-	_play(key, false, cast_speed)
-	_cast_length = _anim.get_animation(LIBRARY + "/" + key).length / cast_speed if _anim and _anim.has_animation(LIBRARY + "/" + key) else 1.5
-
-	SoundPlayer.play_3d(summon_sound if mode == Mode.SUMMON else cast_sound, global_position, get_tree().current_scene)
+	_play(key, false, speed)
+	_cast_length = _anim.get_animation(LIBRARY + "/" + key).length / speed if _anim and _anim.has_animation(LIBRARY + "/" + key) else 1.5
+	_flash_material.albedo_color = heal_flash_color if mode == Mode.HEAL else cast_flash_color
+	_heal_damage_taken = 0.0
+	var sound := cast_sound
+	if mode == Mode.SUMMON:
+		sound = summon_sound
+	elif mode == Mode.HEAL:
+		sound = heal_sound
+	SoundPlayer.play_3d(sound, global_position, get_tree().current_scene)
 
 
 func _think_cast(delta: float) -> void:
@@ -244,11 +275,20 @@ func _think_cast(delta: float) -> void:
 	if _target:
 		_face_position(_target.global_position)
 	_cast_time += delta
-	if not _cast_released and _cast_time >= _cast_length * cast_release:
+	if _mode == Mode.HEAL:
+		health.current_health = minf(health.current_health + heal_per_second * delta, health.max_health)
+	elif not _cast_released and _cast_time >= _cast_length * cast_release:
 		_cast_released = true
 		_release_spell()
 	if _cast_time >= _cast_length:
-		_mode = Mode.CHASE if _target else Mode.PATROL
+		_end_cast()
+
+
+## Back to fighting (or wandering). A heal goes on cooldown however it ended.
+func _end_cast() -> void:
+	if _mode == Mode.HEAL:
+		_heal_cooldown_left = heal_cooldown
+	_mode = Mode.CHASE if _target else Mode.PATROL
 
 
 func _release_spell() -> void:
@@ -264,10 +304,10 @@ func _release_spell() -> void:
 			swarm.spawn_rats(mini(summon_batch, rat_cap - swarm.count()), global_position)
 
 
-func _heal(delta: float) -> void:
-	_since_hurt += delta
-	if _since_hurt >= heal_delay and health.current_health < health.max_health:
-		health.current_health = minf(health.current_health + heal_per_second * delta, health.max_health)
+## Hurt enough, left alone long enough, and not healed too recently.
+func _wants_heal() -> bool:
+	return _heal_cooldown_left <= 0.0 and _since_hurt >= heal_delay \
+			and health.current_health < health.max_health * heal_below
 
 
 ## A boss doesn't flinch at every bullet: it just flashes, wakes up and
@@ -278,6 +318,11 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 	HitFlash.flash(self)
 	_since_hurt = 0.0
 	_update_memory(_find_nearest_player())
+	if _mode == Mode.HEAL:
+		_heal_damage_taken += _amount
+		if _heal_damage_taken >= heal_cancel_damage:
+			_end_cast() # knocked out of it -- keeps what he healed so far
+			return
 	if _mode == Mode.PATROL and _target:
 		_mode = Mode.CHASE
 
@@ -293,14 +338,17 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 
 # ---- Look -------------------------------------------------------------------
 
-## The cast tell: orange flashes speeding up, each one a throb, and a swell
-## that grows until the spell goes off.
+## The cast tell: flashes speeding up, each one a throb, and a swell that
+## grows until the spell goes off -- orange for attacks, green for a heal
+## (which builds over the whole animation, since it heals all the way through).
 func _process(delta: float) -> void:
-	var casting := _state != State.DEAD and (_mode == Mode.CAST_RUSH or _mode == Mode.CAST_LEAP or _mode == Mode.SUMMON) and not _cast_released
+	var healing := _mode == Mode.HEAL
+	var casting := _state != State.DEAD and (_mode == Mode.CAST_RUSH or _mode == Mode.CAST_LEAP or _mode == Mode.SUMMON or healing) and not _cast_released
 	if not casting:
 		_end_cast_look()
 		return
-	var progress := clampf(_cast_time / maxf(_cast_length * cast_release, 0.01), 0.0, 1.0)
+	var build_up := _cast_length if healing else _cast_length * cast_release
+	var progress := clampf(_cast_time / maxf(build_up, 0.01), 0.0, 1.0)
 	_flash_phase += delta * lerpf(flash_rate_start, flash_rate_end, progress * progress)
 	_set_flash(fmod(_flash_phase, 1.0) < 0.4)
 	var pulse := 0.5 + 0.5 * cos(_flash_phase * TAU)

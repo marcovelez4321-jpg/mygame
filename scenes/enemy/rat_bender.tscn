@@ -16,6 +16,7 @@
 [ext_resource type="Resource" path="res://audio/events/rat_bender_summon.tres" id="14"]
 [ext_resource type="Resource" path="res://audio/events/rat_scurry.tres" id="15"]
 [ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="16"]
+[ext_resource type="Resource" path="res://audio/events/rat_bender_heal.tres" id="17"]
 
 [sub_resource type="CapsuleShape3D" id="BenderShape"]
 radius = 0.45
@@ -25,6 +26,7 @@ height = 2.6
 script = ExtResource("1")
 cast_sound = ExtResource("13")
 summon_sound = ExtResource("14")
+heal_sound = ExtResource("17")
 move_speed = 5.5
 gravity = 30.0
 sight_range = 30.0
@@ -37,7 +39,7 @@ shape = SubResource("BenderShape")
 
 [node name="Health" type="Node" parent="."]
 script = ExtResource("2")
-max_health = 300.0
+max_health = 600.0
 
 [node name="Model" type="Node3D" parent="."]
 transform = Transform3D(-0.52, 0, -4.5e-08, 0, 0.52, 0, 4.5e-08, 0, -0.52, 0, 0, 0)

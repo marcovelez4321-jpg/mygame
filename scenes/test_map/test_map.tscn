@@ -345,3 +345,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6886158, 0.5, 2.290947)
 
 [node name="RatBender" parent="." unique_id=1300387606 instance=ExtResource("26_ratbender")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.1, -10)
+rat_cap = 110
+summon_batch = 20
+summon_cooldown = 10.0
