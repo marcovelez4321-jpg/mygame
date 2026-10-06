@@ -403,16 +403,72 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.7, 0, 16.6)
 [node name="EnemyRusher6" parent="." unique_id=1734333394 instance=ExtResource("11_rusher")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.9, 0, -12.6)
 
-[node name="Roach13" parent="." instance=ExtResource("13_2420u")]
+[node name="Roach13" parent="." unique_id=376973256 instance=ExtResource("13_2420u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 2.1926193, 0)
 
-[node name="Roach14" parent="." instance=ExtResource("13_2420u")]
+[node name="Roach14" parent="." unique_id=908187669 instance=ExtResource("13_2420u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 2.1926193, -0.7619037)
 
-[node name="Roach15" parent="." instance=ExtResource("13_2420u")]
+[node name="Roach15" parent="." unique_id=2082886632 instance=ExtResource("13_2420u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.1, 2.1926193, 1.0018294)
 kind = 1
 
-[node name="Roach16" parent="." instance=ExtResource("13_2420u")]
+[node name="Roach16" parent="." unique_id=1851169451 instance=ExtResource("13_2420u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.1, 2.1926193, 0.23992562)
+kind = 1
+
+[node name="Roach17" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.1926193, 18)
+
+[node name="Roach18" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.8, 2.1926193, 18)
+
+[node name="Roach19" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 2.1926193, 18.8)
+
+[node name="Roach20" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.8, 2.1926193, 18.8)
+
+[node name="Roach21" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 2.1926193, -24)
+
+[node name="Roach22" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.2, 2.1926193, -24)
+
+[node name="Roach23" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 2.1926193, -23.2)
+
+[node name="Roach24" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.2, 2.1926193, -23.2)
+
+[node name="Roach25" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 2.1926193, -2)
+kind = 1
+
+[node name="Roach26" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.8, 2.1926193, -2)
+kind = 1
+
+[node name="Roach27" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 2.1926193, -1.2)
+kind = 1
+
+[node name="Roach28" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.8, 2.1926193, -1.2)
+kind = 1
+
+[node name="Roach29" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 2.1926193, -12)
+kind = 1
+
+[node name="Roach30" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23.2, 2.1926193, -12)
+kind = 1
+
+[node name="Roach31" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 2.1926193, -11.2)
+kind = 1
+
+[node name="Roach32" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23.2, 2.1926193, -11.2)
 kind = 1
