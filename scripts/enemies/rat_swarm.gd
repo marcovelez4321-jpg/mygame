@@ -134,8 +134,10 @@ const CORPSE_GROUP := "corpses"
 ## Not fighting: rats go and eat a corpse this close to the Bender.
 @export var eat_range: float = 8.0
 ## A pack only goes for bodies at all -- eating or dragging -- with at least
-## this many rats in it.
+## this many rats in it; more rats nearby join in, up to eat_max_rats on any
+## one body. The rest of the pack carries on.
 @export var eat_min_rats: int = 10
+@export var eat_max_rats: int = 30
 
 @export_group("Feeding")
 ## Rats eating a body breed: every bites_per_rat bites (all the eaters
@@ -176,6 +178,9 @@ var _drag_timer := 0.0
 var _drag_check := 2.0
 var _draggers: Array[Rat] = []
 var _feed_bites := 0
+## The rats eating _corpse (at most eat_max_rats, the nearest), and where it is.
+var _eaters := {}
+var _corpse_pos := Vector3.ZERO
 ## Has had rats at some point -- an empty pack only cleans itself up after
 ## that (a fresh nest is empty for a frame before its rats are spawned).
 var _had_rats := false
@@ -352,6 +357,10 @@ func _physics_process(delta: float) -> void:
 		_path_timer = path_interval
 		_refresh_path(center, goal)
 		_corpse = _find_corpse(center) if order == Order.FOLLOW else null
+		_pick_eaters()
+	if _corpse and is_instance_valid(_corpse):
+		var corpse_ragdoll := _corpse.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
+		_corpse_pos = corpse_ragdoll.body_position() if corpse_ragdoll else _corpse.global_position
 
 	_time += delta
 	var speed := rat_speed * lerpf(1.0, frenzy_speed, _frenzy())
@@ -451,9 +460,6 @@ func _goal() -> Vector3:
 			if reach.length() > leash_distance:
 				hunt = bender.global_position + reach.normalized() * leash_distance
 		return hunt
-	if _corpse and is_instance_valid(_corpse):
-		var ragdoll := _corpse.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
-		return ragdoll.body_position() if ragdoll else _corpse.global_position
 	if bender:
 		return bender.global_position
 	return _wander_to
@@ -483,14 +489,15 @@ func _steer(rat: Rat, index: int, goal: Vector3, speed: float, delta: float) -> 
 	# Restless: now and then a resting rat picks a new spot in the pack.
 	if order != Order.HUNT and randf() < delta / maxf(restless_time, 0.1):
 		rat.slot = Vector2.from_angle(randf() * TAU)
-	var spot := goal + _spot_offset(rat)
+	var eater := _eaters.has(rat) and _corpse != null and is_instance_valid(_corpse)
+	var spot := _corpse_pos + Vector3(rat.slot.x, 0.0, rat.slot.y) * 0.7 if eater else goal + _spot_offset(rat)
 	rat.eating = false
 	var to_spot := spot - position
 	to_spot.y = 0.0
 	var distance := to_spot.length()
 	var crowd := _neighbours(index)
 	if distance < 0.35 and order != Order.HUNT:
-		rat.eating = _corpse != null
+		rat.eating = eater
 		return crowd[0] * speed * 0.5
 	var heading := to_spot / distance
 	if distance > 4.0 and _path.size() > 1:
@@ -521,8 +528,6 @@ func _spot_offset(rat: Rat) -> Vector3:
 		radius = lerpf(engulf_radius_min, engulf_radius_max, dart)
 		var churn := churn_speed if int(rat.rhythm_seed) % 2 == 0 else -churn_speed
 		slot = slot.rotated(_time * churn)
-	elif _corpse:
-		radius = 0.7
 	else:
 		# Ebb and flow: breathing in and out, drifting around each other.
 		var ebb := 0.5 + 0.5 * sin(_time * ebb_speed * TAU + rat.rhythm_seed * 0.7)
@@ -633,6 +638,8 @@ func _update_drag(delta: float, center: Vector3) -> void:
 		DragPhase.EAT:
 			if _drag_timer <= 0.0:
 				_end_drag()
+			elif order != Order.HUNT:
+				_join_feast()
 
 
 ## Picks a body near the pack and the rats nearest it to haul it.
@@ -654,7 +661,7 @@ func _start_drag(center: Vector3) -> void:
 		var by_distance := rats.duplicate()
 		by_distance.sort_custom(func(a: Rat, b: Rat) -> bool:
 			return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
-		var how_many := maxi(4, int(rats.size() * drag_share))
+		var how_many := clampi(int(rats.size() * drag_share), mini(eat_min_rats, rats.size()), eat_max_rats)
 		_draggers.clear()
 		for i in mini(how_many, by_distance.size()):
 			var rat: Rat = by_distance[i]
@@ -748,6 +755,35 @@ func _blocked(from: Vector3, to: Vector3) -> bool:
 	query.collision_mask = 1
 	var hit := get_viewport().find_world_3d().direct_space_state.intersect_ray(query)
 	return not hit.is_empty() and hit.collider is StaticBody3D
+
+
+## Up to eat_max_rats of the nearest rats eat _corpse; the rest carry on.
+func _pick_eaters() -> void:
+	_eaters.clear()
+	if _corpse == null or not is_instance_valid(_corpse):
+		return
+	var at := _corpse.global_position
+	var free_rats: Array[Rat] = []
+	for rat in rats:
+		if not rat.dragging:
+			free_rats.append(rat)
+	free_rats.sort_custom(func(a: Rat, b: Rat) -> bool:
+		return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
+	for i in mini(eat_max_rats, free_rats.size()):
+		_eaters[free_rats[i]] = true
+
+
+## A dragged body being eaten: rats nearby that aren't busy join in, up to
+## eat_max_rats on it.
+func _join_feast() -> void:
+	if _draggers.size() >= eat_max_rats:
+		return
+	for rat in rats:
+		if not rat.dragging and rat.global_position.distance_to(_drag_body_pos) < 6.0:
+			rat.dragging = true
+			_draggers.append(rat)
+			if _draggers.size() >= eat_max_rats:
+				return
 
 
 func _end_drag() -> void:
