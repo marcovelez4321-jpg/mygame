@@ -33,9 +33,17 @@ const CARRY_HEIGHT := 1.6
 ## How fast held parts rise with MIN_ROACHES holding; scales up with each extra
 ## roach (4 roaches = 4/3 as fast, 6 = twice as fast).
 const LIFT_SPEED := 1.5
-## Share of the body's weight each holding roach takes off: 3 roaches leave it
-## at 40% of its weight, 5 or more make it weightless.
-const WEIGHT_PER_ROACH := 0.2
+## Share of the body's weight each holding roach takes off: 3 roaches (the
+## minimum) leave it at 10% of its weight -- light enough that they always
+## get it all the way up, heavy enough that the limbs they aren't holding
+## still hang -- and 4 or more make it weightless. (At 0.2, three left it at
+## 40%, and the unheld limbs could weigh the lift down to a stall short of
+## CARRY_HEIGHT.)
+const WEIGHT_PER_ROACH := 0.3
+## How hard a held part is pulled toward CARRY_HEIGHT: rise speed per meter
+## still to go (capped at the lift speed). Higher closes the last bit of the
+## gap instead of settling a little short of it under the hanging weight.
+const LIFT_PULL := 6.0
 ## The body part each grab slot holds, in the order roaches join: the first
 ## three (the minimum to lift) hold the hips and opposite corners so it rises
 ## level; later ones fill in the other hand, foot and the head.
@@ -223,7 +231,7 @@ func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 		var bone := grip_bone(roach.carry_slot)
 		if bone == null or held.has(bone):
 			continue
-		var rise := clampf((target_y - bone.global_position.y) * 3.0, -speed, speed)
+		var rise := clampf((target_y - bone.global_position.y) * LIFT_PULL, -speed, speed)
 		# Sideways it eases toward `travel` (zero = damped to a stop, so held
 		# parts don't swing wildly); up/down is the roach's pull.
 		held[bone] = Vector3(lerpf(bone.linear_velocity.x, travel.x, 0.2), rise, lerpf(bone.linear_velocity.z, travel.z, 0.2))
