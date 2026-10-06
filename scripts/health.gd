@@ -35,10 +35,16 @@ var is_dead: bool = false
 var last_hit_impulse: Vector3 = Vector3.ZERO
 var last_hit_position: Vector3 = Vector3.ZERO
 var _last_hit_msec: int = -1000
+## Bleeding out (bleed()): health lost per second, seconds left, and who
+## caused it (credited with the kill if it finishes them).
+var _bleed_rate := 0.0
+var _bleed_left := 0.0
+var _bleed_attacker := NO_ATTACKER
 
 
 func _ready() -> void:
 	current_health = max_health
+	set_physics_process(false) # only runs while bleeding
 
 
 ## hit_direction, hit_position and impact_force are optional and only describe
@@ -53,6 +59,33 @@ func take_damage(amount: float, attacker_id: int = NO_ATTACKER, hit_direction: V
 	if current_health <= 0.0:
 		is_dead = true
 		died.emit(attacker_id, is_critical)
+
+
+## A wound that keeps bleeding (a headshot or artery hit): `total` damage
+## drained evenly over `duration` seconds. Quiet -- no flinch, no hit flash
+## every tick, just health draining -- but it can finish them off. A new
+## wound adds what's left of the old one on top. Host only, like all damage.
+func bleed(total: float, duration: float, attacker_id: int = NO_ATTACKER) -> void:
+	if is_dead or total <= 0.0 or duration <= 0.0:
+		return
+	var remaining := _bleed_rate * _bleed_left + total
+	_bleed_left = maxf(_bleed_left, duration)
+	_bleed_rate = remaining / _bleed_left
+	_bleed_attacker = attacker_id
+	set_physics_process(true)
+
+
+func _physics_process(delta: float) -> void:
+	if is_dead or _bleed_left <= 0.0:
+		_bleed_left = 0.0
+		set_physics_process(false)
+		return
+	var step := minf(delta, _bleed_left)
+	_bleed_left -= step
+	current_health = maxf(current_health - _bleed_rate * step, 0.0)
+	if current_health <= 0.0:
+		is_dead = true
+		died.emit(_bleed_attacker, false)
 
 
 func _record_hit(impulse: Vector3, position: Vector3) -> void:

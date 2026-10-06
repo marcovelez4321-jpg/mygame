@@ -2,9 +2,10 @@ class_name RatNest
 extends Node3D
 
 ## A pack of rats with no Rat Bender: they burrow up out of the floor here
-## when the level starts, hang around this spot, and swarm any player who
-## comes within the swarm's hunt_range. Same rats and swarm brain as his
-## horde (RatSwarm, Rat) -- just leaderless.
+## when the level starts and roam around this spot. Once any rat notices a
+## player they all creep over, then swarm them (RatSwarm's "Without a
+## Bender" settings). Same rats and swarm brain as his horde -- just
+## leaderless. Big enough packs drag bodies off to eat them.
 ##
 ## Rule 1 (co-op): the host spawns the rats; the swarm runs on the host.
 

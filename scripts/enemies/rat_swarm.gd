@@ -92,9 +92,33 @@ const CORPSE_GROUP := "corpses"
 @export var spawn_circle_scale: float = 2.2
 
 @export_group("Without a Bender")
-## A pack with no Bender (a rat nest, or his horde after he dies) hangs
-## around `home` and goes for any player who comes within this many meters.
-@export var hunt_range: float = 15.0
+## A pack with no Bender (a rat nest, or his horde after he dies) roams
+## around `home`. The moment ANY rat is within notice_range of a player it
+## can see, the whole pack knows: they creep over at creep_speed, and charge
+## in once the pack is within charge_range of them. More than lose_range
+## from every rat and they lose interest and roam where they are.
+@export var notice_range: float = 10.0
+@export var charge_range: float = 5.0
+@export_range(0.1, 1.0, 0.05) var creep_speed: float = 0.5
+@export var lose_range: float = 25.0
+## Roaming: every roam_interval seconds or so, the pack wanders to a new
+## spot within roam_radius of home.
+@export var roam_radius: float = 6.0
+@export var roam_interval: float = 6.0
+
+@export_group("Corpse Dragging")
+## A pack of at least drag_min_rats near a body (drag_find_range from its
+## middle) sometimes -- drag_chance a second -- splits up: drag_share of the
+## rats (at least 4) haul the body drag_distance away at drag_speed, then eat
+## it for eat_time seconds. The rest carry on, attacking you included.
+@export var drag_min_rats: int = 8
+@export_range(0.0, 1.0, 0.05) var drag_chance: float = 0.15
+@export var drag_find_range: float = 10.0
+@export_range(0.1, 1.0, 0.05) var drag_share: float = 0.4
+@export var drag_distance_min: float = 3.0
+@export var drag_distance_max: float = 6.0
+@export var drag_speed: float = 1.2
+@export var eat_time: float = 6.0
 
 @export_group("Eating")
 ## Not fighting: rats go and eat a corpse this close to the Bender.
@@ -105,11 +129,26 @@ const CORPSE_GROUP := "corpses"
 @export var scurry_sound: SoundEvent
 @export var bite_sound: SoundEvent
 
+enum DragPhase { NONE, GATHER, DRAG, EAT }
+
 var bender: Node3D
 var order := Order.FOLLOW
-## Where a pack with no Bender hangs around.
-var home := Vector3.ZERO
+## Where a pack with no Bender roams around.
+var home := Vector3.ZERO:
+	set(value):
+		home = value
+		_wander_to = value
+var _wander_to := Vector3.ZERO
+var _roam_timer := 0.0
 var _lookout_timer := 0.0
+var _drag_phase := DragPhase.NONE
+var _drag_body: Node3D
+var _drag_ragdoll: EnemyRagdoll
+var _drag_body_pos := Vector3.ZERO
+var _drag_to := Vector3.ZERO
+var _drag_timer := 0.0
+var _drag_check := 2.0
+var _draggers: Array[Rat] = []
 ## Has had rats at some point -- an empty pack only cleans itself up after
 ## that (a fresh nest is empty for a frame before its rats are spawned).
 var _had_rats := false
@@ -170,10 +209,11 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0) -> void:
 
 func forget(rat: Rat) -> void:
 	rats.erase(rat)
+	_draggers.erase(rat)
 
 
 ## The middle of the pack.
-func center() -> Vector3:
+func pack_center() -> Vector3:
 	var sum := Vector3.ZERO
 	for rat in rats:
 		sum += rat.global_position
@@ -251,6 +291,7 @@ func _physics_process(delta: float) -> void:
 	for p in _pos:
 		center += p
 	center /= rats.size()
+	_update_drag(delta, center)
 
 	var goal := _goal()
 	_path_timer -= delta
@@ -261,6 +302,9 @@ func _physics_process(delta: float) -> void:
 
 	_time += delta
 	var speed := rat_speed * lerpf(1.0, frenzy_speed, _frenzy())
+	# A leaderless pack creeps up on a player it's noticed, then charges.
+	if bender == null and target and center.distance_to(target.global_position) > charge_range:
+		speed *= creep_speed
 	var any_moving := false
 	for i in rats.size():
 		var rat := rats[i]
@@ -269,25 +313,70 @@ func _physics_process(delta: float) -> void:
 	_update_scurry(center, any_moving)
 
 
-## No Bender to follow orders from: every half second, go for the nearest
-## living player within hunt_range, or drift back home.
+## No Bender to follow orders from: every half second, see if any rat has
+## noticed a player (then the whole pack goes for them), keep after one it
+## already has unless everyone's lost them, or roam.
 func _look_out(delta: float) -> void:
 	_lookout_timer -= delta
 	if _lookout_timer > 0.0:
 		return
 	_lookout_timer = 0.5
-	target = null
-	var nearest := hunt_range
+	if target and (_is_dead(target) or nearest_rat_distance(target.global_position) > lose_range):
+		target = null
+		home = pack_center() # lost them: roam from here
+	if target == null:
+		target = _noticed_player()
+	order = Order.HUNT if target else Order.FOLLOW
+	if target == null:
+		_roam(0.5)
+
+
+## A living player some rat is within notice_range of, and can see.
+func _noticed_player() -> Node3D:
 	for node in get_tree().get_nodes_in_group("player"):
 		var player := node as Node3D
-		var player_health := player.get_node_or_null("Health") as Health
-		if player_health == null or player_health.is_dead:
+		if _is_dead(player):
 			continue
-		var distance := player.global_position.distance_to(home)
-		if distance < nearest:
-			nearest = distance
-			target = player
-	order = Order.HUNT if target else Order.FOLLOW
+		var nearest: Rat = null
+		var nearest_distance := notice_range
+		for rat in rats:
+			var distance := rat.global_position.distance_to(player.global_position)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest = rat
+		if nearest and _rat_sees(nearest, player):
+			return player
+	return null
+
+
+func _rat_sees(rat: Rat, player: Node3D) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(rat.global_position + Vector3.UP * 0.2, player.global_position + Vector3.UP * 1.0)
+	query.exclude = [rat.get_rid()]
+	query.collision_mask = 1
+	var hit := rat.get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.is_empty() or hit.collider == player
+
+
+func _is_dead(player: Node3D) -> bool:
+	var player_health := player.get_node_or_null("Health") as Health
+	return player_health == null or player_health.is_dead
+
+
+## Every so often, wander to a new walkable spot near home.
+func _roam(elapsed: float) -> void:
+	_roam_timer -= elapsed
+	if _roam_timer > 0.0:
+		return
+	_roam_timer = randf_range(roam_interval * 0.5, roam_interval * 1.5)
+	var offset := Vector2.from_angle(randf() * TAU) * randf_range(1.0, roam_radius)
+	_wander_to = _walkable(home + Vector3(offset.x, 0.0, offset.y))
+
+
+func _walkable(point: Vector3) -> Vector3:
+	var map := get_viewport().find_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(map) > 0:
+		return NavigationServer3D.map_get_closest_point(map, point)
+	return point
 
 
 ## Where the pack as a whole is headed.
@@ -303,7 +392,7 @@ func _goal() -> Vector3:
 		return _corpse.global_position
 	if bender:
 		return bender.global_position
-	return home
+	return _wander_to
 
 
 ## The shared path from the middle of the pack to the goal. If the navmesh
@@ -325,6 +414,8 @@ func _refresh_path(from: Vector3, goal: Vector3) -> void:
 ## runs in its own stop-start bursts.
 func _steer(rat: Rat, index: int, goal: Vector3, speed: float, delta: float) -> Vector3:
 	var position := _pos[index]
+	if rat.dragging:
+		return _steer_dragger(rat, index, speed)
 	# Restless: now and then a resting rat picks a new spot in the pack.
 	if order != Order.HUNT and randf() < delta / maxf(restless_time, 0.1):
 		rat.slot = Vector2.from_angle(randf() * TAU)
@@ -430,6 +521,114 @@ func _build_grid() -> void:
 
 func _cell_of(position: Vector3) -> Vector2i:
 	return Vector2i(floori(position.x / neighbour_distance), floori(position.z / neighbour_distance))
+
+
+# ---- Corpse dragging --------------------------------------------------------
+
+func _update_drag(delta: float, center: Vector3) -> void:
+	if _drag_phase == DragPhase.NONE:
+		_drag_check -= delta
+		if _drag_check <= 0.0:
+			_drag_check = 1.0
+			if rats.size() >= drag_min_rats and randf() < drag_chance:
+				_start_drag(center)
+		return
+	if not is_instance_valid(_drag_body) or not is_instance_valid(_drag_ragdoll) or _draggers.size() < 2:
+		_end_drag()
+		return
+	_drag_timer -= delta
+	_drag_body_pos = _drag_ragdoll.body_position()
+	match _drag_phase:
+		DragPhase.GATHER:
+			# Most of them have hold of it (or they've waited long enough): haul.
+			if _draggers_at_body() >= _draggers.size() * 0.6 or _drag_timer <= 0.0:
+				_drag_phase = DragPhase.DRAG
+				_drag_timer = 8.0
+		DragPhase.DRAG:
+			var to := _drag_to - _drag_body_pos
+			to.y = 0.0
+			if to.length() < 0.6 or _drag_timer <= 0.0:
+				_drag_ragdoll.drag(Vector3.ZERO)
+				_drag_phase = DragPhase.EAT
+				_drag_timer = eat_time
+			elif _draggers_at_body() >= _draggers.size() * 0.5:
+				_drag_ragdoll.drag(to.normalized() * drag_speed)
+			else:
+				_drag_ragdoll.drag(Vector3.ZERO) # waiting for the stragglers
+		DragPhase.EAT:
+			if _drag_timer <= 0.0:
+				_end_drag()
+
+
+## Picks a body near the pack and the rats nearest it to haul it.
+func _start_drag(center: Vector3) -> void:
+	for node in get_tree().get_nodes_in_group(CORPSE_GROUP):
+		var body := node as Node3D
+		if body == null or body.has_meta("dragged"):
+			continue
+		var ragdoll := body.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
+		if ragdoll == null:
+			continue
+		var at := ragdoll.body_position()
+		if at.distance_to(center) > drag_find_range:
+			continue
+		_drag_body = body
+		_drag_ragdoll = ragdoll
+		_drag_body_pos = at
+		body.set_meta("dragged", true)
+		var by_distance := rats.duplicate()
+		by_distance.sort_custom(func(a: Rat, b: Rat) -> bool:
+			return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
+		var how_many := maxi(4, int(rats.size() * drag_share))
+		_draggers.clear()
+		for i in mini(how_many, by_distance.size()):
+			var rat: Rat = by_distance[i]
+			rat.dragging = true
+			_draggers.append(rat)
+		var away := Vector2.from_angle(randf() * TAU) * randf_range(drag_distance_min, drag_distance_max)
+		_drag_to = _walkable(at + Vector3(away.x, 0.0, away.y))
+		_drag_phase = DragPhase.GATHER
+		_drag_timer = 6.0
+		return
+
+
+func _end_drag() -> void:
+	for rat in _draggers:
+		if is_instance_valid(rat):
+			rat.dragging = false
+			rat.eating = false
+	_draggers.clear()
+	if is_instance_valid(_drag_ragdoll):
+		_drag_ragdoll.drag(Vector3.ZERO)
+	if is_instance_valid(_drag_body):
+		_drag_body.remove_meta("dragged")
+	_drag_body = null
+	_drag_ragdoll = null
+	_drag_phase = DragPhase.NONE
+	_drag_check = 3.0
+
+
+func _draggers_at_body() -> int:
+	var holding := 0
+	for rat in _draggers:
+		if rat.global_position.distance_to(_drag_body_pos) < 0.9 * rat.size:
+			holding += 1
+	return holding
+
+
+## A dragger crowds in around the body (its own spot on it) -- the body
+## moving drags them along -- and eats once they've got it where they want.
+func _steer_dragger(rat: Rat, index: int, speed: float) -> Vector3:
+	var spot := _drag_body_pos + Vector3(rat.slot.x, 0.0, rat.slot.y) * 0.45 * rat.size
+	var to_spot := spot - _pos[index]
+	to_spot.y = 0.0
+	var distance := to_spot.length()
+	var crowd := _neighbours(index)
+	rat.eating = _drag_phase == DragPhase.EAT and distance < 0.5
+	if distance < 0.25:
+		return crowd[0] * speed * 0.3
+	var steer: Vector3 = to_spot / distance + crowd[0] * separation_strength * 0.5
+	return steer.normalized() * speed * rat.speed_scale * clampf(distance, 0.3, 1.0)
 
 
 ## A body on the floor near the Bender to eat (EnemyRagdoll adds dead

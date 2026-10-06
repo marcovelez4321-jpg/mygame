@@ -60,11 +60,13 @@ static var _trail_mesh: TubeTrailMesh
 
 ## A short, one-shot particle burst at a hit point, kicked out along the
 ## surface normal it hit. Removes itself once it finishes. `color` lets a
-## non-human enemy bleed something else (the roach's green goo).
-static func spawn_impact(world: Node, position: Vector3, normal: Vector3, color: Color = BLOOD_COLOR) -> void:
+## non-human enemy bleed something else (the roach's green goo). `strength`
+## scales it up for a bigger, more dramatic burst (2 = twice the droplets,
+## flying further, a bit bigger).
+static func spawn_impact(world: Node, position: Vector3, normal: Vector3, color: Color = BLOOD_COLOR, strength: float = 1.0) -> void:
 	var particles := GPUParticles3D.new()
-	particles.amount = 18
-	particles.lifetime = 0.5
+	particles.amount = int(18 * strength)
+	particles.lifetime = 0.5 + 0.15 * (strength - 1.0)
 	particles.one_shot = true
 	particles.explosiveness = 0.9
 	particles.draw_pass_1 = _get_impact_mesh()
@@ -72,11 +74,12 @@ static func spawn_impact(world: Node, position: Vector3, normal: Vector3, color:
 	var mat := ParticleProcessMaterial.new()
 	mat.direction = normal
 	mat.spread = 35.0
-	mat.initial_velocity_min = 2.125
-	mat.initial_velocity_max = 5.1
+	var reach := 1.0 + 0.4 * (strength - 1.0)
+	mat.initial_velocity_min = 2.125 * reach
+	mat.initial_velocity_max = 5.1 * reach
 	mat.gravity = Vector3(0.0, -9.8, 0.0)
-	mat.scale_min = 0.25
-	mat.scale_max = 0.6
+	mat.scale_min = 0.25 * sqrt(strength)
+	mat.scale_max = 0.6 * sqrt(strength)
 	mat.color = color
 	particles.process_material = mat
 

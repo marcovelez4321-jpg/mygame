@@ -561,6 +561,23 @@ func _spawn_blood_pool() -> void:
 	BloodFX.spawn_splatter(_enemy.get_tree().current_scene, result.position, Vector3.UP, 1.3)
 
 
+## Where the body actually is now -- its hips -- since the ragdoll slides
+## and tumbles away from where the enemy died.
+func body_position() -> Vector3:
+	for bone in _bones:
+		if "Hips" in bone.name:
+			return bone.global_position
+	return _bones[0].global_position if not _bones.is_empty() else _enemy.global_position
+
+
+## Rats dragging the corpse (RatSwarm): every bone gets the same sideways
+## velocity, so the whole body slides along as one piece -- pushing single
+## bones just makes the joints fight (see _apply_hit_impulse()). ZERO lets go.
+func drag(velocity: Vector3) -> void:
+	for bone in _bones:
+		bone.linear_velocity = Vector3(velocity.x, minf(bone.linear_velocity.y, 0.5), velocity.z)
+
+
 ## Pushes the body the way the killing blow pushed it: the bone nearest the
 ## impact gets the full shove and every other bone gets a smaller share. So a
 ## shot to the arm kicks the arm, a shot to the chest rocks the whole body, and

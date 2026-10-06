@@ -123,6 +123,9 @@ const TEST_WEAPON_PATHS := [
 @export var artery_damage_multiplier: float = 3.0
 ## Seconds a headshot wound keeps pouring blood (the artery pours for 7).
 @export var headshot_bleed_time: float = 4.0
+## A headshot or artery wound that doesn't kill keeps bleeding: this much
+## damage in total, drained over its bleed time, on top of the hit itself.
+@export var bleed_damage: float = 10.0
 
 @export_group("Physics Push")
 ## How much harder than a weapon's impact_force shots shove physics props
@@ -593,6 +596,8 @@ func resolve_shot(shot: Shot) -> void:
 			# a mutation. Artery and body kills can still mutate (see enemy.gd's
 			# Mutation group).
 			health.take_damage(damage, shot.attacker_id, direction, result.position, shot.weapon.impact_force, kind == HitKind.HEADSHOT)
+			if not health.is_dead and (kind == HitKind.HEADSHOT or kind == HitKind.ARTERY):
+				health.bleed(bleed_damage, headshot_bleed_time if kind == HitKind.HEADSHOT else ARTERY_BLEED_TIME, shot.attacker_id)
 			hit_confirmed.emit(health.is_dead, kind)
 			_play_hit_effects(space, result, direction, kind, health.is_dead)
 

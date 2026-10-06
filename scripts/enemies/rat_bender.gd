@@ -412,7 +412,7 @@ func _horde_ran_ahead() -> bool:
 	if swarm.nearest_rat_distance(global_position) <= escort_lead_distance:
 		return false
 	var forward := -global_basis.z
-	return forward.dot(swarm.center() - global_position) > 0.0
+	return forward.dot(swarm.pack_center() - global_position) > 0.0
 
 
 ## How many rats short of half the horde's size the escort is.

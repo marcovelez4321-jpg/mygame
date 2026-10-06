@@ -78,8 +78,11 @@ const FAR_ANIMATION_RATE := 12.0
 @export var blood_color: Color = Color(0.55, 0.02, 0.02)
 ## Size (m) of the pool a shot rat leaves, and of the spot a launched rat
 ## splats into.
-@export var pool_size: float = 0.45
-@export var splat_size: float = 0.6
+@export var pool_size: float = 0.7
+@export var splat_size: float = 0.9
+## How dramatic its blood is: bursts this many times a normal hit's, so a
+## rat popping in a swarm is easy to notice.
+@export var gore: float = 2.5
 
 ## Set by RatSwarm.
 var swarm: RatSwarm
@@ -88,8 +91,10 @@ var slot := Vector2.RIGHT
 var slot_radius := 1.5
 ## What the swarm wants it doing this tick (horizontal m/s).
 var desired_velocity := Vector3.ZERO
-## Nibbling a corpse -- plays the attack clip in place.
+## Nibbling a corpse -- plays the attack clip in place, flicking blood.
 var eating := false
+## One of the rats hauling a corpse away (RatSwarm's corpse dragging).
+var dragging := false
 ## This rat's own size, pace and rhythm (rolled once, in _roll_variety()).
 ## The swarm reads speed_scale and rhythm_seed for its steering.
 var size := 1.0
@@ -113,6 +118,7 @@ var _anim_step := 0.0
 var _lod_timer := 0.0
 var _emerge_time := 0.0
 var _dug := false
+var _gore_timer := 0.0
 
 @onready var health: Health = $Health
 @onready var _visual: Node3D = $Visual
@@ -325,7 +331,7 @@ func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 ## Shot dead: a burst of blood and a little pool where it stood.
 func _pop() -> void:
 	var world := get_tree().current_scene
-	BloodFX.spawn_impact(world, global_position + Vector3.UP * 0.1, Vector3.UP, blood_color)
+	BloodFX.spawn_impact(world, global_position + Vector3.UP * 0.1, Vector3.UP, blood_color, gore * size)
 	var floor_hit := _ray(global_position + Vector3.UP * 0.2, global_position + Vector3.DOWN * 0.6)
 	if not floor_hit.is_empty():
 		BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, pool_size, blood_color)
@@ -340,7 +346,7 @@ func _splat_here() -> void:
 	var at: Vector3 = floor_hit.position if not floor_hit.is_empty() else global_position
 	var normal: Vector3 = floor_hit.normal if not floor_hit.is_empty() else Vector3.UP
 	BloodFX.spawn_splatter(world, at, normal, splat_size * size, blood_color)
-	BloodFX.spawn_impact(world, at + normal * 0.1, normal, blood_color)
+	BloodFX.spawn_impact(world, at + normal * 0.1, normal, blood_color, gore * 1.2 * size)
 	_remove()
 
 
@@ -352,8 +358,8 @@ func _splat() -> void:
 	if hit.is_empty():
 		hit = _ray(global_position, global_position + Vector3.DOWN * 0.8)
 	if not hit.is_empty():
-		BloodFX.spawn_splatter(world, hit.position, hit.normal, splat_size, blood_color)
-		BloodFX.spawn_impact(world, hit.position, hit.normal, blood_color)
+		BloodFX.spawn_splatter(world, hit.position, hit.normal, splat_size * size, blood_color)
+		BloodFX.spawn_impact(world, hit.position, hit.normal, blood_color, gore * 1.2 * size)
 	_remove()
 
 
@@ -393,6 +399,8 @@ func _ray(from: Vector3, to: Vector3) -> Dictionary:
 func _process(delta: float) -> void:
 	if _state == State.EMERGE:
 		_show_emerging()
+	if eating:
+		_eat_gore(delta)
 	if _anim == null:
 		return
 	# A one-off bite plays out; otherwise run, stand, or chew (eating loops).
@@ -412,6 +420,21 @@ func _process(delta: float) -> void:
 	if _anim_time >= _anim_step:
 		_anim.advance(_anim_time)
 		_anim_time = 0.0
+
+
+## Eating a body: every so often a little spray of blood from its mouth, and
+## now and then a spot of it on the floor.
+func _eat_gore(delta: float) -> void:
+	_gore_timer -= delta
+	if _gore_timer > 0.0:
+		return
+	_gore_timer = randf_range(0.35, 0.8)
+	var world := get_tree().current_scene
+	var forward := -_visual.global_basis.z
+	var mouth := global_position + forward * 0.18 * size + Vector3.UP * 0.08 * size
+	BloodFX.spawn_impact(world, mouth, (Vector3.UP + forward * 0.5).normalized(), blood_color, gore * 0.65)
+	if randf() < 0.3:
+		BloodFX.spawn_splatter(world, global_position + forward * 0.2 * size, Vector3.UP, pool_size * 0.6, blood_color)
 
 
 ## Squirming up out of the floor: rises fast then eases, nose up, shaking

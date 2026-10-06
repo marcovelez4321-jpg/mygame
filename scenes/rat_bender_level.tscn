@@ -337,3 +337,15 @@ summon_cooldown = 10.0
 summon_animation_speed = 2.0
 heal_delay = 6.0
 heal_animation_speed = 4.0
+
+[node name="Enemy2" parent="." instance=ExtResource("5_psl7s")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, -12)
+
+[node name="Enemy3" parent="." instance=ExtResource("5_psl7s")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0, 6)
+
+[node name="EnemyRusher2" parent="." instance=ExtResource("11_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, -22)
+
+[node name="EnemyRusher3" parent="." instance=ExtResource("11_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, -22)

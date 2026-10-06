@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1")
 classname = "monster_rat_nest"
-description = "A small pack of rats with no Rat Bender: they burrow up out of the floor here, hang around, and swarm any player who comes within 15 m. Place it on the floor."
+description = "A small pack of rats with no Rat Bender: they burrow up out of the floor here and roam around; once one notices you they all creep over, then swarm you. Big packs drag bodies off to eat them. Place it on the floor."
 scene_file = ExtResource("2")
 meta_properties = {
 "size": AABB(-12, -12, 0, 24, 24, 12),

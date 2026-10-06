@@ -21,7 +21,7 @@
 [ext_resource type="Resource" path="res://fgd/item_weapon_sniper.tres" id="19"]
 [ext_resource type="Resource" path="res://fgd/prop_explosive_barrel.tres" id="20"]
 [ext_resource type="Resource" path="res://fgd/item_weapon_grenade.tres" id="21"]
-[ext_resource type="Resource" path="res://fgd/monster_rat_bender.tres" id="22"]
+[ext_resource type="Resource" uid="uid://dd3yhw4oeiqnc" path="res://fgd/monster_rat_bender.tres" id="22"]
 [ext_resource type="Resource" path="res://fgd/monster_rat_nest.tres" id="23"]
 
 [resource]
