@@ -88,7 +88,7 @@ const CORPSE_GROUP := "corpses"
 @export var churn_speed: float = 0.5
 ## The Bender's spells whip the horde into a frenzy: this much faster, and
 ## biting this many times as often, wearing off over frenzy_time seconds.
-@export var frenzy_speed: float = 2.7
+@export var frenzy_speed: float = 2.025 # 25% slower than the old 2.7
 @export var frenzy_bite_rate: float = 2.0
 @export var frenzy_time: float = 5.0
 
