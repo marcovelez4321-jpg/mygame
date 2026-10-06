@@ -143,6 +143,11 @@ var _cooldown: float = 0.0
 ## _ready()/pickup_weapon().
 var _magazine: Dictionary = {}
 var _reload_time_left: float = 0.0
+## Seconds until a reload can start: the weapon's reload_delay_after_fire
+## after a shot, or its draw_time after switching to it. Separate from
+## _cooldown (the wait until the next SHOT), so reloading never has to sit
+## out the whole fire_interval.
+var _reload_blocked_left: float = 0.0
 
 @onready var _body: CollisionObject3D = get_parent() as CollisionObject3D
 
@@ -218,6 +223,7 @@ func pickup_weapon(weapon: WeaponData, ammo_amount: int) -> void:
 	if not already_owned:
 		_current = _owned.find(weapon)
 		_cooldown = maxf(_cooldown, weapon.draw_time)
+		_reload_blocked_left = maxf(_reload_blocked_left, weapon.draw_time)
 		weapon_switched.emit(weapon, weapon.draw_time)
 
 
@@ -234,6 +240,7 @@ func add_ammo(type: WeaponData.AmmoType, amount: int, emit_signal: bool = true) 
 ## select_weapon is an inventory index, or -1 for "no change".
 func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
 	_cooldown = maxf(_cooldown - delta, 0.0)
+	_reload_blocked_left = maxf(_reload_blocked_left - delta, 0.0)
 
 	if select_weapon >= 0 and select_weapon != _current and select_weapon < _owned.size():
 		_current = select_weapon
@@ -241,6 +248,7 @@ func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Ve
 		# Can't fire until it's up, and any cooldown from the old weapon still
 		# counts, so switching never lets you fire faster.
 		_cooldown = maxf(_cooldown, new_weapon.draw_time)
+		_reload_blocked_left = maxf(_reload_blocked_left, new_weapon.draw_time)
 		_reload_time_left = 0.0 # switching cancels a reload in progress
 		weapon_switched.emit(new_weapon, new_weapon.draw_time)
 
@@ -255,7 +263,10 @@ func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Ve
 		return
 
 	var loaded: int = _magazine.get(weapon, weapon.magazine_size)
-	if reload and _cooldown <= 0.0 and loaded < weapon.magazine_size and _ammo.get(weapon.ammo_type, 0) > 0:
+	# Gated by _reload_blocked_left, not the fire cooldown: you can reload
+	# right after a shot (WeaponData.reload_delay_after_fire). The shot
+	# cooldown keeps ticking during the reload, so this never fires faster.
+	if reload and _reload_blocked_left <= 0.0 and loaded < weapon.magazine_size and _ammo.get(weapon.ammo_type, 0) > 0:
 		_reload_time_left = weapon.reload_time
 		reload_started.emit(weapon.reload_time)
 		return
@@ -268,6 +279,7 @@ func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Ve
 	if not infinite_ammo:
 		_magazine[weapon] = loaded - weapon.ammo_per_shot
 	_cooldown = weapon.fire_interval
+	_reload_blocked_left = weapon.reload_delay_after_fire
 	shot_fired.emit()
 
 	var shot := Shot.new()
@@ -326,6 +338,7 @@ func resolve_shot(shot: Shot) -> void:
 			if result.collider is PhysicalBone3D:
 				shot_resolved.emit(ray_origin, result.position, true)
 				_spawn_blood(space, result, direction)
+				_hit_mutating_corpse(result.collider, shot, ray_origin, direction, result.position)
 				if penetrations_left <= 0:
 					break
 				penetrations_left -= 1
@@ -342,7 +355,7 @@ func resolve_shot(shot: Shot) -> void:
 				break # world geometry always stops it, penetration or not
 
 			var kind: HitKind = _hit_kind(result.collider, ray_origin, direction) if not health.is_dead else HitKind.NORMAL
-			var damage := _damage_for(shot.weapon, kind, health, shot.origin.distance_to(result.position))
+			var damage := _damage_for(shot.weapon, kind, health.current_health, shot.origin.distance_to(result.position))
 			# is_critical = a headshot kill, the one clean finish that rules out
 			# a mutation. Artery and body kills can still mutate (see enemy.gd's
 			# Mutation group).
@@ -359,18 +372,43 @@ func resolve_shot(shot: Shot) -> void:
 
 
 ## The weapon's own damage times the multiplier for where it landed (the Hit
-## Zones exports), or everything the target has left for an instant-kill artery.
-## `distance` (from the shooter to the hit) feeds the weapon's close-range
-## boost -- see WeaponData.close_range_multiplier(). An instant artery kill
-## ignores it; it already takes everything.
-func _damage_for(weapon: WeaponData, kind: HitKind, health: Health, distance: float) -> float:
+## Zones exports), or everything the target has left (`remaining`) for an
+## instant-kill artery. `distance` (from the shooter to the hit) feeds the
+## weapon's close-range boost -- see WeaponData.close_range_multiplier(). An
+## instant artery kill ignores it; it already takes everything.
+func _damage_for(weapon: WeaponData, kind: HitKind, remaining: float, distance: float) -> float:
 	var close := weapon.close_range_multiplier(distance)
 	match kind:
 		HitKind.HEADSHOT:
 			return weapon.damage * headshot_damage_multiplier * close
 		HitKind.ARTERY:
-			return health.current_health if artery_instant_kill else weapon.damage * artery_damage_multiplier * close
+			return remaining if artery_instant_kill else weapon.damage * artery_damage_multiplier * close
 	return weapon.damage * body_damage_multiplier * close
+
+
+## The double tap: a corpse twitching toward a mutation (enemy.gd's
+## will_mutate) has a fresh pool of mutation_health, and emptying it stops
+## the transformation for good. Damage works exactly like on a live enemy --
+## the head and artery zones are read from the ragdoll's own bones -- and the
+## hit marker / kill confirm fire the same way, so finishing it off reads as a
+## kill. An ordinary corpse ignores all this and just bleeds.
+## Runs only where resolve_shot() runs -- the host, in co-op (Rule 1).
+func _hit_mutating_corpse(bone: Node, shot: Shot, ray_origin: Vector3, direction: Vector3, hit_position: Vector3) -> void:
+	var enemy := _owning_enemy(bone)
+	if enemy == null or not enemy.will_mutate:
+		return
+	var kind := _hit_kind(enemy, ray_origin, direction)
+	var damage := _damage_for(shot.weapon, kind, enemy.mutation_health_left, shot.origin.distance_to(hit_position))
+	var stopped := enemy.damage_mutation(damage)
+	hit_confirmed.emit(stopped, kind)
+
+
+## The Enemy a ragdoll bone belongs to (bones sit a few levels down, under its
+## model's skeleton), or null.
+func _owning_enemy(node: Node) -> Enemy:
+	while node != null and not node is Enemy:
+		node = node.get_parent()
+	return node as Enemy
 
 
 ## Every cosmetic effect of one confirmed hit, in one place -- nothing here

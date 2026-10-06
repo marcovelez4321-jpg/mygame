@@ -10,8 +10,8 @@ extends Node
 @export var oneshot_sound: SoundEvent = preload("res://audio/events/ambience/ambience_oneshot.tres")
 @export var bed_sound: SoundEvent = preload("res://audio/events/ambience/ambience_bed.tres")
 ## Seconds between one-shots, picked at random in this range.
-@export var min_interval: float = 8.0
-@export var max_interval: float = 25.0
+@export var min_interval: float = 12.0
+@export var max_interval: float = 37.5
 ## How far from the player (m) a one-shot plays, picked at random: far
 ## enough to read as "somewhere out there", with a direction you can hear.
 @export var min_distance: float = 8.0

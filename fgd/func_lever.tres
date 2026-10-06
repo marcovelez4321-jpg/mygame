@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDSolidClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_solid_class.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/map/map_button.gd" id="2"]
+
+[resource]
+script = ExtResource("1")classname = "func_lever"
+description = "Lever the player pulls with F. Swings on its hinge (bottom edge by default), then opens/uses whatever has a targetname matching its target. Pull it again to swing it back and use the target again."
+class_properties = {
+"target": "",
+"distance": 60.0,
+"axis": {
+"East-west line": 1,
+"North-south line": 2,
+"Vertical": 0
+},
+"hinge": {
+"Bottom edge": 1,
+"Top edge": 2,
+"Origin brush (or the middle)": 0,
+"West or south end": 3,
+"East or north end": 4
+},
+"speed": 180.0,
+"wait": -1.0,
+"message": ""
+}
+class_property_descriptions = {
+"target": "The targetname of the door(s) this opens.",
+"distance": "How far it swings, in degrees. Negative swings the other way.",
+"axis": ["The line it swings around. On a wall running east-west use East-west line; on a wall running north-south use North-south line.", 1],
+"hinge": ["Where it pivots. Bottom edge suits a floor or wall lever.", 1],
+"speed": "How fast it swings, in degrees per second.",
+"wait": "-1 = stays pulled; pulling again swings it back (toggles the door). 0 or more = springs back after that many seconds.",
+"message": "Shown on screen when it is pulled."
+}
+meta_properties = {
+"color": Color(0.2, 0.7, 1, 1)
+}
+node_class = "AnimatableBody3D"
+script_class = ExtResource("2")

@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDSolidClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_solid_class.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/map/map_door.gd" id="2"]
+
+[resource]
+script = ExtResource("1")classname = "func_door"
+description = "Sliding door. Opens by itself when a player walks up -- unless it has a targetname, then only a button or lever whose target matches opens it. Set key to lock it until the player has that key."
+class_properties = {
+"targetname": "",
+"angle": -1,
+"speed": 100.0,
+"wait": -2.0,
+"lip": 8.0,
+"key": {
+"None": 0,
+"Silver": 1,
+"Gold": 2
+},
+"message": ""
+}
+class_property_descriptions = {
+"targetname": "Name a button or lever uses to open this (type the same name in its target). Leave empty for a door that opens when you walk up.",
+"angle": "Direction it slides open: -1 = up, -2 = down, or degrees in the top view (0 = east, 90 = north, 180 = west, 270 = south).",
+"speed": "How fast it moves, in units per second.",
+"wait": "Seconds it stays open before closing. -1 = stays open (opened by a button/lever: using it again closes it). -2 = automatic: 3 seconds, or stays open if it has a targetname.",
+"lip": "How much of the door still shows when fully open, in units.",
+"key": ["Locked until the player is carrying this key (place an item_key with the same colour).", 0],
+"message": "Shown on screen when a player walks up to it while it is locked or waiting for a button/lever."
+}
+meta_properties = {
+"color": Color(0.9, 0.6, 0.2, 1)
+}
+node_class = "AnimatableBody3D"
+script_class = ExtResource("2")

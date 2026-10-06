@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDSolidClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_solid_class.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/map/map_button.gd" id="2"]
+
+[resource]
+script = ExtResource("1")classname = "func_button"
+description = "Button the player presses with F. Pushes in, then opens/uses whatever has a targetname matching its target."
+class_properties = {
+"target": "",
+"angle": 0,
+"speed": 40.0,
+"wait": 1.0,
+"lip": 4.0,
+"message": ""
+}
+class_property_descriptions = {
+"target": "The targetname of the door(s) this opens.",
+"angle": "Direction it pushes in: degrees in the top view (0 = east, 90 = north, 180 = west, 270 = south), -1 = up, -2 = down. Point it into the wall.",
+"speed": "How fast it pushes in, in units per second.",
+"wait": "Seconds before it pops back out and can be pressed again. -1 = stays pushed in for good.",
+"lip": "How much of the button still sticks out when pressed, in units.",
+"message": "Shown on screen when it is pressed."
+}
+meta_properties = {
+"color": Color(0.2, 0.7, 1, 1)
+}
+node_class = "AnimatableBody3D"
+script_class = ExtResource("2")

@@ -36,14 +36,27 @@ const SCREEN_BLOOD_FADE_TIME := 0.7
 @onready var stamina_pips: Array[ColorRect] = [$StaminaBar/Pip0Fill, $StaminaBar/Pip1Fill, $StaminaBar/Pip2Fill]
 const PIP_WIDTH := 14.0
 
+## Centre-screen messages from the map ("You need the gold key") -- same
+## pop-in as pickups, held a little longer since they're there to be read.
+const MESSAGE_HOLD_TIME := 2.0
+
 var player: CharacterBody3D
 var _player_health: Health
 var _flash_tween: Tween
 var _pickup_tween: Tween
+var _message_tween: Tween
+## Built in code (_make_center_label) rather than in hud.tscn: just two
+## plain centred labels.
+var _message_label: Label
+var _use_prompt_label: Label
 
 
 func _ready() -> void:
 	add_to_group("hud")
+	_message_label = _make_center_label(0.62, 26)
+	_message_label.modulate.a = 0.0
+	_use_prompt_label = _make_center_label(0.56, 20)
+	_use_prompt_label.visible = false
 	call_deferred("_find_player")
 
 
@@ -82,6 +95,48 @@ func _process(_delta: float) -> void:
 	]
 	health_label.text = "Health: %d" % ceili(_player_health.current_health)
 	_update_stamina_bar()
+	_update_use_prompt()
+
+
+## "[F] Press" / "[F] Pull" under the crosshair while a button or lever is in
+## reach -- read straight off the player each frame, like the stamina pips.
+func _update_use_prompt() -> void:
+	var usable: MapButton = player.usable_in_view
+	_use_prompt_label.visible = usable != null
+	if usable:
+		_use_prompt_label.text = "[F] %s" % usable.use_prompt
+
+
+## A centre-screen message (MapIO.show_message): pops in, holds, fades.
+func show_message(text: String) -> void:
+	_message_label.text = text
+	if _message_tween:
+		_message_tween.kill()
+	_message_label.pivot_offset = _message_label.size * 0.5
+	_message_label.scale = Vector2(1.2, 1.2)
+	_message_label.modulate.a = 1.0
+	_message_tween = create_tween()
+	_message_tween.tween_property(_message_label, "scale", Vector2.ONE, 0.12) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_message_tween.tween_interval(MESSAGE_HOLD_TIME)
+	_message_tween.tween_property(_message_label, "modulate:a", 0.0, PICKUP_FADE_TIME)
+
+
+## A full-width label centred horizontally, `height_fraction` of the way down
+## the screen, outlined so it reads over any background.
+func _make_center_label(height_fraction: float, font_size: int) -> Label:
+	var label := Label.new()
+	label.anchor_left = 0.0
+	label.anchor_right = 1.0
+	label.anchor_top = height_fraction
+	label.anchor_bottom = height_fraction
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_constant_override("outline_size", 6)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(label)
+	return label
 
 
 ## Each pip is full (PIP_WIDTH) if that charge is available, empty if it

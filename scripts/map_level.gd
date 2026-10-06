@@ -38,6 +38,9 @@ var navigation_region: NavigationRegion3D
 func _ready() -> void:
 	_bake_navigation()
 	add_child(AmbiencePlayer.new())
+	# Deferred: buttons, levers and doors finish setting up (and naming
+	# themselves) in their own deferred calls, which were queued first.
+	_check_map_links.call_deferred()
 
 	var start := get_tree().get_first_node_in_group("player_start")
 	if start == null:
@@ -48,6 +51,21 @@ func _ready() -> void:
 		return
 	player.global_position = start.global_position
 	player.global_rotation.y = start.global_rotation.y
+
+
+## Warns about every button/lever whose target names nothing -- a typo
+## otherwise fails silently (MapIO.find_broken_links()).
+func _check_map_links() -> void:
+	var problems := MapIO.find_broken_links(get_tree())
+	for problem in problems:
+		push_warning("MapLevel: " + problem)
+	if not problems.is_empty():
+		_show_map_problems(problems)
+
+
+## Hook: TestMapLevel puts these on screen for the mapper.
+func _show_map_problems(_problems: PackedStringArray) -> void:
+	pass
 
 
 ## Bakes a walkable NavigationMesh from this level's own static collision

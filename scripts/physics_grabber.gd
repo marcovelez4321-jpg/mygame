@@ -65,6 +65,10 @@ var _held
 var _held_local_center := Vector3.ZERO
 
 
+func is_holding() -> bool:
+	return _held != null
+
+
 ## Called once per physics tick by the owner's simulation step, same pattern
 ## as WeaponController.tick().
 func tick(grab: bool, delta: float, origin: Vector3, direction: Vector3) -> void:

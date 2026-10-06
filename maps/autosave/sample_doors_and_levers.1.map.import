@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://dgjxr1ahwnp8i"
+path="res://.godot/imported/sample_doors_and_levers.1.map-7d698f739519fd2b08521f02eda10a23.tres"
+
+[deps]
+
+source_file="res://maps/autosave/sample_doors_and_levers.1.map"
+dest_files=["res://.godot/imported/sample_doors_and_levers.1.map-7d698f739519fd2b08521f02eda10a23.tres"]
+
+[params]
+

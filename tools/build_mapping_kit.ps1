@@ -21,6 +21,7 @@ $files = [ordered]@{
     'game_entities.fgd' = Join-Path $config 'game_entities.fgd'
     'icon.png'          = Join-Path $config 'icon.png'
     'MAPPING_GUIDE.md'  = Join-Path $repo 'MAPPING_GUIDE.md'
+    'sample_doors_and_levers.map' = Join-Path $repo 'maps\sample_doors_and_levers.map'
     'SETUP.bat'         = Join-Path $PSScriptRoot 'mapping_kit\SETUP.bat'
     'setup.ps1'         = Join-Path $PSScriptRoot 'mapping_kit\setup.ps1'
 }

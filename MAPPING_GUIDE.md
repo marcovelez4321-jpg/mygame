@@ -192,10 +192,78 @@ gone through section 2.
 | `item_weapon_starter_gun` | Starter pistol pickup | |
 | `item_weapon_machine_gun` | Machine gun pickup | |
 | `item_ammo` | Ammo pickup | Has editable properties in TrenchBroom: `ammo_type` (Bullets / Shells / Rockets) and `amount` (default 20). |
+| `item_key` | Silver or gold key | Walk through it to carry it. See section 7b. |
+| `func_door` | Sliding door (brushes) | See section 7b. |
+| `func_door_rotating` | Swinging door (brushes) | See section 7b. |
+| `func_button` | Button you press with F (brushes) | See section 7b. |
+| `func_lever` | Lever you pull with F (brushes) | See section 7b. |
 
 There's currently no placeable shotgun pickup entity (the shotgun exists in
 code but has no FGD point class yet) — if you want one placeable in
 TrenchBroom, that needs to be added on the code side first.
+
+## 7b. Doors, buttons, levers and keys
+
+**Open `sample_doors_and_levers.map` from the kit first** — it has one of
+each, already working. Click any of them and look at the entity panel on
+the right to see how it's set up. Load it with **Load Test Map** in the game
+to try it.
+
+These work the way Quake does it: **names connect things**. A door gets a
+**targetname** (its name), a button or lever gets a **target** (the name of
+what it opens). If they match, pressing the button opens the door. No code,
+no Godot.
+
+**Brush entities** (doors, buttons, levers) are made from normal brushes:
+build the shape, select it, then **right-click → Create Brush Entity →**
+pick the type. Its settings appear in the entity panel on the right. Hover
+over a setting's name to see what it does. Every setting has a sensible
+default — usually you only set a name and a direction.
+
+### A lever that opens a gate
+1. Build the gate's brush(es) in the doorway. Right-click → Create Brush
+   Entity → `func_door`.
+2. In the entity panel: **targetname** = `gate1` (any name), **angle** = `-1`
+   (slides up).
+3. Build a small lever brush on a wall (e.g. 8 × 16 × 56 units). Right-click
+   → Create Brush Entity → `func_lever`.
+4. **target** = `gate1` (exactly the same as the gate's targetname).
+5. **axis**: the line the lever swings around — if the wall it's on runs
+   east-west, pick *East-west line*; north-south, pick *North-south line*.
+   It pivots on its **bottom edge** by default.
+6. In game: walk up, look at it, **[F] Pull** appears — press F. Pull it
+   again to close the gate.
+
+### A button that opens a door
+Same as above, but make the button brush a `func_button`, set its
+**target**, and set **angle** to point *into* the wall it's on (in the top
+view: 0 = east, 90 = north, 180 = west, 270 = south). It pushes in, the door
+opens, it pops back out after a second.
+
+### A swinging door
+`func_door_rotating` instead of `func_door`. Pick its **hinge**: e.g.
+*West or south end* for a door hinged on one side. (Or the Quake way: draw
+a small extra brush painted with the **origin** texture where the hinge
+goes, include it in the door entity, and leave hinge on *Origin brush*.)
+**distance** = how far it swings (90 = a quarter turn; negative swings the
+other way).
+
+### A door locked by a key
+1. Make a `func_door` with **no targetname** (it opens when you walk up)
+   and set **key** = *Gold*.
+2. Place an `item_key` (point entity) somewhere else and set **key_type** =
+   *Gold*.
+3. Walking up without the key shows "You need the gold key".
+
+### Common mistakes
+- **Lever/button does nothing** → the target and targetname don't match
+  exactly (`gate1` vs `gate_1`). Load Test Map lists every name that
+  doesn't match in the top-left corner.
+- **Lever spins around its middle** → hinge is set to *Origin brush* but
+  there's no origin brush. Pick *Bottom edge* (the default) instead.
+- **Door slides the wrong way** → change **angle**. -1 = up, -2 = down.
+- **Door closes after 3 seconds when you wanted it to stay open** → set
+  **wait** = `-1`. (Doors opened by a button/lever already stay open.)
 
 ## 8. Adding more textures
 

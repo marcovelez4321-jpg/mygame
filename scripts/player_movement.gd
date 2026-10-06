@@ -193,6 +193,11 @@ class MantleTarget:
 	var found: bool = false
 	var position: Vector3 = Vector3.ZERO
 
+@export_group("Use (F)")
+## How far away a button or lever can be pressed with F, in meters --
+## Half-Life 2's use reach is about 1.5-2 m.
+@export var use_range: float = 2.0
+
 @onready var head: Node3D = $Head
 @onready var camera: CameraJuice = $Head/Camera3D
 @onready var weapons: WeaponController = $WeaponController
@@ -215,6 +220,17 @@ var _pending_look_delta: Vector2 = Vector2.ZERO
 ## hand-off is what turns the pick into part of the input packet.
 var _pending_weapon_select: int = -1
 var _is_dead: bool = false
+
+## Keys this player is carrying ("silver", "gold" -- KeyPickup.KEY_NAMES).
+## Locked doors check this (MapDoor). Gone on death, like the rest of the level.
+var keys: Array[String] = []
+## The button or lever under the crosshair within use_range, or null. The HUD
+## shows the "[F] Press" prompt from this.
+var usable_in_view: MapButton
+var _grab_held_prev: bool = false
+## F went to a button/lever this press: don't also start grabbing a prop
+## with the same press while it's held.
+var _use_took_press: bool = false
 
 ## How many stamina charges are currently available (0..max_stamina_charges).
 ## Public so hud.gd can read it straight off the player for the pip display.
@@ -474,7 +490,43 @@ func _finish_tick(input: PlayerInput, delta: float) -> void:
 	# from the camera, so a server can rebuild the same shot (Rule 1).
 	# multiplayer.get_unique_id() is 1 offline, which matches the host's id.
 	weapons.tick(input.fire, input.reload, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
-	grabber.tick(input.grab, delta, head.global_position, -head.global_transform.basis.z)
+	_tick_use(input.grab)
+	grabber.tick(input.grab and not _use_took_press, delta, head.global_position, -head.global_transform.basis.z)
+
+
+## F does two jobs, the Half-Life 2 way: pressed while looking at a button or
+## lever it uses that, otherwise it grabs a prop. A fresh press only, so
+## holding F doesn't keep re-pressing a button.
+func _tick_use(use_held: bool) -> void:
+	usable_in_view = _find_usable()
+	var fresh_press := use_held and not _grab_held_prev
+	_grab_held_prev = use_held
+	if not use_held:
+		_use_took_press = false
+	if fresh_press and usable_in_view and not grabber.is_holding():
+		usable_in_view.use_by(self)
+		_use_took_press = true
+
+
+## The button or lever the crosshair is on, within use_range, or null.
+func _find_usable() -> MapButton:
+	var origin := head.global_position
+	var query := PhysicsRayQueryParameters3D.create(origin, origin - head.global_transform.basis.z * use_range)
+	query.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return null
+	var usable := hit.collider as MapButton
+	return usable if usable and usable.can_use() else null
+
+
+func give_key(key_name: String) -> void:
+	if not keys.has(key_name):
+		keys.append(key_name)
+
+
+func has_key(key_name: String) -> bool:
+	return keys.has(key_name)
 
 
 func _update_stamina(delta: float) -> void:

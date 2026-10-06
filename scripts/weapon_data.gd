@@ -51,6 +51,10 @@ enum ReloadStyle {
 ## Seconds a reload takes -- also how long the viewmodel reload animation
 ## runs (see viewmodel.gd's _on_reload_started()).
 @export var reload_time: float = 1.2
+## Seconds after a shot before you can start reloading. 0 = press reload the
+## instant after firing. The next SHOT is still limited by fire_interval
+## (counted from the last shot, and it keeps counting during the reload).
+@export var reload_delay_after_fire: float = 0.0
 @export var reload_style: ReloadStyle = ReloadStyle.TILT
 
 @export_group("Recoil")

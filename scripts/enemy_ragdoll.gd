@@ -165,7 +165,10 @@ const WORLD_MASK := 1 | RAGDOLL_LAYER
 ## whatever it was at the moment of death, before the ragdoll ever fell. The
 ## combination made the corpse visibly snap to a different pose and position
 ## right as it grew. Not worth fighting that interaction for a step that was
-## always going to be on screen for under a second.
+## always going to be on screen for under a second. The body-part throb
+## below gets its swelling a different way that sidesteps all of that: it
+## only changes how the mesh is drawn (MutationPulseModifier), never the
+## physics bodies.
 @export_group("Mutation Reaction")
 ## Total seconds spent twitching before it explodes.
 @export var mutate_twitch_time: float = 10.0
@@ -175,6 +178,18 @@ const WORLD_MASK := 1 | RAGDOLL_LAYER
 ## than mutate_twitch_rate_start so it reads as building toward something,
 ## not a constant tremor for 10 seconds straight.
 @export var mutate_twitch_rate_end: float = 18.0
+## Head, torso and each limb throb -- swell up and shrink back to normal --
+## each on its own rhythm, building toward the explosion. Visual only (see
+## MutationPulseModifier). How much bigger a part gets at the top of a throb
+## (0.3 = 30% bigger) at the start and end of the mutation:
+@export var mutate_pulse_amount_start: float = 0.12
+@export var mutate_pulse_amount_end: float = 0.35
+## Throbs per second at the start and end.
+@export var mutate_pulse_rate_start: float = 1.2
+@export var mutate_pulse_rate_end: float = 4.0
+## How out of sync the parts are: 0 = all in step, 0.5 = each part's rhythm
+## somewhere between half and one-and-a-half times the shared rate.
+@export_range(0.0, 0.9, 0.05) var mutate_pulse_rhythm_variety: float = 0.5
 
 @onready var _enemy: Enemy = get_parent() as Enemy
 
@@ -200,6 +215,7 @@ var _character_right: Vector3 = Vector3.RIGHT
 var _mutating := false
 var _mutate_elapsed := 0.0
 var _next_mutate_time := 0.0
+var _pulse: MutationPulseModifier
 
 
 func _ready() -> void:
@@ -232,6 +248,7 @@ func _ready() -> void:
 		push_warning("EnemyRagdoll: the model on %s has no humanoid bones -- was it imported with art/animations/mixamo_bonemap.tres? No ragdoll." % _enemy.name)
 		return
 	_enemy.state_changed.connect(_on_state_changed)
+	_enemy.mutation_stopped.connect(_on_mutation_stopped)
 	print("EnemyRagdoll: %s ready with %d ragdoll bones" % [_enemy.name, _bones.size()]) # TEMPORARY diagnostic
 
 
@@ -455,6 +472,29 @@ func _start_mutation_twitch() -> void:
 	_mutating = true
 	_mutate_elapsed = 0.0
 	_next_mutate_time = 0.0
+	_start_pulse()
+
+
+## The body-part throb. Added to the skeleton AFTER the ragdoll's simulator so
+## it runs after it each frame (modifiers run in child order) and swells the
+## pose the ragdoll just set, not the other way round.
+func _start_pulse() -> void:
+	var skeleton := _simulator.get_parent() as Skeleton3D
+	if skeleton == null:
+		return
+	_pulse = MutationPulseModifier.new()
+	_pulse.amount_start = mutate_pulse_amount_start
+	_pulse.amount_end = mutate_pulse_amount_end
+	_pulse.rate_start = mutate_pulse_rate_start
+	_pulse.rate_end = mutate_pulse_rate_end
+	_pulse.rhythm_variety = mutate_pulse_rhythm_variety
+	skeleton.add_child(_pulse)
+
+
+func _stop_pulse() -> void:
+	if is_instance_valid(_pulse):
+		_pulse.queue_free()
+	_pulse = null
 
 
 ## Rate climbs from mutate_twitch_rate_start to _rate_end over the whole
@@ -471,9 +511,20 @@ func _process_mutation_twitch(delta: float) -> void:
 	if _mutate_elapsed < _next_mutate_time or _limb_pairs.is_empty():
 		return
 	var progress := _mutate_elapsed / mutate_twitch_time
+	if is_instance_valid(_pulse):
+		_pulse.progress = progress
 	var rate := lerpf(mutate_twitch_rate_start, mutate_twitch_rate_end, progress)
 	_next_mutate_time = _mutate_elapsed + (1.0 / rate)
 	_do_limb_burst(1.0)
+
+
+## Double-tapped mid-twitch (enemy.gd's damage_mutation()): the twitch stops
+## dead and the body goes limp -- no explosion, no mutant. If it's still
+## falling, nothing to stop yet: _start_post_fall_reaction() sees will_mutate
+## is now false and gives it the ordinary death thrash instead.
+func _on_mutation_stopped() -> void:
+	_mutating = false
+	_stop_pulse()
 
 
 ## The payoff: a blood explosion at roughly the body's center, then the

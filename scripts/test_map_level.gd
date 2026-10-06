@@ -39,6 +39,12 @@ func _build_map() -> void:
 		_show_message("Couldn't build that map -- is it a 2v-2 TrenchBroom map?")
 
 
+## A mapper testing their map sees broken target names right away, in the
+## top-left, instead of a lever that silently does nothing.
+func _show_map_problems(problems: PackedStringArray) -> void:
+	_show_message("Map problems:\n" + "\n".join(problems))
+
+
 func _show_message(text: String) -> void:
 	var layer := CanvasLayer.new()
 	var label := Label.new()

@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/map/key_pickup.gd" id="1_key"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_key"]
+radius = 0.6
+
+[node name="KeyPickup" type="Area3D"]
+script = ExtResource("1_key")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_key")

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/key_pickup.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "item_key"
+description = "A key. Walk through it to carry it; a door whose key setting matches then opens for you."
+scene_file = ExtResource("2")
+auto_apply_to_matching_node_properties = true
+class_properties = {
+"key_type": {
+"Silver": 0,
+"Gold": 1
+}
+}
+class_property_descriptions = {
+"key_type": ["Which key this is -- set the door's key to the same colour.", 0]
+}
+meta_properties = {
+"size": AABB(-8, -8, -8, 16, 16, 16),
+"color": Color(1, 0.8, 0.2, 1)
+}

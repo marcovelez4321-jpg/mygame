@@ -38,6 +38,11 @@ enum State { IDLE, CHASE, LUNGE, ATTACK, PAIN, DEAD, SPAWNING }
 ## without ever sending animation data itself.
 signal state_changed(new_state: State)
 
+## Emitted when a mutating corpse is shot enough to empty its
+## mutation_health -- the transformation is called off. EnemyRagdoll stops
+## the twitch on this.
+signal mutation_stopped
+
 ## Emitted at the START of each swing (the wind-up), not when damage lands.
 ## The animator plays the attack clip on this. In co-op the host sends it to
 ## the other player so both screens show the swing together.
@@ -152,6 +157,11 @@ signal shot_fired(end_point: Vector3)
 ## multiply this enemy's own numbers, so each type's mutant scales with it.
 @export var mutant_tint: Color = Color(0.82464653, 0.0, 0.1482195, 1.0)
 @export var mutant_health_multiplier: float = 2.0
+## The double tap: once a corpse starts mutating it gets this fresh pool of
+## health. Shoot it empty before the twitch ends and it never transforms --
+## it just stays dead. Uses the normal hit zones, so a headshot or artery hit
+## on the twitching body finishes it fastest.
+@export var mutation_health: float = 15.0
 @export var mutant_speed_multiplier: float = 1.2
 ## How long a freshly-spawned mutant sits inert (no AI, no movement) before
 ## joining the fight -- a hook for a spawn animation, not implemented yet
@@ -169,6 +179,10 @@ signal shot_fired(end_point: Vector3)
 ## and the mutation twitch. Public: EnemyRagdoll reads it directly, the same
 ## way it already reads health/corpse_time.
 var will_mutate: bool = false
+## What's left of mutation_health while the corpse is mutating -- see
+## damage_mutation(). Public so weapon_controller.gd can size an instant
+## artery hit to exactly this.
+var mutation_health_left: float = 0.0
 var _spawning_time_left: float = 0.0
 
 @onready var health: Health = $Health
@@ -610,6 +624,7 @@ func _on_died(_attacker_id: int, is_critical: bool) -> void:
 	# kick off its own death reaction right then -- it needs will_mutate
 	# already decided by the time that happens, not after.
 	will_mutate = can_mutate and not scene_file_path.is_empty() and not is_critical and randf() < mutate_chance
+	mutation_health_left = mutation_health
 	_state = State.DEAD
 	velocity = Vector3.ZERO
 	# Turn off collision so shots and players pass through the body.
@@ -619,6 +634,22 @@ func _on_died(_attacker_id: int, is_critical: bool) -> void:
 	# (see spawn_mutant() below), whenever that ends up being.
 	if not will_mutate:
 		get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+
+
+## A shot landing on this corpse while it's mutating (weapon_controller.gd's
+## _hit_mutating_corpse()). Returns true if this shot emptied the pool and
+## called the transformation off -- the corpse then goes the way of any
+## normal kill and is removed after corpse_time.
+func damage_mutation(amount: float) -> bool:
+	if not will_mutate:
+		return false
+	mutation_health_left -= amount
+	if mutation_health_left > 0.0:
+		return false
+	will_mutate = false
+	mutation_stopped.emit()
+	get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+	return true
 
 
 ## Called by EnemyRagdoll once its twitch/enlarge/explode sequence finishes

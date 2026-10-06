@@ -11,7 +11,7 @@
 [ext_resource type="PackedScene" uid="uid://basaei4sy2ydl" path="res://scenes/starter_gun_pickup.tscn" id="9_sgp"]
 [ext_resource type="PackedScene" uid="uid://b1qyhipwwloq7" path="res://scenes/machine_gun_pickup.tscn" id="10_mgp"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="11_rusher"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/enemy_gunner.tscn" id="12_gunner"]
+[ext_resource type="PackedScene" uid="uid://c2sc1shdn5nr1" path="res://scenes/enemy/enemy_gunner.tscn" id="12_gunner"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)

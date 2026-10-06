@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDSolidClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_solid_class.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/map/map_door.gd" id="2"]
+
+[resource]
+script = ExtResource("1")classname = "func_door_rotating"
+description = "Swinging door. Swings around its hinge: draw a small brush with the origin texture where the hinge goes, or pick a hinge edge below. Opens like func_door (walk up, or by a button/lever via targetname)."
+class_properties = {
+"targetname": "",
+"distance": 90.0,
+"axis": {
+"Vertical (normal door)": 0,
+"East-west line": 1,
+"North-south line": 2
+},
+"hinge": {
+"Origin brush (or the middle)": 0,
+"Bottom edge": 1,
+"Top edge": 2,
+"West or south end": 3,
+"East or north end": 4
+},
+"speed": 100.0,
+"wait": -2.0,
+"key": {
+"None": 0,
+"Silver": 1,
+"Gold": 2
+},
+"message": ""
+}
+class_property_descriptions = {
+"targetname": "Name a button or lever uses to open this. Leave empty for a door that opens when you walk up.",
+"distance": "How far it swings, in degrees. Negative swings the other way.",
+"axis": ["The line it swings around. Normal doors: Vertical.", 0],
+"hinge": ["Where the hinge is. Origin brush = the middle of a brush painted with the origin texture (included in this entity).", 0],
+"speed": "How fast it swings, in degrees per second.",
+"wait": "Seconds it stays open before closing. -1 = stays open. -2 = automatic: 3 seconds, or stays open if it has a targetname.",
+"key": ["Locked until the player is carrying this key.", 0],
+"message": "Shown on screen when a player walks up to it while it is locked or waiting for a button/lever."
+}
+meta_properties = {
+"color": Color(0.9, 0.6, 0.2, 1)
+}
+node_class = "AnimatableBody3D"
+script_class = ExtResource("2")
