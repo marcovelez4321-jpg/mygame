@@ -93,7 +93,21 @@ height = 5.0
 
 [sub_resource type="StandardMaterial3D" id="CoverPillarMat"]
 albedo_color = Color(0.5, 0.5, 0.52, 1)
-[sub_resource type="BoxShape3D" id="WallJumpShape"]
+
+[sub_resource type="BoxShape3D" id="LWallLongShape"]
+size = Vector3(5, 4.5, 0.5)
+
+[sub_resource type="BoxMesh" id="LWallLongMesh"]
+size = Vector3(5, 4.5, 0.5)
+
+[sub_resource type="BoxShape3D" id="LWallShortShape"]
+size = Vector3(0.5, 4.5, 3.5)
+
+[sub_resource type="BoxMesh" id="LWallShortMesh"]
+size = Vector3(0.5, 4.5, 3.5)
+
+[sub_resource type="StandardMaterial3D" id="LWallMat"]
+albedo_color = Color(0.36, 0.3, 0.27, 1)[sub_resource type="BoxShape3D" id="WallJumpShape"]
 size = Vector3(1, 8, 6)
 
 [sub_resource type="BoxMesh" id="WallJumpMesh"]
@@ -689,3 +703,68 @@ shape = SubResource("CoverPillarShape")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover18"]
 mesh = SubResource("CoverPillarMesh")
 surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="MazeWalls" type="Node3D" parent="."]
+
+[node name="L1" type="StaticBody3D" parent="MazeWalls"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -4)
+
+[node name="Long" type="CollisionShape3D" parent="MazeWalls/L1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+shape = SubResource("LWallLongShape")
+
+[node name="LongMesh" type="MeshInstance3D" parent="MazeWalls/L1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+mesh = SubResource("LWallLongMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="Short" type="CollisionShape3D" parent="MazeWalls/L1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+shape = SubResource("LWallShortShape")
+
+[node name="ShortMesh" type="MeshInstance3D" parent="MazeWalls/L1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+mesh = SubResource("LWallShortMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="L2" type="StaticBody3D" parent="MazeWalls"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 5, 0, -12)
+
+[node name="Long" type="CollisionShape3D" parent="MazeWalls/L2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+shape = SubResource("LWallLongShape")
+
+[node name="LongMesh" type="MeshInstance3D" parent="MazeWalls/L2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+mesh = SubResource("LWallLongMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="Short" type="CollisionShape3D" parent="MazeWalls/L2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+shape = SubResource("LWallShortShape")
+
+[node name="ShortMesh" type="MeshInstance3D" parent="MazeWalls/L2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+mesh = SubResource("LWallShortMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="L3" type="StaticBody3D" parent="MazeWalls"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -3, 0, -14)
+
+[node name="Long" type="CollisionShape3D" parent="MazeWalls/L3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+shape = SubResource("LWallLongShape")
+
+[node name="LongMesh" type="MeshInstance3D" parent="MazeWalls/L3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+mesh = SubResource("LWallLongMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="Short" type="CollisionShape3D" parent="MazeWalls/L3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+shape = SubResource("LWallShortShape")
+
+[node name="ShortMesh" type="MeshInstance3D" parent="MazeWalls/L3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+mesh = SubResource("LWallShortMesh")
+surface_material_override/0 = SubResource("LWallMat")
