@@ -31,7 +31,7 @@ extends Enemy
 enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 
 @export_group("Patrol")
-@export var patrol_speed: float = 1.6
+@export var patrol_speed: float = 1.84
 ## Wanders anywhere within this many meters of where he started.
 @export var patrol_radius: float = 10.0
 @export var patrol_wait_min: float = 1.0
