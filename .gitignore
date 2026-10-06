@@ -3,3 +3,5 @@
 /android/
 # Local web exports -- GitHub builds and publishes its own (.github/workflows/publish-web.yml)
 /build/
+# TrenchBroom's automatic backups (it makes an autosave folder next to any map you edit)
+autosave/
