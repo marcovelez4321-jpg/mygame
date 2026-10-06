@@ -143,10 +143,13 @@ func _play(state: Enemy.State) -> void:
 		return
 	# Idle, walk/run, and the lunge burst (which reuses the walk/run clip --
 	# see _animations_for()) repeat; attack, hurt and die play once.
-	var repeats := state == Enemy.State.IDLE or state == Enemy.State.CHASE or state == Enemy.State.LUNGE
+	var repeats := state == Enemy.State.IDLE or state == Enemy.State.CHASE or state == Enemy.State.LUNGE \
+			or state == Enemy.State.PATROL
 	_player.get_animation(animation_name).loop_mode = \
 			Animation.LOOP_LINEAR if repeats else Animation.LOOP_NONE
 	var speed := hurt_speed if state == Enemy.State.PAIN else 1.0
+	if state == Enemy.State.PATROL:
+		speed = _enemy.patrol_speed_scale # walking slower than a chase: slower steps
 	_player.play(animation_name, blend_time, speed)
 
 
@@ -169,7 +172,7 @@ func _pick(names: Array[String]) -> String:
 
 func _animations_for(state: Enemy.State) -> Array[String]:
 	match state:
-		Enemy.State.CHASE, Enemy.State.LUNGE:
+		Enemy.State.CHASE, Enemy.State.LUNGE, Enemy.State.PATROL:
 			# LUNGE (the rusher's dash-in burst) has no clips of its own --
 			# it's still fundamentally "moving fast toward the target", so it
 			# reuses the same walk/run clips CHASE does. Without this case it

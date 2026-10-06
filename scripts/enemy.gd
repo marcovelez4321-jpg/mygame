@@ -30,7 +30,8 @@ extends CharacterBody3D
 ##               instead of always closing in (the "gunner", HL2-Combine-
 ##               style keep-your-distance-and-shoot). See _land_hit()/_fire_shot().
 
-enum State { IDLE, CHASE, LUNGE, ATTACK, PAIN, DEAD, SPAWNING }
+## PATROL: walking with its gang (added last so the others keep their numbers).
+enum State { IDLE, CHASE, LUNGE, ATTACK, PAIN, DEAD, SPAWNING, PATROL }
 
 ## Emitted whenever the state changes. Animation (and later, sound) listens
 ## to this. In co-op the host will send its state to the other player, whose
@@ -78,6 +79,35 @@ signal shot_fired(end_point: Vector3)
 ## Source/HL2-style "last known position" memory.
 @export var memory_time: float = 4.0
 
+@export_group("Gang")
+## Tweakers run in gangs (only tweakers -- the Rat Bender keeps his own AI).
+## With nobody to fight, the ones within gang_radius of each other group up
+## and patrol together: the one that's been around longest leads, picking a
+## spot within patrol_radius of its home (where it spawned) every
+## patrol_interval or so, and the rest walk with it in a loose spread
+## (gang_spacing apart) at patrol_speed_scale of move_speed. Now and then
+## (gather_chance per new spot) the leader heads for another gang within
+## gather_range instead, and the two merge.
+@export var gang_radius: float = 12.0
+@export var patrol_radius: float = 15.0
+@export var patrol_interval: float = 10.0
+@export_range(0.1, 1.0, 0.05) var patrol_speed_scale: float = 0.45
+@export var gang_spacing: float = 2.0
+@export_range(0.0, 1.0, 0.05) var gather_chance: float = 0.25
+@export var gather_range: float = 30.0
+## They keep personal_space from each other, patrolling or fighting, instead
+## of walking into each other (separation_strength = how hard, x move_speed).
+@export var personal_space: float = 1.3
+@export var separation_strength: float = 1.0
+## They look out for each other: one spotting something tells the gang
+## within alert_radius, and anything that hurts one of them gets the gang
+## within alert_radius on it (Factions.provoke) -- rats biting one, a roach,
+## you.
+@export var alert_radius: float = 18.0
+## Melee tweakers closing on a target fan out around it (flanking, up to
+## flank_spread meters off the straight line) instead of queueing up.
+@export var flank_spread: float = 3.0
+
 @export_group("Attack")
 @export var attack_range: float = 1.6
 @export var attack_damage: float = 15.0
@@ -97,6 +127,12 @@ signal shot_fired(end_point: Vector3)
 
 @export_group("Reactions")
 @export var pain_time: float = 0.25
+## Hurt by something that isn't a player (a rat's bite, a roach, another
+## tweaker's stray shot), it only flinches once per this many seconds. Every
+## bite used to flinch it and cancel its swing, so a swarm biting a few times
+## a second kept it stunned until it died without ever hitting back. A
+## player's hits still stagger it every time.
+@export var creature_pain_cooldown: float = 1.5
 ## Seconds the body stays after death before it's removed.
 @export var corpse_time: float = 120.0
 
@@ -204,6 +240,19 @@ var killed_by_player: bool = false
 ## artery hit to exactly this.
 var mutation_health_left: float = 0.0
 var _spawning_time_left: float = 0.0
+## The gang (_refresh_gang()): every living tweaker within gang_radius
+## (untyped: any of them may be freed between refreshes), the patrol leader,
+## and this one's place in the spread. Plus its home and where it's heading.
+var _gang: Array = []
+var _gang_leader = null
+var _gang_index := 0
+var _gang_timer := 0.0
+var _home := Vector3.ZERO
+var _patrol_to := Vector3.ZERO
+var _patrol_timer := 0.0
+## A gunner stepping aside because a gang mate is in its line of fire.
+var _sidestep_time := 0.0
+var _sidestep := Vector3.ZERO
 
 @onready var health: Health = $Health
 ## Optional -- routes chase movement around walls/corners via the level's
@@ -227,6 +276,7 @@ var _target: Node3D
 var _retarget_timer: float = 0.0
 var _attack_cooldown: float = 0.0
 var _pain_timer: float = 0.0
+var _creature_pain_left: float = 0.0
 ## Seconds since the current swing began. -1 means no swing in progress.
 var _swing_time: float = -1.0
 ## True from the swing starting until its hit lands.
@@ -262,6 +312,13 @@ func _ready() -> void:
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
 	_apply_tint()
+	_set_home.call_deferred() # once whoever spawned it has put it in place
+	_gang_timer = randf() * 0.5 # spread the gang's checks out
+
+
+func _set_home() -> void:
+	_home = global_position
+	_patrol_to = global_position
 
 
 ## Multiplies every MeshInstance3D's material albedo by tint_color. Duplicates
@@ -319,16 +376,21 @@ func _physics_process(delta: float) -> void:
 		_target = null
 	_attack_cooldown = maxf(_attack_cooldown - delta, 0.0)
 	_lunge_cooldown_left = maxf(_lunge_cooldown_left - delta, 0.0)
+	_creature_pain_left = maxf(_creature_pain_left - delta, 0.0)
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
 		_update_memory(_find_nearest_hostile())
+	_gang_timer -= delta
+	if _gang_timer <= 0.0:
+		_gang_timer = 0.5
+		_refresh_gang()
 	if can_shoot:
 		_track_aim(delta)
 
 	match _state:
-		State.IDLE:
-			_think_idle()
+		State.IDLE, State.PATROL:
+			_think_idle(delta)
 		State.CHASE:
 			_think_chase()
 		State.LUNGE:
@@ -343,11 +405,157 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
-func _think_idle() -> void:
-	velocity.x = 0.0
-	velocity.z = 0.0
-	if _target and _can_see(_target):
+func _think_idle(delta: float) -> void:
+	if _target and (_can_see(_target) or _has_seen_target):
+		_alert_gang(_target) # "over there!" -- the gang goes in together
 		_state = State.CHASE
+		return
+	_think_gang_patrol(delta)
+
+
+# ---- Gangs -------------------------------------------------------------------
+
+## Every living tweaker within gang_radius, and of the idle ones (patrolling or
+## standing around), which leads: the one that's been in the game longest
+## (lowest instance id), so a merged gang settles on one leader without any of
+## them having to agree on it. _gang_index is this one's place in the spread.
+func _refresh_gang() -> void:
+	_gang.clear()
+	_gang_leader = self
+	_gang_index = 0
+	if faction() != Factions.Side.TWEAKER:
+		return
+	for node in get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.TWEAKER]):
+		var other := node as Enemy
+		if other == null or other == self or other.get_state() == State.DEAD:
+			continue
+		if other.global_position.distance_to(global_position) > gang_radius:
+			continue
+		_gang.append(other)
+		if not other.is_patrolling():
+			continue
+		if other.get_instance_id() < (_gang_leader as Object).get_instance_id():
+			_gang_leader = other
+		if other.get_instance_id() < get_instance_id():
+			_gang_index += 1
+
+
+## Standing around or walking with its gang, not fighting.
+func is_patrolling() -> bool:
+	return _state == State.IDLE or _state == State.PATROL
+
+
+## Walk with the gang: the leader picks the spots, everyone else takes their
+## own place around wherever it's headed (a sunflower spread, so nobody
+## shares a spot) and keeps out of each other's way.
+func _think_gang_patrol(delta: float) -> void:
+	var leader = _gang_leader if is_instance_valid(_gang_leader) and _gang_leader.is_patrolling() else self
+	if leader == self:
+		_patrol_timer -= delta
+		if _patrol_timer <= 0.0:
+			_patrol_timer = randf_range(patrol_interval * 0.6, patrol_interval * 1.4)
+			_pick_patrol_spot()
+	var spread := Vector2.from_angle(_gang_index * 2.39996) * gang_spacing * sqrt(float(_gang_index))
+	var spot: Vector3 = leader._patrol_to + Vector3(spread.x, 0.0, spread.y)
+	var push := _separation()
+	# (Slack: once standing, it only sets off again when its spot is clearly
+	# further away, so it doesn't flicker between walking and standing.)
+	if _flat_distance_to_position(spot) <= arrive_distance * (4.0 if _state == State.IDLE else 2.0):
+		velocity.x = push.x
+		velocity.z = push.z
+		_state = State.IDLE
+		return
+	var walk := _nav_direction_to(spot) * move_speed * patrol_speed_scale + push
+	velocity.x = walk.x
+	velocity.z = walk.z
+	_face_position(global_position + walk)
+	_state = State.PATROL
+
+
+## The leader's next spot: usually somewhere walkable within patrol_radius of
+## home; now and then (gather_chance) the nearest other gang within
+## gather_range, to join up with it.
+func _pick_patrol_spot() -> void:
+	var spot := _home
+	var found := false
+	if randf() < gather_chance:
+		var nearest := gather_range
+		for node in get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.TWEAKER]):
+			var other := node as Enemy
+			if other == null or other == self or _gang.has(other) or not other.is_patrolling():
+				continue
+			var distance := other.global_position.distance_to(global_position)
+			if distance < nearest:
+				nearest = distance
+				spot = other.global_position
+				found = true
+	if not found:
+		var away := Vector2.from_angle(randf() * TAU) * randf_range(patrol_radius * 0.3, patrol_radius)
+		spot = _home + Vector3(away.x, 0.0, away.y)
+	var map := get_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(map) > 0:
+		spot = NavigationServer3D.map_get_closest_point(map, spot) # somewhere it can walk
+	_patrol_to = spot
+
+
+## A push away from gang mates closer than personal_space, so they don't walk
+## into each other (patrolling or fighting).
+func _separation() -> Vector3:
+	var push := Vector3.ZERO
+	for other in _gang:
+		if not is_instance_valid(other):
+			continue
+		var offset: Vector3 = global_position - other.global_position
+		offset.y = 0.0
+		var distance := offset.length()
+		if distance < personal_space and distance > 0.01:
+			push += offset / distance * (1.0 - distance / personal_space)
+	return push.limit_length(1.0) * move_speed * separation_strength
+
+
+## Tells the gang within alert_radius about `target`: any of them standing
+## around or patrolling come at it too, knowing where it is.
+func _alert_gang(target: Node3D) -> void:
+	for other in _tweakers_within(alert_radius):
+		other.alert(target)
+
+
+## Every other living tweaker within `radius` (only on events -- spotting
+## something, getting hurt -- not every tick).
+func _tweakers_within(radius: float) -> Array[Enemy]:
+	var found: Array[Enemy] = []
+	if faction() != Factions.Side.TWEAKER:
+		return found
+	for node in get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.TWEAKER]):
+		var other := node as Enemy
+		if other and other != self and other.get_state() != State.DEAD \
+				and other.global_position.distance_to(global_position) <= radius:
+			found.append(other)
+	return found
+
+
+## A gang mate spotted `target` or got hurt by it: go for it, if not already
+## busy fighting.
+func alert(target: Node3D) -> void:
+	if not is_instance_valid(target) or _state == State.DEAD or not is_patrolling():
+		return
+	_target = target
+	_last_seen_position = target.global_position
+	_time_since_seen = 0.0
+	_has_seen_target = true
+	_state = State.CHASE
+
+
+## Hurt: whatever did it (Factions.provoke, recorded right after the damage --
+## hence deferred) becomes the whole gang's problem -- they turn on it even
+## mid-fight with something else (revenge priority), and the idle ones come.
+func _protect_gang() -> void:
+	var attacker = get_meta("provoked_by", null)
+	if not Factions.provoked_by(self, attacker) or not attacker is Node3D:
+		return
+	for other in _tweakers_within(alert_radius):
+		Factions.provoke(other, attacker)
+		other.alert(attacker)
 
 
 func _think_chase() -> void:
@@ -381,8 +589,9 @@ func _think_chase() -> void:
 		var shoot_dir := _nav_direction_to(aim_pos)
 		if can_see_now and shoot_distance < shoot_min_range:
 			shoot_dir = -shoot_dir
-		velocity.x = shoot_dir.x * move_speed
-		velocity.z = shoot_dir.z * move_speed
+		var push := _separation()
+		velocity.x = shoot_dir.x * move_speed + push.x
+		velocity.z = shoot_dir.z * move_speed + push.z
 		return
 
 	# Same last-seen-position pattern the gunner branch above uses: heads for
@@ -413,11 +622,20 @@ func _think_chase() -> void:
 		velocity.z = 0.0
 		return
 
-	# Straight at the target (or its last-seen spot), routed around walls by
-	# the navmesh -- no leading/prediction, by design: simple and readable.
-	var direction := _nav_direction_to(aim_pos)
-	velocity.x = direction.x * move_speed
-	velocity.z = direction.z * move_speed
+	# At the target (or its last-seen spot), routed around walls by the navmesh
+	# -- no leading/prediction, by design: simple and readable. A gang closing
+	# in fans out (each to its own side, by its place in the gang) so they
+	# come at it from several angles instead of single file, and they keep
+	# out of each other's way.
+	var goal := aim_pos
+	if distance > attack_range + 2.0 and _gang_index > 0:
+		var side := _flat_direction_to_position(aim_pos).cross(Vector3.UP)
+		var flank := 1.0 if _gang_index % 2 == 0 else -1.0
+		goal += side * flank * minf(flank_spread, distance * 0.3)
+	var direction := _nav_direction_to(goal)
+	var push := _separation()
+	velocity.x = direction.x * move_speed + push.x
+	velocity.z = direction.z * move_speed + push.z
 
 
 ## Burst toward the target: a short telegraph (standing still -- the tell),
@@ -484,10 +702,21 @@ func _think_attack() -> void:
 		_state = State.CHASE
 		return
 
+	if _sidestep_time > 0.0:
+		_sidestep_time -= get_physics_process_delta_time()
+		velocity.x = _sidestep.x * move_speed
+		velocity.z = _sidestep.z * move_speed
+		return
 	if _attack_cooldown > 0.0:
 		return
 
 	if can_shoot:
+		# A gang mate in the line of fire: hold it and step aside for a clear
+		# shot, instead of shooting through them.
+		if _mate_in_line():
+			_sidestep = _flat_direction_to(_target).cross(Vector3.UP) * (1.0 if randf() < 0.5 else -1.0)
+			_sidestep_time = 0.6
+			return
 		if _burst_shots_left <= 0:
 			_burst_shots_left = burst_shot_count
 		_burst_shots_left -= 1
@@ -558,11 +787,23 @@ func _fire_shot() -> void:
 	if hit_health == null:
 		BloodFX.spawn_bullet_hole(get_tree().current_scene, result.position, result.normal)
 		return
-	if result.collider != _target:
-		return # another enemy stepped in the way -- no friendly fire
+	if result.collider != _target and Factions.side_of(result.collider) == faction():
+		return # a gang mate stepped in the way -- no friendly fire
+	# Anything else it hits takes the shot (a rat or roach that got in the
+	# way, or another target).
 	hit_health.take_damage(attack_damage, Health.NO_ATTACKER, direction, result.position, shoot_impact_force)
-	Factions.provoke(_target, self)
+	Factions.provoke(result.collider, self)
 	BloodFX.spawn_impact(get_tree().current_scene, result.position, -direction)
+
+
+## A gang mate between this gunner and where it's aiming.
+func _mate_in_line() -> bool:
+	var from := global_position + Vector3.UP * 1.5
+	var query := PhysicsRayQueryParameters3D.create(from, _aim_point if _has_aim_point else Factions.aim_point(_target))
+	query.exclude = [get_rid()]
+	query.collision_mask = 1
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and hit.collider != _target and Factions.side_of(hit.collider) == faction()
 
 
 ## Eases _aim_point toward the target's chest every tick. An exponential
@@ -614,12 +855,17 @@ func _think_pain(delta: float) -> void:
 		_state = State.CHASE
 
 
-func _on_damaged(_amount: float, _attacker_id: int) -> void:
+func _on_damaged(_amount: float, attacker_id: int) -> void:
 	if _state == State.DEAD:
 		return
 	HitFlash.flash(self)
+	_protect_gang.call_deferred()
 	# Getting shot wakes it up and makes it flinch.
 	_update_memory(_find_nearest_hostile())
+	if attacker_id == Health.NO_ATTACKER:
+		if _creature_pain_left > 0.0:
+			return # bitten again too soon to flinch: keep fighting
+		_creature_pain_left = creature_pain_cooldown
 	_pain_timer = pain_time
 	_swing_time = -1.0 # getting shot interrupts a swing in progress
 	_hit_pending = false
@@ -639,7 +885,8 @@ func _update_memory(found: Node3D) -> void:
 		_target = null
 		return
 	_target = found
-	if _can_see(_target):
+	# Seen -- or it just hurt us, so we know exactly where it is.
+	if _can_see(_target) or Factions.provoked_by(self, _target):
 		_last_seen_position = _target.global_position
 		_time_since_seen = 0.0
 		_has_seen_target = true
@@ -742,7 +989,10 @@ func _can_see(target: Node3D) -> bool:
 	query.exclude = [get_rid()]
 	query.collision_mask = 1 # ignore ragdoll corpses (layer 4)
 	var result := get_world_3d().direct_space_state.intersect_ray(query)
-	return result.is_empty() or result.collider == target
+	# Only the level blocks sight. A rat, a roach or another tweaker in the
+	# way used to count as a wall, so in a swarm they never "saw" what was
+	# eating them and died without fighting back.
+	return result.is_empty() or result.collider == target or not result.collider is StaticBody3D
 
 
 

@@ -122,7 +122,7 @@ const SPLAT_HEIGHT := 0.35
 ## about patrol_interval seconds. Now and then (gather_chance per new spot)
 ## the leader heads for the nearest roaches outside its flock within
 ## gather_range instead, so scattered groups meet up and merge.
-@export var patrol_radius: float = 14.0
+@export var patrol_radius: float = 28.0 # twice the old 14
 @export var patrol_interval: float = 8.0
 @export_range(0.1, 1.0, 0.05) var patrol_speed_scale: float = 0.4
 @export_range(0.0, 1.0, 0.05) var gather_chance: float = 0.3
@@ -135,6 +135,18 @@ const SPLAT_HEIGHT := 0.35
 @export var separation_distance: float = 1.5
 @export var separation_strength: float = 1.5
 @export var alignment_strength: float = 0.4
+## A messy, living swarm instead of a tidy one: each roach rolls its own
+## personality when it spawns -- its pace, how high it likes to fly, how
+## tightly it sticks with the flock (some straggle), its own spot near
+## wherever the flock's heading (re-picked every few seconds), and how wide
+## it circles or hangs back when fighting -- all scaled by messiness
+## (0 = every roach the same). Now and then (dart_chance a second) it darts
+## off in some direction for a moment.
+@export_range(0.0, 1.0, 0.05) var messiness: float = 1.0
+@export var dart_chance: float = 0.12
+## Attacking in groups: a roach with nothing to fight joins whatever a roach
+## within flock_radius is fighting.
+@export var group_attack: bool = true
 
 @export_group("Spitter")
 ## Random, Normal or Spitter -- set per placement in TrenchBroom (the
@@ -252,6 +264,14 @@ var _flock_leader = null
 var _flock_timer := 0.0
 var _wander_to := Vector3.ZERO
 var _patrol_timer := 0.0
+## Its personality (see messiness), and a dart in progress.
+var _pace := 1.0
+var _hover_bias := 0.0
+var _sociability := 1.0
+var _own_spot := Vector3.ZERO
+var _own_spot_timer := 0.0
+var _dart_left := 0.0
+var _dart := Vector3.ZERO
 ## A dead rat in its jaws, being eaten (_eat_prey()).
 var _prey: Node3D
 var _prey_left := 0.0
@@ -283,6 +303,20 @@ func _ready() -> void:
 	# mapper's "kind" choice only after this node is added.
 	_decide_kind.call_deferred()
 	_set_home.call_deferred() # once whoever spawned it has put it in place
+	_roll_personality()
+
+
+## Every roach a little different (messiness): its pace, preferred height,
+## how much it sticks with the flock (about one in eight barely does), and how
+## wide it circles (or a spitter hangs back) in a fight. Diving is unchanged:
+## only max_divers dive at once.
+func _roll_personality() -> void:
+	var m := messiness
+	_pace = 1.0 + randf_range(-0.3, 0.35) * m
+	_hover_bias = randf_range(-0.5, 0.9) * m
+	_sociability = lerpf(1.0, 0.25 if randf() < 0.125 else randf_range(0.6, 1.4), m)
+	circle_radius *= 1.0 + randf_range(-0.25, 0.4) * m
+	keep_distance *= 1.0 + randf_range(-0.2, 0.25) * m
 
 
 func _set_home() -> void:
@@ -324,6 +358,8 @@ func _physics_process(delta: float) -> void:
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
 		_target = Factions.nearest_hostile(get_tree(), Factions.Side.ROACH, global_position, sight_range, self, _target, threat_range)
+		if _target == null and group_attack and _state == State.HUNT and _prey == null:
+			_target = _flock_target()
 	_eat_prey(delta)
 
 	if _state == State.STUNNED:
@@ -404,11 +440,29 @@ func _think_patrol(delta: float) -> void:
 	var leader = _flock_leader if is_instance_valid(_flock_leader) else self
 	if leader == self:
 		_patrol_timer -= delta
-		if _patrol_timer <= 0.0 or global_position.distance_to(_wander_to) < 1.5:
+		# (Within 4 m counts as there: it aims for its own spot near it.)
+		if _patrol_timer <= 0.0 or global_position.distance_to(_wander_to) < 4.0:
 			_patrol_timer = randf_range(patrol_interval * 0.6, patrol_interval * 1.4)
 			_pick_patrol_spot()
-	var goal: Vector3 = leader._wander_to
-	var desired := _seek(goal, cruise_speed * patrol_speed_scale)
+	# Its own spot near wherever the flock's going, not the exact point --
+	# re-picked every few seconds so the swarm keeps shifting about.
+	_own_spot_timer -= delta
+	if _own_spot_timer <= 0.0:
+		_own_spot_timer = randf_range(2.0, 6.0)
+		var scatter := Vector2.from_angle(randf() * TAU) * randf_range(0.0, 3.5) * messiness
+		_own_spot = Vector3(scatter.x, _hover_bias + randf_range(-0.4, 0.4) * messiness, scatter.y)
+	var pace := cruise_speed * patrol_speed_scale * _pace
+	# Now and then: a sudden dart off to one side, then back to the flock.
+	if _dart_left > 0.0:
+		_dart_left -= delta
+		_turn_toward(_dart, delta)
+		_steer(_hover_correction(_dart * cruise_speed * 0.8), delta)
+		return
+	if randf() < dart_chance * messiness * delta:
+		_dart_left = randf_range(0.25, 0.6)
+		_dart = Vector3(randf_range(-1.0, 1.0), randf_range(-0.3, 0.5), randf_range(-1.0, 1.0)).normalized()
+	var goal: Vector3 = leader._wander_to + _own_spot
+	var desired := _seek(goal, pace)
 	var middle := Vector3.ZERO
 	var heading := Vector3.ZERO
 	var apart := Vector3.ZERO
@@ -424,12 +478,24 @@ func _think_patrol(delta: float) -> void:
 		heading += other.linear_velocity
 		count += 1
 	if count > 0:
-		desired += (middle / count - global_position) * cohesion_strength
-		desired += (heading / count) * alignment_strength
+		desired += (middle / count - global_position) * cohesion_strength * _sociability
+		desired += (heading / count) * alignment_strength * _sociability
 		desired += apart * separation_strength
-	desired = desired.limit_length(cruise_speed * patrol_speed_scale * 1.5)
+	desired = desired.limit_length(pace * 1.5)
 	_turn_toward(linear_velocity if linear_velocity.length_squared() > 0.1 else facing, delta)
 	_steer(_hover_correction(desired), delta)
+
+
+## Something a roach within flock_radius is fighting (group_attack), or null.
+func _flock_target() -> Node3D:
+	for node in get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.ROACH]):
+		var other := node as FlyingRoach
+		if other == null or other == self or other.global_position.distance_to(global_position) > flock_radius:
+			continue
+		var theirs = other.get("_target")
+		if is_instance_valid(theirs) and Factions.is_alive_target(theirs):
+			return theirs
+	return null
 
 
 ## The idle roaches within flock_radius, and which of them leads: the one
