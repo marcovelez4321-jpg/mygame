@@ -46,6 +46,9 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON }
 @export var leap_wave_stagger: float = 0.05
 ## How far into a cast animation (0..1) the spell actually goes off.
 @export_range(0.1, 1.0, 0.05) var cast_release: float = 0.55
+## Plays the casting animations (rush, leap, summon) this much faster --
+## the spell goes off and ends sooner to match.
+@export var cast_speed: float = 1.2
 ## The wind-up tell: orange flashes from flash_rate_start to flash_rate_end
 ## a second, throbbing, swelling up to cast_swell bigger.
 @export var cast_flash_color: Color = Color(1.0, 0.5, 0.05, 0.8)
@@ -229,8 +232,8 @@ func _start_cast(mode: Mode) -> void:
 	_flash_phase = 0.0
 	var key: String = {Mode.CAST_RUSH: "rush", Mode.CAST_LEAP: "leap", Mode.SUMMON: "summon"}[mode]
 	_anim_name = "" # the same spell twice in a row still replays from the start
-	_play(key, false)
-	_cast_length = _anim.get_animation(LIBRARY + "/" + key).length if _anim and _anim.has_animation(LIBRARY + "/" + key) else 1.5
+	_play(key, false, cast_speed)
+	_cast_length = _anim.get_animation(LIBRARY + "/" + key).length / cast_speed if _anim and _anim.has_animation(LIBRARY + "/" + key) else 1.5
 
 	SoundPlayer.play_3d(summon_sound if mode == Mode.SUMMON else cast_sound, global_position, get_tree().current_scene)
 
@@ -320,7 +323,7 @@ func _set_flash(lit: bool) -> void:
 			mesh.material_overlay = _flash_material if lit else null
 
 
-func _play(key: String, loop: bool = true) -> void:
+func _play(key: String, loop: bool = true, speed: float = 1.0) -> void:
 	if _anim == null or key == _anim_name:
 		return
 	var animation_name := LIBRARY + "/" + key
@@ -328,4 +331,4 @@ func _play(key: String, loop: bool = true) -> void:
 		return
 	_anim_name = key
 	_anim.get_animation(animation_name).loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
-	_anim.play(animation_name, 0.2)
+	_anim.play(animation_name, 0.2, speed)
