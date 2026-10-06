@@ -484,3 +484,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.73, 1.97, -24.57)
 [node name="Roach32" parent="." instance=ExtResource("13_2420u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.83, 2.19, -24.37)
 kind = 1
+
+[node name="EnemyGunner4" parent="." instance=ExtResource("12_gunner")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14.8, 0, 25.5)
+
+[node name="EnemyGunner5" parent="." instance=ExtResource("12_gunner")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.7, 0, -13.7)
+
+[node name="EnemyRusher7" parent="." instance=ExtResource("11_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24.7, 0, -1)
+
+[node name="EnemyRusher8" parent="." instance=ExtResource("11_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25.4, 0, -17.8)
