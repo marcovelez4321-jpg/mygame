@@ -5,9 +5,12 @@ extends Node
 ## carried, made by the roaches themselves (RoachCarry.recruit()).
 ##
 ## It takes at least MIN_ROACHES idle roaches near a body to try (more can
-## join, up to MAX_ROACHES). They each fly to a grab point around it; once
-## MIN_ROACHES have hold, they lift it by the torso (arms and legs dangle)
-## up to CARRY_HEIGHT. Once lifting they commit: only getting hurt makes one let go.
+## join, up to MAX_ROACHES). Each one grabs its own body part (GRIP_BONES: hips,
+## a hand, a foot, the head...) and flies it up; once MIN_ROACHES have hold,
+## the body rises toward CARRY_HEIGHT, hanging between the roaches holding it.
+## Every roach holding on takes WEIGHT_PER_ROACH of the body's weight and adds
+## lift speed, so the more of them, the easier and faster it goes up.
+## Once lifting they commit: only getting hurt makes one let go.
 ## start eating -- blood flies, and every BITES_PER_ROACH bites a new roach
 ## bursts out of the body (at most ROACHES_PER_BODY). After EAT_TIME, or if
 ## fewer than MIN_ROACHES are left holding it, they let it drop.
@@ -21,9 +24,18 @@ const MIN_ROACHES := 3
 const MAX_ROACHES := 6
 ## Idle roaches this close to a body can claim it.
 const RECRUIT_RANGE := 12.0
-## How high the body's hips are held above the floor, and how fast it rises.
+## How high the held body parts are carried above the floor.
 const CARRY_HEIGHT := 1.6
-const LIFT_SPEED := 1.5 # 1.25x the original 1.2
+## How fast held parts rise with MIN_ROACHES holding; scales up with each extra
+## roach (4 roaches = 4/3 as fast, 6 = twice as fast).
+const LIFT_SPEED := 1.5
+## Share of the body's weight each holding roach takes off: 3 roaches leave it
+## at 40% of its weight, 5 or more make it weightless.
+const WEIGHT_PER_ROACH := 0.2
+## The body part each grab slot holds, in the order roaches join: the first
+## three (the minimum to lift) hold the hips and opposite corners so it rises
+## level; later ones fill in the other hand, foot and the head.
+const GRIP_BONES := ["Hips", "LeftHand", "RightFoot", "RightHand", "LeftFoot", "Head"]
 ## A roach counts as holding the body inside this distance of its grab point.
 const HOLD_DISTANCE := 0.875 # 1.25x the original 0.7: easier to count as holding
 const EAT_TIME := 8.0
@@ -89,18 +101,32 @@ func _ready() -> void:
 func join(roach: FlyingRoach) -> void:
 	if roaches.has(roach) or roaches.size() >= MAX_ROACHES:
 		return
+	# The lowest grip nobody holds -- after a roach lets go, its body part is
+	# the next one filled, instead of two roaches sharing a hand.
+	var slot := 0
+	while roaches.any(func(other: FlyingRoach) -> bool: return other.carry_slot == slot):
+		slot += 1
 	roaches.append(roach)
-	roach.start_carry(self, roaches.size() - 1)
+	roach.start_carry(self, slot)
 
 
 func leave(roach: FlyingRoach) -> void:
 	roaches.erase(roach)
 
 
-## Where `slot` holds on: spread around the torso, a little above it.
+## Where `slot`'s roach holds on: just above its body part (GRIP_BONES), so
+## it follows that hand or foot as the body swings.
 func grab_point(slot: int) -> Vector3:
-	var angle := TAU * slot / float(MAX_ROACHES)
-	return ragdoll.body_position() + Vector3(cos(angle), 0.0, sin(angle)) * 0.45 + Vector3.UP * 0.35
+	var bone := grip_bone(slot)
+	var at := bone.global_position if bone else ragdoll.body_position()
+	return at + Vector3.UP * 0.3
+
+
+## The body part `slot` holds (GRIP_BONES), falling back to the hips on a body
+## missing that bone.
+func grip_bone(slot: int) -> PhysicalBone3D:
+	var bone := ragdoll.bone_named(GRIP_BONES[slot % GRIP_BONES.size()])
+	return bone if bone else ragdoll.bone_named("Hips")
 
 
 func is_eating() -> bool:
@@ -119,10 +145,8 @@ func _physics_process(delta: float) -> void:
 		_finish()
 		return
 	_timer -= delta
-	var holding := 0
-	for i in roaches.size():
-		if roaches[i].global_position.distance_to(grab_point(roaches[i].carry_slot)) <= HOLD_DISTANCE:
-			holding += 1
+	var holders := _holders()
+	var holding := holders.size()
 	match phase:
 		Phase.GATHER:
 			if holding >= MIN_ROACHES:
@@ -133,7 +157,7 @@ func _physics_process(delta: float) -> void:
 			if holding < MIN_ROACHES:
 				_finish() # not enough of them left holding it: it drops
 				return
-			_lift()
+			_lift(holders)
 			_ground_check -= delta
 			if _ground_check <= 0.0:
 				_ground_check = 0.2
@@ -147,15 +171,35 @@ func _physics_process(delta: float) -> void:
 				_finish()
 
 
-## Holds the torso up at CARRY_HEIGHT above the floor under it.
-func _lift() -> void:
+## The roaches actually holding on right now: close enough to their grab point.
+func _holders() -> Array[FlyingRoach]:
+	var found: Array[FlyingRoach] = []
+	for roach in roaches:
+		if roach.global_position.distance_to(grab_point(roach.carry_slot)) <= HOLD_DISTANCE:
+			found.append(roach)
+	return found
+
+
+## Each holding roach pulls its own body part toward CARRY_HEIGHT above the
+## floor, and the body as a whole gets lighter with every roach on it.
+func _lift(holders: Array[FlyingRoach]) -> void:
 	var hips := ragdoll.body_position()
 	var query := PhysicsRayQueryParameters3D.create(hips + Vector3.UP * 0.5, hips + Vector3.DOWN * 4.0)
 	query.collision_mask = 1
 	var floor_hit := body.get_world_3d().direct_space_state.intersect_ray(query)
 	var floor_y: float = floor_hit.position.y if not floor_hit.is_empty() else hips.y - CARRY_HEIGHT
-	var rise := clampf((floor_y + CARRY_HEIGHT - hips.y) * 3.0, -LIFT_SPEED, LIFT_SPEED)
-	ragdoll.carry(Vector3(0.0, rise, 0.0))
+	var target_y := floor_y + CARRY_HEIGHT
+	var speed := LIFT_SPEED * holders.size() / float(MIN_ROACHES)
+	var held := {}
+	for roach in holders:
+		var bone := grip_bone(roach.carry_slot)
+		if bone == null or held.has(bone):
+			continue
+		var rise := clampf((target_y - bone.global_position.y) * 3.0, -speed, speed)
+		# Sideways it mostly keeps drifting the way it was, damped so held
+		# parts don't swing wildly; up/down is the roach's pull.
+		held[bone] = Vector3(bone.linear_velocity.x * 0.8, rise, bone.linear_velocity.z * 0.8)
+	ragdoll.carry(held, maxf(1.0 - WEIGHT_PER_ROACH * holders.size(), 0.0))
 
 
 ## A roach took a bite (FlyingRoach, while eating). Enough bites and a new
@@ -181,7 +225,7 @@ func bitten() -> void:
 
 func _finish() -> void:
 	if is_instance_valid(ragdoll):
-		ragdoll.carry(Vector3.ZERO)
+		ragdoll.carry({})
 	if is_instance_valid(body):
 		body.remove_meta("dragged")
 	for roach in roaches:

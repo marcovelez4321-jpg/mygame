@@ -88,7 +88,7 @@ const CORPSE_GROUP := "corpses"
 @export var churn_speed: float = 0.5
 ## The Bender's spells whip the horde into a frenzy: this much faster, and
 ## biting this many times as often, wearing off over frenzy_time seconds.
-@export var frenzy_speed: float = 2.7
+@export var frenzy_speed: float = 2.025 # 25% slower than the old 2.7
 @export var frenzy_bite_rate: float = 2.0
 @export var frenzy_time: float = 5.0
 
@@ -109,6 +109,13 @@ const CORPSE_GROUP := "corpses"
 @export var charge_range: float = 5.0
 @export_range(0.1, 1.0, 0.05) var creep_speed: float = 0.5
 @export var lose_range: float = 25.0
+## Scavengers first: anything but roaches (their prey) is only noticed inside
+## threat_range of a rat -- or if it hurt one of the pack lately (shot one,
+## kicked one: Factions.REVENGE_TIME). A pack fighting something that isn't
+## prey gives up once it's more than disengage_range from every rat and
+## hasn't hurt them lately, and goes back to eating and breeding.
+@export var threat_range: float = 4.0
+@export var disengage_range: float = 10.0
 ## Patrolling: the pack wanders between random walkable spots up to
 ## roam_radius from home -- a new one when it gets there, or after about
 ## roam_interval seconds -- heading for any body within corpse_seek_range
@@ -185,6 +192,9 @@ var _corpse_pos := Vector3.ZERO
 ## that (a fresh nest is empty for a frame before its rats are spawned).
 var _had_rats := false
 var target: Node3D
+## Who last killed or hurt one of the pack, and when (threatened_by()).
+var _threat = null # untyped: may be freed by the time it's checked
+var _threat_at := -INF
 var rats: Array[Rat] = []
 
 var _frenzy_left := 0.0
@@ -386,25 +396,28 @@ func _look_out(delta: float) -> void:
 	if _lookout_timer > 0.0:
 		return
 	_lookout_timer = 0.5
-	if target and (not Factions.is_alive_target(target) or nearest_rat_distance(target.global_position) > lose_range):
+	if target and (not Factions.is_alive_target(target) or nearest_rat_distance(target.global_position) > lose_range \
+			or (not _is_prey(target) and not _pack_provoked_by(target) and nearest_rat_distance(target.global_position) > disengage_range)):
 		target = null
-		home = pack_center() # lost them: roam from here
+		home = pack_center() # lost them (or not worth it): roam from here
 	if target == null:
 		target = _noticed_target()
 	order = Order.HUNT if target else Order.FOLLOW
 
 
-## What some rat has noticed: anything the rats are hostile to (a player, a
-## tweaker, a roach -- Factions) within notice_range of a rat that can see
-## it. Of those, the one the rats want most (Factions priority), nearest
+## What some rat has noticed: a roach (food) within notice_range of a rat that
+## can see it, or anything else hostile (a player, a tweaker) within
+## threat_range -- or at any distance in notice_range if it hurt the pack
+## lately. Of those, the one the rats want most (Factions priority), nearest
 ## among equals -- Half-Life's BestEnemy rule.
 func _noticed_target() -> Node3D:
 	var best: Node3D = null
 	var best_priority := -1
 	var best_distance := INF
 	for candidate in Factions.hostiles(get_tree(), Factions.Side.RAT):
+		var provoked := _pack_provoked_by(candidate)
 		var spotter: Rat = null
-		var spotter_distance := notice_range
+		var spotter_distance := notice_range if _is_prey(candidate) or provoked else threat_range
 		for rat in rats:
 			var distance := rat.global_position.distance_to(candidate.global_position)
 			if distance < spotter_distance:
@@ -412,7 +425,9 @@ func _noticed_target() -> Node3D:
 				spotter = rat
 		if spotter == null:
 			continue
-		var priority := Factions.priority_of(Factions.Side.RAT, Factions.side_of(candidate), null, candidate)
+		var priority: int = Factions.PRIORITY[Factions.Side.RAT].get(Factions.side_of(candidate), 0)
+		if provoked:
+			priority += Factions.REVENGE_BONUS
 		if priority < best_priority or (priority == best_priority and spotter_distance >= best_distance):
 			continue
 		if _rat_sees(spotter, candidate):
@@ -420,6 +435,29 @@ func _noticed_target() -> Node3D:
 			best_priority = priority
 			best_distance = spotter_distance
 	return best
+
+
+## Something killed or hurt one of the pack (Rat, as it dies): the whole pack
+## counts it as a threat for Factions.REVENGE_TIME.
+func threatened_by(attacker) -> void:
+	if is_instance_valid(attacker) and attacker is Node3D:
+		_threat = attacker
+		_threat_at = Time.get_ticks_msec()
+
+
+## `candidate` hurt the pack lately: killed a rat (threatened_by()) or hurt
+## one that's still alive (its own Factions.provoke() mark).
+func _pack_provoked_by(candidate: Node3D) -> bool:
+	if candidate == _threat and Time.get_ticks_msec() - _threat_at < Factions.REVENGE_TIME * 1000.0:
+		return true
+	for rat in rats:
+		if Factions.provoked_by(rat, candidate):
+			return true
+	return false
+
+
+func _is_prey(candidate: Node3D) -> bool:
+	return Factions.PREY[Factions.Side.RAT].has(Factions.side_of(candidate))
 
 
 func _rat_sees(rat: Rat, target: Node3D) -> bool:

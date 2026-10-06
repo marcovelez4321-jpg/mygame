@@ -882,3 +882,68 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25.92, 2.17, -49.19)
 [node name="Roach48" parent="." unique_id=1667158302 instance=ExtResource("13_2420u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.63, 2.49, -48.89)
 kind = 1
+
+[node name="MazeWallsMirrored" type="Node3D" parent="." unique_id=761737023]
+
+[node name="L1" type="StaticBody3D" parent="MazeWallsMirrored" unique_id=1801787861]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, 4)
+
+[node name="Long" type="CollisionShape3D" parent="MazeWallsMirrored/L1" unique_id=1473600762]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+shape = SubResource("LWallLongShape")
+
+[node name="LongMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L1" unique_id=1040033867]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+mesh = SubResource("LWallLongMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="Short" type="CollisionShape3D" parent="MazeWallsMirrored/L1" unique_id=1503972055]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+shape = SubResource("LWallShortShape")
+
+[node name="ShortMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L1" unique_id=420579850]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+mesh = SubResource("LWallShortMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="L2" type="StaticBody3D" parent="MazeWallsMirrored" unique_id=856049270]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 5, 0, 12)
+
+[node name="Long" type="CollisionShape3D" parent="MazeWallsMirrored/L2" unique_id=579111599]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+shape = SubResource("LWallLongShape")
+
+[node name="LongMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L2" unique_id=1622249429]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+mesh = SubResource("LWallLongMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="Short" type="CollisionShape3D" parent="MazeWallsMirrored/L2" unique_id=1382565156]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+shape = SubResource("LWallShortShape")
+
+[node name="ShortMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L2" unique_id=865666776]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+mesh = SubResource("LWallShortMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="L3" type="StaticBody3D" parent="MazeWallsMirrored" unique_id=1523479514]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -3, 0, 14)
+
+[node name="Long" type="CollisionShape3D" parent="MazeWallsMirrored/L3" unique_id=450011639]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+shape = SubResource("LWallLongShape")
+
+[node name="LongMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L3" unique_id=580606620]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+mesh = SubResource("LWallLongMesh")
+surface_material_override/0 = SubResource("LWallMat")
+
+[node name="Short" type="CollisionShape3D" parent="MazeWallsMirrored/L3" unique_id=785543052]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+shape = SubResource("LWallShortShape")
+
+[node name="ShortMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L3" unique_id=1121925082]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+mesh = SubResource("LWallShortMesh")
+surface_material_override/0 = SubResource("LWallMat")
