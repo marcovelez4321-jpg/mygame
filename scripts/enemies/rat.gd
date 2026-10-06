@@ -14,7 +14,7 @@ extends RigidBody3D
 ## Rule 1 (co-op): only the host moves and bites. The swarm is the brain;
 ## this script just follows orders and reacts to physics.
 
-enum State { RUN, LEAP, THROWN, DEAD }
+enum State { EMERGE, RUN, LEAP, THROWN, DEAD }
 
 const ANIM_RUN := "Run"
 const ANIM_IDLE := "Idle"
@@ -60,6 +60,16 @@ const FAR_ANIMATION_RATE := 12.0
 ## = up to 10% either way).
 @export var speed_variation: float = 0.1
 
+@export_group("Burrowing")
+## Summoned rats burrow up out of the floor: a dirt hole and a spray of dirt,
+## then the rat squirms up from emerge_depth below over emerge_time seconds,
+## shaking side to side (wiggle, radians) less and less as it surfaces.
+@export var emerge_time: float = 0.7
+@export var emerge_depth: float = 0.3
+@export var wiggle: float = 0.5
+@export var hole_size: float = 0.45
+@export var dirt_color: Color = Color(0.13, 0.09, 0.06)
+
 @export_group("Death")
 @export var blood_color: Color = Color(0.55, 0.02, 0.02)
 ## Size (m) of the pool a shot rat leaves, and of the spot a launched rat
@@ -81,6 +91,9 @@ var eating := false
 var size := 1.0
 var speed_scale := 1.0
 var rhythm_seed := 0.0
+## Set by RatSwarm before it's added: wait this long, then burrow up out of
+## the floor. Below 0 = just appear (not summoned).
+var emerge_delay := -1.0
 
 var _state := State.RUN
 var _bite_cooldown := 0.0
@@ -94,6 +107,8 @@ var _anim_name := ""
 var _anim_time := 0.0
 var _anim_step := 0.0
 var _lod_timer := 0.0
+var _emerge_time := 0.0
+var _dug := false
 
 @onready var health: Health = $Health
 @onready var _visual: Node3D = $Visual
@@ -118,6 +133,29 @@ func _ready() -> void:
 		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 		_anim.seek(randf() * 0.5, true) # out of step with each other
 	_lod_timer = randf() * 0.5
+	if emerge_delay >= 0.0:
+		_start_burrow()
+
+
+## Waits under the floor, frozen in place, until its turn to dig up.
+func _start_burrow() -> void:
+	_state = State.EMERGE
+	_emerge_time = -emerge_delay
+	BloodFX.warm_splat_texture(dirt_color) # no hitch on the first hole
+	freeze = true
+	_visual.position.y = -emerge_depth
+	_visual.rotation.y = randf() * TAU
+	_visual.visible = false
+	_play(ANIM_RUN, true) # scrabbling its way up
+
+
+## Out of the ground: a normal rat from here on.
+func _surface() -> void:
+	freeze = false
+	_visual.position = Vector3.ZERO
+	_visual.rotation = Vector3(0.0, _visual.rotation.y, 0.0)
+	_visual.visible = true
+	_state = State.RUN
 
 
 ## No two rats alike. Rule 1 (co-op): rolled on the host; the size and seed
@@ -155,6 +193,10 @@ func _physics_process(delta: float) -> void:
 			_fly_leap(delta)
 		State.THROWN:
 			_thrown_time += delta
+		State.EMERGE:
+			_emerge_time += delta
+			if _emerge_time >= emerge_time:
+				_surface()
 
 
 func _run(delta: float) -> void:
@@ -246,6 +288,8 @@ func _fly_leap(_delta: float) -> void:
 func stun() -> void:
 	if _state == State.THROWN:
 		return
+	if _state == State.EMERGE:
+		_surface() # blown out of its hole
 	_state = State.THROWN
 	_thrown_time = 0.0
 	_set_contacts(true)
@@ -322,6 +366,8 @@ func _ray(from: Vector3, to: Vector3) -> Dictionary:
 # ---- Look -------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	if _state == State.EMERGE:
+		_show_emerging()
 	if _anim == null:
 		return
 	# A one-off bite plays out; otherwise run, stand, or chew (eating loops).
@@ -341,6 +387,49 @@ func _process(delta: float) -> void:
 	if _anim_time >= _anim_step:
 		_anim.advance(_anim_time)
 		_anim_time = 0.0
+
+
+## Squirming up out of the floor: rises fast then eases, nose up, shaking
+## side to side less and less as it gets clear.
+func _show_emerging() -> void:
+	if _emerge_time < 0.0:
+		return
+	if not _dug:
+		_dug = true
+		_visual.visible = true
+		_dig_fx()
+	var t := clampf(_emerge_time / maxf(emerge_time, 0.01), 0.0, 1.0)
+	var rise := 1.0 - (1.0 - t) * (1.0 - t)
+	_visual.position.y = -emerge_depth * (1.0 - rise)
+	var shake := 1.0 - t
+	_visual.rotation.z = sin(_emerge_time * 28.0 + rhythm_seed) * wiggle * shake
+	_visual.rotation.x = -0.6 * shake # nose up out of the hole
+
+
+## A dark hole in the floor and a little spray of dirt.
+func _dig_fx() -> void:
+	var world := get_tree().current_scene
+	BloodFX.spawn_splatter(world, global_position + Vector3.UP * 0.01, Vector3.UP, hole_size * size, dirt_color)
+	var dirt := GPUParticles3D.new()
+	dirt.amount = 10
+	dirt.lifetime = 0.6
+	dirt.one_shot = true
+	dirt.explosiveness = 0.9
+	dirt.draw_pass_1 = BloodFX.droplet_mesh()
+	var material := ParticleProcessMaterial.new()
+	material.direction = Vector3.UP
+	material.spread = 35.0
+	material.initial_velocity_min = 1.5
+	material.initial_velocity_max = 3.0
+	material.gravity = Vector3(0.0, -9.8, 0.0)
+	material.scale_min = 0.6
+	material.scale_max = 1.2
+	material.color = dirt_color.lightened(0.15)
+	dirt.process_material = material
+	world.add_child(dirt)
+	dirt.global_position = global_position + Vector3.UP * 0.05
+	dirt.emitting = true
+	dirt.finished.connect(dirt.queue_free)
 
 
 func _play(animation_name: String, loop: bool) -> void:

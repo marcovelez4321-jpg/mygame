@@ -75,6 +75,10 @@ const CORPSE_GROUP := "corpses"
 @export var frenzy_bite_rate: float = 2.0
 @export var frenzy_time: float = 5.0
 
+@export_group("Summoning")
+## Summoned rats burrow up one after another over this many seconds.
+@export var spawn_spread: float = 1.2
+
 @export_group("Eating")
 ## Not fighting: rats go and eat a corpse this close to the Bender.
 @export var eat_range: float = 8.0
@@ -114,17 +118,29 @@ func count() -> int:
 	return rats.size()
 
 
-## New rats in a ring around `center`.
+## New rats burrowing up out of the floor right around `center` (the
+## Bender's feet), one after another over about spawn_spread seconds. The
+## more there are, the wider the patch of floor they come up through.
 func spawn_rats(amount: int, center: Vector3) -> void:
 	var world := get_tree().current_scene
+	var space := get_viewport().find_world_3d().direct_space_state
+	var reach := 0.6 + 0.12 * sqrt(float(amount))
 	for i in amount:
 		var rat := RAT_SCENE.instantiate() as Rat
 		rat.swarm = self
 		var angle := randf() * TAU
 		rat.slot = Vector2.from_angle(angle)
 		rat.slot_radius = randf_range(follow_radius_min, follow_radius_max)
+		rat.emerge_delay = randf() * spawn_spread
+		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(0.4, reach)
+		# Onto the floor there (or where he stands, if there's none).
+		var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.0, spot + Vector3.DOWN * 3.0)
+		query.collision_mask = 1
+		if bender:
+			query.exclude = [(bender as CollisionObject3D).get_rid()]
+		var hit := space.intersect_ray(query)
 		world.add_child(rat)
-		rat.global_position = center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(0.5, 1.5) + Vector3.UP * 0.3
+		rat.global_position = hit.position if not hit.is_empty() else spot
 		rats.append(rat)
 
 
