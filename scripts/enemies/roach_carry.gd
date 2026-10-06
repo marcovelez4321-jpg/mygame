@@ -77,6 +77,9 @@ const BITES_PER_ROACH := 25
 ## can breed them (2 x 3 = up to 6 new roaches per body).
 const ROACHES_PER_BREED := 2
 const BREEDS_PER_BODY := 3
+## Chance a newborn roach is a spitter (else a normal one). roach.tscn itself
+## is set to always be a spitter, so births roll their own.
+const BRED_SPITTER_CHANCE := 0.5
 const BLOOD := Color(0.55, 0.02, 0.02)
 
 ## GATHER: getting hold of it. LIFT: raising it as high as they can (eating
@@ -331,13 +334,22 @@ func bitten() -> void:
 	BloodFX.spawn_impact(world, at, Vector3.UP, BLOOD, 2.5)
 	var turn := randf() * TAU
 	for i in ROACHES_PER_BREED:
-		var roach := ROACH_SCENE.instantiate() as FlyingRoach
-		world.add_child(roach)
 		# Spread around the body, so they don't start inside each other.
 		var side := Vector3.RIGHT.rotated(Vector3.UP, turn + TAU * i / ROACHES_PER_BREED) * 0.25
-		roach.global_position = at + Vector3.UP * 0.3 + side
-		roach.burst_out.call_deferred() # after its own setup: a springy pop out of the body
+		hatch(world, at + Vector3.UP * 0.3 + side)
 		BloodFX.spawn_impact(world, at + Vector3.UP * 0.2, (Vector3.UP + Vector3(randf() - 0.5, 0.0, randf() - 0.5)).normalized(), BLOOD, 1.5)
+
+
+## A newborn roach bursting out at `at`: a spitter or a normal one, 50/50
+## (BRED_SPITTER_CHANCE). Shared by every roach birth -- a carried body
+## (bitten()) and a rat eaten in mid-air (FlyingRoach). Rule 1: host only;
+## the roll goes with the spawn in co-op.
+static func hatch(world: Node, at: Vector3) -> void:
+	var roach := ROACH_SCENE.instantiate() as FlyingRoach
+	roach.kind = FlyingRoach.Kind.SPITTER if randf() < BRED_SPITTER_CHANCE else FlyingRoach.Kind.NORMAL
+	world.add_child(roach)
+	roach.global_position = at
+	roach.burst_out.call_deferred() # after its own setup: a springy pop out of the body
 
 
 func _finish() -> void:

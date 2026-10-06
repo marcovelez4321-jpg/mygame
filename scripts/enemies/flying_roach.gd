@@ -675,10 +675,7 @@ func _eat_prey(delta: float) -> void:
 	_prey.call("consumed")
 	_prey = null
 	BloodFX.spawn_impact(world, at, Vector3.UP, RoachCarry.BLOOD, 1.5)
-	var roach := RoachCarry.ROACH_SCENE.instantiate() as FlyingRoach
-	world.add_child(roach)
-	roach.global_position = at + Vector3.UP * 0.2
-	roach.burst_out.call_deferred()
+	RoachCarry.hatch(world, at + Vector3.UP * 0.2)
 
 
 ## A rat killed it and wants it in its jaws. True if it can be taken: dead,
