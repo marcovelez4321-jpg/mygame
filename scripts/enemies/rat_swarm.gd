@@ -28,6 +28,10 @@ const CORPSE_GROUP := "corpses"
 
 @export_group("Pack")
 @export var rat_speed: float = 5.3
+## Every rat this swarm brings up is this much bigger, and has this many
+## times the health, on top of its own little variety. 1 = normal rats.
+@export var rat_scale: float = 1.0
+@export var rat_health_multiplier: float = 1.0
 ## Following the Bender, rats spread between these distances around him.
 @export var follow_radius_min: float = 0.9
 @export var follow_radius_max: float = 2.4

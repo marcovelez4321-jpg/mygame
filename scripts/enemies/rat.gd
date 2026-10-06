@@ -145,7 +145,7 @@ func _start_burrow() -> void:
 	_emerge_time = -emerge_delay
 	BloodFX.warm_splat_texture(dirt_color) # no hitch on the first hole
 	freeze = true
-	_visual.position.y = -emerge_depth
+	_visual.position.y = -emerge_depth * size
 	_visual.rotation.y = randf() * TAU
 	_visual.visible = false
 	_play(ANIM_RUN, true) # scrabbling its way up
@@ -162,9 +162,12 @@ func _surface() -> void:
 
 ## No two rats alike. Rule 1 (co-op): rolled on the host; the size and seed
 ## travel with the spawn so every screen sees the same rat.
+## On top of that, its swarm can make every rat bigger and tougher (the
+## Bender's bodyguards: RatSwarm.rat_scale / rat_health_multiplier).
 func _roll_variety() -> void:
-	size = randf_range(size_min, size_max)
-	speed_scale = randf_range(1.0 - speed_variation, 1.0 + speed_variation) / sqrt(size)
+	var variety := randf_range(size_min, size_max)
+	size = variety * (swarm.rat_scale if swarm else 1.0)
+	speed_scale = randf_range(1.0 - speed_variation, 1.0 + speed_variation) / sqrt(variety)
 	rhythm_seed = randf() * 1000.0
 	# On the model, not Visual: Visual is the part that turns to face where
 	# it runs, and a turning node has to stay unscaled.
@@ -175,8 +178,9 @@ func _roll_variety() -> void:
 	shape.shape = box
 	shape.position *= size
 	mass *= size * size * size
-	health.max_health *= size * size
+	health.max_health *= variety * variety * (swarm.rat_health_multiplier if swarm else 1.0)
 	health.current_health = health.max_health
+	bite_reach *= size
 
 
 func _physics_process(delta: float) -> void:
@@ -402,7 +406,7 @@ func _show_emerging() -> void:
 		_dig_fx()
 	var t := clampf(_emerge_time / maxf(emerge_time, 0.01), 0.0, 1.0)
 	var rise := 1.0 - (1.0 - t) * (1.0 - t)
-	_visual.position.y = -emerge_depth * (1.0 - rise)
+	_visual.position.y = -emerge_depth * size * (1.0 - rise)
 	var shake := 1.0 - t
 	_visual.rotation.z = sin(_emerge_time * 28.0 + rhythm_seed) * wiggle * shake
 	_visual.rotation.x = -0.6 * shake # nose up out of the hole

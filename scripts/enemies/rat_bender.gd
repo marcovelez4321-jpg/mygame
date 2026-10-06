@@ -71,7 +71,7 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 ## the rats burrow up a few at a time all the way through it -- cut it short
 ## and the ones already up stay. Hit him for summon_cancel_damage to cut it.
 @export var summon_animation_speed: float = 0.6
-@export var summon_cancel_damage: float = 40.0
+@export var summon_cancel_damage: float = 80.0
 ## The blinking tell while summoning.
 @export var summon_flash_color: Color = Color(1.0, 0.08, 0.05, 0.8)
 
@@ -84,6 +84,9 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 @export var escort_cooldown: float = 15.0
 ## The escort stays at his feet and only swarms you inside this range of him.
 @export var escort_engage_range: float = 6.0
+## Bodyguards are bigger and tougher than normal rats.
+@export var escort_rat_scale: float = 2.0
+@export var escort_health_multiplier: float = 2.0
 
 @export_group("Healing")
 ## Starts a heal once below this share of his health (0.75 = 75%) and not
@@ -97,7 +100,7 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 ## The heal animation's speed (0.5 = half speed -- a long, punishable cast).
 @export var heal_animation_speed: float = 0.5
 ## Hit him for this much in total during a heal and it's cancelled.
-@export var heal_cancel_damage: float = 40.0
+@export var heal_cancel_damage: float = 80.0
 @export var heal_flash_color: Color = Color(0.2, 1.0, 0.3, 0.8)
 
 @export_group("Animations")
@@ -379,6 +382,12 @@ func _escort_swarm() -> RatSwarm:
 	if _escort == null:
 		_escort = swarm.duplicate() as RatSwarm
 		_escort.name = "EscortSwarm"
+		_escort.rat_scale = escort_rat_scale
+		_escort.rat_health_multiplier = escort_health_multiplier
+		# Bigger rats need more room around him and each other.
+		_escort.separation_distance *= escort_rat_scale
+		_escort.follow_radius_min *= escort_rat_scale
+		_escort.follow_radius_max *= escort_rat_scale
 		add_child(_escort)
 		_escort.bender = self
 	return _escort
