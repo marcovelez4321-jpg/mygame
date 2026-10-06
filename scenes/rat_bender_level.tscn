@@ -18,3 +18,15 @@ summon_cooldown = 10.0
 summon_animation_speed = 2.0
 heal_delay = 6.0
 heal_animation_speed = 0.8
+
+[node name="RatNest2" parent="."]
+rat_count = 0
+bodyguard_count = 0
+
+[node name="RatNest3" parent="."]
+rat_count = 0
+bodyguard_count = 0
+
+[node name="RatNest4" parent="."]
+rat_count = 0
+bodyguard_count = 0

@@ -11,9 +11,13 @@ extends Node
 ## Every roach holding on takes WEIGHT_PER_ROACH of the body's weight and adds
 ## lift speed, so the more of them, the easier and faster it goes up.
 ## Once lifting they commit: only getting hurt makes one let go.
-## start eating -- blood flies, and every BITES_PER_ROACH bites a new roach
-## bursts out of the body (at most ROACHES_PER_BODY). After EAT_TIME, or if
-## fewer than MIN_ROACHES are left holding it, they let it drop.
+## They start eating the moment they start lifting -- however high they manage
+## to get it -- blood flies, and every BITES_PER_ROACH bites a new roach
+## bursts out of the body (at most ROACHES_PER_BODY). Once it's clear of the
+## ground they fly off with it at FLY_SPEED, still eating, toward the quietest
+## spot nearby (fewest hostiles around it: Factions.danger_at()), re-picked
+## every REPICK_TIME as things move. After EAT_TIME of eating, or if fewer
+## than MIN_ROACHES are left holding it, they let it drop.
 ##
 ## Rule 1 (co-op): the host runs this. Ragdolls are drawn on each player's
 ## own screen, so the lift will be sent as a "carry this body" event.
@@ -39,11 +43,23 @@ const GRIP_BONES := ["Hips", "LeftHand", "RightFoot", "RightHand", "LeftFoot", "
 ## A roach counts as holding the body inside this distance of its grab point.
 const HOLD_DISTANCE := 0.875 # 1.25x the original 0.7: easier to count as holding
 const EAT_TIME := 8.0
+## Flying off with it: how fast (well under a roach's cruise_speed, so the
+## holders keep up), how far it looks for somewhere quieter, and how often.
+const FLY_SPEED := 2.0
+const FLY_DISTANCE := 12.0
+const REPICK_TIME := 2.0
+## Hostiles within this of a spot count against it (Factions.danger_at()).
+const DANGER_RADIUS := 15.0
+## A spot has to be this much quieter than where it's headed to change course
+## (so it doesn't dither between two equally quiet spots).
+const REPICK_MARGIN := 0.25
 const BITES_PER_ROACH := 25
 const ROACHES_PER_BODY := 3
 const BLOOD := Color(0.55, 0.02, 0.02)
 
-enum Phase { GATHER, LIFT, EAT }
+## GATHER: getting hold of it. LIFT: raising it as high as they can (eating
+## already). FLY: clear of the ground, flying it somewhere quiet (eating).
+enum Phase { GATHER, LIFT, FLY }
 
 var body: Node3D
 var ragdoll: EnemyRagdoll
@@ -53,6 +69,11 @@ var _timer := 6.0
 var _bites := 0
 var _ground_check := 0.0
 var _airborne := false
+var _eating := false
+## Where it's flying the body (FLY), and when to look for a quieter spot.
+var _destination := Vector3.ZERO
+var _has_destination := false
+var _repick := 0.0
 
 
 ## An idle roach looking for a meal: joins a carry near it that has room, or
@@ -130,7 +151,7 @@ func grip_bone(slot: int) -> PhysicalBone3D:
 
 
 func is_eating() -> bool:
-	return phase == Phase.EAT
+	return _eating
 
 
 func _physics_process(delta: float) -> void:
@@ -151,24 +172,27 @@ func _physics_process(delta: float) -> void:
 		Phase.GATHER:
 			if holding >= MIN_ROACHES:
 				phase = Phase.LIFT
+				_eating = true # dig in as soon as it's coming up
+				_timer = EAT_TIME
 			elif _timer <= 0.0 or roaches.size() < MIN_ROACHES:
 				_finish() # couldn't get enough of a grip
-		Phase.LIFT, Phase.EAT:
+		Phase.LIFT, Phase.FLY:
 			if holding < MIN_ROACHES:
 				_finish() # not enough of them left holding it: it drops
 				return
-			_lift(holders)
+			if _timer <= 0.0:
+				_finish() # eaten its fill
+				return
 			_ground_check -= delta
 			if _ground_check <= 0.0:
 				_ground_check = 0.2
 				_airborne = not ragdoll.is_touching_ground()
 			if phase == Phase.LIFT and _airborne:
-				phase = Phase.EAT
-				_timer = EAT_TIME
-			elif phase == Phase.EAT and not _airborne:
-				phase = Phase.LIFT # sagged back down: lift it again first
-			elif phase == Phase.EAT and _timer <= 0.0:
-				_finish()
+				phase = Phase.FLY
+				_repick = 0.0
+			elif phase == Phase.FLY and not _airborne:
+				phase = Phase.LIFT # sagged back down (or snagged): lift it clear first
+			_lift(holders, _fly_velocity(delta) if phase == Phase.FLY else Vector3.ZERO)
 
 
 ## The roaches actually holding on right now: close enough to their grab point.
@@ -181,8 +205,9 @@ func _holders() -> Array[FlyingRoach]:
 
 
 ## Each holding roach pulls its own body part toward CARRY_HEIGHT above the
-## floor, and the body as a whole gets lighter with every roach on it.
-func _lift(holders: Array[FlyingRoach]) -> void:
+## floor (and along at `travel`, flying off with it), and the body as a whole
+## gets lighter with every roach on it.
+func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 	var hips := ragdoll.body_position()
 	var query := PhysicsRayQueryParameters3D.create(hips + Vector3.UP * 0.5, hips + Vector3.DOWN * 4.0)
 	query.collision_mask = 1
@@ -196,10 +221,56 @@ func _lift(holders: Array[FlyingRoach]) -> void:
 		if bone == null or held.has(bone):
 			continue
 		var rise := clampf((target_y - bone.global_position.y) * 3.0, -speed, speed)
-		# Sideways it mostly keeps drifting the way it was, damped so held
-		# parts don't swing wildly; up/down is the roach's pull.
-		held[bone] = Vector3(bone.linear_velocity.x * 0.8, rise, bone.linear_velocity.z * 0.8)
+		# Sideways it eases toward `travel` (zero = damped to a stop, so held
+		# parts don't swing wildly); up/down is the roach's pull.
+		held[bone] = Vector3(lerpf(bone.linear_velocity.x, travel.x, 0.2), rise, lerpf(bone.linear_velocity.z, travel.z, 0.2))
 	ragdoll.carry(held, maxf(1.0 - WEIGHT_PER_ROACH * holders.size(), 0.0))
+
+
+## Which way to fly the body this tick: toward the quietest spot nearby
+## (re-picked every REPICK_TIME), slowing to a hover once it's there.
+func _fly_velocity(delta: float) -> Vector3:
+	var at := ragdoll.body_position()
+	_repick -= delta
+	if _repick <= 0.0:
+		_repick = REPICK_TIME
+		_pick_destination(at)
+	var to := _destination - at
+	to.y = 0.0
+	if to.length() < 0.5:
+		return Vector3.ZERO
+	return to.normalized() * FLY_SPEED * clampf(to.length(), 0.3, 1.0)
+
+
+## The quietest of: staying here, carrying on to where it's headed, or one of
+## 8 spots FLY_DISTANCE around (cut short at walls, at carry height).
+func _pick_destination(at: Vector3) -> void:
+	var tree := get_tree()
+	var space := body.get_world_3d().direct_space_state
+	var best := at
+	var best_danger := Factions.danger_at(tree, Factions.Side.ROACH, at, DANGER_RADIUS)
+	if _has_destination:
+		var current := Factions.danger_at(tree, Factions.Side.ROACH, _destination, DANGER_RADIUS)
+		if current <= best_danger + REPICK_MARGIN:
+			best = _destination
+			best_danger = current - REPICK_MARGIN # sticking with it is a bit better
+	var turn := randf() * TAU
+	for i in 8:
+		var out := Vector3.FORWARD.rotated(Vector3.UP, turn + TAU * i / 8.0) * FLY_DISTANCE
+		var query := PhysicsRayQueryParameters3D.create(at, at + out)
+		query.collision_mask = 1
+		var hit := space.intersect_ray(query)
+		var spot := at + out
+		if not hit.is_empty():
+			spot = hit.position - out.normalized() * 1.0 # stop short of the wall
+		if spot.distance_to(at) < 3.0:
+			continue # boxed in that way
+		var danger := Factions.danger_at(tree, Factions.Side.ROACH, spot, DANGER_RADIUS)
+		if danger < best_danger:
+			best = spot
+			best_danger = danger
+	_destination = best
+	_has_destination = true
 
 
 ## A roach took a bite (FlyingRoach, while eating). Enough bites and a new

@@ -127,14 +127,19 @@ const CORPSE_GROUP := "corpses"
 @export_group("Corpse Dragging")
 ## A pack of at least eat_min_rats near a body (drag_find_range from its
 ## middle) sometimes -- drag_chance a second -- splits up: drag_share of the
-## rats (at least 4) haul the body drag_distance away at drag_speed, then eat
-## it for eat_time seconds. The rest carry on, attacking you included.
+## rats (at least 4) haul the body drag_distance away at drag_speed (eating
+## it as they go, toward the quietest spot: drag_danger_radius), then eat it
+## for eat_time seconds. The rest carry on, attacking you included.
 @export_range(0.0, 1.0, 0.05) var drag_chance: float = 0.15
 @export var drag_find_range: float = 10.0
 @export_range(0.1, 1.0, 0.05) var drag_share: float = 0.4
 @export var drag_distance_min: float = 3.0
 @export var drag_distance_max: float = 6.0
 @export var drag_speed: float = 1.2
+## Hostiles within this of a spot count against hauling a body there -- they
+## drag it toward whichever candidate spot is quietest (Factions.danger_at()).
+## Dragged rats eat the whole way, not just once they get there.
+@export var drag_danger_radius: float = 15.0
 @export var eat_time: float = 6.0
 
 @export_group("Eating")
@@ -718,12 +723,19 @@ func _start_drag(center: Vector3) -> void:
 		return
 
 
-## Somewhere open to haul a body to: on the walkable map, a clear line from
-## the body with no wall in between, not too roundabout to reach, and not
-## tucked in a corner (nothing solid close around it). No good spot found:
-## stay put and eat it where it lies.
+## Somewhere open and quiet to haul a body to: on the walkable map, a clear
+## line from the body with no wall in between, not too roundabout to reach,
+## not tucked in a corner (nothing solid close around it) -- and of the spots
+## that pass, the one with the fewest hostiles around it (Factions.danger_at()),
+## so they drag their meal away from trouble. No good spot found: stay put and
+## eat it where it lies.
 func _pick_drag_spot(from: Vector3) -> Vector3:
+	var best := from
+	var best_danger := INF
+	var found := 0
 	for attempt in 12:
+		if found >= 4:
+			break # enough to choose from (each check costs a path and 9 rays)
 		var away := Vector2.from_angle(randf() * TAU) * randf_range(drag_distance_min, drag_distance_max)
 		var spot := _walkable(from + Vector3(away.x, 0.0, away.y))
 		var straight := Vector2(spot.x - from.x, spot.z - from.z).length()
@@ -735,8 +747,12 @@ func _pick_drag_spot(from: Vector3) -> Vector3:
 			continue # only reachable the long way round
 		if _hemmed_in(spot):
 			continue
-		return spot
-	return from
+		found += 1
+		var danger := Factions.danger_at(get_tree(), Factions.Side.RAT, spot, drag_danger_radius)
+		if danger < best_danger:
+			best = spot
+			best_danger = danger
+	return best
 
 
 ## Something solid within an arm's length around `spot` -- a corner or a wall.
@@ -862,7 +878,8 @@ func _steer_dragger(rat: Rat, index: int, speed: float) -> Vector3:
 	to_spot.y = 0.0
 	var distance := to_spot.length()
 	var crowd := _neighbours(index)
-	rat.eating = _drag_phase == DragPhase.EAT and distance < 0.5
+	# Chewing on it the whole way, not just once it's there.
+	rat.eating = _drag_phase != DragPhase.GATHER and distance < 0.5
 	if distance < 0.25:
 		return crowd[0] * speed * 0.3
 	var steer: Vector3 = to_spot / distance + crowd[0] * separation_strength * 0.5

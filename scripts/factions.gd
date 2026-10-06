@@ -115,6 +115,20 @@ static func is_threat(side: int, other: int, viewer: Node, target: Node3D, dista
 	return distance <= threat_range * (2.0 if is_current else 1.0)
 
 
+## How dangerous `point` is for `side`: every living thing it's hostile to
+## within `radius` adds up to 1 (1 right on top of it, fading to 0 at the
+## edge). Scavengers compare spots by this to carry a meal somewhere quiet --
+## the same idea as Source NPCs scoring hint nodes by how far they are from
+## their enemies when picking somewhere to flee or take cover.
+static func danger_at(tree: SceneTree, side: int, point: Vector3, radius: float) -> float:
+	var danger := 0.0
+	for other in hostiles(tree, side):
+		var distance := point.distance_to(other.global_position)
+		if distance < radius:
+			danger += 1.0 - distance / radius
+	return danger
+
+
 ## `attacker` just hurt `victim`: it jumps up the victim's list for a while.
 static func provoke(victim: Node, attacker: Node3D) -> void:
 	if victim == null or attacker == null:
