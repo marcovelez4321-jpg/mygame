@@ -206,6 +206,7 @@ func get_state() -> State:
 
 func _ready() -> void:
 	add_to_group("enemies")
+	add_to_group(Factions.GROUPS[Factions.Side.ROACH])
 	gravity_scale = 0.0
 	lock_rotation = true # the model shows tumbling; the body stays upright
 	health.damaged.connect(_on_damaged)
@@ -249,7 +250,7 @@ func _physics_process(delta: float) -> void:
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
-		_target = _find_nearest_player()
+		_target = Factions.nearest_hostile(get_tree(), Factions.Side.ROACH, global_position, sight_range, self)
 
 	if _state == State.STUNNED:
 		_think_stunned()
@@ -271,7 +272,7 @@ func _physics_process(delta: float) -> void:
 	if _target == null:
 		_steer(_hover_correction(Vector3.ZERO), delta)
 		return
-	var chest := _target.global_position + Vector3.UP * CHEST_HEIGHT
+	var chest := Factions.aim_point(_target)
 	var can_see := _can_see(chest)
 	var distance := global_position.distance_to(chest)
 	_turn_toward(chest - global_position, delta)
@@ -331,7 +332,7 @@ func _think_spit(delta: float) -> void:
 	if _target == null:
 		_set_state(State.HUNT)
 		return
-	var chest := _target.global_position + Vector3.UP * CHEST_HEIGHT
+	var chest := Factions.aim_point(_target)
 	_turn_toward(chest - global_position, delta * 2.0)
 	if _state_time < spit_windup:
 		return
@@ -351,7 +352,7 @@ func _think_spit(delta: float) -> void:
 ## is NOW was what made globs land short when you ran at it.
 func _spit_at(target: Node3D) -> void:
 	var mouth := global_position + facing * 0.3
-	var aim := target.global_position + Vector3.UP * CHEST_HEIGHT
+	var aim := Factions.aim_point(target)
 	var to_target := Vector3(aim.x - mouth.x, 0.0, aim.z - mouth.z)
 	var line := to_target.normalized() if to_target.length_squared() > 0.0001 else facing
 
@@ -455,7 +456,7 @@ func _think_dive(delta: float) -> void:
 	if _target == null or _state_time >= dive_time:
 		_end_dive()
 		return
-	var chest := _target.global_position + Vector3.UP * CHEST_HEIGHT
+	var chest := Factions.aim_point(_target)
 	_dive_direction = _dive_direction.slerp((chest - global_position).normalized(), 2.0 * delta).normalized()
 	facing = _dive_direction
 	linear_velocity = linear_velocity.move_toward(_dive_direction * dive_speed, acceleration * 2.0 * delta)
@@ -467,8 +468,11 @@ func _think_dive(delta: float) -> void:
 func _try_bite() -> bool:
 	if _target == null or _bite_gap_left > 0.0:
 		return false
+	# Measured to the target's whole body, feet to head -- scaled down for a
+	# rat or another roach.
 	var feet := _target.global_position
-	var body_point := Vector3(feet.x, clampf(global_position.y, feet.y + BODY_LOW, feet.y + BODY_HIGH), feet.z)
+	var tall := Factions.height_of(_target)
+	var body_point := Vector3(feet.x, clampf(global_position.y, feet.y + minf(BODY_LOW, tall * 0.2), feet.y + minf(BODY_HIGH, tall * 0.9)), feet.z)
 	var to_body := body_point - global_position
 	if to_body.length() > bite_reach:
 		return false
@@ -480,6 +484,7 @@ func _bite(player: Node3D, direction: Vector3) -> void:
 	var player_health := player.get_node_or_null("Health") as Health
 	if player_health:
 		player_health.take_damage(damage, Health.NO_ATTACKER, direction, global_position, 1.0)
+		Factions.provoke(player, self)
 	bit_player.emit()
 	_bite_gap_left = bite_gap
 	# Thrown back and a little up and sideways, like the manhack's
@@ -566,22 +571,6 @@ func _turn_toward(direction: Vector3, delta: float) -> void:
 	if direction.length_squared() < 0.0001:
 		return
 	facing = facing.slerp(direction.normalized(), clampf(turn_speed * delta, 0.0, 1.0)).normalized()
-
-
-## Nearest living player, like Enemy's -- in co-op, "nearest of two".
-func _find_nearest_player() -> Node3D:
-	var nearest: Node3D = null
-	var nearest_distance := sight_range
-	for node in get_tree().get_nodes_in_group("player"):
-		var player := node as Node3D
-		var player_health := player.get_node_or_null("Health") as Health
-		if player_health == null or player_health.is_dead:
-			continue
-		var distance := global_position.distance_to(player.global_position)
-		if distance < nearest_distance:
-			nearest_distance = distance
-			nearest = player
-	return nearest
 
 
 func _can_see(point: Vector3) -> bool:

@@ -596,6 +596,7 @@ func resolve_shot(shot: Shot) -> void:
 			# a mutation. Artery and body kills can still mutate (see enemy.gd's
 			# Mutation group).
 			health.take_damage(damage, shot.attacker_id, direction, result.position, shot.weapon.impact_force, kind == HitKind.HEADSHOT)
+			Factions.provoke(result.collider, _body as Node3D) # it turns on whoever shot it
 			if not health.is_dead and (kind == HitKind.HEADSHOT or kind == HitKind.ARTERY):
 				health.bleed(bleed_damage, headshot_bleed_time if kind == HitKind.HEADSHOT else ARTERY_BLEED_TIME, shot.attacker_id)
 			hit_confirmed.emit(health.is_dead, kind)

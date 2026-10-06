@@ -243,6 +243,7 @@ var _has_seen_target: bool = false
 
 func _ready() -> void:
 	add_to_group("enemies")
+	add_to_group(Factions.GROUPS[faction()])
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
 	_apply_tint()
@@ -302,7 +303,7 @@ func _physics_process(delta: float) -> void:
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
-		_update_memory(_find_nearest_player())
+		_update_memory(_find_nearest_hostile())
 	if can_shoot:
 		_track_aim(delta)
 
@@ -505,6 +506,7 @@ func _land_hit() -> void:
 	var target_health := _target.get_node_or_null("Health") as Health
 	if target_health:
 		target_health.take_damage(attack_damage, Health.NO_ATTACKER)
+		Factions.provoke(_target, self)
 	if _target.has_method("shove") and (melee_shove > 0.0 or melee_shove_up > 0.0):
 		_target.call("shove", _flat_direction_to(_target) * melee_shove + Vector3.UP * melee_shove_up)
 
@@ -537,6 +539,7 @@ func _fire_shot() -> void:
 	if result.collider != _target:
 		return # another enemy stepped in the way -- no friendly fire
 	hit_health.take_damage(attack_damage, Health.NO_ATTACKER, direction, result.position, shoot_impact_force)
+	Factions.provoke(_target, self)
 	BloodFX.spawn_impact(get_tree().current_scene, result.position, -direction)
 
 
@@ -548,7 +551,7 @@ func _track_aim(delta: float) -> void:
 	if _target == null:
 		_has_aim_point = false
 		return
-	var chest := _target.global_position + Vector3.UP * 1.0
+	var chest := Factions.aim_point(_target)
 	if not _has_aim_point or aim_lag_time <= 0.0:
 		_aim_point = chest
 		_has_aim_point = true
@@ -594,7 +597,7 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 		return
 	HitFlash.flash(self)
 	# Getting shot wakes it up and makes it flinch.
-	_update_memory(_find_nearest_player())
+	_update_memory(_find_nearest_hostile())
 	_pain_timer = pain_time
 	_swing_time = -1.0 # getting shot interrupts a swing in progress
 	_hit_pending = false
@@ -694,20 +697,15 @@ func get_state() -> State:
 	return _state
 
 
-## Nearest living player, or null. In co-op this is "nearest of two".
-func _find_nearest_player() -> Node3D:
-	var nearest: Node3D = null
-	var nearest_distance := INF
-	for node in get_tree().get_nodes_in_group("player"):
-		var player := node as Node3D
-		var player_health := player.get_node_or_null("Health") as Health
-		if player_health == null or player_health.is_dead:
-			continue
-		var distance := global_position.distance_to(player.global_position)
-		if distance < nearest_distance:
-			nearest_distance = distance
-			nearest = player
-	return nearest
+## Which side it fights for (Factions). Tweakers; the Rat Bender overrides.
+func faction() -> Factions.Side:
+	return Factions.Side.TWEAKER
+
+
+## The nearest living thing it's hostile to -- a player, or a roach or rat
+## (Factions) -- or null. In co-op, players are just more candidates.
+func _find_nearest_hostile() -> Node3D:
+	return Factions.nearest_hostile(get_tree(), faction(), global_position, INF, self)
 
 
 ## Clear line of sight within range? A ray from our eyes to the player's
@@ -716,7 +714,7 @@ func _can_see(target: Node3D) -> bool:
 	if global_position.distance_to(target.global_position) > sight_range:
 		return false
 	var from := global_position + Vector3.UP * 1.5
-	var to := target.global_position + Vector3.UP * 1.0
+	var to := Factions.aim_point(target)
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = [get_rid()]
 	query.collision_mask = 1 # ignore ragdoll corpses (layer 4)

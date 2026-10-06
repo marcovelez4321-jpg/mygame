@@ -118,11 +118,10 @@ const CORPSE_GROUP := "corpses"
 @export var corpse_seek_range: float = 20.0
 
 @export_group("Corpse Dragging")
-## A pack of at least drag_min_rats near a body (drag_find_range from its
+## A pack of at least eat_min_rats near a body (drag_find_range from its
 ## middle) sometimes -- drag_chance a second -- splits up: drag_share of the
 ## rats (at least 4) haul the body drag_distance away at drag_speed, then eat
 ## it for eat_time seconds. The rest carry on, attacking you included.
-@export var drag_min_rats: int = 8
 @export_range(0.0, 1.0, 0.05) var drag_chance: float = 0.15
 @export var drag_find_range: float = 10.0
 @export_range(0.1, 1.0, 0.05) var drag_share: float = 0.4
@@ -134,6 +133,9 @@ const CORPSE_GROUP := "corpses"
 @export_group("Eating")
 ## Not fighting: rats go and eat a corpse this close to the Bender.
 @export var eat_range: float = 8.0
+## A pack only goes for bodies at all -- eating or dragging -- with at least
+## this many rats in it.
+@export var eat_min_rats: int = 15
 
 @export_group("Feeding")
 ## Rats eating a body breed: every bites_per_rat bites (all the eaters
@@ -372,44 +374,48 @@ func _look_out(delta: float) -> void:
 	if _lookout_timer > 0.0:
 		return
 	_lookout_timer = 0.5
-	if target and (_is_dead(target) or nearest_rat_distance(target.global_position) > lose_range):
+	if target and (not Factions.is_alive_target(target) or nearest_rat_distance(target.global_position) > lose_range):
 		target = null
 		home = pack_center() # lost them: roam from here
 	if target == null:
-		target = _noticed_player()
+		target = _noticed_target()
 	order = Order.HUNT if target else Order.FOLLOW
 
 
-## A living player some rat is within notice_range of, and can see.
-func _noticed_player() -> Node3D:
-	for node in get_tree().get_nodes_in_group("player"):
-		var player := node as Node3D
-		if _is_dead(player):
-			continue
-		var nearest: Rat = null
-		var nearest_distance := notice_range
+## What some rat has noticed: anything the rats are hostile to (a player, a
+## tweaker, a roach -- Factions) within notice_range of a rat that can see
+## it. Of those, the one the rats want most (Factions priority), nearest
+## among equals -- Half-Life's BestEnemy rule.
+func _noticed_target() -> Node3D:
+	var best: Node3D = null
+	var best_priority := -1
+	var best_distance := INF
+	for candidate in Factions.hostiles(get_tree(), Factions.Side.RAT):
+		var spotter: Rat = null
+		var spotter_distance := notice_range
 		for rat in rats:
-			var distance := rat.global_position.distance_to(player.global_position)
-			if distance < nearest_distance:
-				nearest_distance = distance
-				nearest = rat
-		if nearest and _rat_sees(nearest, player):
-			return player
-	return null
+			var distance := rat.global_position.distance_to(candidate.global_position)
+			if distance < spotter_distance:
+				spotter_distance = distance
+				spotter = rat
+		if spotter == null:
+			continue
+		var priority := Factions.priority_of(Factions.Side.RAT, Factions.side_of(candidate) as Factions.Side, null, candidate)
+		if priority < best_priority or (priority == best_priority and spotter_distance >= best_distance):
+			continue
+		if _rat_sees(spotter, candidate):
+			best = candidate
+			best_priority = priority
+			best_distance = spotter_distance
+	return best
 
 
-func _rat_sees(rat: Rat, player: Node3D) -> bool:
-	var query := PhysicsRayQueryParameters3D.create(rat.global_position + Vector3.UP * 0.2, player.global_position + Vector3.UP * 1.0)
+func _rat_sees(rat: Rat, target: Node3D) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(rat.global_position + Vector3.UP * 0.2, Factions.aim_point(target))
 	query.exclude = [rat.get_rid()]
 	query.collision_mask = 1
 	var hit := rat.get_world_3d().direct_space_state.intersect_ray(query)
-	return hit.is_empty() or hit.collider == player
-
-
-func _is_dead(player: Node3D) -> bool:
-	var player_health := player.get_node_or_null("Health") as Health
-	return player_health == null or player_health.is_dead
-
+	return hit.is_empty() or hit.collider == target
 
 ## Patrol: on to the next spot once the pack gets there (or after a while) --
 ## a body to eat if there's one within corpse_seek_range, else a random
@@ -420,7 +426,7 @@ func _roam(delta: float, middle: Vector3) -> void:
 	if _roam_timer > 0.0 and not (arrived and _corpse == null):
 		return
 	_roam_timer = randf_range(roam_interval * 0.5, roam_interval * 1.5)
-	var body := _corpse_near(middle, corpse_seek_range)
+	var body := _corpse_near(middle, corpse_seek_range) if rats.size() >= eat_min_rats else null
 	if body:
 		var ragdoll := body.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
 		_wander_to = ragdoll.body_position() if ragdoll else body.global_position
@@ -594,7 +600,7 @@ func _update_drag(delta: float, center: Vector3) -> void:
 		_drag_check -= delta
 		if _drag_check <= 0.0:
 			_drag_check = 1.0
-			if rats.size() >= drag_min_rats and randf() < drag_chance:
+			if rats.size() >= eat_min_rats and randf() < drag_chance:
 				_start_drag(center)
 		return
 	if not is_instance_valid(_drag_body) or not is_instance_valid(_drag_ragdoll) or _draggers.size() < 2:
@@ -786,6 +792,8 @@ func _steer_dragger(rat: Rat, index: int, speed: float) -> Vector3:
 ## A body on the floor near the Bender (or, with no Bender, near the pack)
 ## to eat. EnemyRagdoll adds dead enemies to CORPSE_GROUP.
 func _find_corpse(middle: Vector3) -> Node3D:
+	if rats.size() < eat_min_rats:
+		return null
 	return _corpse_near(bender.global_position if bender else middle, eat_range)
 
 

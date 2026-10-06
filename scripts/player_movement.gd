@@ -235,6 +235,9 @@ var usable_in_view: Node
 ## True while something else has your controls -- a conversation
 ## (DialogueBox). Movement, looking, shooting and F all stop.
 var controls_locked := false
+## Debug (pause menu, "Invisible to Enemies"): no enemy picks you as a target
+## (Factions.is_alive_target()). Runtime-only, not saved.
+var hidden_from_enemies := false
 var _grab_held_prev: bool = false
 ## A shove waiting to be applied on the next simulation tick (see shove()).
 var _pending_shove := Vector3.ZERO

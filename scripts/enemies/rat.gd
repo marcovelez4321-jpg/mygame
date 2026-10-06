@@ -127,6 +127,7 @@ var _gore_timer := 0.0
 
 func _ready() -> void:
 	add_to_group("enemies")
+	add_to_group(Factions.GROUPS[Factions.Side.RAT])
 	lock_rotation = true # upright; the Visual turns to face where it runs
 	_roll_variety()
 	health.died.connect(_on_died)
@@ -252,6 +253,7 @@ func _bite(target: Node3D, damage: float) -> void:
 	var target_health := target.get_node_or_null("Health") as Health
 	if target_health:
 		target_health.take_damage(damage, Health.NO_ATTACKER)
+		Factions.provoke(target, self)
 	_play(ANIM_ATTACK, false)
 	if swarm:
 		swarm.rat_bit(global_position)
@@ -275,7 +277,7 @@ func _maybe_leap(delta: float) -> void:
 func leap(target: Node3D) -> void:
 	if _state != State.RUN or not _on_ground():
 		return
-	var chest := target.global_position + Vector3.UP * 1.0
+	var chest := Factions.aim_point(target)
 	var gap := chest - global_position
 	var gravity := ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float * gravity_scale
 	linear_velocity = gap / leap_time + Vector3.UP * 0.5 * gravity * leap_time
@@ -293,7 +295,7 @@ func _fly_leap(_delta: float) -> void:
 	var tilt := clampf(-linear_velocity.y * 6.0, -leap_tilt, leap_tilt)
 	_visual.rotation.x = deg_to_rad(tilt)
 	if not _leap_bit and swarm and is_instance_valid(swarm.target):
-		var offset := swarm.target.global_position + Vector3.UP * 0.9 - global_position
+		var offset := Factions.aim_point(swarm.target) - global_position
 		if offset.length() < bite_reach:
 			_leap_bit = true
 			_bite(swarm.target, leap_damage)

@@ -212,6 +212,11 @@ func _ready() -> void:
 		_make_guards.call_deferred()
 
 
+## He's with the rats: fights tweakers, roaches and you.
+func faction() -> Factions.Side:
+	return Factions.Side.RAT
+
+
 func _setup_animations() -> void:
 	_anim = find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if _anim == null:
@@ -241,7 +246,7 @@ func _physics_process(delta: float) -> void:
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
-		_update_memory(_find_nearest_player())
+		_update_memory(_find_nearest_hostile())
 	swarm.target = _target
 
 	match _mode:
@@ -483,7 +488,7 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 		return
 	HitFlash.flash(self)
 	_since_hurt = 0.0
-	_update_memory(_find_nearest_player())
+	_update_memory(_find_nearest_hostile())
 	if _mode == Mode.HEAL or _mode == Mode.SUMMON:
 		_channel_damage += _amount
 		var cancel_at := summon_cancel_damage

@@ -16,6 +16,7 @@ extends CanvasLayer
 @onready var vsync_check: CheckButton = $Dim/MenuPanel/VBox/VSyncRow/VSyncCheck
 @onready var infinite_ammo_check: CheckButton = $Dim/MenuPanel/VBox/InfiniteAmmoRow/InfiniteAmmoCheck
 @onready var hit_zones_check: CheckButton = $Dim/MenuPanel/VBox/HitZonesRow/HitZonesCheck
+@onready var invisible_check: CheckButton = $Dim/MenuPanel/VBox/InvisibleRow/InvisibleCheck
 @onready var sensitivity_slider: HSlider = $Dim/MenuPanel/VBox/SensitivityRow/SensitivitySlider
 @onready var sensitivity_value_label: Label = $Dim/MenuPanel/VBox/SensitivityRow/SensitivityValueLabel
 @onready var resume_button: Button = $Dim/MenuPanel/VBox/ButtonsRow/ResumeButton
@@ -74,6 +75,11 @@ func _ready() -> void:
 	vsync_check.toggled.connect(_on_vsync_toggled)
 	infinite_ammo_check.toggled.connect(_on_infinite_ammo_toggled)
 	hit_zones_check.toggled.connect(_on_hit_zones_toggled)
+	# Debug: no enemy can pick you as a target (they fight each other instead).
+	invisible_check.toggled.connect(func(enabled: bool) -> void:
+		if is_instance_valid(player):
+			player.set("hidden_from_enemies", enabled)
+	)
 	sensitivity_slider.value_changed.connect(_on_sensitivity_changed)
 	resume_button.pressed.connect(close)
 	quit_button.pressed.connect(func() -> void:
@@ -121,6 +127,7 @@ func open() -> void:
 		var weapons := player.get_node("WeaponController") as WeaponController
 		infinite_ammo_check.button_pressed = weapons.infinite_ammo
 		hit_zones_check.button_pressed = weapons.show_hit_zones
+		invisible_check.set_pressed_no_signal(player.get("hidden_from_enemies") == true)
 
 
 ## Saves here rather than on every slider tick: dragging a slider fires
