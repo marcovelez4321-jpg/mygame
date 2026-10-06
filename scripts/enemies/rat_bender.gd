@@ -33,6 +33,11 @@ extends Enemy
 
 enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 
+@export_group("Toughness")
+## A headshot or artery hit on him does this many times a weapon's damage --
+## never the instant kill they are on other enemies. A boss stays a fight.
+@export var weak_spot_multiplier: float = 2.0
+
 @export_group("Patrol")
 @export var patrol_speed: float = 1.84
 ## Wanders anywhere within this many meters of where he started.

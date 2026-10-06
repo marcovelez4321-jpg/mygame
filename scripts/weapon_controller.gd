@@ -588,7 +588,7 @@ func resolve_shot(shot: Shot) -> void:
 				break # world geometry always stops it, penetration or not
 
 			var kind: HitKind = _hit_kind(result.collider, ray_origin, direction) if not health.is_dead else HitKind.NORMAL
-			var damage := _damage_for(shot.weapon, kind, health.current_health, shot.origin.distance_to(result.position))
+			var damage := _damage_for(shot.weapon, kind, health.current_health, shot.origin.distance_to(result.position), result.collider)
 			# is_critical = a headshot kill, the one clean finish that rules out
 			# a mutation. Artery and body kills can still mutate (see enemy.gd's
 			# Mutation group).
@@ -609,8 +609,13 @@ func resolve_shot(shot: Shot) -> void:
 ## instant-kill artery. `distance` (from the shooter to the hit) feeds the
 ## weapon's close-range boost -- see WeaponData.close_range_multiplier(). An
 ## instant artery kill ignores it; it already takes everything.
-func _damage_for(weapon: WeaponData, kind: HitKind, remaining: float, distance: float) -> float:
+## A target with its own weak_spot_multiplier (the Rat Bender) can't be
+## one-shot: a headshot or artery hit just does that many times the damage.
+func _damage_for(weapon: WeaponData, kind: HitKind, remaining: float, distance: float, target: Object = null) -> float:
 	var close := weapon.close_range_multiplier(distance)
+	var weak_spot: Variant = target.get("weak_spot_multiplier") if target else null
+	if weak_spot is float and kind != HitKind.NORMAL:
+		return weapon.damage * weak_spot * close
 	match kind:
 		HitKind.HEADSHOT:
 			return weapon.damage * headshot_damage_multiplier * close
