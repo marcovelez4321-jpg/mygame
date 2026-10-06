@@ -28,6 +28,7 @@
 [ext_resource type="Resource" path="res://audio/events/player_mantle.tres" id="40_mantle"]
 [ext_resource type="Script" path="res://scripts/player_model.gd" id="41_pmodel"]
 [ext_resource type="Script" path="res://scripts/aim_down_sights.gd" id="42_ads"]
+[ext_resource type="Script" path="res://scripts/interact_highlight.gd" id="43_hl"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -99,3 +100,6 @@ gory_kill_sound = ExtResource("29_gory")
 
 [node name="AimDownSights" type="Node" parent="."]
 script = ExtResource("42_ads")
+
+[node name="InteractHighlight" type="Node" parent="."]
+script = ExtResource("43_hl")

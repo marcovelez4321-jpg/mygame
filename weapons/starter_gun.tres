@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://isfmguhkycbe"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bnjpiq8h0wxyh"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://dxh5oybljgwgu" path="res://art/weapons/NEWPSXWEAPONS/Revolver/Revolver_glb.glb" id="2_revolver"]
@@ -14,6 +14,7 @@ magazine_size = 6
 recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-0.05, 0.7), Vector2(0.1, 0.75), Vector2(0.15, 0.8), Vector2(0.25, 0.7), Vector2(0.3, 0.6), Vector2(0.3, 0.5), Vector2(0.2, 0.45), Vector2(-0.1, 0.45), Vector2(-0.3, 0.4), Vector2(-0.4, 0.4), Vector2(-0.35, 0.35), Vector2(-0.2, 0.35), Vector2(0.2, 0.35), Vector2(0.35, 0.3)])
 recoil_scale = 4.0
 recoil_jitter = 0.32
+aim_position = Vector3(-0.00096765015, -0.11331543, -0.3)
 viewmodel_scene = ExtResource("2_revolver")
 viewmodel_position = Vector3(0.115640216, -0.12794662, -0.5408055)
 viewmodel_scale = 0.105

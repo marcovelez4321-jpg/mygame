@@ -13,6 +13,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="11_rusher"]
 [ext_resource type="PackedScene" uid="uid://c2sc1shdn5nr1" path="res://scenes/enemy/enemy_gunner.tscn" id="12_gunner"]
 [ext_resource type="PackedScene" uid="uid://b3qfvpmbq2lhu" path="res://scenes/enemy/roach.tscn" id="13_2420u"]
+[ext_resource type="PackedScene" path="res://art/weapons/frag_grenade.tscn" id="19_kguij"]
 [ext_resource type="PackedScene" path="res://scenes/npc/grandma.tscn" id="20_grandma"]
 [ext_resource type="PackedScene" uid="uid://c3xdwbwnsmpvr" path="res://scenes/ppsh_pickup.tscn" id="21_ppsh"]
 [ext_resource type="PackedScene" path="res://scenes/rpg_pickup.tscn" id="22_rpg"]
@@ -352,3 +353,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.02, 9)
 
 [node name="ExplosiveBarrel5" parent="." unique_id=1245216070 instance=ExtResource("24_barrel")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.02, 8.2)
+
+[node name="FragGrenade" parent="." unique_id=1356417328 instance=ExtResource("19_kguij")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6886158, 0.30527237, 3.3022475)
+
+[node name="FragGrenade2" parent="." unique_id=1785864823 instance=ExtResource("19_kguij")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6886158, 0.30527237, 2.6331367)
+
+[node name="FragGrenade3" parent="." unique_id=203319888 instance=ExtResource("19_kguij")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6886158, 0.30527237, 2.290947)

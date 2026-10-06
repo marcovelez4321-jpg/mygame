@@ -13,6 +13,8 @@ extends Node
 const SETTINGS_PATH := "user://settings.cfg"
 
 enum WindowMode { WINDOWED, BORDERLESS_FULLSCREEN, EXCLUSIVE_FULLSCREEN }
+## When pickups and usable things get an outline (InteractHighlight).
+enum OutlineMode { LOOKING, ALWAYS, OFF }
 
 ## Every audio bus the pause menu's Audio panel shows a slider for, in order:
 ## Master, then one per audio/sfx folder (default_bus_layout.tres).
@@ -28,6 +30,7 @@ var audio_volumes: Dictionary = {}
 var mouse_sensitivity: float = 0.0
 ## Path of the character FBX the player wears (PlayerModel); "" = first one.
 var player_character: String = ""
+var outline_mode: OutlineMode = OutlineMode.LOOKING
 
 
 func _ready() -> void:
@@ -153,6 +156,7 @@ func save_settings() -> void:
 		config.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	if not player_character.is_empty():
 		config.set_value("player", "character", player_character)
+	config.set_value("display", "outline_mode", outline_mode)
 	config.save(SETTINGS_PATH)
 
 
@@ -170,3 +174,4 @@ func load_settings() -> void:
 			audio_volumes[bus] = config.get_value("audio", bus)
 	mouse_sensitivity = config.get_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	player_character = config.get_value("player", "character", player_character)
+	outline_mode = config.get_value("display", "outline_mode", outline_mode) as OutlineMode

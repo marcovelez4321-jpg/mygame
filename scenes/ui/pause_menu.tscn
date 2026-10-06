@@ -19,9 +19,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -230.0
-offset_top = -358.0
+offset_top = -340.0
 offset_right = 230.0
-offset_bottom = 358.0
+offset_bottom = 340.0
 
 [node name="VBox" type="VBoxContainer" parent="Dim/MenuPanel"]
 anchors_preset = 15
@@ -31,7 +31,7 @@ offset_left = 20.0
 offset_top = 20.0
 offset_right = -20.0
 offset_bottom = -20.0
-theme_override_constants/separation = 14
+theme_override_constants/separation = 8
 
 [node name="TitleLabel" type="Label" parent="Dim/MenuPanel/VBox"]
 theme_override_font_sizes/font_size = 28
@@ -45,7 +45,10 @@ custom_minimum_size = Vector2(160, 0)
 text = "Resolution"
 
 [node name="ResolutionOption" type="OptionButton" parent="Dim/MenuPanel/VBox/ResolutionRow"]
+custom_minimum_size = Vector2(120, 0)
 size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
 
 [node name="WindowModeRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
 
@@ -54,7 +57,10 @@ custom_minimum_size = Vector2(160, 0)
 text = "Window Mode"
 
 [node name="WindowModeOption" type="OptionButton" parent="Dim/MenuPanel/VBox/WindowModeRow"]
+custom_minimum_size = Vector2(120, 0)
 size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
 
 [node name="VSyncRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
 
@@ -90,7 +96,22 @@ custom_minimum_size = Vector2(160, 0)
 text = "Character"
 
 [node name="CharacterOption" type="OptionButton" parent="Dim/MenuPanel/VBox/CharacterRow"]
+custom_minimum_size = Vector2(120, 0)
 size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
+
+[node name="OutlinesRow" type="HBoxContainer" parent="Dim/MenuPanel/VBox"]
+
+[node name="OutlinesLabel" type="Label" parent="Dim/MenuPanel/VBox/OutlinesRow"]
+custom_minimum_size = Vector2(160, 0)
+text = "Item outlines"
+
+[node name="OutlinesOption" type="OptionButton" parent="Dim/MenuPanel/VBox/OutlinesRow"]
+custom_minimum_size = Vector2(120, 0)
+size_flags_horizontal = 3
+clip_text = true
+fit_to_longest_item = false
 
 [node name="AudioButton" type="Button" parent="Dim/MenuPanel/VBox"]
 custom_minimum_size = Vector2(0, 36)

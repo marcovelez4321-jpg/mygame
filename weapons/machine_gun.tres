@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://djefg74aunvx5"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://brnsy2rrq6n3b"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://bqjnvlnf7fk8x" path="res://art/weapons/PSX_Guns/GLB/Submachine_Gun.glb" id="2_5umog"]
@@ -26,7 +26,7 @@ draw_time = 0.5
 viewmodel_scene = ExtResource("2_5umog")
 viewmodel_position = Vector3(0.07112444, -0.18982406, -0.44816217)
 viewmodel_rotation_degrees = Vector3(1.9469497, 90.136536, 1.4610975)
-muzzle_offset = Vector3(0.314, 0.086, 0)
+muzzle_offset = Vector3(0.31738794, 0.09361669, -0.024605408)
 placeholder_color = Color(0.3, 0.5, 0.85, 1)
 hold_animation = ExtResource("6_hold")
 arms_position = Vector3(0.00917909, -1.5276697, 0.03752516)

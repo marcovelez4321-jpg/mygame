@@ -26,6 +26,7 @@ var _time := 0.0
 
 
 func _ready() -> void:
+	add_to_group(InteractHighlight.GROUP) # outlined when you look at it
 	body_entered.connect(_on_body_entered)
 	# Deferred: when the map is built while the game runs, func_godot sets
 	# key_type only after this node is added.

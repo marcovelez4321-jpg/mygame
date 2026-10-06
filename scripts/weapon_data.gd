@@ -93,8 +93,15 @@ enum ReloadStyle {
 ## Seconds to raise the gun to your eye (lowering takes the same).
 @export var aim_time: float = 0.25
 ## Where the gun sits when fully raised -- same space as viewmodel_position.
-## Tune in-game: F2, then I, arrows to move, F3 to save.
+## Tune in-game: F2, then I, arrows to move, F3 to save. With an Aim Sight
+## Node set, this is instead a small nudge on top of the automatic line-up
+## (normally 0, 0, 0).
 @export var aim_position: Vector3 = Vector3(0.0, -0.1, -0.3)
+## The name of the sight part in the model (the rifle's "Scope"). Set it and
+## aiming lines that part up dead centre in front of your eye by itself --
+## it stays lined up however the gun is moved or resized. Empty = use
+## aim_position as-is.
+@export var aim_sight_node: String = ""
 ## How much the view zooms in when fully aimed: 1 = none, 2.5 = things look
 ## 2.5x bigger. Mouse turning slows down to match.
 @export var aim_zoom: float = 1.2

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cwbwi6m5h7irf"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://c81wuhsopqanh" path="res://art/weapons/NEWPSXWEAPONS/Rifle/Rifle.glb" id="2_rifle"]
@@ -6,7 +6,7 @@
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_switch.tres" id="5_switch"]
 [ext_resource type="Animation" uid="uid://dbl27rf02bybf" path="res://art/animations/RifleAimingIdle.res" id="6_hold"]
-[ext_resource type="Texture2D" path="res://art/ui/scope.png" id="7_scope"]
+[ext_resource type="Texture2D" uid="uid://h3fnv3erkynk" path="res://art/ui/scope.png" id="7_scope"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_scope_in.tres" id="8_in"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_scope_out.tres" id="9_out"]
 
@@ -27,21 +27,22 @@ recoil_pattern = Array[Vector2]([Vector2(0, 3)])
 recoil_jitter = 0.4
 can_aim = true
 aim_time = 0.3
-aim_position = Vector3(0, -0.08, -0.3)
+aim_position = Vector3(0, 0, 0)
+aim_sight_node = "Scope"
 aim_zoom = 2.5
-aim_spread_degrees = 0.0
 aim_move_speed_scale = 0.5
 scope_overlay = ExtResource("7_scope")
 aim_in_sound = ExtResource("8_in")
 aim_out_sound = ExtResource("9_out")
 draw_time = 0.7
 viewmodel_scene = ExtResource("2_rifle")
-viewmodel_position = Vector3(0.1, -0.2, -0.5)
-viewmodel_scale = 0.15
+viewmodel_position = Vector3(0.09151058, -0.18005013, -0.28396088)
+viewmodel_scale = 0.2388816577400362
 muzzle_offset = Vector3(0, 0.39, -2.48)
 muzzle_flash_time = 0.08
 placeholder_color = Color(0.35, 0.3, 0.2, 1)
 hold_animation = ExtResource("6_hold")
+arms_position = Vector3(0.0056443647, -1.5127565, 0.060364135)
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")
 switch_sound = ExtResource("5_switch")

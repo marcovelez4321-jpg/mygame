@@ -23,6 +23,7 @@ extends CanvasLayer
 @onready var menu_panel: Panel = $Dim/MenuPanel
 @onready var audio_button: Button = $Dim/MenuPanel/VBox/AudioButton
 @onready var character_option: OptionButton = $Dim/MenuPanel/VBox/CharacterRow/CharacterOption
+@onready var outlines_option: OptionButton = $Dim/MenuPanel/VBox/OutlinesRow/OutlinesOption
 @onready var test_map_button: Button = $Dim/MenuPanel/VBox/TestMapButton
 @onready var hub_button: Button = $Dim/MenuPanel/VBox/HubButton
 
@@ -83,6 +84,13 @@ func _ready() -> void:
 	_build_audio_panel()
 	_populate_character_options()
 	character_option.item_selected.connect(_on_character_selected)
+	# Same order as GameSettings.OutlineMode.
+	for label in ["When looking at it", "Always", "Off"]:
+		outlines_option.add_item(label)
+	outlines_option.select(GameSettings.outline_mode)
+	outlines_option.item_selected.connect(func(index: int) -> void:
+		GameSettings.outline_mode = index as GameSettings.OutlineMode
+	)
 
 	# Play a TrenchBroom .map from your own computer (see TestMapLoader).
 	var test_map_loader := TestMapLoader.new()

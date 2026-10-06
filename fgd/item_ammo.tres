@@ -1,28 +1,29 @@
-[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" format=3 uid="uid://xctiw00smj1y"]
 
-[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="Script" uid="uid://cxsqwtsqd8w33" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="Script" uid="uid://d1nwwgcrner8b" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class_display_descriptor.gd" id="1_h71l8"]
 [ext_resource type="PackedScene" uid="uid://gn8wbsdypt3p" path="res://scenes/ammo_pickup.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
+scene_file = ExtResource("2")
 classname = "item_ammo"
 description = "A loose pile of ammo, lying as a real physics object -- falls, sits on the ground, can be shot or grabbed. Ammo Type and Amount are editable per placement."
-scene_file = ExtResource("2")
-auto_apply_to_matching_node_properties = true
-class_properties = {
+class_properties = Dictionary[String, Variant]({
 "ammo_type": {
 "Bullets": 0,
-"Shells": 1,
+"Grenades": 3,
 "Rockets": 2,
-"Grenades": 3
+"Shells": 1
 },
 "amount": 20
-}
-class_property_descriptions = {
+})
+class_property_descriptions = Dictionary[String, Variant]({
 "ammo_type": "Which ammo pool this adds to -- matches WeaponData.AmmoType (see scripts/weapon_data.gd).",
 "amount": "How much ammo this pickup grants."
-}
-meta_properties = {
-"size": AABB(-8, -8, -8, 16, 16, 16),
-"color": Color(0.3, 0.85, 0.3, 1)
-}
+})
+auto_apply_to_matching_node_properties = true
+meta_properties = Dictionary[String, Variant]({
+"color": Color(0.3, 0.85, 0.3, 1),
+"size": AABB(-8, -8, -8, 16, 16, 16)
+})

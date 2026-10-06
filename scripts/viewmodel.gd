@@ -70,6 +70,10 @@ const THROW_WINDUP_SHARE := 0.6
 const THROW_FOLLOW_TIME := 0.2
 const THROW_RAISE_TIME := 0.3
 
+## How far in front of your eye the middle of a scope sits when aimed
+## (WeaponData.aim_sight_node), in meters.
+const AIM_EYE_DISTANCE := 0.25
+
 ## Dev tool speeds while a key is held.
 const TUNE_MOVE_SPEED := 0.3     # meters per second
 const TUNE_ROTATE_SPEED := 45.0  # degrees per second
@@ -131,6 +135,9 @@ var aim_offset := Vector3.ZERO
 var aim_steady := 0.0
 ## F2 then I: the arrows move the gun's aimed position (WeaponData.aim_position).
 var _tuning_aim: bool = false
+## The middle of the weapon's aim_sight_node (the scope), in _model's own
+## space -- found once per weapon, see aim_position_for().
+var _sight_center: Variant = null
 
 
 func _ready() -> void:
@@ -261,6 +268,30 @@ func _update_held_grenade() -> void:
 	_switch_tween = create_tween()
 	_switch_tween.tween_property(self, "position", Vector3.ZERO, THROW_RAISE_TIME).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, THROW_RAISE_TIME)
+
+
+## Where the gun goes when fully aimed. With an aim_sight_node: wherever
+## puts the middle of that part (the scope) straight ahead of your eye,
+## AIM_EYE_DISTANCE away, plus the weapon's aim_position as a nudge.
+## Otherwise just aim_position.
+func aim_position_for(weapon: WeaponData) -> Vector3:
+	if weapon.aim_sight_node.is_empty() or _sight_center == null:
+		return weapon.aim_position
+	var sight_offset: Vector3 = _model_rest_transform.basis * (_sight_center as Vector3)
+	return -sight_offset + Vector3(0.0, 0.0, -AIM_EYE_DISTANCE) + weapon.aim_position
+
+
+## The middle of the named sight part's mesh, in _model's space (null if the
+## model has no such part).
+func _find_sight_center(weapon: WeaponData) -> Variant:
+	if weapon.aim_sight_node.is_empty() or _gun == null:
+		return null
+	var sight := _gun.find_child(weapon.aim_sight_node, true, false) as MeshInstance3D
+	if sight == null:
+		push_warning("Viewmodel: %s has no part named '%s' to aim through." % [weapon.weapon_name, weapon.aim_sight_node])
+		return null
+	var to_model := _model.global_transform.affine_inverse() * sight.global_transform
+	return to_model * sight.get_aabb().get_center()
 
 
 ## Hides the gun and arms (a scope image is covering the view) or shows them.
@@ -465,6 +496,7 @@ func _show_weapon(weapon: WeaponData) -> void:
 	gun.visible = not _waiting_for_grenade
 	_center_on_pivot(gun)
 	_apply_transform(weapon)
+	_sight_center = _find_sight_center(weapon)
 	_attach_arms(weapon)
 	# An empty launcher comes out empty.
 	if weapon.fires_projectile:
@@ -710,7 +742,7 @@ func _process(delta: float) -> void:
 	_apply_transform(weapon)
 	if _tuning_aim:
 		# Show the gun where it'll sit when aimed, so you can line up the sights.
-		_model.position = weapon.aim_position
+		_model.position = aim_position_for(weapon)
 	_update_label("")
 
 

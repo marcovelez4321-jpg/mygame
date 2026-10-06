@@ -8,7 +8,7 @@
 [ext_resource type="Resource" path="res://fgd/monster_enemy_gunner.tres" id="6"]
 [ext_resource type="Resource" path="res://fgd/item_weapon_starter_gun.tres" id="7"]
 [ext_resource type="Resource" path="res://fgd/item_weapon_machine_gun.tres" id="8"]
-[ext_resource type="Resource" path="res://fgd/item_ammo.tres" id="9"]
+[ext_resource type="Resource" uid="uid://xctiw00smj1y" path="res://fgd/item_ammo.tres" id="9"]
 [ext_resource type="Resource" path="res://fgd/func_door.tres" id="10"]
 [ext_resource type="Resource" path="res://fgd/func_door_rotating.tres" id="11"]
 [ext_resource type="Resource" path="res://fgd/func_button.tres" id="12"]

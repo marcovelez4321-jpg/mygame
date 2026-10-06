@@ -19,6 +19,7 @@ extends RigidBody3D
 
 
 func _ready() -> void:
+	add_to_group(InteractHighlight.GROUP) # outlined when you look at it
 	_pickup_area.body_entered.connect(_on_body_entered)
 
 

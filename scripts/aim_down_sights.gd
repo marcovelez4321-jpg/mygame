@@ -47,7 +47,7 @@ func _process(_delta: float) -> void:
 
 	# The gun travels from its hip position to its aimed position.
 	if weapon:
-		_viewmodel.aim_offset = (weapon.aim_position - weapon.viewmodel_position) * eased
+		_viewmodel.aim_offset = (_viewmodel.aim_position_for(weapon) - weapon.viewmodel_position) * eased
 	else:
 		_viewmodel.aim_offset = Vector3.ZERO
 	_viewmodel.aim_steady = eased

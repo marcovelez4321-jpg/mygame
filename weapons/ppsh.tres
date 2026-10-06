@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://c2fxecuoqd75"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bpjpjn7wvra10"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://crog8r7ju3cxr" path="res://art/weapons/NEWPSXWEAPONS/PPSH/PPSH.glb" id="2_ppsh"]
@@ -20,11 +20,12 @@ reload_time = 0.8
 recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-0.05, 0.7), Vector2(0.1, 0.75), Vector2(0.15, 0.8), Vector2(0.25, 0.7), Vector2(0.3, 0.6), Vector2(0.3, 0.5), Vector2(0.2, 0.45), Vector2(-0.1, 0.45), Vector2(-0.3, 0.4), Vector2(-0.4, 0.4), Vector2(-0.35, 0.35), Vector2(-0.2, 0.35), Vector2(0.2, 0.35), Vector2(0.35, 0.3)])
 recoil_scale = 0.75
 recoil_jitter = 0.05
+aim_position = Vector3(-0.005634394, -0.1168878, -0.3)
 draw_time = 0.5
 viewmodel_scene = ExtResource("2_ppsh")
 viewmodel_position = Vector3(0.07112444, -0.18982406, -0.44816217)
 viewmodel_scale = 0.163
-muzzle_offset = Vector3(0, 0.43, -2.31)
+muzzle_offset = Vector3(-0.06159248, 0.626694, -2.31)
 placeholder_color = Color(0.3, 0.5, 0.85, 1)
 hold_animation = ExtResource("6_hold")
 arms_position = Vector3(0.00917909, -1.5276697, 0.03752516)
