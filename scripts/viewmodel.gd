@@ -161,6 +161,7 @@ func _ready() -> void:
 	_weapons.reload_started.connect(_on_reload_started)
 	_weapons.projectile_launched.connect(_on_projectile_launched)
 	_weapons.throw_started.connect(_on_throw_started)
+	_weapons.quick_throw_started.connect(_on_quick_throw_started)
 	call_deferred("_show_current_weapon")
 	if OS.is_debug_build():
 		_make_tune_label()
@@ -248,6 +249,49 @@ func _on_throw_started(release_delay: float) -> void:
 	_switch_tween.tween_callback(_release_held_grenade)
 	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, THROW_FOLLOW_TIME).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, THROW_FOLLOW_TIME)
+
+
+## Q: the gun drops out of view, the grenade hand comes up and throws (same
+## wind-up and swing as the grenade slot), then the gun comes back up. Times
+## match WeaponController's, so the grenade leaves the hand on the swing.
+func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_delay: float, recover_time: float) -> void:
+	var gun_weapon := _weapons.current_weapon()
+	if _switch_tween:
+		_switch_tween.kill()
+	var windup := release_delay * THROW_WINDUP_SHARE
+	var swing := release_delay - windup
+	var follow := recover_time * 0.4
+	_switch_tween = create_tween()
+	# Gun down...
+	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, lower_time).set_ease(Tween.EASE_IN)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, lower_time)
+	# ...grenade hand in, straight up into the wind-up, and swing...
+	_switch_tween.tween_callback(_show_quick_grenade.bind(grenade))
+	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET, windup) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT, windup)
+	_switch_tween.tween_property(self, "position", THROW_SWING_OFFSET, swing).set_ease(Tween.EASE_IN)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_SWING_TILT, swing)
+	# ...let go, follow through out of view...
+	_switch_tween.tween_callback(_hide_held_gun)
+	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, follow).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, follow)
+	# ...and the gun comes back up.
+	_switch_tween.tween_callback(_show_weapon.bind(gun_weapon))
+	_switch_tween.tween_property(self, "position", Vector3.ZERO, recover_time - follow).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time - follow)
+
+
+func _hide_held_gun() -> void:
+	if _gun:
+		_gun.visible = false
+
+
+func _show_quick_grenade(grenade: WeaponData) -> void:
+	_show_weapon(grenade)
+	_waiting_for_grenade = false
+	if _gun:
+		_gun.visible = true
 
 
 func _release_held_grenade() -> void:

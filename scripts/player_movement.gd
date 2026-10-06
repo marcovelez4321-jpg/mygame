@@ -180,6 +180,7 @@ class PlayerInput:
 	var want_dash: bool = false
 	var fire: bool = false
 	var aim: bool = false # right mouse: aim down the sights
+	var quick_throw: bool = false # Q: throw a grenade without switching to it
 	var reload: bool = false
 	var grab: bool = false
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
@@ -374,6 +375,8 @@ func _gather_input() -> PlayerInput:
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 	input.aim = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	input.quick_throw = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_physical_key_pressed(KEY_Q)
 	input.reload = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_R)
 	input.grab = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
@@ -516,7 +519,7 @@ func _finish_tick(input: PlayerInput, delta: float) -> void:
 	# Aim comes from the player's own state (head position and facing), not
 	# from the camera, so a server can rebuild the same shot (Rule 1).
 	# multiplayer.get_unique_id() is 1 offline, which matches the host's id.
-	weapons.tick(input.fire, input.reload, input.aim, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
+	weapons.tick(input.fire, input.reload, input.aim, input.quick_throw, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
 	_update_view_recoil(delta)
 	_tick_use(input.grab)
 	grabber.tick(input.grab and not _use_took_press, delta, head.global_position, -head.global_transform.basis.z)

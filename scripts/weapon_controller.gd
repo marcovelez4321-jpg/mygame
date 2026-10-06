@@ -26,6 +26,10 @@ signal projectile_launched(rocket: Rocket)
 ## `release_delay` seconds from now (grenade_thrown).
 signal throw_started(release_delay: float)
 signal grenade_thrown(grenade: Grenade)
+## Q: a quick grenade throw with the gun still equipped -- lower the gun for
+## lower_time, throw `grenade_weapon` (leaves the hand release_delay after
+## that), then bring the gun back up over recover_time.
+signal quick_throw_started(grenade_weapon: WeaponData, lower_time: float, release_delay: float, recover_time: float)
 ## Emitted for every resolved ray with where it started and ended, and whether
 ## it hit something with Health. Presentation only (tracer lines).
 signal shot_resolved(from: Vector3, to: Vector3, hit_target: bool)
@@ -126,6 +130,13 @@ const TEST_WEAPON_PATHS := [
 ## roach) uses that instead.
 @export var prop_push_multiplier: float = 2.0
 
+@export_group("Quick Grenade (Q)")
+## Q throws a grenade without switching to it: the gun drops out of view
+## (this long), the throw plays, then the gun comes back up (this long).
+## You can't shoot until it's back.
+@export var quick_throw_lower_time: float = 0.15
+@export var quick_throw_recover_time: float = 0.45
+
 ## Debug toggle (pause menu): firing never drains the magazine, so reload is
 ## effectively never needed. Runtime-only, not saved -- resets to off on
 ## restart. Not a WeaponData/balance number on purpose: this is a dev/testing
@@ -176,6 +187,9 @@ var _pending_recoil := Vector2.ZERO
 var _aim := 0.0
 ## Seconds until a thrown grenade leaves the hand; below 0 = not throwing.
 var _throw_left := -1.0
+## The grenade weapon being thrown (the equipped one, or a Q quick throw's).
+var _throw_weapon: WeaponData
+var _quick_throw_held_prev := false
 ## The weapon held before this one -- where you go back to when you run out
 ## of grenades.
 var _previous: int = 0
@@ -241,6 +255,22 @@ func aim_amount() -> float:
 	return _aim
 
 
+## The grenade weapon you own (null if none) -- what Q throws.
+func grenade_weapon() -> WeaponData:
+	for weapon in _owned:
+		if weapon.throws_grenade:
+			return weapon
+	return null
+
+
+## Every grenade you have: the one in hand plus the spares.
+func grenade_count() -> int:
+	var grenade := grenade_weapon()
+	if grenade == null:
+		return 0
+	return _magazine.get(grenade, grenade.magazine_size) + _ammo.get(grenade.ammo_type, 0)
+
+
 ## Called by WeaponPickup when the player walks over one. "Found in levels,
 ## kept permanently" (original design): once owned, a weapon stays owned for
 ## the rest of the level/campaign, so picking up a duplicate just tops off
@@ -272,8 +302,8 @@ func add_ammo(type: WeaponData.AmmoType, amount: int, emit_signal: bool = true) 
 
 ## Called once per physics tick by the owner's simulation step.
 ## select_weapon is an inventory index, or -1 for "no change". aim = right
-## mouse held.
-func tick(fire: bool, reload: bool, aim: bool, select_weapon: int, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
+## mouse held, quick_throw = Q held.
+func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon: int, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_reload_blocked_left = maxf(_reload_blocked_left - delta, 0.0)
 	_time_since_shot += delta
@@ -285,12 +315,28 @@ func tick(fire: bool, reload: bool, aim: bool, select_weapon: int, delta: float,
 	if weapon == null:
 		return
 
+	# An arm mid-throw: nothing else happens until the grenade's gone.
+	if _throw_left >= 0.0:
+		_throw_left -= delta
+		if _throw_left < 0.0:
+			_release_grenade(_throw_weapon, origin, direction, attacker_id)
+		return
+
+	var quick_pressed := quick_throw and not _quick_throw_held_prev
+	_quick_throw_held_prev = quick_throw
+	if quick_pressed:
+		if weapon.throws_grenade:
+			fire = true # holding grenades already: Q is just a throw
+		else:
+			_start_quick_throw()
+			return
+
 	# Raise toward your eye while aiming, lower otherwise. Reloading lowers it.
 	var aiming := aim and weapon.can_aim and _reload_time_left <= 0.0
 	_aim = move_toward(_aim, 1.0 if aiming else 0.0, delta / maxf(weapon.aim_time, 0.01))
 
 	if weapon.throws_grenade:
-		_tick_throw(weapon, fire, delta, origin, direction, attacker_id)
+		_tick_throw(weapon, fire)
 		return
 
 	if _reload_time_left > 0.0:
@@ -337,11 +383,10 @@ func tick(fire: bool, reload: bool, aim: bool, select_weapon: int, delta: float,
 func _select(index: int) -> void:
 	if index == _current:
 		return
-	# Switching away mid-throw keeps the grenade in your hand.
+	# Switching away mid-throw keeps the grenade (back with the spares).
 	if _throw_left >= 0.0:
 		_throw_left = -1.0
-		var held := current_weapon()
-		_magazine[held] = _magazine.get(held, held.magazine_size) + 1
+		_ammo[_throw_weapon.ammo_type] = _ammo.get(_throw_weapon.ammo_type, 0) + 1
 	_previous = _current
 	_current = index
 	var new_weapon := _owned[_current]
@@ -358,12 +403,7 @@ func _select(index: int) -> void:
 ## grenade leaving the hand throw_release_delay later. The next one comes
 ## into your hand once fire_interval has passed; out of grenades, you switch
 ## back to the weapon you had before.
-func _tick_throw(weapon: WeaponData, fire: bool, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
-	if _throw_left >= 0.0:
-		_throw_left -= delta
-		if _throw_left < 0.0:
-			_release_grenade(weapon, origin, direction, attacker_id)
-		return
+func _tick_throw(weapon: WeaponData, fire: bool) -> void:
 	var loaded: int = _magazine.get(weapon, weapon.magazine_size)
 	if loaded <= 0:
 		if _cooldown > 0.0:
@@ -379,8 +419,29 @@ func _tick_throw(weapon: WeaponData, fire: bool, delta: float, origin: Vector3, 
 	if not infinite_ammo:
 		_magazine[weapon] = loaded - 1
 	_cooldown = weapon.fire_interval
+	_throw_weapon = weapon
 	_throw_left = weapon.throw_release_delay
 	throw_started.emit(weapon.throw_release_delay)
+
+
+## Q with a gun out: throw a grenade without switching to it -- a spare
+## first, then the one "in hand" in the grenade slot. The gun is down for the
+## whole thing, so it can't fire until quick_throw_recover_time after release.
+func _start_quick_throw() -> void:
+	var grenade := grenade_weapon()
+	if grenade == null or grenade_count() <= 0:
+		return
+	if not infinite_ammo:
+		if _ammo.get(grenade.ammo_type, 0) > 0:
+			_ammo[grenade.ammo_type] -= 1
+		else:
+			_magazine[grenade] = _magazine.get(grenade, grenade.magazine_size) - 1
+	_reload_time_left = 0.0 # a reload in progress is dropped
+	_aim = 0.0
+	_throw_weapon = grenade
+	_throw_left = quick_throw_lower_time + grenade.throw_release_delay
+	_cooldown = maxf(_cooldown, _throw_left + quick_throw_recover_time)
+	quick_throw_started.emit(grenade, quick_throw_lower_time, grenade.throw_release_delay, quick_throw_recover_time)
 
 
 ## The grenade leaves the hand: thrown along the aim tilted up a little, plus

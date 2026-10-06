@@ -47,6 +47,9 @@ func _ready() -> void:
 	_weapons.shot_fired.connect(_on_shot_fired)
 	# A grenade throw's "fire" sound is the throw itself.
 	_weapons.throw_started.connect(func(_delay: float) -> void: _on_shot_fired())
+	_weapons.quick_throw_started.connect(func(grenade: WeaponData, _lower: float, _release: float, _recover: float) -> void:
+		SoundPlayer.play_for_owner(grenade.fire_sound, _owner_body)
+	)
 	_weapons.reload_started.connect(_on_reload_started)
 	_weapons.weapon_switched.connect(_on_weapon_switched)
 	_weapons.hit_confirmed.connect(_on_hit_confirmed)
