@@ -69,6 +69,8 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 ## and the ones already up stay. Hit him for summon_cancel_damage to cut it.
 @export var summon_animation_speed: float = 0.6
 @export var summon_cancel_damage: float = 40.0
+## The blinking tell while summoning.
+@export var summon_flash_color: Color = Color(1.0, 0.08, 0.05, 0.8)
 
 @export_group("Healing")
 ## Starts a heal once below this share of his health (0.75 = 75%) and not
@@ -274,7 +276,11 @@ func _start_cast(mode: Mode) -> void:
 	_anim_name = "" # the same spell twice in a row still replays from the start
 	_play(key, false, speed)
 	_cast_length = _anim.get_animation(LIBRARY + "/" + key).length / speed if _anim and _anim.has_animation(LIBRARY + "/" + key) else 1.5
-	_flash_material.albedo_color = heal_flash_color if mode == Mode.HEAL else cast_flash_color
+	_flash_material.albedo_color = cast_flash_color
+	if mode == Mode.HEAL:
+		_flash_material.albedo_color = heal_flash_color
+	elif mode == Mode.SUMMON:
+		_flash_material.albedo_color = summon_flash_color
 	_channel_damage = 0.0
 	var sound := cast_sound
 	if mode == Mode.SUMMON:
@@ -360,7 +366,8 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 # ---- Look -------------------------------------------------------------------
 
 ## The cast tell: flashes speeding up, each one a throb, and a swell that
-## grows until the spell goes off -- orange for attacks, green for a heal.
+## grows until the spell goes off -- orange for attacks, red for a summon,
+## green for a heal.
 ## A heal or summon is channeled, so it builds over the whole animation.
 func _process(delta: float) -> void:
 	var channeling := _mode == Mode.HEAL or _mode == Mode.SUMMON
