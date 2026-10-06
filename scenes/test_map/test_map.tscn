@@ -345,8 +345,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6886158, 0.5, 2.290947)
 
 [node name="RatBender" parent="." unique_id=1300387606 instance=ExtResource("26_ratbender")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.1, -10)
-patrol_speed = 2.3
-rat_cap = 140
+patrol_speed = 2.8
+patrol_radius = 20.0
+rat_cap = 110
 summon_cooldown = 10.0
 summon_animation_speed = 2.0
 heal_delay = 6.0

@@ -8,8 +8,10 @@ extends RigidBody3D
 ##
 ## Deaths:
 ##   - Shot: pops into a little pool of blood and is gone.
-##   - Launched by an explosion (stun()): flies, and splats against whatever
-##     it hits next, leaving a red spot.
+##   - Killed by an explosion: splats on the spot, a big red splatter on the
+##     floor where it stood.
+##   - Caught by a blast but survives (stun()): flies, and splats against
+##     whatever it hits next, leaving a red spot.
 ##
 ## Rule 1 (co-op): only the host moves and bites. The swarm is the brain;
 ## this script just follows orders and reacts to physics.
@@ -191,9 +193,11 @@ func _physics_process(delta: float) -> void:
 		return
 	if _pop_pending:
 		_pop_pending = false
-		if _state != State.THROWN:
+		if _state == State.THROWN:
+			_splat_here() # killed by the blast that hit it: no flight, just splat
+		else:
 			_pop()
-			return
+		return
 	match _state:
 		State.RUN:
 			_run(delta)
@@ -312,8 +316,8 @@ func _on_body_entered(_body: Node) -> void:
 		_splat()
 
 
-## Shot (or hurt any other way): decided next physics tick, so a blast that
-## kills AND launches it (Explosion hurts first, pushes second) flies instead.
+## Shot (or hurt any other way): decided next physics tick, once we know
+## whether a blast did it (Explosion hurts first, then pushes -- stun()).
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	_pop_pending = true
 
@@ -325,6 +329,18 @@ func _pop() -> void:
 	var floor_hit := _ray(global_position + Vector3.UP * 0.2, global_position + Vector3.DOWN * 0.6)
 	if not floor_hit.is_empty():
 		BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, pool_size, blood_color)
+	_remove()
+
+
+## Killed by a blast: splatted where it stood -- a big red splatter on the
+## floor, a burst of blood, gone.
+func _splat_here() -> void:
+	var world := get_tree().current_scene
+	var floor_hit := _ray(global_position + Vector3.UP * 0.3, global_position + Vector3.DOWN * 1.0)
+	var at: Vector3 = floor_hit.position if not floor_hit.is_empty() else global_position
+	var normal: Vector3 = floor_hit.normal if not floor_hit.is_empty() else Vector3.UP
+	BloodFX.spawn_splatter(world, at, normal, splat_size * size, blood_color)
+	BloodFX.spawn_impact(world, at + normal * 0.1, normal, blood_color)
 	_remove()
 
 
