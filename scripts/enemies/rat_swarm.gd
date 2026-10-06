@@ -322,8 +322,11 @@ func leap_at(within: float, stagger: float) -> void:
 			delay += stagger
 
 
+## Runs off a scene-tree timer, which outlives everything: by the time it
+## fires the rat may be gone, or out of the tree (the level being swapped out
+## mid-wave), where its floor ray can't run ("!is_inside_tree()").
 func _leap(rat: Rat) -> void:
-	if is_instance_valid(rat) and is_instance_valid(target):
+	if is_instance_valid(rat) and rat.is_inside_tree() and is_instance_valid(target) and target.is_inside_tree():
 		rat.leap(target)
 
 

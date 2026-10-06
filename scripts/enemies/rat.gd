@@ -313,7 +313,7 @@ func _maybe_leap(delta: float) -> void:
 ## Launch at the target's chest on a ballistic arc that gets there in
 ## leap_time -- velocity = gap / time, plus what gravity will take off.
 func leap(target: Node3D) -> void:
-	if _state != State.RUN or not _on_ground():
+	if not is_inside_tree() or _state != State.RUN or not _on_ground():
 		return
 	var chest := Factions.aim_point(target)
 	var gap := chest - global_position
