@@ -105,6 +105,8 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 ## more), and never chase more than entourage_leash meters from him.
 @export var entourage_health_multiplier: float = 1.2
 @export var entourage_leash: float = 10.0
+## Damage it takes during the entourage summon to cut it short.
+@export var entourage_cancel_damage: float = 100.0
 
 @export_group("Bodyguards")
 @export var guard_count: int = 4
@@ -483,7 +485,12 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 	_update_memory(_find_nearest_player())
 	if _mode == Mode.HEAL or _mode == Mode.SUMMON:
 		_channel_damage += _amount
-		if _channel_damage >= (heal_cancel_damage if _mode == Mode.HEAL else summon_cancel_damage):
+		var cancel_at := summon_cancel_damage
+		if _mode == Mode.HEAL:
+			cancel_at = heal_cancel_damage
+		elif _summon_into != null and _summon_into == _entourage:
+			cancel_at = entourage_cancel_damage
+		if _channel_damage >= cancel_at:
 			_end_cast() # knocked out of it -- keeps what he got so far
 			return
 	if _mode == Mode.PATROL and _target:
