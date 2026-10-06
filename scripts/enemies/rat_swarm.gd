@@ -27,7 +27,7 @@ const RAT_SCENE := preload("res://scenes/enemy/rat.tscn")
 const CORPSE_GROUP := "corpses"
 
 @export_group("Pack")
-@export var rat_speed: float = 4.25
+@export var rat_speed: float = 4.04
 ## Following the Bender, rats spread between these distances around him.
 @export var follow_radius_min: float = 0.9
 @export var follow_radius_max: float = 2.4
@@ -91,6 +91,13 @@ var rats: Array[Rat] = []
 
 var _frenzy_left := 0.0
 var _time := 0.0
+## This tick's rat positions and velocities (read once, used many times),
+## and a grid of which rats are in which square -- so each rat only checks
+## the rats in its own and the 8 surrounding squares for crowding, not the
+## whole horde (with 90 rats: a few hundred checks instead of ~8,000).
+var _pos := PackedVector3Array()
+var _vel := PackedVector3Array()
+var _cells := {} # Vector2i -> Array of rat indices
 var _path := PackedVector3Array()
 var _path_timer := 0.0
 var _corpse: Node3D
@@ -177,9 +184,10 @@ func _physics_process(delta: float) -> void:
 		order = Order.HUNT # leaderless: they just go for whoever's around
 	_frenzy_left = maxf(_frenzy_left - delta, 0.0)
 
+	_build_grid()
 	var center := Vector3.ZERO
-	for rat in rats:
-		center += rat.global_position
+	for p in _pos:
+		center += p
 	center /= rats.size()
 
 	var goal := _goal()
@@ -192,8 +200,9 @@ func _physics_process(delta: float) -> void:
 	_time += delta
 	var speed := rat_speed * lerpf(1.0, frenzy_speed, _frenzy())
 	var any_moving := false
-	for rat in rats:
-		rat.desired_velocity = _steer(rat, goal, speed, delta)
+	for i in rats.size():
+		var rat := rats[i]
+		rat.desired_velocity = _steer(rat, i, goal, speed, delta)
 		any_moving = any_moving or rat.desired_velocity.length_squared() > 1.0
 	_update_scurry(center, any_moving)
 
@@ -226,8 +235,8 @@ func _refresh_path(from: Vector3, goal: Vector3) -> void:
 ## path when it's far, straight in when it's close -- then made alive: it
 ## weaves, falls in with its neighbours' flow, keeps a little space, and
 ## runs in its own stop-start bursts.
-func _steer(rat: Rat, goal: Vector3, speed: float, delta: float) -> Vector3:
-	var position := rat.global_position
+func _steer(rat: Rat, index: int, goal: Vector3, speed: float, delta: float) -> Vector3:
+	var position := _pos[index]
 	# Restless: now and then a resting rat picks a new spot in the pack.
 	if order != Order.HUNT and randf() < delta / maxf(restless_time, 0.1):
 		rat.slot = Vector2.from_angle(randf() * TAU)
@@ -236,7 +245,7 @@ func _steer(rat: Rat, goal: Vector3, speed: float, delta: float) -> Vector3:
 	var to_spot := spot - position
 	to_spot.y = 0.0
 	var distance := to_spot.length()
-	var crowd := _neighbours(rat)
+	var crowd := _neighbours(index)
 	if distance < 0.35 and order != Order.HUNT:
 		rat.eating = _corpse != null
 		return crowd[0] * speed * 0.5
@@ -292,24 +301,47 @@ func _along_path(position: Vector3) -> Vector3:
 ## One pass over the pack for the two boids rules: [separation push, the
 ## average heading of rats nearby (alignment)]. Swarming the player they
 ## barely keep apart -- so they pile up and climb over each other.
-func _neighbours(rat: Rat) -> Array[Vector3]:
+func _neighbours(index: int) -> Array[Vector3]:
 	var push := Vector3.ZERO
 	var flow := Vector3.ZERO
 	var spacing := separation_distance * (0.5 if order == Order.HUNT else 1.0)
-	var position := rat.global_position
-	for other in rats:
-		if other == rat:
-			continue
-		var away := position - other.global_position
-		away.y = 0.0
-		var d := away.length()
-		if d < spacing and d > 0.001:
-			push += away / d * (1.0 - d / spacing)
-		if d < neighbour_distance:
-			flow += Vector3(other.linear_velocity.x, 0.0, other.linear_velocity.z)
+	var position := _pos[index]
+	var cell := _cell_of(position)
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			var bucket: Array = _cells.get(cell + Vector2i(dx, dz), [])
+			for other: int in bucket:
+				if other == index:
+					continue
+				var away := position - _pos[other]
+				away.y = 0.0
+				var d := away.length()
+				if d < spacing and d > 0.001:
+					push += away / d * (1.0 - d / spacing)
+				if d < neighbour_distance:
+					flow += Vector3(_vel[other].x, 0.0, _vel[other].z)
 	if flow.length_squared() > 0.01:
 		flow = flow.normalized()
 	return [push, flow]
+
+
+## Sorts every rat into a neighbour_distance-sized square, once per tick.
+func _build_grid() -> void:
+	_cells.clear()
+	_pos.resize(rats.size())
+	_vel.resize(rats.size())
+	for i in rats.size():
+		var rat := rats[i]
+		_pos[i] = rat.global_position
+		_vel[i] = rat.linear_velocity
+		var cell := _cell_of(_pos[i])
+		if not _cells.has(cell):
+			_cells[cell] = []
+		(_cells[cell] as Array).append(i)
+
+
+func _cell_of(position: Vector3) -> Vector2i:
+	return Vector2i(floori(position.x / neighbour_distance), floori(position.z / neighbour_distance))
 
 
 ## A body on the floor near the Bender to eat (EnemyRagdoll adds dead
