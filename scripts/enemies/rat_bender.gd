@@ -14,13 +14,16 @@ extends Enemy
 ##       rats leaping at you one after another;
 ##     - short on rats: SUMMON (Spell Casting) -- new rats appear around him,
 ##       back up to the cap.
+##   BODYGUARDS - a few big, tough rats that fight as part of the horde but
+##            are loyal: they never chase more than guard_leash from him,
+##            and only leave him to eat a corpse that's really close. Lost
+##            ones burrow back up with his next summon.
 ##   ESCORT - his whole horde has run off ahead of him: he summons a fresh
-##            swarm half its size at his feet (past the cap) -- an entourage
-##            that stays with him and only swarms you if you come close.
-##   BODYGUARDS - always: a few big, tough rats hovering right at his feet.
-##            They only wander off to eat a corpse that's really close, and
-##            leap at you if you get near him. Lost ones come back with his
-##            next summon.
+##            swarm half its size at his feet that sticks close (escort_leash).
+##   PHASE TWO - beaten down to half health, he summons his ENTOURAGE: a
+##            whole second horde (past the cap), a bit tougher, that sticks
+##            closer to him than the first. Once per fight; cut the summon
+##            short and only the rats already up stay.
 ##   HEAL - hurt and left alone a moment, he stands and channels a heal
 ##          (Spell Casting, slowed), flashing green faster and faster. Health
 ##          trickles in the whole time, so knocking him out of it early (enough
@@ -87,12 +90,21 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 @export_group("Escort")
 ## His horde counts as "run off ahead" when no rat is within this many meters
 ## of him and the pack is out in front of him. Then he summons an escort
-## swarm half the horde's size (ignoring rat_cap), at most every
-## escort_cooldown seconds.
+## half the horde's size (ignoring rat_cap) -- topped up to that, never past
+## it, at most every escort_cooldown seconds.
 @export var escort_lead_distance: float = 10.0
 @export var escort_cooldown: float = 15.0
-## The escort stays at his feet and only swarms you inside this range of him.
-@export var escort_engage_range: float = 6.0
+## The escort never chases more than this many meters from him.
+@export var escort_leash: float = 6.0
+
+@export_group("Phase Two")
+## At this share of his health (0.5 = half) he summons the entourage: a full
+## second horde of rat_cap rats, on top of the first.
+@export_range(0.0, 1.0, 0.05) var phase_two_health: float = 0.5
+## Entourage rats have this many times a normal rat's health (1.2 = 20%
+## more), and never chase more than entourage_leash meters from him.
+@export var entourage_health_multiplier: float = 1.2
+@export var entourage_leash: float = 10.0
 
 @export_group("Bodyguards")
 @export var guard_count: int = 4
@@ -101,16 +113,10 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 @export var guard_rat_scale: float = 2.0
 @export var guard_health_multiplier: float = 4.0
 @export var guard_damage_multiplier: float = 2.0
-## How far from his feet they hover (at normal rat size; scaled up by
-## guard_rat_scale).
-@export var guard_radius_min: float = 0.5
-@export var guard_radius_max: float = 0.9
-## They only leave him to eat a corpse within this many meters of him.
+## They fight with the horde but never chase more than this from him...
+@export var guard_leash: float = 6.0
+## ...and only leave him to eat a corpse within this many meters of him.
 @export var guard_eat_range: float = 3.0
-## Get within this range of him and they go for you, leaping in a wave every
-## guard_leap_cooldown seconds while you stay close.
-@export var guard_engage_range: float = 5.0
-@export var guard_leap_cooldown: float = 3.0
 
 @export_group("Healing")
 ## Starts a heal once below this share of his health (0.75 = 75%) and not
@@ -156,14 +162,16 @@ var _channel_damage := 0.0
 ## Rats this summon will bring, and how many are up so far.
 var _summon_goal := 0
 var _summoned := 0
-## Which swarm this summon fills: the horde, or the escort.
+## Which swarm this summon fills: the horde, or the entourage.
 var _summon_into: RatSwarm
-## His bodyguard swarm, made the first time the horde runs off ahead.
+## Summoned whenever the horde runs off ahead of him.
 var _escort: RatSwarm
 var _escort_cooldown_left := 0.0
-## His few big bodyguard rats, always at his feet.
+## His second horde, summoned once at phase two.
+var _entourage: RatSwarm
+var _phase_two := false
+## His few big, loyal bodyguard rats.
 var _guards: RatSwarm
-var _guard_leap_left := 0.0
 var _since_hurt := 999.0
 var _cast_time := 0.0
 var _cast_length := 1.0
@@ -225,18 +233,13 @@ func _physics_process(delta: float) -> void:
 	_leap_cooldown_left = maxf(_leap_cooldown_left - delta, 0.0)
 	_summon_cooldown_left = maxf(_summon_cooldown_left - delta, 0.0)
 	_heal_cooldown_left = maxf(_heal_cooldown_left - delta, 0.0)
+	_escort_cooldown_left = maxf(_escort_cooldown_left - delta, 0.0)
 	_since_hurt += delta
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
 		_update_memory(_find_nearest_player())
 	swarm.target = _target
-	_escort_cooldown_left = maxf(_escort_cooldown_left - delta, 0.0)
-	_command_guards(delta)
-	if _escort:
-		_escort.target = _target
-		var close := _target != null and global_position.distance_to(_target.global_position) <= escort_engage_range
-		_escort.order = RatSwarm.Order.HUNT if close else RatSwarm.Order.FOLLOW
 
 	match _mode:
 		Mode.PATROL:
@@ -245,6 +248,12 @@ func _physics_process(delta: float) -> void:
 			_think_chase_target()
 		Mode.CAST_RUSH, Mode.CAST_LEAP, Mode.SUMMON, Mode.HEAL:
 			_think_cast(delta)
+
+	# The entourage and bodyguards do whatever the horde is doing (their
+	# leashes keep them closer to him).
+	for pack in _packs():
+		pack.target = _target
+		pack.order = swarm.order
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -295,6 +304,10 @@ func _think_chase_target() -> void:
 	var can_see_now := _can_see(_target)
 	var aim := _target.global_position if can_see_now else _last_seen_position
 	var distance := _flat_distance_to_position(aim)
+	if not _phase_two and health.current_health <= health.max_health * phase_two_health:
+		_phase_two = true
+		_begin_summon(_entourage_swarm(), rat_cap)
+		return
 	if _wants_heal():
 		_start_cast(Mode.HEAL)
 		return
@@ -307,6 +320,7 @@ func _think_chase_target() -> void:
 	if _horde_ran_ahead():
 		_begin_summon(_escort_swarm(), _escort_shortfall())
 		return
+
 	if swarm.count() < rat_cap and _summon_cooldown_left <= 0.0 and distance > leap_range:
 		_begin_summon(swarm, mini(summon_batch, rat_cap - swarm.count()))
 		return
@@ -377,7 +391,7 @@ func _end_cast() -> void:
 		if _summon_into == swarm:
 			_summon_cooldown_left = summon_cooldown
 			_top_up_guards()
-		else:
+		elif _summon_into == _escort:
 			_escort_cooldown_left = escort_cooldown
 	_mode = Mode.CHASE if _target else Mode.PATROL
 
@@ -399,33 +413,58 @@ func _horde_ran_ahead() -> bool:
 	return forward.dot(swarm.center() - global_position) > 0.0
 
 
-## How many rats short of half the horde's size the escort is -- he tops it
-## up to that, never past it, so it can't keep growing in a long fight.
+## How many rats short of half the horde's size the escort is.
 func _escort_shortfall() -> int:
 	var have := _escort.count() if _escort else 0
 	return swarm.count() / 2 - have
 
 
-## The escort swarm, made the first time it's needed -- a second RatSwarm
-## with the horde's settings, following him.
+## The escort: normal rats with the horde's settings, on a short leash.
 func _escort_swarm() -> RatSwarm:
 	if _escort == null:
 		_escort = swarm.duplicate() as RatSwarm
-		_escort.name = "EscortSwarm"
-
+		_escort.name = "Escort"
+		_escort.leash_distance = escort_leash
 		add_child(_escort)
 		_escort.bender = self
 	return _escort
 
 
+## The entourage: a second horde with the first's settings, a bit tougher,
+## kept closer to him. Made at phase two.
+func _entourage_swarm() -> RatSwarm:
+	if _entourage == null:
+		_entourage = swarm.duplicate() as RatSwarm
+		_entourage.name = "Entourage"
+		_entourage.rat_health_multiplier = entourage_health_multiplier
+		_entourage.leash_distance = entourage_leash
+		add_child(_entourage)
+		_entourage.bender = self
+	return _entourage
+
+
+## Every pack he has besides the horde.
+func _packs() -> Array[RatSwarm]:
+	var packs: Array[RatSwarm] = []
+	for pack in [_escort, _entourage, _guards]:
+		if pack and is_instance_valid(pack):
+			packs.append(pack)
+	return packs
+
+
+## His spells drive every pack he has.
 func _release_spell() -> void:
+	var all: Array[RatSwarm] = [swarm]
+	all.append_array(_packs())
 	match _mode:
 		Mode.CAST_RUSH:
 			_rush_cooldown_left = rush_cooldown
-			swarm.frenzy()
+			for pack in all:
+				pack.frenzy()
 		Mode.CAST_LEAP:
 			_leap_cooldown_left = leap_cooldown
-			swarm.leap_wave(leap_wave_range, leap_wave_stagger)
+			for pack in all:
+				pack.leap_wave(leap_wave_range, leap_wave_stagger)
 
 
 ## Hurt enough, left alone long enough, and not healed too recently.
@@ -454,7 +493,7 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 func _on_died(attacker_id: int, is_critical: bool) -> void:
 	_end_cast_look()
 	# The horde lives on without him: keep it in the world after his body goes.
-	for pack: RatSwarm in [swarm, _escort, _guards]:
+	for pack: RatSwarm in [swarm, _escort, _entourage, _guards]:
 		if pack and pack.get_parent() == self:
 			pack.bender = null
 			pack.reparent.call_deferred(get_tree().current_scene)
@@ -464,7 +503,7 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 # ---- Bodyguards -------------------------------------------------------------
 
 ## His bodyguard swarm: a copy of the horde's settings with big, tough rats
-## kept in tight around his feet.
+## on a short leash.
 func _make_guards() -> void:
 	_guards = swarm.duplicate() as RatSwarm
 	_guards.name = "Bodyguards"
@@ -472,10 +511,8 @@ func _make_guards() -> void:
 	_guards.rat_health_multiplier = guard_health_multiplier
 	_guards.rat_damage_multiplier = guard_damage_multiplier
 	_guards.separation_distance *= guard_rat_scale
-	_guards.follow_radius_min = guard_radius_min * guard_rat_scale
-	_guards.follow_radius_max = guard_radius_max * guard_rat_scale
 	_guards.eat_range = guard_eat_range
-	_guards.restless_time *= 2.0 # guards fidget less than the horde
+	_guards.leash_distance = guard_leash
 	add_child(_guards)
 	_guards.bender = self
 	_guards.spawn_rats(guard_count, global_position)
@@ -485,19 +522,6 @@ func _make_guards() -> void:
 func _top_up_guards() -> void:
 	if _guards and _guards.count() < guard_count:
 		_guards.spawn_rats(guard_count - _guards.count(), global_position)
-
-
-## At his feet unless you come close; then at you, with a leap every so often.
-func _command_guards(delta: float) -> void:
-	if _guards == null:
-		return
-	_guard_leap_left = maxf(_guard_leap_left - delta, 0.0)
-	_guards.target = _target
-	var close := _target != null and global_position.distance_to(_target.global_position) <= guard_engage_range
-	_guards.order = RatSwarm.Order.HUNT if close else RatSwarm.Order.FOLLOW
-	if close and _guard_leap_left <= 0.0:
-		_guard_leap_left = guard_leap_cooldown
-		_guards.leap_at(guard_engage_range + 2.0, 0.15)
 
 
 # ---- Look -------------------------------------------------------------------

@@ -34,6 +34,9 @@ const CORPSE_GROUP := "corpses"
 @export var rat_health_multiplier: float = 1.0
 ## ...and bites (and leap-bites) this many times harder.
 @export var rat_damage_multiplier: float = 1.0
+## Hunting, this pack never goes more than this many meters from the Bender
+## -- loyal packs swarm you only while you're near him. 0 = no leash.
+@export var leash_distance: float = 0.0
 ## Following the Bender, rats spread between these distances around him.
 @export var follow_radius_min: float = 0.9
 @export var follow_radius_max: float = 2.4
@@ -257,7 +260,12 @@ func _physics_process(delta: float) -> void:
 ## Where the pack as a whole is headed.
 func _goal() -> Vector3:
 	if order == Order.HUNT and target:
-		return target.global_position
+		var hunt := target.global_position
+		if leash_distance > 0.0 and bender:
+			var reach := hunt - bender.global_position
+			if reach.length() > leash_distance:
+				hunt = bender.global_position + reach.normalized() * leash_distance
+		return hunt
 	if _corpse and is_instance_valid(_corpse):
 		return _corpse.global_position
 	if bender:
