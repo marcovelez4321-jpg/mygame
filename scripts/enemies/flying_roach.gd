@@ -31,7 +31,7 @@ extends RigidBody3D
 
 ## SPIT is the spitter's attack (see the Spitter group): it hangs back,
 ## rears up, and lobs a glob of acid on an arc instead of diving.
-enum State { HUNT, CIRCLE, DIVE, RECOVER, STUNNED, DEAD, SPIT }
+enum State { HUNT, CIRCLE, DIVE, RECOVER, STUNNED, DEAD, SPIT, CARRY }
 ## Random rolls spitter_chance when it spawns; mappers can force either.
 enum Kind { RANDOM, NORMAL, SPITTER }
 
@@ -194,6 +194,12 @@ var _dive_direction := Vector3.ZERO
 var _held := false
 var _circle_angle := 0.0
 var _noise := FastNoiseLite.new()
+## Lifting a body with other roaches (RoachCarry), and which grab point is
+## this one's.
+var _carry: RoachCarry
+var carry_slot := 0
+var _carry_look := 0.0
+var _carry_bite := 0.0
 var _time := 0.0
 
 @onready var health: Health = $Health
@@ -255,6 +261,20 @@ func _physics_process(delta: float) -> void:
 	if _state == State.STUNNED:
 		_think_stunned()
 		return
+	if _state == State.CARRY:
+		if _target:
+			_leave_carry() # something to fight: drop it
+		else:
+			_think_carry(delta)
+			return
+	if _target == null and _state == State.HUNT:
+		# Nothing to fight: look around for a body to carry off and eat.
+		_carry_look -= delta
+		if _carry_look <= 0.0:
+			_carry_look = randf_range(0.8, 1.2)
+			RoachCarry.recruit(self)
+			if _state == State.CARRY:
+				return
 	if _try_bite():
 		return
 	match _state:
@@ -560,6 +580,58 @@ func _think_dead() -> void:
 	BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, splat_size, blood_color)
 	BloodFX.spawn_impact(world, floor_hit.position, floor_hit.normal, blood_color)
 	splatted.emit()
+
+
+# ---- Carrying bodies (RoachCarry) --------------------------------------------
+
+## Free to help carry a body: alive, nothing to fight, not busy.
+func is_idle() -> bool:
+	return _target == null and _state == State.HUNT and not _held
+
+
+func is_carrying(carry: RoachCarry) -> bool:
+	return _carry == carry and _state == State.CARRY
+
+
+func start_carry(carry: RoachCarry, slot: int) -> void:
+	_carry = carry
+	carry_slot = slot
+	_set_state(State.CARRY)
+
+
+func end_carry(carry: RoachCarry) -> void:
+	if _carry != carry:
+		return
+	_carry = null
+	if _state == State.CARRY:
+		_set_state(State.HUNT)
+
+
+func _leave_carry() -> void:
+	if is_instance_valid(_carry):
+		_carry.leave(self)
+	_carry = null
+	_set_state(State.HUNT)
+
+
+## Flies to its grab point on the body and holds there; once the body's off
+## the ground, takes bites out of it (blood flies, and RoachCarry counts the
+## bites toward a new roach).
+func _think_carry(delta: float) -> void:
+	if not is_instance_valid(_carry) or not is_instance_valid(_carry.ragdoll):
+		_leave_carry()
+		return
+	var grab := _carry.grab_point(carry_slot)
+	_turn_toward(_carry.ragdoll.body_position() - global_position, delta)
+	linear_velocity = linear_velocity.move_toward(_seek(grab, cruise_speed), acceleration * delta)
+	if not _carry.is_eating() or global_position.distance_to(grab) > RoachCarry.HOLD_DISTANCE:
+		return
+	_carry_bite -= delta
+	if _carry_bite > 0.0:
+		return
+	_carry_bite = randf_range(0.5, 0.9)
+	BloodFX.spawn_impact(get_tree().current_scene, global_position + facing * 0.25, -facing + Vector3.UP * 0.3, RoachCarry.BLOOD, 1.2)
+	_carry.bitten()
 
 
 func _set_state(state: State) -> void:

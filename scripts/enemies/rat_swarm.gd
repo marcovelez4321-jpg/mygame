@@ -135,7 +135,7 @@ const CORPSE_GROUP := "corpses"
 @export var eat_range: float = 8.0
 ## A pack only goes for bodies at all -- eating or dragging -- with at least
 ## this many rats in it.
-@export var eat_min_rats: int = 15
+@export var eat_min_rats: int = 10
 
 @export_group("Feeding")
 ## Rats eating a body breed: every bites_per_rat bites (all the eaters

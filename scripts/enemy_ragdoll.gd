@@ -594,6 +594,31 @@ func drag(velocity: Vector3) -> void:
 		bone.linear_velocity = Vector3(velocity.x, minf(bone.linear_velocity.y, 0.5), velocity.z)
 
 
+## Roaches carrying the body (RoachCarry): the torso bones -- hips, spine,
+## chest, neck -- all get the same velocity, so the body is held up by its
+## middle and the arms and legs hang off it on their joints. ZERO lets go.
+func carry(velocity: Vector3) -> void:
+	var holding := velocity != Vector3.ZERO
+	for bone in _bones:
+		bone.can_sleep = _settled and not holding
+		if not holding:
+			continue
+		if "Hips" in bone.name or "Spine" in bone.name or "Chest" in bone.name or "Neck" in bone.name:
+			bone.apply_central_impulse(Vector3.UP * 0.001) # wakes a sleeping body
+			bone.linear_velocity = velocity
+
+
+## Any part of the body resting on (or just above) the ground.
+func is_touching_ground() -> bool:
+	var space := _enemy.get_world_3d().direct_space_state
+	for bone in _bones:
+		var query := PhysicsRayQueryParameters3D.create(bone.global_position, bone.global_position + Vector3.DOWN * 0.25)
+		query.collision_mask = 1
+		if not space.intersect_ray(query).is_empty():
+			return true
+	return false
+
+
 ## Settled: from here the physics engine may put the body to sleep.
 func _allow_sleep() -> void:
 	if _mutating:
