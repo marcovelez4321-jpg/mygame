@@ -21,7 +21,7 @@ attack_interval = 1.1
 attack_windup = 0.35
 attack_recovery = 0.15
 pain_time = 0.3
-corpse_time = 15.0
+corpse_time = 60.0
 can_shoot = true
 shot_unfocused_multiplier = 3.3
 

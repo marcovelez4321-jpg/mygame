@@ -25,6 +25,12 @@ const RAGDOLL_LAYER := 1 << 3
 ## body crumples into a heap. Bones joined together don't collide with their
 ## direct neighbours, which is what keeps them from fighting at the joints.
 const WORLD_MASK := 1 | RAGDOLL_LAYER
+## However long the body stays, the death flail never runs longer than this.
+const MAX_THRASH_TIME := 15.0
+## Seconds after death (or after the flail ends) before the body may stop
+## being simulated. Bodies stay a minute; dozens that never sleep would cost
+## physics time for nothing. A shot or rats dragging it wake it right up.
+const SETTLE_TIME := 6.0
 
 ## PhysicalBone3D has no apply_torque()/apply_torque_impulse() at all --
 ## confirmed directly against the class reference after the first version of
@@ -203,6 +209,8 @@ var _fall_start_y := 0.0
 var _floor_y := 0.0
 
 var _thrashing := false
+## Done moving on its own (see _allow_sleep()).
+var _settled := false
 var _thrash_elapsed := 0.0
 var _next_thrash_time := 0.0
 ## Each entry is {"bones": [upper, lower], "is_leg": bool} -- a 2-bone limb
@@ -314,6 +322,9 @@ func _start_ragdoll() -> void:
 
 	_apply_hit_impulse()
 	_start_death_reaction()
+	if not _enemy.will_mutate:
+		var settle := SETTLE_TIME + (thrash_time if thrash_enabled else 0.0)
+		get_tree().create_timer(settle).timeout.connect(_allow_sleep)
 	# Rats come and eat bodies on the floor (RatSwarm).
 	_enemy.add_to_group(RatSwarm.CORPSE_GROUP)
 	get_tree().create_timer(blood_pool_delay).timeout.connect(_spawn_blood_pool)
@@ -335,7 +346,7 @@ func _start_death_reaction() -> void:
 	# Track the thrash to the corpse's own remaining lifetime rather than a
 	# fixed duration disconnected from it, so it's still going right up until
 	# the body is about to be removed.
-	thrash_time = maxf(_enemy.corpse_time - 0.3, 0.5)
+	thrash_time = clampf(_enemy.corpse_time - 0.3, 0.5, MAX_THRASH_TIME)
 
 	# Find the floor below the body right now (still roughly at standing
 	# height) so the falling-reach phase has a start height and a target
@@ -527,6 +538,7 @@ func _process_mutation_twitch(delta: float) -> void:
 func _on_mutation_stopped() -> void:
 	_mutating = false
 	_stop_pulse()
+	get_tree().create_timer(SETTLE_TIME).timeout.connect(_allow_sleep)
 
 
 ## The payoff: a blood explosion at roughly the body's center, then the
@@ -574,8 +586,22 @@ func body_position() -> Vector3:
 ## velocity, so the whole body slides along as one piece -- pushing single
 ## bones just makes the joints fight (see _apply_hit_impulse()). ZERO lets go.
 func drag(velocity: Vector3) -> void:
+	var dragging := velocity != Vector3.ZERO
 	for bone in _bones:
+		bone.can_sleep = _settled and not dragging
+		if dragging:
+			bone.apply_central_impulse(Vector3.UP * 0.001) # wakes a sleeping body
 		bone.linear_velocity = Vector3(velocity.x, minf(bone.linear_velocity.y, 0.5), velocity.z)
+
+
+## Settled: from here the physics engine may put the body to sleep.
+func _allow_sleep() -> void:
+	if _mutating:
+		return
+	_settled = true
+	for bone in _bones:
+		if is_instance_valid(bone):
+			bone.can_sleep = true
 
 
 ## Pushes the body the way the killing blow pushed it: the bone nearest the

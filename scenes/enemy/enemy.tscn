@@ -50,7 +50,7 @@ sight_range = 15.0
 attack_range = 2.2
 attack_windup = 0.47
 pain_time = 0.4
-corpse_time = 20.0
+corpse_time = 60.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1873091499]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0977296, 0)
