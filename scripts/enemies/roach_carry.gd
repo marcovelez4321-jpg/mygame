@@ -7,7 +7,7 @@ extends Node
 ## It takes at least MIN_ROACHES idle roaches near a body to try (more can
 ## join, up to MAX_ROACHES). They each fly to a grab point around it; once
 ## MIN_ROACHES have hold, they lift it by the torso (arms and legs dangle)
-## up to CARRY_HEIGHT. Only when NO part of it is touching the ground do they
+## up to CARRY_HEIGHT. Once lifting they commit: only getting hurt makes one let go.
 ## start eating -- blood flies, and every BITES_PER_ROACH bites a new roach
 ## bursts out of the body (at most ROACHES_PER_BODY). After EAT_TIME, or if
 ## fewer than MIN_ROACHES are left holding it, they let it drop.
@@ -23,9 +23,9 @@ const MAX_ROACHES := 6
 const RECRUIT_RANGE := 12.0
 ## How high the body's hips are held above the floor, and how fast it rises.
 const CARRY_HEIGHT := 1.6
-const LIFT_SPEED := 1.2
+const LIFT_SPEED := 1.5 # 1.25x the original 1.2
 ## A roach counts as holding the body inside this distance of its grab point.
-const HOLD_DISTANCE := 0.7
+const HOLD_DISTANCE := 0.875 # 1.25x the original 0.7: easier to count as holding
 const EAT_TIME := 8.0
 const BITES_PER_ROACH := 25
 const ROACHES_PER_BODY := 3

@@ -200,6 +200,10 @@ var _carry: RoachCarry
 var carry_slot := 0
 var _carry_look := 0.0
 var _carry_bite := 0.0
+## When it last took damage (in _time), so a carrying roach drops the body
+## only while it's actually being hurt.
+var _hurt_at := -999.0
+const CARRY_FLINCH_TIME := 1.0
 var _time := 0.0
 
 @onready var health: Health = $Health
@@ -262,8 +266,10 @@ func _physics_process(delta: float) -> void:
 		_think_stunned()
 		return
 	if _state == State.CARRY:
-		if _target:
-			_leave_carry() # something to fight: drop it
+		# Committed: it keeps hauling and eating whatever else is around --
+		# only actually getting hurt makes it let go.
+		if _time - _hurt_at < CARRY_FLINCH_TIME:
+			_leave_carry()
 		else:
 			_think_carry(delta)
 			return
@@ -546,6 +552,7 @@ func set_held(held: bool) -> void:
 
 
 func _on_damaged(_amount: float, _attacker_id: int) -> void:
+	_hurt_at = _time
 	if _state == State.DIVE:
 		_end_dive() # getting shot knocks it out of a dive
 
