@@ -24,6 +24,7 @@ extends CanvasLayer
 @onready var audio_button: Button = $Dim/MenuPanel/VBox/AudioButton
 @onready var character_option: OptionButton = $Dim/MenuPanel/VBox/CharacterRow/CharacterOption
 @onready var test_map_button: Button = $Dim/MenuPanel/VBox/TestMapButton
+@onready var hub_button: Button = $Dim/MenuPanel/VBox/HubButton
 
 ## On-screen names for GameSettings.AUDIO_BUSES, one slider each.
 const AUDIO_BUS_LABELS := {
@@ -88,6 +89,7 @@ func _ready() -> void:
 	add_child(test_map_loader)
 	test_map_button.pressed.connect(test_map_loader.pick)
 	test_map_loader.map_ready.connect(_open_test_map)
+	hub_button.pressed.connect(_go_to_hub)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -101,6 +103,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func open() -> void:
 	visible = true
+	# Only offered when you're somewhere other than the hub already.
+	var current := get_tree().current_scene
+	hub_button.visible = current != null and current.scene_file_path != MissionData.HUB_SCENE
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_sync_sensitivity_slider()
@@ -276,6 +281,14 @@ func _on_character_selected(index: int) -> void:
 		var model := player.get_node_or_null("PlayerModel") as PlayerModel
 		if model:
 			model.set_character(_characters[index])
+
+
+## Back to Grandma's house (MissionData.HUB_SCENE) from a mission -- a
+## stand-in until missions have their own return portal at the end.
+## Rule 1 (co-op): becomes a host-only "everyone back to the hub".
+func _go_to_hub() -> void:
+	close()
+	get_tree().change_scene_to_file(MissionData.HUB_SCENE)
 
 
 ## Reloads even when already in the test level, so re-picking an edited map

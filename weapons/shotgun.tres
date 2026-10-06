@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://usm3sl5kokv2"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://c5cnojtgl7uns"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://tp0htaqch10f" path="res://art/weapons/PSX_Guns/FBX/Shotgun.fbx" id="2_yi04f"]
@@ -23,12 +23,15 @@ magazine_size = 1
 reload_time = 0.7
 recoil_kick_distance = 0.1
 recoil_kick_rotation_degrees = 10.0
+recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-0.05, 0.7), Vector2(0.1, 0.75), Vector2(0.15, 0.8), Vector2(0.25, 0.7), Vector2(0.3, 0.6), Vector2(0.3, 0.5), Vector2(0.2, 0.45), Vector2(-0.1, 0.45), Vector2(-0.3, 0.4), Vector2(-0.4, 0.4), Vector2(-0.35, 0.35), Vector2(-0.2, 0.35), Vector2(0.2, 0.35), Vector2(0.35, 0.3)])
+recoil_scale = 4.0
+recoil_jitter = 0.32
 draw_time = 0.6
 viewmodel_scene = ExtResource("2_yi04f")
 viewmodel_position = Vector3(0.06961666, -0.15292223, -0.17601113)
 viewmodel_rotation_degrees = Vector3(-6.1223407, 86.735466, 0)
 viewmodel_scale = 1.2960939373946962
-muzzle_offset = Vector3(0.39170688, 0.08010229, -0.035429858)
+muzzle_offset = Vector3(0.5013528, 0.065914884, -0.003895534)
 muzzle_flash_time = 0.15
 hold_animation = ExtResource("6_hold")
 arms_position = Vector3(0.016034938, -1.5091604, 0.041858062)

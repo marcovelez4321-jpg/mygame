@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://c3xdwbwnsmpvr"]
+
+[ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
+[ext_resource type="Resource" uid="uid://c2fxecuoqd75" path="res://weapons/ppsh.tres" id="2"]
+[ext_resource type="PackedScene" uid="uid://crog8r7ju3cxr" path="res://art/weapons/NEWPSXWEAPONS/PPSH/PPSH.glb" id="3"]
+
+[sub_resource type="SphereShape3D" id="PickupZoneShape"]
+radius = 0.65
+
+[sub_resource type="BoxShape3D" id="PhysicalShape"]
+size = Vector3(0.05, 0.26, 0.78)
+
+[node name="WeaponPickup" type="RigidBody3D" unique_id=1]
+mass = 1.2
+script = ExtResource("1")
+weapon = ExtResource("2")
+
+[node name="PickupArea" type="Area3D" parent="." unique_id=406267476]
+collision_layer = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea" unique_id=973329271]
+shape = SubResource("PickupZoneShape")
+
+[node name="PPSH" parent="." unique_id=678490490 instance=ExtResource("3")]
+transform = Transform3D(0.17, 0, 0, 0, 0.17, 0, 0, 0, 0.17, 0, 0.014, 0.005)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1761138420]
+shape = SubResource("PhysicalShape")

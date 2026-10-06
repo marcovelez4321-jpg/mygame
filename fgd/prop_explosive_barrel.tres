@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/props/explosive_barrel.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "prop_explosive_barrel"
+description = "A red explosive barrel. Blows up like an RPG rocket when shot or caught in a blast -- line a few up for a chain reaction. Place it with its bottom on the floor."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-12, -12, 0, 24, 24, 36),
+"color": Color(0.85, 0.15, 0.1, 1)
+}

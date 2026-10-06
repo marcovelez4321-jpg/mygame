@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="SoundEvent" format=3]
+[gd_resource type="Resource" script_class="SoundEvent" format=3 uid="uid://ddl7ovj3rpstk"]
 
-[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="Script" uid="uid://dpm4dmxv0u4h" path="res://scripts/sound_event.gd" id="1"]
 
 [resource]
 script = ExtResource("1")

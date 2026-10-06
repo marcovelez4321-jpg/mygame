@@ -94,17 +94,20 @@ func _process(_delta: float) -> void:
 		" (reloading)" if reloading else "",
 	]
 	health_label.text = "Health: %d" % ceili(_player_health.current_health)
+	# Aiming down the sights: the sights (or scope) are the crosshair now.
+	$Crosshair.visible = player.weapons.aim_amount() <= 0.0
 	_update_stamina_bar()
 	_update_use_prompt()
 
 
-## "[F] Press" / "[F] Pull" under the crosshair while a button or lever is in
-## reach -- read straight off the player each frame, like the stamina pips.
+## "[F] Press" / "[F] Pull" / "[F] Talk" under the crosshair while something
+## usable is in reach -- read straight off the player each frame, like the
+## stamina pips. Hidden during a conversation.
 func _update_use_prompt() -> void:
-	var usable: MapButton = player.usable_in_view
-	_use_prompt_label.visible = usable != null
+	var usable: Node = player.usable_in_view
+	_use_prompt_label.visible = usable != null and not player.controls_locked
 	if usable:
-		_use_prompt_label.text = "[F] %s" % usable.use_prompt
+		_use_prompt_label.text = "[F] %s" % str(usable.get("use_prompt"))
 
 
 ## A centre-screen message (MapIO.show_message): pops in, holds, fades.

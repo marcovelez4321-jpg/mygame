@@ -19,9 +19,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -230.0
-offset_top = -333.0
+offset_top = -358.0
 offset_right = 230.0
-offset_bottom = 333.0
+offset_bottom = 358.0
 
 [node name="VBox" type="VBoxContainer" parent="Dim/MenuPanel"]
 anchors_preset = 15
@@ -99,6 +99,10 @@ text = "Audio"
 [node name="TestMapButton" type="Button" parent="Dim/MenuPanel/VBox"]
 custom_minimum_size = Vector2(0, 36)
 text = "Load Test Map"
+
+[node name="HubButton" type="Button" parent="Dim/MenuPanel/VBox"]
+custom_minimum_size = Vector2(0, 36)
+text = "Back to Grandma's"
 
 [node name="DebugLabel" type="Label" parent="Dim/MenuPanel/VBox"]
 theme_override_font_sizes/font_size = 16

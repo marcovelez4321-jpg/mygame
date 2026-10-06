@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cm8emkwg5001e"]
+
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://saepgdej6wg6" path="res://art/weapons/NEWPSXWEAPONS/RPG/RPG.glb" id="2_rpg"]
+[ext_resource type="Resource" path="res://audio/events/weapons/rpg_fire.tres" id="3_fire"]
+[ext_resource type="Resource" path="res://audio/events/weapons/rpg_reload.tres" id="4_reload"]
+[ext_resource type="Resource" path="res://audio/events/weapons/rpg_switch.tres" id="5_switch"]
+[ext_resource type="Animation" uid="uid://dbl27rf02bybf" path="res://art/animations/RifleAimingIdle.res" id="6_hold"]
+
+[resource]
+script = ExtResource("1")
+weapon_name = "RPG"
+fire_interval = 1.0
+ammo_type = 2
+magazine_size = 1
+reload_time = 1.6
+recoil_kick_distance = 0.2
+recoil_kick_rotation_degrees = 10.0
+recoil_pattern = Array[Vector2]([Vector2(0, 3.5)])
+recoil_scale = 4.0
+recoil_jitter = 1.2
+fires_projectile = true
+backblast_offset = Vector3(0, 0.27, 3.1)
+draw_time = 0.8
+viewmodel_scene = ExtResource("2_rpg")
+viewmodel_position = Vector3(0.09043326, -0.12, -0.25)
+viewmodel_rotation_degrees = Vector3(0, 0.3515403, 0)
+viewmodel_scale = 0.18
+muzzle_offset = Vector3(0, 0.27, -1.77)
+muzzle_flash_time = 0.15
+placeholder_color = Color(0.4, 0.45, 0.3, 1)
+hold_animation = ExtResource("6_hold")
+arms_position = Vector3(0.029592782, -1.5084416, 0.058382954)
+fire_sound = ExtResource("3_fire")
+reload_sound = ExtResource("4_reload")
+switch_sound = ExtResource("5_switch")

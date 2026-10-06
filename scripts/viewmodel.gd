@@ -108,6 +108,13 @@ var _sway_tilt: Vector2 = Vector2.ZERO # degrees: x = pitch, y = yaw
 var _previous_look: Vector2 = Vector2.ZERO # pitch, yaw in radians
 var _has_previous_look: bool = false
 
+## Set by AimDownSights while you aim: how far the gun has moved toward your
+## eye (camera space), and how much its sway calms down (0 = none, 1 = still).
+var aim_offset := Vector3.ZERO
+var aim_steady := 0.0
+## F2 then I: the arrows move the gun's aimed position (WeaponData.aim_position).
+var _tuning_aim: bool = false
+
 
 func _ready() -> void:
 	# Rule 1 (co-op): first-person arms and gun are only ever for the player
@@ -128,6 +135,7 @@ func _ready() -> void:
 	_weapons.weapon_switched.connect(_on_weapon_switched)
 	_weapons.shot_fired.connect(_on_shot_fired)
 	_weapons.reload_started.connect(_on_reload_started)
+	_weapons.projectile_launched.connect(_on_projectile_launched)
 	call_deferred("_show_current_weapon")
 	if OS.is_debug_build():
 		_make_tune_label()
@@ -170,6 +178,88 @@ func _on_reload_started(duration: float) -> void:
 		_play_pump_rack_reload(duration)
 	else:
 		_play_tilt_reload(duration)
+	# A launcher gets its new rocket while it's lowered out of sight, so it
+	# comes back up loaded.
+	if weapon and weapon.fires_projectile:
+		get_tree().create_timer(duration * 0.4).timeout.connect(_show_loaded_projectile.bind(true))
+
+
+## The RPG fired: the rocket that was sitting in the launcher is handed to
+## the real rocket (so it's seen leaving the tube) and hidden here, and the
+## backblast blows out of the rear.
+func _on_projectile_launched(rocket: Rocket) -> void:
+	var weapon := _weapons.current_weapon()
+	var part := _loaded_projectile()
+	if part and is_instance_valid(rocket):
+		# How the rocket would sit with the gun at rest -- no sway, no fire
+		# kick -- so the rocket can straighten out onto its flight path
+		# instead of flying on at whatever angle the gun was swinging.
+		var part_in_model := _model.global_basis.inverse() * part.global_basis
+		rocket.take_launcher_visual(part, global_basis * _model_rest_transform.basis * part_in_model)
+	_show_loaded_projectile(false)
+	# Still loaded (a bigger magazine, or Infinite Ammo): the next rocket
+	# slides into view just before it can fire again.
+	if weapon and _weapons.get_magazine_ammo() > 0:
+		get_tree().create_timer(weapon.fire_interval * 0.8).timeout.connect(_show_loaded_projectile.bind(true))
+	if weapon and _model:
+		_spawn_backblast(_model.global_transform * weapon.backblast_offset,
+				_model.global_transform.basis * Vector3.BACK)
+
+
+## Hides the gun and arms (a scope image is covering the view) or shows them.
+func set_gun_hidden(hidden: bool) -> void:
+	if _sway_pivot:
+		_sway_pivot.visible = not hidden
+
+
+## The launcher's loaded rocket in the current gun model, or null.
+func _loaded_projectile() -> Node3D:
+	var weapon := _weapons.current_weapon()
+	if weapon == null or not weapon.fires_projectile or _model == null:
+		return null
+	return _model.find_child(weapon.projectile_part, true, false) as Node3D
+
+
+func _show_loaded_projectile(loaded: bool) -> void:
+	var part := _loaded_projectile()
+	if part:
+		part.visible = loaded
+
+
+## Smoke and a flash thrown out of the back of the launcher -- the RPG's
+## signature. Left in the world (not on the gun), so it hangs behind you.
+func _spawn_backblast(at: Vector3, backward: Vector3) -> void:
+	var world := get_tree().current_scene
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.7, 0.3)
+	light.light_energy = 4.0
+	light.omni_range = 3.0
+	world.add_child(light)
+	light.global_position = at
+	light.create_tween().tween_property(light, "light_energy", 0.0, 0.2)
+	get_tree().create_timer(0.25).timeout.connect(light.queue_free)
+
+	var smoke := GPUParticles3D.new()
+	smoke.amount = 14
+	smoke.lifetime = 1.0
+	smoke.one_shot = true
+	smoke.explosiveness = 1.0
+	smoke.local_coords = false
+	smoke.draw_pass_1 = Rocket._smoke_quad(0.5)
+	var material := ParticleProcessMaterial.new()
+	material.direction = backward
+	material.spread = 25.0
+	material.initial_velocity_min = 3.0
+	material.initial_velocity_max = 7.0
+	material.damping_min = 4.0
+	material.damping_max = 6.0
+	material.gravity = Vector3(0.0, 0.4, 0.0)
+	material.color = Color(0.8, 0.76, 0.7, 0.7)
+	smoke.process_material = material
+	world.add_child(smoke)
+	smoke.global_position = at
+	smoke.emitting = true
+	smoke.finished.connect(smoke.queue_free)
 
 
 ## The same tilt-down/tilt-up shape _on_weapon_switched() uses, minus the
@@ -315,6 +405,9 @@ func _show_weapon(weapon: WeaponData) -> void:
 	_center_on_pivot(gun)
 	_apply_transform(weapon)
 	_attach_arms(weapon)
+	# An empty launcher comes out empty.
+	if weapon.fires_projectile:
+		_show_loaded_projectile(_weapons.get_magazine_ammo() > 0)
 	if _tuning_muzzle:
 		_update_muzzle_marker(weapon)
 
@@ -449,9 +542,19 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_update_label("")
 	elif key.keycode == KEY_F3 and _tuning:
 		_save_weapon()
+	elif key.keycode == KEY_I and _tuning:
+		_tuning_aim = not _tuning_aim
+		_tuning_arms = false
+		_tuning_muzzle = false
+		var weapon := _weapons.current_weapon()
+		if weapon and _model:
+			_apply_transform(weapon) # back to the hip pose when leaving
+			_update_muzzle_marker(weapon)
+		_update_label("")
 	elif key.keycode == KEY_M and _tuning:
 		_tuning_muzzle = not _tuning_muzzle
 		_tuning_arms = false
+		_tuning_aim = false
 		var weapon := _weapons.current_weapon()
 		if weapon:
 			_update_muzzle_marker(weapon)
@@ -459,6 +562,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif key.keycode == KEY_H and _tuning:
 		_tuning_arms = not _tuning_arms
 		_tuning_muzzle = false
+		_tuning_aim = false
 		var weapon := _weapons.current_weapon()
 		if weapon:
 			_update_muzzle_marker(weapon)
@@ -475,7 +579,7 @@ func _physics_process(delta: float) -> void:
 ## the turn speed comes out steady instead of spiking between frames.
 func _update_sway(delta: float) -> void:
 	if not sway_enabled or delta <= 0.0:
-		_sway_pivot.position = Vector3.ZERO
+		_sway_pivot.position = aim_offset
 		_sway_pivot.rotation = Vector3.ZERO
 		return
 	var camera := get_parent() as Node3D
@@ -497,8 +601,10 @@ func _update_sway(delta: float) -> void:
 	var blend := 1.0 - exp(-sway_smoothing * delta)
 	_sway_position = _sway_position.lerp(target_position, blend)
 	_sway_tilt = _sway_tilt.lerp(target_tilt, blend)
-	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0)
-	_sway_pivot.rotation_degrees = Vector3(_sway_tilt.x, _sway_tilt.y, 0.0)
+	# Aiming steadies the sway and carries the gun toward your eye.
+	var calm := 1.0 - aim_steady
+	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0) * calm + aim_offset
+	_sway_pivot.rotation_degrees = Vector3(_sway_tilt.x, _sway_tilt.y, 0.0) * calm
 
 
 func _process(delta: float) -> void:
@@ -519,6 +625,8 @@ func _process(delta: float) -> void:
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 		_update_muzzle_marker(weapon)
+	elif _tuning_aim:
+		weapon.aim_position += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 	elif _tuning_arms:
 		# H mode: the same keys move/rotate/resize the arms instead of the gun.
 		if Input.is_key_pressed(KEY_SHIFT):
@@ -535,6 +643,9 @@ func _process(delta: float) -> void:
 		weapon.viewmodel_scale = maxf(weapon.viewmodel_scale * (1.0 + grow * TUNE_SCALE_SPEED * fine * delta), 0.0001)
 
 	_apply_transform(weapon)
+	if _tuning_aim:
+		# Show the gun where it'll sit when aimed, so you can line up the sights.
+		_model.position = weapon.aim_position
 	_update_label("")
 
 
@@ -597,5 +708,8 @@ func _update_label(message: String) -> void:
 	elif _tuning_muzzle:
 		target = "MUZZLE"
 		p = weapon.muzzle_offset
-	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nH = arms   M = muzzle   F3 = save   F2 = off\n%s" \
+	elif _tuning_aim:
+		target = "AIMED POSITION"
+		p = weapon.aim_position
+	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nH = arms   M = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
 			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s, message]

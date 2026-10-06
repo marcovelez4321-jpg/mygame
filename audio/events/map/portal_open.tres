@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SoundEvent" format=3]
+
+[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+clip_folder = "res://audio/sfx/map"
+clip_prefix = "portal_open"
+pitch_variance = 0.03
+bus = "Props"

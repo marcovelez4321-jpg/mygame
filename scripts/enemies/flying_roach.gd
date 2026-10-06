@@ -43,6 +43,9 @@ signal bit_player
 signal kind_decided(spitter: bool)
 ## A glob just left its mouth -- RoachVisual jolts it forward.
 signal spat
+## Dead and just hit the ground -- RoachVisual squashes it flat and plays
+## the splat.
+signal splatted
 
 ## Everyone mid-dive, so the swarm can count how many are diving.
 const DIVING_GROUP := "roach_diving"
@@ -51,6 +54,9 @@ const CHEST_HEIGHT := 1.0
 ## top of the head (their capsule is 1.8 m tall), for "is it touching them".
 const BODY_LOW := 0.3
 const BODY_HIGH := 1.6
+## A dead roach counts as landed once the floor is this close below its
+## centre: its own radius (about 0.25) plus a little.
+const SPLAT_HEIGHT := 0.35
 
 @export_group("Flight")
 ## Cruising speed in m/s (HL2's manhack tops out around 5 m/s; ours is a
@@ -163,6 +169,8 @@ const BODY_HIGH := 1.6
 ## What it bleeds -- weapon_controller.gd's hit spray reads this too, so any
 ## enemy can bleed its own colour.
 @export var blood_color: Color = Color(0.42, 0.5, 0.08)
+## Size (m) of the goo spot it leaves where it lands.
+@export var splat_size: float = 0.7
 
 var _state: State = State.HUNT:
 	set(value):
@@ -174,6 +182,8 @@ var _state: State = State.HUNT:
 var facing: Vector3 = Vector3.FORWARD
 ## Spits acid instead of diving (decided in _decide_kind()).
 var is_spitter := false
+## Dead and already splatted on the ground.
+var _splatted := false
 
 var _target: Node3D
 var _retarget_timer := 0.0
@@ -227,7 +237,10 @@ func _decide_kind() -> void:
 
 func _physics_process(delta: float) -> void:
 	# Only the host thinks and pushes. Offline, multiplayer.is_server() is true.
-	if not multiplayer.is_server() or _state == State.DEAD:
+	if not multiplayer.is_server():
+		return
+	if _state == State.DEAD:
+		_think_dead()
 		return
 	_time += delta
 	_state_time += delta
@@ -521,12 +534,27 @@ func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	# on the floor (mask 1) instead of falling through the world.
 	collision_layer = 0
 	collision_mask = 1
-	var world := get_tree().current_scene
-	BloodFX.spawn_impact(world, global_position, Vector3.UP, blood_color)
-	var floor_hit := _ray(global_position, global_position + Vector3.DOWN * 4.0)
-	if not floor_hit.is_empty():
-		BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, 0.5, blood_color)
+	BloodFX.spawn_impact(get_tree().current_scene, global_position, Vector3.UP, blood_color)
 	get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+
+
+## Falling dead: the moment it reaches the ground it splats -- stops dead
+## (no rolling around like a ball), leaves a goo spot where it landed, and
+## tells RoachVisual to squash it flat and play the splat.
+func _think_dead() -> void:
+	if _splatted:
+		return
+	var floor_hit := _ray(global_position, global_position + Vector3.DOWN * SPLAT_HEIGHT)
+	if floor_hit.is_empty():
+		return
+	_splatted = true
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	global_position = floor_hit.position + Vector3.UP * 0.03
+	var world := get_tree().current_scene
+	BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, splat_size, blood_color)
+	BloodFX.spawn_impact(world, floor_hit.position, floor_hit.normal, blood_color)
+	splatted.emit()
 
 
 func _set_state(state: State) -> void:

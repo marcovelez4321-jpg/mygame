@@ -15,6 +15,11 @@ const PICKUP_SOUND := preload("res://audio/events/map/key_pickup.tres")
 
 ## Index into KEY_NAMES; set from the "key_type" choice in TrenchBroom.
 @export var key_type: int = 0
+## The key model (PSX Mega Pack key_mp_4). It's tinted the key's colour so
+## silver and gold stay easy to tell apart.
+@export var model_scene: PackedScene = preload("res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/key_mp_4.glb")
+## The model is a real-sized 9 cm key; this makes it big enough to spot.
+@export var model_scale: float = 3.0
 
 var _model: Node3D
 var _time := 0.0
@@ -48,35 +53,45 @@ func _on_body_entered(body: Node3D) -> void:
 	queue_free()
 
 
-## A simple key: a ring (the bow) and a shaft with a tooth, in the key's
-## colour and a little glow so it reads in a dark corner.
+## The key model, stood upright (it's modelled lying flat), scaled up,
+## centred on the spin point and tinted the key's colour with a slight glow
+## so it reads in a dark corner.
 func _build_model() -> void:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = KEY_COLORS[clampi(key_type, 0, KEY_COLORS.size() - 1)]
-	material.metallic = 0.8
-	material.roughness = 0.35
-	material.emission_enabled = true
-	material.emission = material.albedo_color
-	material.emission_energy_multiplier = 0.3
-
-	_model = Node3D.new()
+	if model_scene == null:
+		return
+	_model = Node3D.new() # spins and bobs (see _process)
 	add_child(_model)
-	var bow := TorusMesh.new()
-	bow.inner_radius = 0.06
-	bow.outer_radius = 0.11
-	_add_part(bow, Vector3(0.0, 0.15, 0.0), Vector3(PI * 0.5, 0.0, 0.0), material)
-	var shaft := BoxMesh.new()
-	shaft.size = Vector3(0.035, 0.28, 0.035)
-	_add_part(shaft, Vector3(0.0, -0.08, 0.0), Vector3.ZERO, material)
-	var tooth := BoxMesh.new()
-	tooth.size = Vector3(0.08, 0.05, 0.035)
-	_add_part(tooth, Vector3(0.05, -0.19, 0.0), Vector3.ZERO, material)
+	var key := model_scene.instantiate() as Node3D
+	key.rotation.z = PI * 0.5
+	key.scale = Vector3.ONE * model_scale
+	_model.add_child(key)
+
+	var meshes := key.find_children("*", "MeshInstance3D", true, false)
+	if key is MeshInstance3D:
+		meshes.append(key)
+	var bounds := AABB()
+	var has_bounds := false
+	var color := KEY_COLORS[clampi(key_type, 0, KEY_COLORS.size() - 1)]
+	for node in meshes:
+		var mesh_node := node as MeshInstance3D
+		var box := _model.global_transform.affine_inverse() * mesh_node.global_transform * mesh_node.get_aabb()
+		bounds = box if not has_bounds else bounds.merge(box)
+		has_bounds = true
+		_tint(mesh_node, color)
+	if has_bounds:
+		key.position -= bounds.get_center()
 
 
-func _add_part(mesh: Mesh, position_offset: Vector3, rotation_offset: Vector3, material: Material) -> void:
-	var part := MeshInstance3D.new()
-	part.mesh = mesh
-	part.material_override = material
-	part.position = position_offset
-	part.rotation = rotation_offset
-	_model.add_child(part)
+## Multiplies the model's own texture by the key colour (a copy of each
+## material, so tinting one key never recolours another).
+func _tint(mesh_node: MeshInstance3D, color: Color) -> void:
+	for i in mesh_node.get_surface_override_material_count():
+		var original := mesh_node.get_active_material(i) as StandardMaterial3D
+		if original == null:
+			continue
+		var tinted := original.duplicate() as StandardMaterial3D
+		tinted.albedo_color = color
+		tinted.emission_enabled = true
+		tinted.emission = color
+		tinted.emission_energy_multiplier = 0.25
+		mesh_node.set_surface_override_material(i, tinted)

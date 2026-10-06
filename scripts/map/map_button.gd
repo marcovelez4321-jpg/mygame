@@ -3,9 +3,9 @@ class_name MapButton
 extends MapMover
 
 ## func_button (pushes in) and func_lever (swings on a hinge). Both are used
-## ONLY by walking up and pressing F (PlayerMovement looks for the
-## "map_usable" group) -- not by touching or shooting them like Quake's
-## buttons. The press-a-key idea is Half-Life's +use; the lever is its
+## ONLY by walking up and pressing F (PlayerMovement looks for its
+## USABLE_GROUP) -- not by touching or shooting them like Quake's buttons.
+## The press-a-key idea is Half-Life's +use; the lever is its
 ## func_rot_button.
 ##
 ## Like Quake's func_button (g_func.c), it fires its target once it has
@@ -14,8 +14,6 @@ extends MapMover
 ##   wait = -1: a button stays pushed in for good; a lever stays pulled, and
 ##              pulling it again swings it back and fires its target again
 ##              (so a lever toggles a door open and shut).
-
-const USABLE_GROUP := "map_usable"
 
 const PRESS_SOUND := preload("res://audio/events/map/button_press.tres")
 const LEVER_SOUND := preload("res://audio/events/map/lever_pull.tres")
@@ -38,7 +36,7 @@ func _setup() -> void:
 	target = str(prop("target", ""))
 	message = str(prop("message", ""))
 	MapIO.register_target(self, target)
-	add_to_group(USABLE_GROUP)
+	add_to_group(PlayerMovement.USABLE_GROUP)
 	if _is_lever:
 		use_prompt = "Pull"
 		wait = float(prop("wait", -1.0))

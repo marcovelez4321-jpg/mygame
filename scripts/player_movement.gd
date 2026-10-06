@@ -179,6 +179,7 @@ class PlayerInput:
 	var want_jump: bool = false
 	var want_dash: bool = false
 	var fire: bool = false
+	var aim: bool = false # right mouse: aim down the sights
 	var reload: bool = false
 	var grab: bool = false
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
@@ -192,6 +193,9 @@ class PlayerInput:
 class MantleTarget:
 	var found: bool = false
 	var position: Vector3 = Vector3.ZERO
+
+## Anything F can be used on joins this group (see _find_usable()).
+const USABLE_GROUP := "usable"
 
 @export_group("Use (F)")
 ## How far away a button or lever can be pressed with F, in meters --
@@ -226,10 +230,17 @@ var _is_dead: bool = false
 var keys: Array[String] = []
 ## The button or lever under the crosshair within use_range, or null. The HUD
 ## shows the "[F] Press" prompt from this.
-var usable_in_view: MapButton
+var usable_in_view: Node
+## True while something else has your controls -- a conversation
+## (DialogueBox). Movement, looking, shooting and F all stop.
+var controls_locked := false
 var _grab_held_prev: bool = false
 ## A shove waiting to be applied on the next simulation tick (see shove()).
 var _pending_shove := Vector3.ZERO
+## View recoil in degrees (x = right, y = up): kick still being eased in,
+## and how much the aim is currently pushed off by recoil (for recovery).
+var _recoil_to_apply := Vector2.ZERO
+var _recoil_offset := Vector2.ZERO
 ## F went to a button/lever this press: don't also start grabbing a prop
 ## with the same press while it's held.
 var _use_took_press: bool = false
@@ -337,6 +348,12 @@ func _restart_level() -> void:
 ## downstream works from the PlayerInput it returns.
 func _gather_input() -> PlayerInput:
 	var input := PlayerInput.new()
+	if controls_locked:
+		# An empty input: you stand still (gravity and friction still apply)
+		# and nothing buffered from before leaks through afterward.
+		_pending_look_delta = Vector2.ZERO
+		_pending_weapon_select = -1
+		return input
 
 	var move := Vector2.ZERO
 	if Input.is_physical_key_pressed(KEY_W):
@@ -355,6 +372,8 @@ func _gather_input() -> PlayerInput:
 	# never fires the gun.
 	input.fire = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	input.aim = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 	input.reload = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_R)
 	input.grab = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
@@ -363,7 +382,9 @@ func _gather_input() -> PlayerInput:
 	input.select_weapon = _pending_weapon_select
 	_pending_weapon_select = -1
 
-	input.look_delta = _pending_look_delta * mouse_sensitivity
+	# Zoomed in (aiming), the mouse turns slower to match, so the same hand
+	# movement still covers the same part of the screen.
+	input.look_delta = _pending_look_delta * mouse_sensitivity / camera.zoom
 	_pending_look_delta = Vector2.ZERO
 
 	return input
@@ -376,6 +397,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	rotate_y(-input.look_delta.x)
 	_pitch = clamp(_pitch - input.look_delta.y, deg_to_rad(-89.0), deg_to_rad(89.0))
 	head.rotation.x = _pitch
+	_absorb_recoil_compensation(input.look_delta)
 
 	_mantle_cooldown_left = maxf(_mantle_cooldown_left - delta, 0.0)
 
@@ -494,7 +516,8 @@ func _finish_tick(input: PlayerInput, delta: float) -> void:
 	# Aim comes from the player's own state (head position and facing), not
 	# from the camera, so a server can rebuild the same shot (Rule 1).
 	# multiplayer.get_unique_id() is 1 offline, which matches the host's id.
-	weapons.tick(input.fire, input.reload, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
+	weapons.tick(input.fire, input.reload, input.aim, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
+	_update_view_recoil(delta)
 	_tick_use(input.grab)
 	grabber.tick(input.grab and not _use_took_press, delta, head.global_position, -head.global_transform.basis.z)
 
@@ -509,20 +532,69 @@ func _tick_use(use_held: bool) -> void:
 	if not use_held:
 		_use_took_press = false
 	if fresh_press and usable_in_view and not grabber.is_holding():
-		usable_in_view.use_by(self)
+		usable_in_view.call("use_by", self)
 		_use_took_press = true
 
 
-## The button or lever the crosshair is on, within use_range, or null.
-func _find_usable() -> MapButton:
+## Whatever usable thing the crosshair is on within use_range -- a button,
+## a lever, Grandma -- or null. "Usable" means it's in the USABLE_GROUP and
+## has can_use(), use_by(player) and a use_prompt ("Press", "Talk"...).
+func _find_usable() -> Node:
 	var origin := head.global_position
 	var query := PhysicsRayQueryParameters3D.create(origin, origin - head.global_transform.basis.z * use_range)
 	query.exclude = [get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
 		return null
-	var usable := hit.collider as MapButton
-	return usable if usable and usable.can_use() else null
+	var usable := hit.collider as Node
+	if usable and usable.is_in_group(USABLE_GROUP) and usable.call("can_use"):
+		return usable
+	return null
+
+
+## View recoil (the weapon's spray pattern, see WeaponData's View Recoil):
+## kicks your actual aim, eased in over recoil_kick_time so it reads as
+## recoil rather than a camera snap, then drifts back down after you stop
+## firing -- but only by what you didn't pull down yourself. Runs inside the
+## simulation tick and the shots follow the aim, so in co-op the host
+## computes the same pattern from the same inputs (Rule 1).
+func _update_view_recoil(delta: float) -> void:
+	var weapon := weapons.current_weapon()
+	_recoil_to_apply += weapons.take_recoil()
+	if _recoil_to_apply != Vector2.ZERO:
+		var kick_time := weapon.recoil_kick_time if weapon else 0.06
+		var step := _recoil_to_apply * clampf(delta / maxf(kick_time, 0.001), 0.0, 1.0)
+		if _recoil_to_apply.length() < 0.01:
+			step = _recoil_to_apply
+		_recoil_to_apply -= step
+		_turn_view(step)
+		_recoil_offset += step
+	elif weapon and _recoil_offset != Vector2.ZERO and weapons.time_since_shot() > weapon.recoil_reset_time:
+		var back := _recoil_offset.limit_length(weapon.recoil_recovery_speed * delta)
+		_turn_view(-back)
+		_recoil_offset -= back
+
+
+## Turns the view by `degrees` (x = right, y = up).
+func _turn_view(degrees: Vector2) -> void:
+	rotate_y(-deg_to_rad(degrees.x))
+	_pitch = clamp(_pitch + deg_to_rad(degrees.y), deg_to_rad(-89.0), deg_to_rad(89.0))
+	head.rotation.x = _pitch
+
+
+## When you pull your mouse against the recoil, that much of it is "handled"
+## and won't be pulled back down for you later -- otherwise fighting the
+## recoil and then letting go would yank the aim below the target.
+func _absorb_recoil_compensation(look_delta: Vector2) -> void:
+	if _recoil_offset == Vector2.ZERO:
+		return
+	# look_delta is in radians: +y = looking down, +x = turning right.
+	var moved := Vector2(rad_to_deg(look_delta.x), -rad_to_deg(look_delta.y))
+	if _recoil_offset.y > 0.0 and moved.y < 0.0:
+		_recoil_offset.y = maxf(_recoil_offset.y + moved.y, 0.0)
+	if _recoil_offset.x * moved.x < 0.0:
+		var against := minf(absf(moved.x), absf(_recoil_offset.x))
+		_recoil_offset.x -= signf(_recoil_offset.x) * against
 
 
 ## Pushed from outside -- an enemy's melee hit (Enemy.melee_shove). Stored,
@@ -920,7 +992,16 @@ func _ground_move(wishdir: Vector3, delta: float) -> void:
 		velocity.x *= scale
 		velocity.z *= scale
 
-	_accelerate(wishdir, ground_max_speed, ground_accel, delta)
+	_accelerate(wishdir, ground_max_speed * _aim_speed_scale(), ground_accel, delta)
+
+
+## Walking slows while aiming down the sights (WeaponData.aim_move_speed_scale),
+## blending in as the gun comes up.
+func _aim_speed_scale() -> float:
+	var weapon := weapons.current_weapon()
+	if weapon == null:
+		return 1.0
+	return lerpf(1.0, weapon.aim_move_speed_scale, weapons.aim_amount())
 
 
 func _accelerate(wishdir: Vector3, wishspeed: float, accel: float, delta: float) -> void:

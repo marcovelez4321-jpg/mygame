@@ -27,6 +27,7 @@
 [ext_resource type="Resource" path="res://audio/events/headshot.tres" id="35_headshot"]
 [ext_resource type="Resource" path="res://audio/events/player_mantle.tres" id="40_mantle"]
 [ext_resource type="Script" path="res://scripts/player_model.gd" id="41_pmodel"]
+[ext_resource type="Script" path="res://scripts/aim_down_sights.gd" id="42_ads"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -59,7 +60,7 @@ weapons_path = NodePath("../../../WeaponController")
 
 [node name="Health" type="Node" parent="." unique_id=182433073]
 script = ExtResource("2_dovo2")
-max_health = 50.0
+max_health = 100.0
 metadata/_custom_type_script = "uid://nnai8cso0red"
 
 [node name="WeaponController" type="Node" parent="." unique_id=1120857251]
@@ -95,3 +96,6 @@ mantle_sound = ExtResource("40_mantle")
 damage_sound = ExtResource("27_dmg")
 death_sound = ExtResource("28_pdeath")
 gory_kill_sound = ExtResource("29_gory")
+
+[node name="AimDownSights" type="Node" parent="."]
+script = ExtResource("42_ads")

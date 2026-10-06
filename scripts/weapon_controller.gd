@@ -19,6 +19,9 @@ extends Node
 enum HitKind { NORMAL, HEADSHOT, ARTERY }
 
 signal shot_fired
+## A projectile weapon (the RPG) just launched this rocket. Presentation hook:
+## the viewmodel hands it the rocket that was sitting in the launcher.
+signal projectile_launched(rocket: Rocket)
 ## Emitted for every resolved ray with where it started and ended, and whether
 ## it hit something with Health. Presentation only (tracer lines).
 signal shot_resolved(from: Vector3, to: Vector3, hit_target: bool)
@@ -57,6 +60,7 @@ class Shot:
 	var tick: int          # physics tick it was fired on (for lag compensation)
 	var attacker_id: int   # multiplayer peer id of the shooter (host is 1)
 	var weapon: WeaponData
+	var spread_degrees: float # hip-fire spread, tightened by aiming
 
 ## TEMPORARY: until weapons are found in levels and remembered by the campaign,
 ## the player starts with these test weapons.
@@ -155,6 +159,17 @@ var _reload_time_left: float = 0.0
 ## _cooldown (the wait until the next SHOT), so reloading never has to sit
 ## out the whole fire_interval.
 var _reload_blocked_left: float = 0.0
+## View recoil (WeaponData's spray pattern): which shot of the current burst
+## is next, how long since the last shot, and kick (degrees: x = right,
+## y = up) not yet handed to the player -- PlayerMovement takes it with
+## take_recoil() inside its own simulation step.
+var _spray_index: int = 0
+var _time_since_shot: float = 999.0
+var _pending_recoil := Vector2.ZERO
+## How far the gun is raised to your eye: 0 = at the hip, 1 = fully aimed
+## (WeaponData's Aim Down Sights). Part of the simulation, not just the look,
+## because it decides each shot's spread -- in co-op the host needs it too.
+var _aim := 0.0
 
 @onready var _body: CollisionObject3D = get_parent() as CollisionObject3D
 
@@ -211,6 +226,11 @@ func is_reloading() -> bool:
 	return _reload_time_left > 0.0
 
 
+## 0 = gun at the hip, 1 = fully aimed down the sights.
+func aim_amount() -> float:
+	return _aim
+
+
 ## Called by WeaponPickup when the player walks over one. "Found in levels,
 ## kept permanently" (original design): once owned, a weapon stays owned for
 ## the rest of the level/campaign, so picking up a duplicate just tops off
@@ -244,10 +264,12 @@ func add_ammo(type: WeaponData.AmmoType, amount: int, emit_signal: bool = true) 
 
 
 ## Called once per physics tick by the owner's simulation step.
-## select_weapon is an inventory index, or -1 for "no change".
-func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
+## select_weapon is an inventory index, or -1 for "no change". aim = right
+## mouse held.
+func tick(fire: bool, reload: bool, aim: bool, select_weapon: int, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_reload_blocked_left = maxf(_reload_blocked_left - delta, 0.0)
+	_time_since_shot += delta
 
 	if select_weapon >= 0 and select_weapon != _current and select_weapon < _owned.size():
 		_current = select_weapon
@@ -257,11 +279,16 @@ func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Ve
 		_cooldown = maxf(_cooldown, new_weapon.draw_time)
 		_reload_blocked_left = maxf(_reload_blocked_left, new_weapon.draw_time)
 		_reload_time_left = 0.0 # switching cancels a reload in progress
+		_aim = 0.0 # the new gun comes up at the hip
 		weapon_switched.emit(new_weapon, new_weapon.draw_time)
 
 	var weapon := current_weapon()
 	if weapon == null:
 		return
+
+	# Raise toward your eye while aiming, lower otherwise. Reloading lowers it.
+	var aiming := aim and weapon.can_aim and _reload_time_left <= 0.0
+	_aim = move_toward(_aim, 1.0 if aiming else 0.0, delta / maxf(weapon.aim_time, 0.01))
 
 	if _reload_time_left > 0.0:
 		_reload_time_left = maxf(_reload_time_left - delta, 0.0)
@@ -287,6 +314,7 @@ func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Ve
 		_magazine[weapon] = loaded - weapon.ammo_per_shot
 	_cooldown = weapon.fire_interval
 	_reload_blocked_left = weapon.reload_delay_after_fire
+	_add_recoil(weapon)
 	shot_fired.emit()
 
 	var shot := Shot.new()
@@ -295,7 +323,67 @@ func tick(fire: bool, reload: bool, select_weapon: int, delta: float, origin: Ve
 	shot.tick = Engine.get_physics_frames()
 	shot.attacker_id = attacker_id
 	shot.weapon = weapon
-	resolve_shot(shot)
+	shot.spread_degrees = lerpf(weapon.spread_degrees, weapon.aim_spread_degrees, _aim)
+	if weapon.fires_projectile:
+		_launch_rocket(shot)
+	else:
+		resolve_shot(shot)
+
+
+## A projectile weapon's shot: a Rocket from the eye along the aim (so it
+## flies where the crosshair points); the viewmodel then hands it the rocket
+## from the launcher so it's SEEN leaving the tube (projectile_launched).
+## Rule 1 (co-op): the host launches it from the same Shot it would resolve.
+func _launch_rocket(shot: Shot) -> void:
+	var rocket := Rocket.launch(_body.get_tree().current_scene, shot.origin, shot.direction, shot.weapon,
+			shot.attacker_id, _body as Node3D, self)
+	projectile_launched.emit(rocket)
+
+
+## Hit markers for everything an explosion this player caused hurt (not
+## counting themselves) -- same feedback as a bullet hit.
+func report_explosion_hits(hits: Array[Explosion.Hit]) -> void:
+	for hit in hits:
+		hit_confirmed.emit(hit.killed, HitKind.NORMAL)
+
+
+## This shot's kick from the weapon's spray pattern. A pause longer than
+## recoil_reset_time starts the pattern over; past its end the last four
+## entries cycle. The jitter's random generator is seeded from the shot's
+## number in the burst and the physics tick, so in co-op the host and the
+## shooter roll the same wobble (Rule 1).
+func _add_recoil(weapon: WeaponData) -> void:
+	if _time_since_shot > weapon.recoil_reset_time:
+		_spray_index = 0
+	_time_since_shot = 0.0
+	var pattern := weapon.recoil_pattern
+	if pattern.is_empty():
+		return
+	var index := _spray_index
+	if index >= pattern.size():
+		var tail := mini(4, pattern.size())
+		index = pattern.size() - tail + (index - pattern.size()) % tail
+	var kick := pattern[index] * weapon.recoil_scale
+	if weapon.recoil_jitter > 0.0:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(Vector2i(_spray_index, Engine.get_physics_frames()))
+		kick += Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * weapon.recoil_jitter
+	_pending_recoil += kick
+	_spray_index += 1
+
+
+## Hands over the view kick waiting since the last call (degrees: x = right,
+## y = up) -- PlayerMovement turns it into actual aim movement.
+func take_recoil() -> Vector2:
+	var kick := _pending_recoil
+	_pending_recoil = Vector2.ZERO
+	return kick
+
+
+## Seconds since the last shot -- the player's aim starts drifting back once
+## this passes the weapon's recoil_reset_time.
+func time_since_shot() -> float:
+	return _time_since_shot
 
 
 ## Moves ammo from the shared reserve pool into the magazine, capped at
@@ -321,7 +409,7 @@ func _finish_reload(weapon: WeaponData) -> void:
 func resolve_shot(shot: Shot) -> void:
 	var space := _body.get_world_3d().direct_space_state
 	for pellet in shot.weapon.pellets:
-		var direction := _spread(shot.direction, shot.weapon.spread_degrees)
+		var direction := _spread(shot.direction, shot.spread_degrees)
 		var ray_origin := shot.origin
 		var range_left := shot.weapon.max_range
 		var exclude: Array[RID] = [_body.get_rid()] # don't shoot ourselves
@@ -447,6 +535,11 @@ func _owning_enemy(node: Node) -> Enemy:
 ## (target, position, normal, direction, kind, killed) and each client calls
 ## this same function to bleed its own copy of the enemy locally.
 func _play_hit_effects(space: PhysicsDirectSpaceState3D, hit: Dictionary, direction: Vector3, kind: HitKind, killed: bool) -> void:
+	# Things with health that don't bleed (bleeds = false, e.g. an explosive
+	# barrel) just take a bullet hole.
+	if hit.collider.get("bleeds") == false:
+		BloodFX.spawn_bullet_hole(_body.get_tree().current_scene, hit.position, hit.normal)
+		return
 	_spawn_blood(space, hit, direction)
 	if kind == HitKind.HEADSHOT:
 		_spawn_headshot_bleed(hit.collider, hit.position)

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MissionData" format=3]
+
+[ext_resource type="Script" path="res://scripts/missions/mission_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "The Alley"
+description = "Tweakers have taken over the alley behind the corner store."
+scene = "res://scenes/alley1_level.tscn"
+order = 1

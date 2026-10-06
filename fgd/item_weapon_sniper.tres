@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/sniper_pickup.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "item_weapon_sniper"
+description = "A pickable scoped sniper rifle (comes with 10 bullets), lying as a real physics object. Hold right mouse to look through the scope."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-8, -8, -8, 16, 16, 16),
+"color": Color(0.85, 0.3, 0.15, 1)
+}

@@ -31,6 +31,8 @@ extends Node3D
 @export var bite_sound: SoundEvent = preload("res://audio/events/enemy/roach_bite.tres")
 @export var death_sound: SoundEvent = preload("res://audio/events/enemy/roach_death.tres")
 @export var spit_sound: SoundEvent = preload("res://audio/events/enemy/roach_spit.tres")
+## A dead roach hitting the ground.
+@export var splat_sound: SoundEvent = preload("res://audio/events/enemy/roach_splat.tres")
 ## The buzz rises in pitch as it gets close, like the manhack's engine
 ## (pitch 100 -> 160 within 512 units, about 13 m, in npc_manhack.cpp).
 @export var buzz_pitch_far: float = 1.0
@@ -45,6 +47,7 @@ var _buzz: AudioStreamPlayer3D
 var _time := randf() * 10.0
 var _tumble_axis := Vector3.RIGHT
 var _spit_tween: Tween
+var _splatted := false
 
 
 func _ready() -> void:
@@ -54,6 +57,7 @@ func _ready() -> void:
 	_roach.state_changed.connect(_on_state_changed)
 	_roach.bit_player.connect(_on_bit_player)
 	_roach.spat.connect(_on_spat)
+	_roach.splatted.connect(_on_splatted)
 	# Deferred: the buzz player is added as a child of the roach, and the
 	# roach is still busy setting up its own children during this _ready --
 	# Godot refuses the add then, and the buzz never started.
@@ -83,7 +87,9 @@ func _start_buzz() -> void:
 func _process(delta: float) -> void:
 	_time += delta
 	var state := _roach.get_state()
-	if state == FlyingRoach.State.STUNNED or state == FlyingRoach.State.DEAD:
+	if _splatted:
+		pass # flat on the floor, done moving
+	elif state == FlyingRoach.State.STUNNED or state == FlyingRoach.State.DEAD:
 		rotate(_tumble_axis, (6.0 if state == FlyingRoach.State.DEAD else 9.0) * delta)
 	elif _roach.facing.length_squared() > 0.01:
 		var up := Vector3.UP if absf(_roach.facing.normalized().y) < 0.98 else Vector3.BACK
@@ -127,6 +133,18 @@ func _on_state_changed(state: FlyingRoach.State) -> void:
 
 func _on_bit_player() -> void:
 	SoundPlayer.play_3d(bite_sound, global_position, get_tree().current_scene)
+
+
+## Hit the ground dead: stops tumbling, lies flat facing a random way, and
+## squashes -- flattened and spread out -- with a splat.
+func _on_splatted() -> void:
+	_splatted = true
+	SoundPlayer.play_3d(splat_sound, global_position, get_tree().current_scene)
+	global_basis = Basis(Vector3.UP, randf() * TAU)
+	if _model == null:
+		return
+	var squashed := Vector3(model_scale * 1.3, model_scale * 0.3, model_scale * 1.15)
+	create_tween().tween_property(_model, "scale", squashed, 0.08).set_ease(Tween.EASE_OUT)
 
 
 ## The glob's out: snaps forward (the model faces -Z), then settles back.

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/ppsh_pickup.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "item_weapon_ppsh"
+description = "A pickable PPSh submachine gun (35-round drum), lying as a real physics object -- falls, sits on the ground, can be shot or grabbed."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-8, -8, -8, 16, 16, 16),
+"color": Color(0.9, 0.55, 0.15, 1)
+}

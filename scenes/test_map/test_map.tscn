@@ -13,6 +13,11 @@
 [ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="11_rusher"]
 [ext_resource type="PackedScene" uid="uid://c2sc1shdn5nr1" path="res://scenes/enemy/enemy_gunner.tscn" id="12_gunner"]
 [ext_resource type="PackedScene" uid="uid://b3qfvpmbq2lhu" path="res://scenes/enemy/roach.tscn" id="13_2420u"]
+[ext_resource type="PackedScene" path="res://scenes/npc/grandma.tscn" id="20_grandma"]
+[ext_resource type="PackedScene" path="res://scenes/ppsh_pickup.tscn" id="21_ppsh"]
+[ext_resource type="PackedScene" path="res://scenes/rpg_pickup.tscn" id="22_rpg"]
+[ext_resource type="PackedScene" path="res://scenes/sniper_pickup.tscn" id="23_sniper"]
+[ext_resource type="PackedScene" path="res://scenes/props/explosive_barrel.tscn" id="24_barrel"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)
@@ -296,3 +301,30 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3539274, 2.1926193, 0)
 
 [node name="Roach6" parent="." unique_id=572321184 instance=ExtResource("13_2420u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3539274, 2.1926193, -0.7619037)
+
+[node name="Grandma" parent="." unique_id=656254352 instance=ExtResource("20_grandma")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.5, 0, 14)
+
+[node name="PPShPickup" parent="." unique_id=1531801628 instance=ExtResource("21_ppsh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.5, 17)
+
+[node name="RPGPickup" parent="." instance=ExtResource("22_rpg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 0.5, 17)
+
+[node name="SniperPickup" parent="." instance=ExtResource("23_sniper")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.5, 17)
+
+[node name="ExplosiveBarrel" parent="." instance=ExtResource("24_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.02, 13)
+
+[node name="ExplosiveBarrel2" parent="." instance=ExtResource("24_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.25, 0.02, 13.5)
+
+[node name="ExplosiveBarrel3" parent="." instance=ExtResource("24_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 0.02, 14.25)
+
+[node name="ExplosiveBarrel4" parent="." instance=ExtResource("24_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.02, 9)
+
+[node name="ExplosiveBarrel5" parent="." instance=ExtResource("24_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.02, 8.2)

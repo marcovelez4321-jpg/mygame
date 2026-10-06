@@ -1,0 +1,29 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
+[ext_resource type="Resource" path="res://weapons/rpg.tres" id="2"]
+[ext_resource type="PackedScene" path="res://art/weapons/NEWPSXWEAPONS/RPG/RPG.glb" id="3"]
+
+[sub_resource type="SphereShape3D" id="PickupZoneShape"]
+radius = 0.8
+
+[sub_resource type="BoxShape3D" id="PhysicalShape"]
+size = Vector3(0.09, 0.23, 1.24)
+
+[node name="WeaponPickup" type="RigidBody3D"]
+mass = 3.0
+script = ExtResource("1")
+weapon = ExtResource("2")
+ammo_amount = 3
+
+[node name="PickupArea" type="Area3D" parent="."]
+collision_layer = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea"]
+shape = SubResource("PickupZoneShape")
+
+[node name="RPG" parent="." instance=ExtResource("3")]
+transform = Transform3D(0.2, 0, 0, 0, 0.2, 0, 0, 0, 0.2, 0, 0.054, 0.008)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("PhysicalShape")

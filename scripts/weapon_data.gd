@@ -64,6 +64,86 @@ enum ReloadStyle {
 @export var recoil_kick_distance: float = 0.06
 @export var recoil_kick_rotation_degrees: float = 4.0
 
+@export_group("View Recoil")
+## Your AIM kicks as you hold the trigger, following this per-shot pattern --
+## the Counter-Strike / Valorant "spray pattern": the same every time, so it
+## can be learned and pulled down against, not random kick. Each entry is one
+## shot's kick in degrees: x = sideways (+ = right), y = up. Past the end, the
+## last four entries repeat. Empty = no view recoil (only the gun model
+## kicks, see Recoil above).
+@export var recoil_pattern: Array[Vector2] = []
+## Multiplies the whole pattern -- quick way to make it harder or softer.
+@export var recoil_scale: float = 1.0
+## A little extra random wobble per shot (degrees) on top of the pattern.
+@export var recoil_jitter: float = 0.0
+## Stop firing this long (seconds) and the next burst starts the pattern
+## from shot 1 again -- and the aim starts drifting back down.
+@export var recoil_reset_time: float = 0.3
+## How fast (degrees per second) the aim drifts back down after you stop
+## firing. Only the recoil you didn't pull down yourself comes back.
+@export var recoil_recovery_speed: float = 12.0
+## Each kick is eased in over this long (seconds) instead of snapping in one
+## frame, so it reads as recoil rather than camera jitter.
+@export var recoil_kick_time: float = 0.06
+
+@export_group("Aim Down Sights")
+## Hold right mouse to raise this gun to your eye. Off = right mouse does
+## nothing while holding it.
+@export var can_aim: bool = false
+## Seconds to raise the gun to your eye (lowering takes the same).
+@export var aim_time: float = 0.25
+## Where the gun sits when fully raised -- same space as viewmodel_position.
+## Tune in-game: F2, then I, arrows to move, F3 to save.
+@export var aim_position: Vector3 = Vector3(0.0, -0.1, -0.3)
+## How much the view zooms in when fully aimed: 1 = none, 2.5 = things look
+## 2.5x bigger. Mouse turning slows down to match.
+@export var aim_zoom: float = 1.2
+## Spread (degrees) when fully aimed. spread_degrees above becomes the
+## hip-fire spread; in between it blends.
+@export var aim_spread_degrees: float = 0.0
+## Walking speed while aimed, as a fraction of normal.
+@export var aim_move_speed_scale: float = 0.6
+## A full-screen scope image -- a PNG that's see-through where you look
+## through it. Set: once the gun is raised the screen blinks, the gun hides
+## and this covers the view, like an old Call of Duty sniper. Empty: plain
+## iron sights, the gun stays visible.
+@export var scope_overlay: Texture2D
+@export var aim_in_sound: SoundEvent
+@export var aim_out_sound: SoundEvent
+
+@export_group("Projectile (RPG)")
+## Fires a rocket (Rocket) instead of hitscan bullets; damage, pellets and
+## spread above are then unused -- the explosion settings below apply.
+@export var fires_projectile: bool = false
+## The node in viewmodel_scene that IS the loaded rocket. It's hidden in the
+## launcher when fired, launched as the projectile, and shown again when
+## the reload finishes.
+@export var projectile_part: String = "Rocket"
+## Stage 1, the launch charge: how fast it leaves the tube (m/s) and how much
+## it dips (m/s²) before the motor lights.
+@export var launch_speed: float = 18.0
+@export var launch_gravity: float = 4.0
+## Seconds after leaving the tube that the motor ignites (stage 2).
+@export var ignite_delay: float = 0.15
+## Stage 2, the motor: acceleration (m/s²) up to max_speed (m/s).
+@export var thrust: float = 120.0
+@export var max_speed: float = 45.0
+## Slow roll as it flies, radians per second.
+@export var rocket_spin: float = 6.0
+## Where the backblast comes out of the rear of the launcher -- same space as
+## muzzle_offset (tune with F2 then M for the muzzle; this one by hand).
+@export var backblast_offset: Vector3 = Vector3.ZERO
+## Damage at the centre of the blast (a direct hit always takes all of it),
+## falling off to 0 at explosion_radius metres.
+@export var explosion_damage: float = 100.0
+@export var explosion_radius: float = 5.6
+## Push at the centre, m/s -- what launches a rocket jump.
+@export var explosion_knockback: float = 14.0
+## What a PLAYER takes at the centre of the blast instead of explosion_damage
+## (falling off the same way) -- you when rocket jumping, and in co-op your
+## friends, so a stray rocket stings but never one-shots anyone.
+@export var explosion_player_damage: float = 10.0
+
 @export_group("Switching")
 ## Seconds to bring this weapon up after choosing it. You can't fire during
 ## it, and any cooldown left from the previous weapon carries over, so

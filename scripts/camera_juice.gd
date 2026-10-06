@@ -14,6 +14,10 @@ extends Camera3D
 @export var shake_decay: float = 90.0 ## degrees/second a shake settles at
 @export var fov_decay: float = 90.0   ## degrees/second an FOV kick settles at
 
+## Magnification: 1 = normal, 2.5 = everything looks 2.5x bigger. Set by
+## AimDownSights while you aim.
+var zoom: float = 1.0
+
 var _base_fov: float
 var _shake_strength: float = 0.0
 var _fov_offset: float = 0.0
@@ -49,8 +53,13 @@ func _process(delta: float) -> void:
 	elif rotation != Vector3.ZERO:
 		rotation = Vector3.ZERO
 
+	# Zooming narrows the view: 2x zoom = half as wide (measured as the
+	# tangent of the half-angle, so it's a true 2x, not just half the degrees).
+	var base_fov := _base_fov
+	if zoom > 1.0:
+		base_fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(_base_fov) * 0.5) / zoom))
 	if _fov_offset > 0.01:
-		fov = _base_fov + _fov_offset
+		fov = base_fov + _fov_offset
 		_fov_offset = maxf(_fov_offset - fov_decay * delta, 0.0)
-	elif fov != _base_fov:
-		fov = _base_fov
+	elif fov != base_fov:
+		fov = base_fov

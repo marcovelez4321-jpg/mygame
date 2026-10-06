@@ -81,10 +81,10 @@ signal shot_fired(end_point: Vector3)
 ## animation plays out.
 @export var attack_recovery: float = 0.5
 ## A melee hit shoves the player back: horizontal push in m/s, plus a small
-## hop so floor friction doesn't eat it instantly. A shove, not a launch --
-## about a meter or two. 0 = no shove. (The gunner's shots don't shove.)
-@export var melee_shove: float = 6.0
-@export var melee_shove_up: float = 2.0
+## hop so floor friction doesn't eat it instantly. A real shove, not a
+## launch -- a few meters. 0 = no shove. (The gunner's shots don't shove.)
+@export var melee_shove: float = 12.0
+@export var melee_shove_up: float = 4.0
 
 @export_group("Reactions")
 @export var pain_time: float = 0.25
