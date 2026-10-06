@@ -355,3 +355,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0, -6)
 
 [node name="EnemyGunner3" parent="." instance=ExtResource("12_gunner")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, -6)
+
+[node name="Roach13" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 2.1926193, 0)
+
+[node name="Roach14" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.1, 2.1926193, -0.7619037)
+
+[node name="Roach15" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.1, 2.1926193, 1.0018294)
+kind = 1
+
+[node name="Roach16" parent="." instance=ExtResource("13_2420u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.1, 2.1926193, 0.23992562)
+kind = 1

@@ -213,7 +213,7 @@ func _ready() -> void:
 
 
 ## He's with the rats: fights tweakers, roaches and you.
-func faction() -> Factions.Side:
+func faction() -> int:
 	return Factions.Side.RAT
 
 

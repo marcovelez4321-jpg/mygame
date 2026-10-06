@@ -215,7 +215,7 @@ func count() -> int:
 ## New rats burrowing up out of the floor right around `center` (the
 ## Bender's feet), one after another over about spawn_spread seconds (or
 ## `spread`, if given). The more there are, the wider the patch of floor.
-func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float = -1.0) -> void:
+func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float = -1.0, scale_bonus: float = 1.0, health_bonus: float = 1.0, damage_bonus: float = 1.0) -> void:
 	var world := get_tree().current_scene
 	var space := get_viewport().find_world_3d().direct_space_state
 	var reach := (0.6 + 0.12 * sqrt(float(amount))) * spawn_circle_scale
@@ -230,6 +230,9 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float 
 		rat.slot = Vector2.from_angle(angle)
 		rat.slot_radius = randf_range(follow_radius_min, follow_radius_max)
 		rat.emerge_delay = randf() * (spawn_spread if spread < 0.0 else spread)
+		rat.scale_bonus = scale_bonus
+		rat.health_bonus = health_bonus
+		rat.damage_bonus = damage_bonus
 		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(inner, reach)
 		# Onto the floor there (or where he stands, if there's none).
 		var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.0, spot + Vector3.DOWN * 3.0)
@@ -409,7 +412,7 @@ func _noticed_target() -> Node3D:
 				spotter = rat
 		if spotter == null:
 			continue
-		var priority := Factions.priority_of(Factions.Side.RAT, Factions.side_of(candidate) as Factions.Side, null, candidate)
+		var priority := Factions.priority_of(Factions.Side.RAT, Factions.side_of(candidate), null, candidate)
 		if priority < best_priority or (priority == best_priority and spotter_distance >= best_distance):
 			continue
 		if _rat_sees(spotter, candidate):

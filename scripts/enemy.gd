@@ -698,7 +698,7 @@ func get_state() -> State:
 
 
 ## Which side it fights for (Factions). Tweakers; the Rat Bender overrides.
-func faction() -> Factions.Side:
+func faction() -> int:
 	return Factions.Side.TWEAKER
 
 

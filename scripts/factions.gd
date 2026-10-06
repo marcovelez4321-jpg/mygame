@@ -17,6 +17,8 @@ extends RefCounted
 ## you once it stops.
 ## Rule 1 (co-op): only the host picks targets; players are just one more side.
 
+## Sides are passed around as plain ints (Side values) -- Godot's type check
+## treats "Side" here and "Factions.Side" elsewhere as different types.
 enum Side { PLAYER, TWEAKER, ROACH, RAT }
 
 const GROUPS := {
@@ -40,11 +42,11 @@ const REVENGE_TIME := 5.0
 
 ## The target `viewer` (on `side`, at `from`) wants most, within max_range:
 ## highest priority (plus revenge), nearest among equals. Null if none.
-static func nearest_hostile(tree: SceneTree, side: Side, from: Vector3, max_range: float = INF, viewer: Node = null) -> Node3D:
+static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null) -> Node3D:
 	var best: Node3D = null
 	var best_priority := -1
 	var best_distance := INF
-	for other: Side in GROUPS:
+	for other: int in GROUPS:
 		if other == side:
 			continue
 		for node in tree.get_nodes_in_group(GROUPS[other]):
@@ -63,9 +65,9 @@ static func nearest_hostile(tree: SceneTree, side: Side, from: Vector3, max_rang
 
 
 ## How much `side` wants to fight `target` (of side `other`), with revenge.
-static func priority_of(side: Side, other: Side, viewer: Node, target: Node3D) -> int:
+static func priority_of(side: int, other: int, viewer: Node, target: Node3D) -> int:
 	var priority: int = PRIORITY[side].get(other, 0)
-	if viewer and viewer.get_meta("provoked_by", null) == target \
+	if viewer and viewer.has_meta("provoked_by") and viewer.get_meta("provoked_by") == target \
 			and Time.get_ticks_msec() - int(viewer.get_meta("provoked_at", 0)) < REVENGE_TIME * 1000.0:
 		priority += REVENGE_BONUS
 	return priority
@@ -81,16 +83,16 @@ static func provoke(victim: Node, attacker: Node3D) -> void:
 
 ## Which side `node` is on, or -1.
 static func side_of(node: Node) -> int:
-	for side: Side in GROUPS:
+	for side: int in GROUPS:
 		if node.is_in_group(GROUPS[side]):
 			return side
 	return -1
 
 
 ## Every living target `side` is hostile to.
-static func hostiles(tree: SceneTree, side: Side) -> Array[Node3D]:
+static func hostiles(tree: SceneTree, side: int) -> Array[Node3D]:
 	var found: Array[Node3D] = []
-	for other: Side in GROUPS:
+	for other: int in GROUPS:
 		if other == side:
 			continue
 		for node in tree.get_nodes_in_group(GROUPS[other]):

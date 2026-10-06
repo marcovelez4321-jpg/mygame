@@ -104,6 +104,12 @@ var rhythm_seed := 0.0
 ## Set by RatSwarm before it's added: wait this long, then burrow up out of
 ## the floor. Below 0 = just appear (not summoned).
 var emerge_delay := -1.0
+## Set by RatSwarm before it's added, for a bodyguard mixed into a pack:
+## bigger, tougher and harder-biting than its swarm-mates (multiplies the
+## swarm's own rat_scale / rat_health_multiplier / rat_damage_multiplier).
+var scale_bonus := 1.0
+var health_bonus := 1.0
+var damage_bonus := 1.0
 
 var _state := State.RUN
 var _bite_cooldown := 0.0
@@ -176,7 +182,7 @@ func _surface() -> void:
 ## Bender's bodyguards: RatSwarm.rat_scale / rat_health_multiplier).
 func _roll_variety() -> void:
 	var variety := randf_range(size_min, size_max)
-	size = variety * (swarm.rat_scale if swarm else 1.0)
+	size = variety * (swarm.rat_scale if swarm else 1.0) * scale_bonus
 	speed_scale = randf_range(1.0 - speed_variation, 1.0 + speed_variation) / sqrt(variety)
 	rhythm_seed = randf() * 1000.0
 	# On the model, not Visual: Visual is the part that turns to face where
@@ -188,10 +194,10 @@ func _roll_variety() -> void:
 	shape.shape = box
 	shape.position *= size
 	mass *= size * size * size
-	health.max_health *= variety * variety * (swarm.rat_health_multiplier if swarm else 1.0)
+	health.max_health *= variety * variety * (swarm.rat_health_multiplier if swarm else 1.0) * health_bonus
 	health.current_health = health.max_health
 	bite_reach *= size
-	var damage_multiplier := swarm.rat_damage_multiplier if swarm else 1.0
+	var damage_multiplier := (swarm.rat_damage_multiplier if swarm else 1.0) * damage_bonus
 	bite_damage *= damage_multiplier
 	leap_damage *= damage_multiplier
 
