@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/rat_bender.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "monster_rat_bender"
+description = "The Rat Bender: a spellcaster with a horde of up to 30 rats. Patrols around where you place him; spots you and sends the rats rushing or leaping at you, and summons more when they run low. Give him room -- the rats need floor space."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-16, -16, 0, 32, 32, 84),
+"color": Color(0.85, 0.45, 0.1, 1)
+}

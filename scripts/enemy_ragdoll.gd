@@ -314,6 +314,8 @@ func _start_ragdoll() -> void:
 
 	_apply_hit_impulse()
 	_start_death_reaction()
+	# Rats come and eat bodies on the floor (RatSwarm).
+	_enemy.add_to_group(RatSwarm.CORPSE_GROUP)
 	get_tree().create_timer(blood_pool_delay).timeout.connect(_spawn_blood_pool)
 
 

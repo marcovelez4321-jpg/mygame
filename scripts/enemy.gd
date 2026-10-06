@@ -738,6 +738,12 @@ func _nav_direction_to(destination: Vector3) -> Vector3:
 		return _flat_direction_to_position(destination)
 	_nav_agent.target_position = destination
 	var next_point := _nav_agent.get_next_path_position()
+	# No walkable route there -- e.g. the player is down below a ledge with no
+	# stairs: the path just ends at the brink. Walk straight at them instead
+	# and drop off the edge (gravity does the rest), like Quake's monsters,
+	# rather than standing stuck at the top.
+	if not _nav_agent.is_target_reachable():
+		return _flat_direction_to_position(destination)
 	return _flat_direction_to_position(next_point)
 
 

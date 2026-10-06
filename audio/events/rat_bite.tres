@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SoundEvent" format=3]
+
+[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+clip_folder = "res://audio/sfx/enemies/rat_bender"
+clip_prefix = "bite"
+pitch_variance = 0.15
+bus = "Enemies"

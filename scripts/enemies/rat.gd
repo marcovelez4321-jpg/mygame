@@ -1,0 +1,320 @@
+class_name Rat
+extends RigidBody3D
+
+## One rat of a Rat Bender's horde (RatSwarm). A real physics object --
+## shots and blasts shove it around -- that runs wherever its swarm says
+## (desired_velocity), bites players it touches and leap-bites on command.
+##
+## Deaths:
+##   - Shot: pops into a little pool of blood and is gone.
+##   - Launched by an explosion (stun()): flies, and splats against whatever
+##     it hits next, leaving a red spot.
+##
+## Rule 1 (co-op): only the host moves and bites. The swarm is the brain;
+## this script just follows orders and reacts to physics.
+
+enum State { RUN, LEAP, THROWN, DEAD }
+
+const ANIM_RUN := "Run"
+const ANIM_IDLE := "Idle"
+const ANIM_ATTACK := "Attack"
+## Rats further than this from the camera animate at a lower rate
+## (FAR_ANIMATION_RATE times a second) -- they're small and nobody can tell.
+const FAR_ANIMATION_DISTANCE := 12.0
+const FAR_ANIMATION_RATE := 12.0
+
+@export_group("Movement")
+## How fast it reaches the swarm's chosen velocity, m/s².
+@export var acceleration: float = 30.0
+## Hops this hard (m/s) when it's trying to move but stuck on a step or lip.
+@export var hop_speed: float = 3.5
+
+@export_group("Bite")
+@export var bite_damage: float = 5.0
+@export var bite_interval: float = 0.8
+## How close to a player's feet it has to be to bite, meters.
+@export var bite_reach: float = 0.8
+@export var leap_damage: float = 10.0
+@export var leap_speed: float = 7.0
+@export var leap_lift: float = 4.0
+
+@export_group("Variety")
+## Every rat rolls its own size in this range. Bigger rats have more health
+## (by size²), weigh more (size³) and run a little slower; little ones are
+## quick and pop from one hit.
+@export var size_min: float = 0.85
+@export var size_max: float = 1.2
+## On top of that, each rat's own speed is this much faster or slower (0.1
+## = up to 10% either way).
+@export var speed_variation: float = 0.1
+
+@export_group("Death")
+@export var blood_color: Color = Color(0.55, 0.02, 0.02)
+## Size (m) of the pool a shot rat leaves, and of the spot a launched rat
+## splats into.
+@export var pool_size: float = 0.45
+@export var splat_size: float = 0.6
+
+## Set by RatSwarm.
+var swarm: RatSwarm
+## Where in the pack it likes to be: a direction (unit) and how far out.
+var slot := Vector2.RIGHT
+var slot_radius := 1.5
+## What the swarm wants it doing this tick (horizontal m/s).
+var desired_velocity := Vector3.ZERO
+## Nibbling a corpse -- plays the attack clip in place.
+var eating := false
+## This rat's own size, pace and rhythm (rolled once, in _roll_variety()).
+## The swarm reads speed_scale and rhythm_seed for its steering.
+var size := 1.0
+var speed_scale := 1.0
+var rhythm_seed := 0.0
+
+var _state := State.RUN
+var _bite_cooldown := 0.0
+var _stuck_time := 0.0
+var _thrown_time := 0.0
+var _pop_pending := false
+var _leap_bit := false
+var _anim: AnimationPlayer
+var _anim_name := ""
+var _anim_time := 0.0
+var _anim_step := 0.0
+var _lod_timer := 0.0
+
+@onready var health: Health = $Health
+@onready var _visual: Node3D = $Visual
+
+
+func _ready() -> void:
+	add_to_group("enemies")
+	lock_rotation = true # upright; the Visual turns to face where it runs
+	_roll_variety()
+	health.died.connect(_on_died)
+	body_entered.connect(_on_body_entered)
+	# Players and its own Bender walk straight through the horde instead of
+	# tripping over 30 little physics bodies.
+	for player in get_tree().get_nodes_in_group("player"):
+		add_collision_exception_with(player as PhysicsBody3D)
+	if swarm and is_instance_valid(swarm.bender):
+		add_collision_exception_with(swarm.bender as PhysicsBody3D)
+	BloodFX.warm_splat_texture(blood_color)
+	_anim = find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if _anim:
+		# Advanced by hand in _process, so far-away rats can animate less often.
+		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+		_anim.seek(randf() * 0.5, true) # out of step with each other
+	_lod_timer = randf() * 0.5
+
+
+## No two rats alike. Rule 1 (co-op): rolled on the host; the size and seed
+## travel with the spawn so every screen sees the same rat.
+func _roll_variety() -> void:
+	size = randf_range(size_min, size_max)
+	speed_scale = randf_range(1.0 - speed_variation, 1.0 + speed_variation) / sqrt(size)
+	rhythm_seed = randf() * 1000.0
+	_visual.scale *= size
+	var shape := $CollisionShape3D as CollisionShape3D
+	var box := (shape.shape as BoxShape3D).duplicate() as BoxShape3D
+	box.size *= size
+	shape.shape = box
+	shape.position *= size
+	mass *= size * size * size
+	health.max_health *= size * size
+	health.current_health = health.max_health
+
+
+func _physics_process(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	if _pop_pending:
+		_pop_pending = false
+		if _state != State.THROWN:
+			_pop()
+			return
+	match _state:
+		State.RUN:
+			_run(delta)
+		State.LEAP:
+			_check_leap_bite()
+			if linear_velocity.y <= 0.0 and _on_ground():
+				_set_contacts(false)
+				_state = State.RUN
+		State.THROWN:
+			_thrown_time += delta
+
+
+func _run(delta: float) -> void:
+	_bite_cooldown = maxf(_bite_cooldown - delta, 0.0)
+	var velocity := linear_velocity
+	var flat := Vector3(velocity.x, 0.0, velocity.z).move_toward(desired_velocity, acceleration * delta)
+	linear_velocity = Vector3(flat.x, velocity.y, flat.z)
+	if desired_velocity.length_squared() > 0.25:
+		_face(desired_velocity, delta)
+		# Wants to move but isn't getting anywhere: a step or a lip -- hop it.
+		_stuck_time = _stuck_time + delta if flat.length() < 0.4 else 0.0
+		if _stuck_time > 0.25 and _on_ground():
+			_stuck_time = 0.0
+			linear_velocity.y = hop_speed
+	_try_bite()
+
+
+func _try_bite() -> void:
+	if _bite_cooldown > 0.0 or swarm == null:
+		return
+	var target := swarm.target
+	if target == null or not is_instance_valid(target):
+		return
+	var offset := target.global_position - global_position
+	if absf(offset.y) > 1.2 or Vector2(offset.x, offset.z).length() > bite_reach:
+		return
+	_bite_cooldown = bite_interval
+	_bite(target, bite_damage)
+
+
+func _bite(target: Node3D, damage: float) -> void:
+	var target_health := target.get_node_or_null("Health") as Health
+	if target_health:
+		target_health.take_damage(damage, Health.NO_ATTACKER)
+	_play(ANIM_ATTACK, false)
+	if swarm:
+		swarm.rat_bit(global_position)
+
+
+## Jump at the player and bite on the way in (the Bender's close-range spell).
+func leap(target: Node3D) -> void:
+	if _state != State.RUN or not _on_ground():
+		return
+	var direction := target.global_position - global_position
+	direction.y = 0.0
+	_face(direction, 1.0)
+	linear_velocity = direction.normalized() * leap_speed + Vector3.UP * leap_lift
+	_leap_bit = false
+	_state = State.LEAP
+	_set_contacts(true)
+	_play(ANIM_ATTACK, false)
+
+
+func _check_leap_bite() -> void:
+	if _leap_bit or swarm == null or not is_instance_valid(swarm.target):
+		return
+	var offset := swarm.target.global_position - global_position
+	if absf(offset.y) < 1.6 and Vector2(offset.x, offset.z).length() < bite_reach:
+		_leap_bit = true
+		_bite(swarm.target, leap_damage)
+
+
+## Explosion.push() calls this when a blast launches it: it flies, and splats
+## on the next thing it hits.
+func stun() -> void:
+	if _state == State.THROWN:
+		return
+	_state = State.THROWN
+	_thrown_time = 0.0
+	_set_contacts(true)
+	remove_from_group("enemies")
+
+
+func _on_body_entered(_body: Node) -> void:
+	# A few hundredths of a second of grace, or the floor it was launched off
+	# would splat it on the spot.
+	if _state == State.THROWN and _thrown_time > 0.08:
+		_splat()
+
+
+## Shot (or hurt any other way): decided next physics tick, so a blast that
+## kills AND launches it (Explosion hurts first, pushes second) flies instead.
+func _on_died(_attacker_id: int, _is_critical: bool) -> void:
+	_pop_pending = true
+
+
+## Shot dead: a burst of blood and a little pool where it stood.
+func _pop() -> void:
+	var world := get_tree().current_scene
+	BloodFX.spawn_impact(world, global_position + Vector3.UP * 0.1, Vector3.UP, blood_color)
+	var floor_hit := _ray(global_position + Vector3.UP * 0.2, global_position + Vector3.DOWN * 0.6)
+	if not floor_hit.is_empty():
+		BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, pool_size, blood_color)
+	_remove()
+
+
+## Launched and hit something: a red spot on whatever it hit.
+func _splat() -> void:
+	var world := get_tree().current_scene
+	var heading := linear_velocity.normalized() if linear_velocity.length() > 0.5 else Vector3.DOWN
+	var hit := _ray(global_position - heading * 0.2, global_position + heading * 0.8)
+	if hit.is_empty():
+		hit = _ray(global_position, global_position + Vector3.DOWN * 0.8)
+	if not hit.is_empty():
+		BloodFX.spawn_splatter(world, hit.position, hit.normal, splat_size, blood_color)
+		BloodFX.spawn_impact(world, hit.position, hit.normal, blood_color)
+	_remove()
+
+
+func _remove() -> void:
+	_state = State.DEAD
+	if swarm:
+		swarm.forget(self)
+	queue_free()
+
+
+func _set_contacts(on: bool) -> void:
+	contact_monitor = on
+	max_contacts_reported = 2 if on else 0
+
+
+func _on_ground() -> bool:
+	return not _ray(global_position + Vector3.UP * 0.1, global_position + Vector3.DOWN * 0.15).is_empty()
+
+
+func _face(direction: Vector3, delta: float) -> void:
+	var flat := Vector3(direction.x, 0.0, direction.z)
+	if flat.length_squared() < 0.0001:
+		return
+	var target_basis := Basis.looking_at(flat.normalized(), Vector3.UP)
+	_visual.basis = _visual.basis.slerp(target_basis, clampf(12.0 * delta, 0.0, 1.0)).orthonormalized()
+
+
+func _ray(from: Vector3, to: Vector3) -> Dictionary:
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [get_rid()]
+	query.collision_mask = 1
+	return get_world_3d().direct_space_state.intersect_ray(query)
+
+
+# ---- Look -------------------------------------------------------------------
+
+func _process(delta: float) -> void:
+	if _anim == null:
+		return
+	# A one-off bite plays out; otherwise run, stand, or chew (eating loops).
+	var biting := _anim_name == ANIM_ATTACK and _anim.is_playing() \
+			and _anim.get_animation(ANIM_ATTACK).loop_mode == Animation.LOOP_NONE
+	if _state == State.RUN and not biting:
+		var moving := Vector2(linear_velocity.x, linear_velocity.z).length() > 0.6
+		_play(ANIM_ATTACK if eating else (ANIM_RUN if moving else ANIM_IDLE), true)
+	# Far away: animate in bigger, less frequent steps.
+	_lod_timer -= delta
+	if _lod_timer <= 0.0:
+		_lod_timer = 0.5
+		var camera := get_viewport().get_camera_3d()
+		var far := camera != null and camera.global_position.distance_to(global_position) > FAR_ANIMATION_DISTANCE
+		_anim_step = 1.0 / FAR_ANIMATION_RATE if far else 0.0
+	_anim_time += delta
+	if _anim_time >= _anim_step:
+		_anim.advance(_anim_time)
+		_anim_time = 0.0
+
+
+func _play(animation_name: String, loop: bool) -> void:
+	if _anim == null or not _anim.has_animation(animation_name):
+		return
+	var loop_mode := Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+	var animation := _anim.get_animation(animation_name)
+	if animation_name == _anim_name and _anim.is_playing() and animation.loop_mode == loop_mode:
+		return
+	_anim_name = animation_name
+	animation.loop_mode = loop_mode
+	_anim.play(animation_name, 0.1)
+	if not loop:
+		_anim.seek(0.0, true) # a bite always starts from the top

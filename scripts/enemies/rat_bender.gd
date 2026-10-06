@@ -1,0 +1,329 @@
+class_name RatBender
+extends Enemy
+
+## The Rat Bender: a caster who never fights alone. A horde of rats (RatSwarm)
+## swarms around his feet and does the biting; he does the spells.
+##
+##   PATROL - nobody around: wanders (orc walk) around where he started; his
+##            rats follow at his feet and stop to eat any corpse nearby.
+##   CHASE  - runs at you, picking a spell:
+##     - you're far: RUSH (Magic Attack 01) -- the rats crowd in to him,
+##       then pour at you as one pack with a burst of speed that wears off;
+##     - you're close: LEAP (Magic Area Attack 02) -- they crowd in, then
+##       leap at you biting;
+##     - short on rats: SUMMON (Spell Casting) -- new rats appear around him,
+##       back up to the cap.
+##   Left alone after being hurt, he heals.
+##
+## Every spell has a wind-up you can read from across the room: he flashes
+## orange, faster and faster, throbbing and swelling until it goes off --
+## the same tell as a grenade's fuse.
+##
+## Built on Enemy, so pathfinding, health, hit zones, ragdoll and death all
+## come along; it just swaps in its own brain (_physics_process).
+## Rule 1 (co-op): only the host thinks; spells are short named events
+## (cast started / went off) that clients can play from.
+
+enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON }
+
+@export_group("Patrol")
+@export var patrol_speed: float = 1.6
+## Wanders anywhere within this many meters of where he started.
+@export var patrol_radius: float = 10.0
+@export var patrol_wait_min: float = 1.0
+@export var patrol_wait_max: float = 3.0
+
+@export_group("Spells")
+## RUSH when you're at least this far away, at most every rush_cooldown s.
+@export var rush_min_range: float = 7.0
+@export var rush_cooldown: float = 6.0
+## LEAP when you're this close, at most every leap_cooldown s.
+@export var leap_range: float = 5.0
+@export var leap_cooldown: float = 5.0
+## How far into a cast animation (0..1) the spell actually goes off.
+@export_range(0.1, 1.0, 0.05) var cast_release: float = 0.55
+## The wind-up tell: orange flashes from flash_rate_start to flash_rate_end
+## a second, throbbing, swelling up to cast_swell bigger.
+@export var cast_flash_color: Color = Color(1.0, 0.5, 0.05, 0.8)
+@export var flash_rate_start: float = 2.0
+@export var flash_rate_end: float = 12.0
+@export var cast_swell: float = 0.15
+
+@export_group("Rats")
+@export var rat_cap: int = 30
+## Rats per SUMMON cast, and the least time between casts.
+@export var summon_batch: int = 6
+@export var summon_cooldown: float = 8.0
+
+@export_group("Healing")
+## Not hurt for this long: heals heal_per_second until full.
+@export var heal_delay: float = 5.0
+@export var heal_per_second: float = 8.0
+
+@export_group("Animations")
+@export_file("*.res") var patrol_animation: String = "res://art/animations/OrcWalk.res"
+@export_file("*.res") var run_animation: String = "res://art/animations/Run.res"
+@export_file("*.res") var idle_animation: String = "res://art/animations/Idle.res"
+@export_file("*.res") var rush_animation: String = "res://art/animations/MagicAttack01.res"
+@export_file("*.res") var leap_animation: String = "res://art/animations/MagicAreaAttack02.res"
+@export_file("*.res") var summon_animation: String = "res://art/animations/SpellCasting.res"
+
+@export_group("Sound")
+@export var cast_sound: SoundEvent
+@export var summon_sound: SoundEvent
+
+const LIBRARY := "bender"
+
+var _mode := Mode.PATROL
+var _home := Vector3.ZERO
+var _patrol_point := Vector3.ZERO
+var _patrol_wait := 0.0
+var _rush_cooldown_left := 0.0
+var _leap_cooldown_left := 2.0
+var _summon_cooldown_left := 0.0
+var _since_hurt := 999.0
+var _cast_time := 0.0
+var _cast_length := 1.0
+var _cast_released := false
+var _flash_phase := 0.0
+var _flash_lit := false
+var _flash_material: StandardMaterial3D
+var _model: Node3D
+var _model_scale := Vector3.ONE
+var _meshes: Array[MeshInstance3D] = []
+var _anim: AnimationPlayer
+var _anim_name := ""
+
+@onready var swarm: RatSwarm = $RatSwarm
+
+
+func _ready() -> void:
+	super._ready()
+	_home = global_position
+	_patrol_point = _home
+	swarm.bender = self
+	_model = get_node_or_null("Model") as Node3D
+	if _model:
+		_model_scale = _model.scale
+		for node in _model.find_children("*", "MeshInstance3D", true, false):
+			_meshes.append(node as MeshInstance3D)
+	_flash_material = StandardMaterial3D.new()
+	_flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_flash_material.albedo_color = cast_flash_color
+	_setup_animations()
+	_play("patrol")
+	if multiplayer.is_server():
+		swarm.spawn_rats.call_deferred(rat_cap, global_position)
+
+
+func _setup_animations() -> void:
+	_anim = find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if _anim == null:
+		push_warning("RatBender: no AnimationPlayer in the model.")
+		return
+	var library := AnimationLibrary.new()
+	var paths := {"patrol": patrol_animation, "run": run_animation, "idle": idle_animation,
+			"rush": rush_animation, "leap": leap_animation, "summon": summon_animation}
+	for key: String in paths:
+		var animation := load(paths[key]) as Animation if ResourceLoader.exists(paths[key]) else null
+		if animation:
+			library.add_animation(key, animation)
+		else:
+			push_warning("RatBender: animation '%s' not found -- has Godot imported it yet?" % paths[key])
+	_anim.add_animation_library(LIBRARY, library)
+
+
+func _physics_process(delta: float) -> void:
+	if not multiplayer.is_server() or _state == State.DEAD:
+		return
+	_rush_cooldown_left = maxf(_rush_cooldown_left - delta, 0.0)
+	_leap_cooldown_left = maxf(_leap_cooldown_left - delta, 0.0)
+	_summon_cooldown_left = maxf(_summon_cooldown_left - delta, 0.0)
+	_heal(delta)
+	_retarget_timer -= delta
+	if _retarget_timer <= 0.0:
+		_retarget_timer = retarget_interval
+		_update_memory(_find_nearest_player())
+	swarm.target = _target
+
+	match _mode:
+		Mode.PATROL:
+			_think_patrol(delta)
+		Mode.CHASE:
+			_think_chase_target()
+		Mode.CAST_RUSH, Mode.CAST_LEAP, Mode.SUMMON:
+			_think_cast(delta)
+
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+	move_and_slide()
+
+
+func _think_patrol(delta: float) -> void:
+	if _target and _can_see(_target):
+		_mode = Mode.CHASE
+		return
+	if swarm.count() < rat_cap and _summon_cooldown_left <= 0.0:
+		_start_cast(Mode.SUMMON)
+		return
+	swarm.order = RatSwarm.Order.FOLLOW
+	if _flat_distance_to_position(_patrol_point) < 1.0:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		_play("idle")
+		_patrol_wait -= delta
+		if _patrol_wait <= 0.0:
+			_patrol_wait = randf_range(patrol_wait_min, patrol_wait_max)
+			_patrol_point = _random_patrol_point()
+		return
+	var direction := _nav_direction_to(_patrol_point)
+	_face_position(global_position + direction)
+	velocity.x = direction.x * patrol_speed
+	velocity.z = direction.z * patrol_speed
+	_play("patrol")
+
+
+## Somewhere walkable near home.
+func _random_patrol_point() -> Vector3:
+	var offset := Vector2.from_angle(randf() * TAU) * randf_range(2.0, patrol_radius)
+	var point := _home + Vector3(offset.x, 0.0, offset.y)
+	var map := get_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(map) > 0:
+		point = NavigationServer3D.map_get_closest_point(map, point)
+	return point
+
+
+func _think_chase_target() -> void:
+	if _target == null:
+		_mode = Mode.PATROL
+		return
+	var can_see_now := _can_see(_target)
+	var aim := _target.global_position if can_see_now else _last_seen_position
+	var distance := _flat_distance_to_position(aim)
+	if can_see_now and distance <= leap_range and _leap_cooldown_left <= 0.0:
+		_start_cast(Mode.CAST_LEAP)
+		return
+	if can_see_now and distance >= rush_min_range and _rush_cooldown_left <= 0.0:
+		_start_cast(Mode.CAST_RUSH)
+		return
+	if swarm.count() < rat_cap and _summon_cooldown_left <= 0.0 and distance > leap_range:
+		_start_cast(Mode.SUMMON)
+		return
+	if swarm.order == RatSwarm.Order.GATHER:
+		swarm.order = RatSwarm.Order.FOLLOW
+	var direction := _nav_direction_to(aim)
+	_face_position(aim)
+	velocity.x = direction.x * move_speed
+	velocity.z = direction.z * move_speed
+	_play("run")
+
+
+func _start_cast(mode: Mode) -> void:
+	_mode = mode
+	_cast_time = 0.0
+	_cast_released = false
+	_flash_phase = 0.0
+	var key: String = {Mode.CAST_RUSH: "rush", Mode.CAST_LEAP: "leap", Mode.SUMMON: "summon"}[mode]
+	_anim_name = "" # the same spell twice in a row still replays from the start
+	_play(key, false)
+	_cast_length = _anim.get_animation(LIBRARY + "/" + key).length if _anim and _anim.has_animation(LIBRARY + "/" + key) else 1.5
+	if mode != Mode.SUMMON:
+		swarm.order = RatSwarm.Order.GATHER # crowd in while he winds up
+	SoundPlayer.play_3d(summon_sound if mode == Mode.SUMMON else cast_sound, global_position, get_tree().current_scene)
+
+
+func _think_cast(delta: float) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if _target:
+		_face_position(_target.global_position)
+	_cast_time += delta
+	if not _cast_released and _cast_time >= _cast_length * cast_release:
+		_cast_released = true
+		_release_spell()
+	if _cast_time >= _cast_length:
+		_mode = Mode.CHASE if _target else Mode.PATROL
+
+
+func _release_spell() -> void:
+	match _mode:
+		Mode.CAST_RUSH:
+			_rush_cooldown_left = rush_cooldown
+			swarm.rush()
+		Mode.CAST_LEAP:
+			_leap_cooldown_left = leap_cooldown
+			swarm.leap_at_target()
+		Mode.SUMMON:
+			_summon_cooldown_left = summon_cooldown
+			swarm.spawn_rats(mini(summon_batch, rat_cap - swarm.count()), global_position)
+
+
+func _heal(delta: float) -> void:
+	_since_hurt += delta
+	if _since_hurt >= heal_delay and health.current_health < health.max_health:
+		health.current_health = minf(health.current_health + heal_per_second * delta, health.max_health)
+
+
+## A boss doesn't flinch at every bullet: it just flashes, wakes up and
+## starts its healing timer over. (Replaces Enemy's stagger.)
+func _on_damaged(_amount: float, _attacker_id: int) -> void:
+	if _state == State.DEAD:
+		return
+	HitFlash.flash(self)
+	_since_hurt = 0.0
+	_update_memory(_find_nearest_player())
+	if _mode == Mode.PATROL and _target:
+		_mode = Mode.CHASE
+
+
+func _on_died(attacker_id: int, is_critical: bool) -> void:
+	_end_cast_look()
+	# The horde lives on without him: keep it in the world after his body goes.
+	if swarm.get_parent() == self:
+		swarm.bender = null
+		swarm.reparent.call_deferred(get_tree().current_scene)
+	super._on_died(attacker_id, is_critical)
+
+
+# ---- Look -------------------------------------------------------------------
+
+## The cast tell: orange flashes speeding up, each one a throb, and a swell
+## that grows until the spell goes off.
+func _process(delta: float) -> void:
+	var casting := _state != State.DEAD and (_mode == Mode.CAST_RUSH or _mode == Mode.CAST_LEAP or _mode == Mode.SUMMON) and not _cast_released
+	if not casting:
+		_end_cast_look()
+		return
+	var progress := clampf(_cast_time / maxf(_cast_length * cast_release, 0.01), 0.0, 1.0)
+	_flash_phase += delta * lerpf(flash_rate_start, flash_rate_end, progress * progress)
+	_set_flash(fmod(_flash_phase, 1.0) < 0.4)
+	var pulse := 0.5 + 0.5 * cos(_flash_phase * TAU)
+	if _model:
+		_model.scale = _model_scale * (1.0 + cast_swell * progress * progress + cast_swell * 0.5 * progress * pulse)
+
+
+func _end_cast_look() -> void:
+	_set_flash(false)
+	if _model:
+		_model.scale = _model_scale
+
+
+func _set_flash(lit: bool) -> void:
+	if lit == _flash_lit:
+		return
+	_flash_lit = lit
+	for mesh in _meshes:
+		if is_instance_valid(mesh):
+			mesh.material_overlay = _flash_material if lit else null
+
+
+func _play(key: String, loop: bool = true) -> void:
+	if _anim == null or key == _anim_name:
+		return
+	var animation_name := LIBRARY + "/" + key
+	if not _anim.has_animation(animation_name):
+		return
+	_anim_name = key
+	_anim.get_animation(animation_name).loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+	_anim.play(animation_name, 0.2)
