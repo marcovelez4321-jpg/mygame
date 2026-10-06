@@ -336,7 +336,7 @@ rat_cap = 110
 summon_cooldown = 10.0
 summon_animation_speed = 2.0
 heal_delay = 6.0
-heal_animation_speed = 4.0
+heal_animation_speed = 0.8
 
 [node name="Enemy2" parent="." instance=ExtResource("5_psl7s")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, -12)

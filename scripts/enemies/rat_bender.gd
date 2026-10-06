@@ -129,8 +129,8 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 ## Health per second while channeling -- all the way through, so a heal cut
 ## short still counts for what it got.
 @export var heal_per_second: float = 10.0
-## The heal animation's speed (0.1 = a tenth of normal -- a long, punishable cast).
-@export var heal_animation_speed: float = 0.1
+## The heal animation's speed (0.5 = half speed -- a long, punishable cast).
+@export var heal_animation_speed: float = 0.5
 ## Hit him for this much in total during a heal and it's cancelled.
 @export var heal_cancel_damage: float = 80.0
 @export var heal_flash_color: Color = Color(0.2, 1.0, 0.3, 0.8)
