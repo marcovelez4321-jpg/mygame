@@ -13,6 +13,13 @@ extends RefCounted
 ## a shot lands) and enemy_ragdoll.gd (ground pool, once the corpse settles).
 
 const SPLAT_TEXTURE_SIZE := 128
+## Every decal (blood, goo, bullet holes, dig holes) stays about DECAL_LIFETIME
+## seconds -- each one randomly up to DECAL_LIFETIME_VARIANCE either side, so
+## they don't all vanish at once -- then fades out over DECAL_FADE_OUT_TIME
+## and is removed. Also keeps a long fight from piling up hundreds of decals.
+const DECAL_LIFETIME := 25.0
+const DECAL_LIFETIME_VARIANCE := 5.0
+const DECAL_FADE_OUT_TIME := 2.0
 const BLOOD_COLOR := Color(0.35, 0.02, 0.02)
 ## The spurt's physics, shared by the visible GPU droplets AND the invisible
 ## traced droplets that decide where blood lands -- one source of truth, so
@@ -388,7 +395,8 @@ static func spawn_bullet_hole(world: Node, position: Vector3, normal: Vector3, b
 ## surface (-normal) so the decal sticks to it regardless of whether that
 ## surface is a floor, wall, or ceiling (a Decal projects along its own
 ## local -Y), with some randomness in size/orientation so repeated hits don't
-## look identical, then fades it in over `fade_time`.
+## look identical, then fades it in over `fade_time`, and out again after its
+## lifetime (DECAL_LIFETIME).
 static func _place_decal(world: Node, texture: Texture2D, position: Vector3, normal: Vector3, base_size: float, fade_time: float) -> void:
 	var decal := Decal.new()
 	decal.texture_albedo = texture
@@ -410,6 +418,10 @@ static func _place_decal(world: Node, texture: Texture2D, position: Vector3, nor
 	world.add_child(decal)
 	var tween := decal.create_tween()
 	tween.tween_property(decal, "modulate:a", 1.0, fade_time)
+	var stay := DECAL_LIFETIME + randf_range(-DECAL_LIFETIME_VARIANCE, DECAL_LIFETIME_VARIANCE)
+	tween.tween_interval(maxf(stay - fade_time - DECAL_FADE_OUT_TIME, 0.0))
+	tween.tween_property(decal, "modulate:a", 0.0, DECAL_FADE_OUT_TIME)
+	tween.tween_callback(decal.queue_free)
 
 
 ## The little cube every blood/goo particle is drawn with, for other effects
