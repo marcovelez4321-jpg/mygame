@@ -196,6 +196,15 @@ const SETTLE_TIME := 6.0
 ## How out of sync the parts are: 0 = all in step, 0.5 = each part's rhythm
 ## somewhere between half and one-and-a-half times the shared rate.
 @export_range(0.0, 0.9, 0.05) var mutate_pulse_rhythm_variety: float = 0.5
+## Killed by something that isn't a player (a roach, a rat, another tweaker):
+## no twitching, no swelling -- the body lies still and flashes, faster and
+## faster as it gets closer to mutating, over the same mutate_twitch_time.
+## Flashes per second at the start and right before it bursts:
+@export var mutate_flash_rate_start: float = 0.5
+@export var mutate_flash_rate_end: float = 5.0
+@export var mutate_flash_color: Color = Color(1.0, 0.25, 0.2, 1.0)
+## Seconds each flash takes to fade out.
+@export var mutate_flash_time: float = 0.15
 
 @onready var _enemy: Enemy = get_parent() as Enemy
 
@@ -224,6 +233,8 @@ var _mutating := false
 var _mutate_elapsed := 0.0
 var _next_mutate_time := 0.0
 var _pulse: MutationPulseModifier
+## Mutating without the twitch and swell -- flashing instead (not a player's kill).
+var _mutate_quietly := false
 
 
 func _ready() -> void:
@@ -485,7 +496,11 @@ func _start_mutation_twitch() -> void:
 	_mutating = true
 	_mutate_elapsed = 0.0
 	_next_mutate_time = 0.0
-	_start_pulse()
+	_mutate_quietly = not _enemy.killed_by_player
+	if not _mutate_quietly:
+		_start_pulse()
+	else:
+		get_tree().create_timer(SETTLE_TIME).timeout.connect(_allow_sleep) # lies still
 
 
 ## The body-part throb. Added to the skeleton AFTER the ragdoll's simulator so
@@ -521,9 +536,14 @@ func _process_mutation_twitch(delta: float) -> void:
 		_mutating = false
 		_explode_and_spawn_mutant()
 		return
+	var progress := _mutate_elapsed / mutate_twitch_time
+	if _mutate_quietly:
+		if _mutate_elapsed >= _next_mutate_time:
+			_next_mutate_time = _mutate_elapsed + 1.0 / lerpf(mutate_flash_rate_start, mutate_flash_rate_end, progress)
+			HitFlash.flash(_enemy, mutate_flash_color, mutate_flash_time)
+		return
 	if _mutate_elapsed < _next_mutate_time or _limb_pairs.is_empty():
 		return
-	var progress := _mutate_elapsed / mutate_twitch_time
 	if is_instance_valid(_pulse):
 		_pulse.progress = progress
 	var rate := lerpf(mutate_twitch_rate_start, mutate_twitch_rate_end, progress)

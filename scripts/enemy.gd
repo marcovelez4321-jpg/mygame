@@ -193,6 +193,12 @@ signal shot_fired(end_point: Vector3)
 ## and the mutation twitch. Public: EnemyRagdoll reads it directly, the same
 ## way it already reads health/corpse_time.
 var will_mutate: bool = false
+## A player landed the killing blow (any attacker id -- players are peer ids,
+## NPCs, roaches and rats hurt with Health.NO_ATTACKER; a player's grenade,
+## rocket or the barrel they set off carries their id). Set with will_mutate.
+## EnemyRagdoll reads it: only a player's kill gets the twitching, swelling
+## mutation; anything else mutates quietly, flashing instead.
+var killed_by_player: bool = false
 ## What's left of mutation_health while the corpse is mutating -- see
 ## damage_mutation(). Public so weapon_controller.gd can size an instant
 ## artery hit to exactly this.
@@ -644,12 +650,13 @@ func _update_memory(found: Node3D) -> void:
 		_has_seen_target = false
 
 
-func _on_died(_attacker_id: int, is_critical: bool) -> void:
+func _on_died(attacker_id: int, is_critical: bool) -> void:
 	# Rolled and stored BEFORE entering State.DEAD: the state setter emits
 	# state_changed synchronously, which EnemyRagdoll is listening for to
 	# kick off its own death reaction right then -- it needs will_mutate
 	# already decided by the time that happens, not after.
 	will_mutate = can_mutate and not scene_file_path.is_empty() and not is_critical and randf() < mutate_chance
+	killed_by_player = attacker_id != Health.NO_ATTACKER
 	mutation_health_left = mutation_health
 	_state = State.DEAD
 	velocity = Vector3.ZERO

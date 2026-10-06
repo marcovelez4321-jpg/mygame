@@ -12,8 +12,8 @@ extends Node
 ## lift speed, so the more of them, the easier and faster it goes up.
 ## Once lifting they commit: only getting hurt makes one let go.
 ## They start eating the moment they start lifting -- however high they manage
-## to get it -- blood flies, and every BITES_PER_ROACH bites a new roach
-## bursts out of the body (at most ROACHES_PER_BODY). Once it's clear of the
+## to get it -- blood flies, and every BITES_PER_ROACH bites ROACHES_PER_BREED
+## new roaches burst out of the body (at most BREEDS_PER_BODY times). Once it's clear of the
 ## ground they fly off with it at FLY_SPEED, still eating, toward the quietest
 ## spot nearby (fewest hostiles around it: Factions.danger_at()), re-picked
 ## every REPICK_TIME as things move. After EAT_TIME of eating, or if fewer
@@ -54,7 +54,10 @@ const DANGER_RADIUS := 15.0
 ## (so it doesn't dither between two equally quiet spots).
 const REPICK_MARGIN := 0.25
 const BITES_PER_ROACH := 25
-const ROACHES_PER_BODY := 3
+## Roaches born each time they've bitten enough, and how many times one body
+## can breed them (2 x 3 = up to 6 new roaches per body).
+const ROACHES_PER_BREED := 2
+const BREEDS_PER_BODY := 3
 const BLOOD := Color(0.55, 0.02, 0.02)
 
 ## GATHER: getting hold of it. LIFT: raising it as high as they can (eating
@@ -273,25 +276,29 @@ func _pick_destination(at: Vector3) -> void:
 	_has_destination = true
 
 
-## A roach took a bite (FlyingRoach, while eating). Enough bites and a new
-## roach bursts out of the body.
+## A roach took a bite (FlyingRoach, while eating). Enough bites and
+## ROACHES_PER_BREED new roaches burst out of the body.
 func bitten() -> void:
 	_bites += 1
 	if _bites < BITES_PER_ROACH:
 		return
 	_bites = 0
-	var born: int = body.get_meta("roaches_born", 0)
-	if born >= ROACHES_PER_BODY:
+	var breeds: int = body.get_meta("roach_breeds", 0)
+	if breeds >= BREEDS_PER_BODY:
 		return
-	body.set_meta("roaches_born", born + 1)
+	body.set_meta("roach_breeds", breeds + 1)
 	var at := ragdoll.body_position()
 	var world := get_tree().current_scene
 	BloodFX.spawn_impact(world, at, Vector3.UP, BLOOD, 2.5)
-	var roach := ROACH_SCENE.instantiate() as FlyingRoach
-	world.add_child(roach)
-	roach.global_position = at + Vector3.UP * 0.3
-	roach.burst_out.call_deferred() # after its own setup: a springy pop out of the body
-	BloodFX.spawn_impact(world, at + Vector3.UP * 0.2, (Vector3.UP + Vector3(randf() - 0.5, 0.0, randf() - 0.5)).normalized(), BLOOD, 1.5)
+	var turn := randf() * TAU
+	for i in ROACHES_PER_BREED:
+		var roach := ROACH_SCENE.instantiate() as FlyingRoach
+		world.add_child(roach)
+		# Spread around the body, so they don't start inside each other.
+		var side := Vector3.RIGHT.rotated(Vector3.UP, turn + TAU * i / ROACHES_PER_BREED) * 0.25
+		roach.global_position = at + Vector3.UP * 0.3 + side
+		roach.burst_out.call_deferred() # after its own setup: a springy pop out of the body
+		BloodFX.spawn_impact(world, at + Vector3.UP * 0.2, (Vector3.UP + Vector3(randf() - 0.5, 0.0, randf() - 0.5)).normalized(), BLOOD, 1.5)
 
 
 func _finish() -> void:

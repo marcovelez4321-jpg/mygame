@@ -22,8 +22,9 @@ const FLASH_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 const FLASH_TIME := 0.08
 
 
-## Flashes every MeshInstance3D under `root` white, then fades back out.
-static func flash(root: Node) -> void:
+## Flashes every MeshInstance3D under `root` white (or `color`), then fades
+## back out over `time` seconds.
+static func flash(root: Node, color: Color = FLASH_COLOR, time: float = FLASH_TIME) -> void:
 	var meshes := _find_mesh_instances(root)
 	if meshes.is_empty():
 		return
@@ -31,7 +32,7 @@ static func flash(root: Node) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = FLASH_COLOR
+	mat.albedo_color = color
 	for mesh in meshes:
 		mesh.material_overlay = mat
 
@@ -42,7 +43,7 @@ static func flash(root: Node) -> void:
 		return
 
 	var tween := tree.create_tween()
-	tween.tween_property(mat, "albedo_color:a", 0.0, FLASH_TIME)
+	tween.tween_property(mat, "albedo_color:a", 0.0, time)
 	tween.tween_callback(func() -> void:
 		for mesh in meshes:
 			# Only clear it if nothing hit again and replaced it with a
