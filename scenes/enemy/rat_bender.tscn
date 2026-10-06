@@ -30,7 +30,7 @@ heal_sound = ExtResource("17")
 move_speed = 6.325
 gravity = 30.0
 sight_range = 30.0
-corpse_time = 60.0
+corpse_time = 120.0
 can_mutate = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

@@ -19,7 +19,7 @@ attack_interval = 0.7
 attack_windup = 0.3
 attack_recovery = 0.3
 pain_time = 0.2
-corpse_time = 60.0
+corpse_time = 120.0
 
 [node name="Health" parent="." index="1"]
 max_health = 35.0

@@ -89,7 +89,7 @@ signal shot_fired(end_point: Vector3)
 @export_group("Reactions")
 @export var pain_time: float = 0.25
 ## Seconds the body stays after death before it's removed.
-@export var corpse_time: float = 60.0
+@export var corpse_time: float = 120.0
 
 @export_group("Lunge (rusher)")
 ## Turns on the dash-in burst below. Off by default -- the base enemy just

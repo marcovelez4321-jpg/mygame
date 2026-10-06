@@ -436,6 +436,8 @@ func _eat_gore(delta: float) -> void:
 	BloodFX.spawn_impact(world, mouth, (Vector3.UP + forward * 0.5).normalized(), blood_color, gore * 0.65)
 	if randf() < 0.3:
 		BloodFX.spawn_splatter(world, global_position + forward * 0.2 * size, Vector3.UP, pool_size * 0.6, blood_color)
+	if swarm:
+		swarm.fed_on(self) # enough mouthfuls and the pack breeds
 
 
 ## Squirming up out of the floor: rises fast then eases, nose up, shaking

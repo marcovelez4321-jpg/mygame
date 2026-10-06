@@ -135,6 +135,15 @@ const CORPSE_GROUP := "corpses"
 ## Not fighting: rats go and eat a corpse this close to the Bender.
 @export var eat_range: float = 8.0
 
+@export_group("Feeding")
+## Rats eating a body breed: every bites_per_rat bites (all the eaters
+## together) a new rat crawls up out of the floor right at the body -- at
+## most rats_per_body from any one body, and never past feed_limit rats in
+## the pack (the Rat Bender sets his horde's to his rat cap).
+@export var bites_per_rat: int = 30
+@export var rats_per_body: int = 6
+@export var feed_limit: int = 60
+
 @export_group("Sound")
 ## One scurrying loop for the whole pack, at its middle -- not one per rat.
 @export var scurry_sound: SoundEvent
@@ -164,6 +173,7 @@ var _drag_stuck_timer := 0.0
 var _drag_timer := 0.0
 var _drag_check := 2.0
 var _draggers: Array[Rat] = []
+var _feed_bites := 0
 ## Has had rats at some point -- an empty pack only cleans itself up after
 ## that (a fresh nest is empty for a frame before its rats are spawned).
 var _had_rats := false
@@ -198,10 +208,14 @@ func count() -> int:
 ## New rats burrowing up out of the floor right around `center` (the
 ## Bender's feet), one after another over about spawn_spread seconds (or
 ## `spread`, if given). The more there are, the wider the patch of floor.
-func spawn_rats(amount: int, center: Vector3, spread: float = -1.0) -> void:
+func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float = -1.0) -> void:
 	var world := get_tree().current_scene
 	var space := get_viewport().find_world_3d().direct_space_state
 	var reach := (0.6 + 0.12 * sqrt(float(amount))) * spawn_circle_scale
+	var inner := 0.4 * spawn_circle_scale
+	if ring >= 0.0: # right at the center instead (a rat born from a body)
+		inner = 0.1
+		reach = maxf(ring, 0.15)
 	for i in amount:
 		var rat := RAT_SCENE.instantiate() as Rat
 		rat.swarm = self
@@ -209,7 +223,7 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0) -> void:
 		rat.slot = Vector2.from_angle(angle)
 		rat.slot_radius = randf_range(follow_radius_min, follow_radius_max)
 		rat.emerge_delay = randf() * (spawn_spread if spread < 0.0 else spread)
-		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(0.4 * spawn_circle_scale, reach)
+		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(inner, reach)
 		# Onto the floor there (or where he stands, if there's none).
 		var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.0, spot + Vector3.DOWN * 3.0)
 		query.collision_mask = 1
@@ -241,6 +255,26 @@ func nearest_rat_distance(point: Vector3) -> float:
 	for rat in rats:
 		nearest = minf(nearest, rat.global_position.distance_squared_to(point))
 	return sqrt(nearest)
+
+
+## A rat took a mouthful of a body. Every bites_per_rat of those, a new rat
+## crawls up out of the floor at the body, with a burst of blood.
+func fed_on(rat: Rat) -> void:
+	_feed_bites += 1
+	if _feed_bites < bites_per_rat:
+		return
+	_feed_bites = 0
+	var body := _drag_body if rat.dragging else _corpse
+	if body == null or not is_instance_valid(body) or rats.size() >= feed_limit:
+		return
+	var born: int = body.get_meta("rats_born", 0)
+	if born >= rats_per_body:
+		return
+	body.set_meta("rats_born", born + 1)
+	var ragdoll := body.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
+	var at := ragdoll.body_position() if ragdoll else body.global_position
+	BloodFX.spawn_impact(get_tree().current_scene, at + Vector3.UP * 0.2, Vector3.UP, rat.blood_color, 2.0)
+	spawn_rats(1, at, 0.0, 0.5)
 
 
 ## A Bender spell: the whole horde goes for the player in a frenzy.

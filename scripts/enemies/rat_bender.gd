@@ -195,6 +195,7 @@ func _ready() -> void:
 	_home = global_position
 	_patrol_point = _home
 	swarm.bender = self
+	swarm.feed_limit = rat_cap # feeding refills the horde, never past his cap
 	_model = get_node_or_null("Model") as Node3D
 	if _model:
 		_model_scale = _model.scale
@@ -521,6 +522,7 @@ func _make_guards() -> void:
 	_guards.separation_distance *= guard_rat_scale
 	_guards.eat_range = guard_eat_range
 	_guards.leash_distance = guard_leash
+	_guards.feed_limit = guard_count
 	add_child(_guards)
 	_guards.bender = self
 	_guards.spawn_rats(guard_count, global_position)
