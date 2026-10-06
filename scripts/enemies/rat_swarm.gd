@@ -119,9 +119,9 @@ func count() -> int:
 
 
 ## New rats burrowing up out of the floor right around `center` (the
-## Bender's feet), one after another over about spawn_spread seconds. The
-## more there are, the wider the patch of floor they come up through.
-func spawn_rats(amount: int, center: Vector3) -> void:
+## Bender's feet), one after another over about spawn_spread seconds (or
+## `spread`, if given). The more there are, the wider the patch of floor.
+func spawn_rats(amount: int, center: Vector3, spread: float = -1.0) -> void:
 	var world := get_tree().current_scene
 	var space := get_viewport().find_world_3d().direct_space_state
 	var reach := 0.6 + 0.12 * sqrt(float(amount))
@@ -131,7 +131,7 @@ func spawn_rats(amount: int, center: Vector3) -> void:
 		var angle := randf() * TAU
 		rat.slot = Vector2.from_angle(angle)
 		rat.slot_radius = randf_range(follow_radius_min, follow_radius_max)
-		rat.emerge_delay = randf() * spawn_spread
+		rat.emerge_delay = randf() * (spawn_spread if spread < 0.0 else spread)
 		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(0.4, reach)
 		# Onto the floor there (or where he stands, if there's none).
 		var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.0, spot + Vector3.DOWN * 3.0)
