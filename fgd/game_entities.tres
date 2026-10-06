@@ -22,9 +22,10 @@
 [ext_resource type="Resource" path="res://fgd/prop_explosive_barrel.tres" id="20"]
 [ext_resource type="Resource" path="res://fgd/item_weapon_grenade.tres" id="21"]
 [ext_resource type="Resource" path="res://fgd/monster_rat_bender.tres" id="22"]
+[ext_resource type="Resource" path="res://fgd/monster_rat_nest.tres" id="23"]
 
 [resource]
 script = ExtResource("1")
 fgd_name = "game_entities"
 base_fgd_files = Array[Resource]([ExtResource("2")])
-entity_definitions = Array[Resource]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13"), ExtResource("14"), ExtResource("15"), ExtResource("16"), ExtResource("17"), ExtResource("18"), ExtResource("19"), ExtResource("20"), ExtResource("21"), ExtResource("22")])
+entity_definitions = Array[Resource]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13"), ExtResource("14"), ExtResource("15"), ExtResource("16"), ExtResource("17"), ExtResource("18"), ExtResource("19"), ExtResource("20"), ExtResource("21"), ExtResource("22"), ExtResource("23")])

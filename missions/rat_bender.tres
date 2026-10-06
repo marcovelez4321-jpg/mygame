@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1")
-title = "The Alley"
-description = "Tweakers have taken over the alley behind the corner store."
-scene = "res://scenes/alley1_level.tscn"
+title = "Defeat the Last Rat Bender"
+description = "The last Rat Bender and his horde are holed up across town. End it."
+scene = "res://scenes/rat_bender_level.tscn"
 order = 1

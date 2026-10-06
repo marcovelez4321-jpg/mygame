@@ -503,6 +503,7 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 	for pack: RatSwarm in [swarm, _escort, _entourage, _guards]:
 		if pack and pack.get_parent() == self:
 			pack.bender = null
+			pack.home = global_position # leftovers hang around where he fell
 			pack.reparent.call_deferred(get_tree().current_scene)
 	super._on_died(attacker_id, is_critical)
 

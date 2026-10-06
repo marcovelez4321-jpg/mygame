@@ -91,6 +91,11 @@ const CORPSE_GROUP := "corpses"
 ## (1 = a tight ring; it also widens with how many come up at once).
 @export var spawn_circle_scale: float = 2.2
 
+@export_group("Without a Bender")
+## A pack with no Bender (a rat nest, or his horde after he dies) hangs
+## around `home` and goes for any player who comes within this many meters.
+@export var hunt_range: float = 15.0
+
 @export_group("Eating")
 ## Not fighting: rats go and eat a corpse this close to the Bender.
 @export var eat_range: float = 8.0
@@ -102,6 +107,12 @@ const CORPSE_GROUP := "corpses"
 
 var bender: Node3D
 var order := Order.FOLLOW
+## Where a pack with no Bender hangs around.
+var home := Vector3.ZERO
+var _lookout_timer := 0.0
+## Has had rats at some point -- an empty pack only cleans itself up after
+## that (a fresh nest is empty for a frame before its rats are spawned).
+var _had_rats := false
 var target: Node3D
 var rats: Array[Rat] = []
 
@@ -154,6 +165,7 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0) -> void:
 		world.add_child(rat)
 		rat.global_position = hit.position if not hit.is_empty() else spot
 		rats.append(rat)
+		_had_rats = true
 
 
 func forget(rat: Rat) -> void:
@@ -225,13 +237,13 @@ func _physics_process(delta: float) -> void:
 		bender = null
 	if not multiplayer.is_server() or rats.is_empty():
 		_update_scurry(Vector3.ZERO, false)
-		if bender == null and rats.is_empty() and multiplayer.is_server():
+		if bender == null and rats.is_empty() and _had_rats and multiplayer.is_server():
 			queue_free() # leader and pack both gone
 		return
 	if not is_instance_valid(target):
 		target = null
-	if bender == null and order != Order.HUNT:
-		order = Order.HUNT # leaderless: they just go for whoever's around
+	if bender == null:
+		_look_out(delta)
 	_frenzy_left = maxf(_frenzy_left - delta, 0.0)
 
 	_build_grid()
@@ -257,6 +269,27 @@ func _physics_process(delta: float) -> void:
 	_update_scurry(center, any_moving)
 
 
+## No Bender to follow orders from: every half second, go for the nearest
+## living player within hunt_range, or drift back home.
+func _look_out(delta: float) -> void:
+	_lookout_timer -= delta
+	if _lookout_timer > 0.0:
+		return
+	_lookout_timer = 0.5
+	target = null
+	var nearest := hunt_range
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as Node3D
+		var player_health := player.get_node_or_null("Health") as Health
+		if player_health == null or player_health.is_dead:
+			continue
+		var distance := player.global_position.distance_to(home)
+		if distance < nearest:
+			nearest = distance
+			target = player
+	order = Order.HUNT if target else Order.FOLLOW
+
+
 ## Where the pack as a whole is headed.
 func _goal() -> Vector3:
 	if order == Order.HUNT and target:
@@ -270,7 +303,7 @@ func _goal() -> Vector3:
 		return _corpse.global_position
 	if bender:
 		return bender.global_position
-	return target.global_position if target else Vector3.ZERO
+	return home
 
 
 ## The shared path from the middle of the pack to the goal. If the navmesh

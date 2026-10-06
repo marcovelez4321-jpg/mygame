@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/rat_nest.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "monster_rat_nest"
+description = "A small pack of rats with no Rat Bender: they burrow up out of the floor here, hang around, and swarm any player who comes within 15 m. Place it on the floor."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-12, -12, 0, 24, 24, 12),
+"color": Color(0.6, 0.3, 0.2, 1)
+}
