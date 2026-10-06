@@ -617,21 +617,33 @@ func drag(velocity: Vector3) -> void:
 		bone.linear_velocity = Vector3(velocity.x, minf(bone.linear_velocity.y, 0.5), velocity.z)
 
 
-## Roaches carrying the body by its limbs (RoachCarry): `held` maps each bone a
-## roach has hold of to the velocity it's being pulled at, and the whole body
-## weighs `weight` of normal (1 = full, 0 = weightless) -- every roach holding
-## on takes a share. Held at several points (hands, feet, hips, head) the body
-## hangs between them instead of every limb dangling off one held torso, which
-## used to outweigh the pull and stall the lift halfway up. Empty `held` lets
-## go and restores full weight.
-func carry(held: Dictionary, weight: float = 1.0) -> void:
-	var holding := not held.is_empty()
+## Roaches carrying the body by its limbs (RoachCarry): `pushes` maps each bone
+## a roach has hold of to the impulse it pulls with this tick (its force times
+## the tick), and the whole body weighs `weight` of normal (1 = full,
+## 0 = weightless) -- every roach holding on bears a share. Pushed, never
+## placed: the physics decides how high it actually gets, so a part with more
+## of the body hanging off it sags lower. Empty `pushes` lets go and restores
+## full weight.
+func carry(pushes: Dictionary, weight: float = 1.0) -> void:
+	var holding := not pushes.is_empty()
 	for bone in _bones:
 		bone.can_sleep = _settled and not holding
 		bone.gravity_scale = bone_gravity_scale * (weight if holding else 1.0)
-		if held.has(bone):
-			bone.apply_central_impulse(Vector3.UP * 0.001) # wakes a sleeping body
-			bone.linear_velocity = held[bone]
+		if pushes.has(bone):
+			bone.apply_central_impulse(pushes[bone])
+
+
+## The whole ragdoll's mass (every physical bone).
+func total_mass() -> float:
+	var mass := 0.0
+	for bone in _bones:
+		mass += bone.mass
+	return mass
+
+
+## How hard gravity pulls each kilo of this body at full weight (m/s^2).
+func gravity_strength() -> float:
+	return float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)) * bone_gravity_scale
 
 
 ## The ragdoll bone for humanoid bone `bone_name` ("LeftHand", "Hips"...), or null.

@@ -216,6 +216,8 @@ var _carry_bite := 0.0
 ## only while it's actually being hurt.
 var _hurt_at := -999.0
 const CARRY_FLINCH_TIME := 1.0
+## How far (m) a carrying roach bobs up and down when it's pulling flat out.
+const CARRY_BOB := 0.12
 var _time := 0.0
 ## A dead rat in its jaws, being eaten (_eat_prey()).
 var _prey: Node3D
@@ -735,7 +737,11 @@ func _think_carry(delta: float) -> void:
 	if not is_instance_valid(_carry) or not is_instance_valid(_carry.ragdoll):
 		_leave_carry()
 		return
-	var grab := _carry.grab_point(carry_slot)
+	# Straining: the harder it's pulling, the more it bobs and shudders on
+	# the spot -- wings working against the weight.
+	var effort := _carry.strain(carry_slot)
+	var bob := sin(_time * lerpf(6.0, 14.0, effort)) * CARRY_BOB * effort
+	var grab := _carry.grab_point(carry_slot) + Vector3.UP * bob
 	_turn_toward(_carry.ragdoll.body_position() - global_position, delta)
 	linear_velocity = linear_velocity.move_toward(_seek(grab, cruise_speed), acceleration * delta)
 	if not _carry.is_eating() or global_position.distance_to(grab) > RoachCarry.HOLD_DISTANCE:

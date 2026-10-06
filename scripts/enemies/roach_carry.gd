@@ -6,10 +6,15 @@ extends Node
 ##
 ## It takes at least MIN_ROACHES idle roaches near a body to try (more can
 ## join, up to MAX_ROACHES). Each one grabs its own body part (GRIP_BONES: hips,
-## a hand, a foot, the head...) and flies it up; once MIN_ROACHES have hold,
+## a hand, a foot, the head...) and pulls it up; once MIN_ROACHES have hold,
 ## the body rises toward CARRY_HEIGHT, hanging between the roaches holding it.
-## Every roach holding on takes WEIGHT_PER_ROACH of the body's weight and adds
-## lift speed, so the more of them, the easier and faster it goes up.
+## It's a real tug against the body's weight, not a scripted lift: each roach
+## can only pull its part with GRIP_STRENGTH (a share of the body's weight) and
+## bears a little more of it overall (SUPPORT_PER_ROACH), so three only just
+## manage -- the parts with the most body hanging off them (the hips) sag
+## lower than a hand or a foot, the roaches end up at different heights, and
+## they bob harder the closer they are to their limit (strain()). Every roach
+## that joins adds its strength, so more of them lift it easier and faster.
 ## Once lifting they commit: only getting hurt makes one let go.
 ## They start eating the moment they start lifting -- however high they manage
 ## to get it -- blood flies, and every BITES_PER_ROACH bites ROACHES_PER_BREED
@@ -30,20 +35,26 @@ const MAX_ROACHES := 6
 const RECRUIT_RANGE := 12.0
 ## How high the held body parts are carried above the floor.
 const CARRY_HEIGHT := 1.6
-## How fast held parts rise with MIN_ROACHES holding; scales up with each extra
-## roach (4 roaches = 4/3 as fast, 6 = twice as fast).
-const LIFT_SPEED := 1.5
-## Share of the body's weight each holding roach takes off: 3 roaches (the
-## minimum) leave it at 10% of its weight -- light enough that they always
-## get it all the way up, heavy enough that the limbs they aren't holding
-## still hang -- and 4 or more make it weightless. (At 0.2, three left it at
-## 40%, and the unheld limbs could weigh the lift down to a stall short of
-## CARRY_HEIGHT.)
-const WEIGHT_PER_ROACH := 0.3
-## How hard a held part is pulled toward CARRY_HEIGHT: rise speed per meter
-## still to go (capped at the lift speed). Higher closes the last bit of the
-## gap instead of settling a little short of it under the hanging weight.
-const LIFT_PULL := 6.0
+## The most each roach can pull its own body part up with, as a share of the
+## whole body's weight. Applied as a force on that one bone: the joints pass
+## it on to whatever hangs off it.
+const GRIP_STRENGTH := 0.3
+## Each roach holding on also bears this share of the weight spread over the
+## whole body (its gravity is scaled down) -- keeps the joints from being
+## yanked apart with everything hanging off three points. Three roaches:
+## 3 x 0.3 pull + 3 x 0.12 spread = 1.26x the body's weight, only just enough;
+## six: 2.5x, easy.
+const SUPPORT_PER_ROACH := 0.12
+## How a roach works its pull (0 = slack, 1 = all it's got): it holds
+## HOVER_EFFORT to keep its part where it is, more the further below
+## CARRY_HEIGHT the part is (EFFORT_PER_METER) and less while it's already
+## rising (EFFORT_DAMPING per m/s) so it doesn't overshoot and bounce.
+const HOVER_EFFORT := 0.6
+const EFFORT_PER_METER := 1.5
+const EFFORT_DAMPING := 0.5
+## Steering the body sideways (flying off with it, or holding it steady): how
+## quickly the held parts are brought to the travel velocity, per second.
+const STEER_RATE := 3.0
 ## The body part each grab slot holds, in the order roaches join: the first
 ## three (the minimum to lift) hold the hips and opposite corners so it rises
 ## level; later ones fill in the other hand, foot and the head.
@@ -81,6 +92,8 @@ var _bites := 0
 var _ground_check := 0.0
 var _airborne := false
 var _eating := false
+## How hard each grab slot's roach is pulling right now, 0..1 (strain()).
+var _strain := {}
 ## Where it's flying the body (FLY), and when to look for a quieter spot.
 var _destination := Vector3.ZERO
 var _has_destination := false
@@ -215,9 +228,17 @@ func _holders() -> Array[FlyingRoach]:
 	return found
 
 
-## Each holding roach pulls its own body part toward CARRY_HEIGHT above the
-## floor (and along at `travel`, flying off with it), and the body as a whole
-## gets lighter with every roach on it.
+## How hard `slot`'s roach is pulling right now: 0 = slack, 1 = flat out.
+## The roach bobs and strains with it (FlyingRoach._think_carry()).
+func strain(slot: int) -> float:
+	return _strain.get(slot, 0.0)
+
+
+## Each holding roach pulls its own body part up toward CARRY_HEIGHT above the
+## floor with a force it can't exceed (GRIP_STRENGTH), and steers it along at
+## `travel` (flying off with it); every roach also bears SUPPORT_PER_ROACH of
+## the weight spread over the body. Real forces against real weight: the
+## parts with the most body hanging off them sag lowest.
 func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 	var hips := ragdoll.body_position()
 	var query := PhysicsRayQueryParameters3D.create(hips + Vector3.UP * 0.5, hips + Vector3.DOWN * 4.0)
@@ -225,17 +246,27 @@ func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 	var floor_hit := body.get_world_3d().direct_space_state.intersect_ray(query)
 	var floor_y: float = floor_hit.position.y if not floor_hit.is_empty() else hips.y - CARRY_HEIGHT
 	var target_y := floor_y + CARRY_HEIGHT
-	var speed := LIFT_SPEED * holders.size() / float(MIN_ROACHES)
-	var held := {}
+	var delta := get_physics_process_delta_time()
+	var mass := ragdoll.total_mass()
+	var weight := mass * ragdoll.gravity_strength()
+	var grip_force := weight * GRIP_STRENGTH
+	var share := mass / maxf(holders.size(), 1.0) # the body mass each roach steers
+	var pushes := {}
+	_strain.clear()
 	for roach in holders:
 		var bone := grip_bone(roach.carry_slot)
-		if bone == null or held.has(bone):
+		if bone == null:
 			continue
-		var rise := clampf((target_y - bone.global_position.y) * LIFT_PULL, -speed, speed)
-		# Sideways it eases toward `travel` (zero = damped to a stop, so held
-		# parts don't swing wildly); up/down is the roach's pull.
-		held[bone] = Vector3(lerpf(bone.linear_velocity.x, travel.x, 0.2), rise, lerpf(bone.linear_velocity.z, travel.z, 0.2))
-	ragdoll.carry(held, maxf(1.0 - WEIGHT_PER_ROACH * holders.size(), 0.0))
+		var effort := clampf(HOVER_EFFORT + (target_y - bone.global_position.y) * EFFORT_PER_METER \
+				- bone.linear_velocity.y * EFFORT_DAMPING, 0.0, 1.0)
+		_strain[roach.carry_slot] = effort
+		# Sideways: bring the part to `travel` (zero = hold it steady, so it
+		# doesn't swing wildly), within what the roach can manage.
+		var flat := Vector3(travel.x - bone.linear_velocity.x, 0.0, travel.z - bone.linear_velocity.z)
+		var steer := (flat * share * STEER_RATE).limit_length(grip_force * 0.5)
+		var push: Vector3 = (Vector3.UP * grip_force * effort + steer) * delta
+		pushes[bone] = pushes.get(bone, Vector3.ZERO) + push # two roaches on one part add up
+	ragdoll.carry(pushes, maxf(1.0 - SUPPORT_PER_ROACH * holders.size(), 0.0))
 
 
 ## Which way to fly the body this tick: toward the quietest spot nearby
@@ -310,6 +341,7 @@ func bitten() -> void:
 
 
 func _finish() -> void:
+	_strain.clear()
 	if is_instance_valid(ragdoll):
 		ragdoll.carry({})
 	if is_instance_valid(body):
