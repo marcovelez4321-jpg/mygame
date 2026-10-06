@@ -56,6 +56,15 @@ signal shot_fired(end_point: Vector3)
 
 @export_group("Movement")
 @export var move_speed: float = 4.0
+## How fast it turns to face where it's going or what it's fighting, degrees a
+## second (0 = snaps instantly). Snapping straight round every tick is what
+## made them shake on the spot with something darting around them -- a roach
+## circling their head, two targets either side -- like HL2's NPCs it turns
+## at a set yaw speed instead (CAI_BaseNPC::UpdateYaw / m_flYawSpeed).
+@export var turn_speed: float = 540.0
+## Close enough to where it's walking to stop: closer than this it stands
+## still instead of twitching back and forth over the spot.
+@export var arrive_distance: float = 0.4
 @export var gravity: float = 20.0
 
 @export_group("Senses")
@@ -354,7 +363,10 @@ func _think_chase() -> void:
 		# Too close: back off instead of closing in like a melee enemy would
 		# -- a gunner keeps its distance (HL2 Combine-style), it doesn't
 		# rush you.
-		if can_see_now and shoot_distance <= attack_range and shoot_distance >= shoot_min_range:
+		# (Slack on the near edge too, like melee's 1.3x below: it backs off
+		# to shoot_min_range, then holds and fires until you're well inside
+		# it, instead of stepping back and forth across that one line.)
+		if can_see_now and shoot_distance <= attack_range and shoot_distance >= shoot_min_range * (0.8 if _state == State.ATTACK else 1.0):
 			_state = State.ATTACK
 			return
 		# Backing off just negates the approach direction rather than pathing
@@ -457,7 +469,7 @@ func _think_attack() -> void:
 	if can_shoot:
 		# Too close, too far, or lost the shot: back to CHASE, which backs a
 		# gunner away if the target's the one that got too close.
-		if distance > attack_range or distance < shoot_min_range or not _can_see(_target):
+		if distance > attack_range or distance < shoot_min_range * 0.8 or not _can_see(_target):
 			_state = State.CHASE
 			return
 	# Target stepped away: go back to chasing (with some slack so it doesn't
@@ -738,13 +750,21 @@ func _can_see(target: Node3D) -> bool:
 func _nav_direction_to(destination: Vector3) -> Vector3:
 	if _nav_agent == null:
 		return _flat_direction_to_position(destination)
-	_nav_agent.target_position = destination
+	# Already there: stand still. Past this point the path is "finished" and
+	# its next point is our own feet, which pointed a full-speed walk in a
+	# random direction every tick -- the shaking on the spot.
+	if _flat_distance_to_position(destination) <= arrive_distance:
+		return Vector3.ZERO
+	if _nav_agent.target_position.distance_squared_to(destination) > 0.01:
+		_nav_agent.target_position = destination
+	if _nav_agent.is_navigation_finished():
+		return _flat_direction_to_position(destination)
 	var next_point := _nav_agent.get_next_path_position()
 	# No walkable route there -- e.g. the player is down below a ledge with no
 	# stairs: the path just ends at the brink. Walk straight at them instead
 	# and drop off the edge (gravity does the rest), like Quake's monsters,
 	# rather than standing stuck at the top.
-	if not _nav_agent.is_target_reachable():
+	if not _nav_agent.is_target_reachable() or _flat_distance_to_position(next_point) < 0.05:
 		return _flat_direction_to_position(destination)
 	return _flat_direction_to_position(next_point)
 
@@ -771,6 +791,10 @@ func _face(target: Node3D) -> void:
 func _flat_direction_to_position(pos: Vector3) -> Vector3:
 	var offset := pos - global_position
 	offset.y = 0.0
+	# Right on top of it there's no real direction (a hair's offset normalizes
+	# to a full step any which way): none, rather than a random one.
+	if offset.length_squared() < 0.0025:
+		return Vector3.ZERO
 	return offset.normalized()
 
 
@@ -781,8 +805,13 @@ func _flat_distance_to_position(pos: Vector3) -> float:
 
 
 func _face_position(pos: Vector3) -> void:
-	var flat_target := Vector3(pos.x, global_position.y, pos.z)
+	var offset := Vector3(pos.x - global_position.x, 0.0, pos.z - global_position.z)
 	# A target right overhead or underfoot (a roach, a rat) has no real
 	# direction -- turning toward it would spin it in place every tick.
-	if flat_target.distance_to(global_position) > 0.3:
-		look_at(flat_target, Vector3.UP)
+	if offset.length() <= 0.3:
+		return
+	var yaw := atan2(-offset.x, -offset.z) # facing -Z, same as look_at()
+	if turn_speed <= 0.0:
+		global_rotation.y = yaw
+	else:
+		global_rotation.y = rotate_toward(global_rotation.y, yaw, deg_to_rad(turn_speed) * get_physics_process_delta_time())

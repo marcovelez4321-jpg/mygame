@@ -76,6 +76,13 @@ const SPLAT_HEIGHT := 0.35
 @export var sight_range: float = 25.0
 ## Seconds between "who's nearest?" checks.
 @export var retarget_interval: float = 0.5
+## Roaches would rather eat and breed than fight: a player or tweaker is only
+## worth attacking inside this range (m), or after hurting it or a roach near
+## it (alarm_radius). Once it's fighting you it keeps at it out to twice this.
+## Rats are food, so it hunts those anywhere in sight_range.
+@export var threat_range: float = 6.0
+## Hurt one roach and every roach this close (m) turns on whoever did it.
+@export var alarm_radius: float = 10.0
 
 @export_group("Attack")
 ## Starts a dive from this close (m) -- HL2: about 5 m.
@@ -154,6 +161,11 @@ const SPLAT_HEIGHT := 0.35
 @export var spit_damage: float = 12.0
 @export var spit_color: Color = Color(0.6, 0.85, 0.1)
 
+@export_group("Eating Prey")
+## A rat it kills stays in its jaws; it chews it for this many seconds, then a
+## new roach bursts out of the meal.
+@export var prey_eat_time: float = 4.0
+
 @export_group("Physics")
 ## How much harder than normal bullets shove it -- every gun's
 ## impact_force times this (weapon_controller.gd reads it). 2 = twice as hard.
@@ -205,6 +217,12 @@ var _carry_bite := 0.0
 var _hurt_at := -999.0
 const CARRY_FLINCH_TIME := 1.0
 var _time := 0.0
+## A dead rat in its jaws, being eaten (_eat_prey()).
+var _prey: Node3D
+var _prey_left := 0.0
+var _prey_bite := 0.0
+## Dead itself, and held in a rat's jaws (seize()).
+var _eater: Node3D
 
 @onready var health: Health = $Health
 @onready var _nav_agent: NavigationAgent3D = get_node_or_null("NavigationAgent3D") as NavigationAgent3D
@@ -264,7 +282,8 @@ func _physics_process(delta: float) -> void:
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
-		_target = Factions.nearest_hostile(get_tree(), Factions.Side.ROACH, global_position, sight_range, self, _target)
+		_target = Factions.nearest_hostile(get_tree(), Factions.Side.ROACH, global_position, sight_range, self, _target, threat_range)
+	_eat_prey(delta)
 
 	if _state == State.STUNNED:
 		_think_stunned()
@@ -515,6 +534,10 @@ func _bite(player: Node3D, direction: Vector3) -> void:
 	if player_health:
 		player_health.take_damage(damage, Health.NO_ATTACKER, direction, global_position, 1.0)
 		Factions.provoke(player, self)
+		if player_health.is_dead and _prey == null and player.has_method("seize") and player.call("seize", self):
+			_prey = player # a rat: it's dinner
+			_prey_left = prey_eat_time
+			_prey_bite = 0.0
 	bit_player.emit()
 	_bite_gap_left = bite_gap
 	# Thrown back and a little up and sideways, like the manhack's
@@ -557,6 +580,9 @@ func set_held(held: bool) -> void:
 
 func _on_damaged(_amount: float, _attacker_id: int) -> void:
 	_hurt_at = _time
+	# Deferred: whoever hurt it is recorded (Factions.provoke) right after the
+	# damage lands, so read it once that's happened.
+	_alarm_nearby.call_deferred()
 	if _state == State.DIVE:
 		_end_dive() # getting shot knocks it out of a dive
 
@@ -572,12 +598,19 @@ func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	collision_mask = 1
 	BloodFX.spawn_impact(get_tree().current_scene, global_position, Vector3.UP, blood_color)
 	get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+	_prey = null # anything in its jaws drops (it notices: is_holding() goes false)
 
 
 ## Falling dead: the moment it reaches the ground it splats -- stops dead
 ## (no rolling around like a ball), leaves a goo spot where it landed, and
 ## tells RoachVisual to squash it flat and play the splat.
 func _think_dead() -> void:
+	if _eater != null:
+		if is_instance_valid(_eater) and _eater.call("is_holding", self):
+			global_position = _eater.call("mouth_position")
+			return
+		_eater = null # the rat died or let go: fall and splat like any dead roach
+		freeze = false
 	if _splatted:
 		return
 	var floor_hit := _ray(global_position, global_position + Vector3.DOWN * SPLAT_HEIGHT)
@@ -593,11 +626,81 @@ func _think_dead() -> void:
 	splatted.emit()
 
 
+## Hurt: every roach within alarm_radius turns on whoever did it too
+## (Factions.provoke) -- threatening one threatens the group, so the swarm
+## stops feeding and fights back even if you're outside their threat_range.
+func _alarm_nearby() -> void:
+	if not has_meta("provoked_by"):
+		return
+	var attacker = get_meta("provoked_by")
+	if not is_instance_valid(attacker) or not attacker is Node3D:
+		return
+	for node in get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.ROACH]):
+		var roach := node as Node3D
+		if roach and roach != self and roach.global_position.distance_to(global_position) <= alarm_radius:
+			Factions.provoke(roach, attacker as Node3D)
+
+
+# ---- Eating prey (rats it killed, and being eaten by rats) -------------------
+
+## Where whatever it's eating is held.
+func mouth_position() -> Vector3:
+	return global_position + facing * 0.25 + Vector3.DOWN * 0.08
+
+
+## True while `prey` is still in its jaws and it's alive to hold it.
+func is_holding(prey: Node) -> bool:
+	return _prey == prey and not health.is_dead
+
+
+## Chewing a rat it killed: blood flies now and then; once it's eaten, a new
+## roach bursts out of the meal. Rule 1: host-side, like breeding on bodies.
+func _eat_prey(delta: float) -> void:
+	if _prey == null:
+		return
+	if not is_instance_valid(_prey):
+		_prey = null
+		return
+	var world := get_tree().current_scene
+	_prey_left -= delta
+	_prey_bite -= delta
+	if _prey_bite <= 0.0:
+		_prey_bite = randf_range(0.4, 0.7)
+		BloodFX.spawn_impact(world, mouth_position(), Vector3.UP + facing * 0.3, _prey.get("blood_color"), 0.8)
+	if _prey_left > 0.0:
+		return
+	var at := mouth_position()
+	_prey.call("consumed")
+	_prey = null
+	BloodFX.spawn_impact(world, at, Vector3.UP, RoachCarry.BLOOD, 1.5)
+	var roach := RoachCarry.ROACH_SCENE.instantiate() as FlyingRoach
+	world.add_child(roach)
+	roach.global_position = at + Vector3.UP * 0.2
+	roach.burst_out.call_deferred()
+
+
+## A rat killed it and wants it in its jaws. True if it can be taken: dead,
+## still in one piece (not splatted flat), and nobody else has it already.
+func seize(eater: Node3D) -> bool:
+	if _state != State.DEAD or _splatted or _eater != null:
+		return false
+	_eater = eater
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	return true
+
+
+## Fully eaten: a last burst of goo, gone.
+func consumed() -> void:
+	BloodFX.spawn_impact(get_tree().current_scene, global_position, Vector3.UP, blood_color, 1.2)
+	queue_free()
+
+
 # ---- Carrying bodies (RoachCarry) --------------------------------------------
 
 ## Free to help carry a body: alive, nothing to fight, not busy.
 func is_idle() -> bool:
-	return _target == null and _state == State.HUNT and not _held
+	return _target == null and _state == State.HUNT and not _held and _prey == null
 
 
 func is_carrying(carry: RoachCarry) -> bool:

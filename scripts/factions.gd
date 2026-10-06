@@ -43,6 +43,12 @@ const REVENGE_TIME := 5.0
 ## nearer -- without it, two equally hated targets swapping places as they
 ## move made NPCs flip between them twice a second (the "vibrating").
 const STICKINESS := 0.6
+## Roaches and rats eat each other (and breed off the meal), so each hunts the
+## other as food -- no threat range applies to prey (see nearest_hostile()).
+const PREY := {
+	Side.ROACH: [Side.RAT],
+	Side.RAT: [Side.ROACH],
+}
 
 
 ## The target `viewer` (on `side`, at `from`) wants most, within max_range:
@@ -52,7 +58,11 @@ const STICKINESS := 0.6
 ## in, and it may have been freed since (a body eaten, a corpse removed).
 ## Godot refuses to pass a freed object into a typed Node3D parameter ("argument
 ## 6 (previously freed) is not a subclass..."), so it's checked here instead.
-static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null, current = null) -> Node3D:
+## `threat_range` is for scavengers that would rather eat than fight: anything
+## that isn't their prey only counts inside it, or if it hurt `viewer` lately --
+## and a target it's already fighting stays one out to twice that, so it
+## doesn't drop you the instant you step back.
+static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null, current = null, threat_range: float = INF) -> Node3D:
 	if not is_instance_valid(current):
 		current = null
 	var best: Node3D = null
@@ -68,6 +78,8 @@ static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range
 			var distance := from.distance_to(target.global_position)
 			if distance > max_range:
 				continue
+			if distance > threat_range and not is_threat(side, other, viewer, target, distance, threat_range, target == current):
+				continue
 			if target == current:
 				distance *= STICKINESS
 			var priority := priority_of(side, other, viewer, target)
@@ -81,10 +93,26 @@ static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range
 ## How much `side` wants to fight `target` (of side `other`), with revenge.
 static func priority_of(side: int, other: int, viewer: Node, target: Node3D) -> int:
 	var priority: int = PRIORITY[side].get(other, 0)
-	if viewer and viewer.has_meta("provoked_by") and viewer.get_meta("provoked_by") == target \
-			and Time.get_ticks_msec() - int(viewer.get_meta("provoked_at", 0)) < REVENGE_TIME * 1000.0:
+	if provoked_by(viewer, target):
 		priority += REVENGE_BONUS
 	return priority
+
+
+## `target` hurt `viewer` within the last REVENGE_TIME seconds (provoke()).
+## `target` is untyped for the same reason as nearest_hostile()'s `current`:
+## callers pass a stored attacker that may have been freed since.
+static func provoked_by(viewer: Node, target) -> bool:
+	return viewer != null and is_instance_valid(target) and viewer.has_meta("provoked_by") and viewer.get_meta("provoked_by") == target \
+			and Time.get_ticks_msec() - int(viewer.get_meta("provoked_at", 0)) < REVENGE_TIME * 1000.0
+
+
+## Worth fighting for a scavenger (see nearest_hostile()'s threat_range): its
+## prey always is; anything else only within `threat_range` (twice that if
+## it's already the target), or if it hurt `viewer` lately.
+static func is_threat(side: int, other: int, viewer: Node, target: Node3D, distance: float, threat_range: float, is_current: bool) -> bool:
+	if PREY.get(side, []).has(other) or provoked_by(viewer, target):
+		return true
+	return distance <= threat_range * (2.0 if is_current else 1.0)
 
 
 ## `attacker` just hurt `victim`: it jumps up the victim's list for a while.

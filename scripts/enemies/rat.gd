@@ -53,6 +53,16 @@ const FAR_ANIMATION_RATE := 12.0
 @export var leap_time: float = 0.35
 ## How far it tips nose-down/up in the air, degrees.
 @export var leap_tilt: float = 35.0
+## Flying targets (roaches): it leaps at one up to this high above it (m), from
+## up to leap_range_max away sideways -- a ground bite can't reach them.
+@export var leap_max_height: float = 3.5
+## ...and tries it this many times as often as a leap at someone on the ground.
+@export var flier_leap_chance_multiplier: float = 4.0
+
+@export_group("Eating Prey")
+## A roach it kills stays in its jaws; it chews it for this many seconds, then
+## a new rat burrows up where it ate (if the pack isn't at its feed_limit).
+@export var prey_eat_time: float = 4.0
 
 @export_group("Variety")
 ## Every rat rolls its own size in this range. Bigger rats have more health
@@ -126,6 +136,12 @@ var _lod_timer := 0.0
 var _emerge_time := 0.0
 var _dug := false
 var _gore_timer := 0.0
+## A dead roach in its jaws, being eaten (_eat_prey()).
+var _prey: Node3D
+var _prey_left := 0.0
+var _prey_bite := 0.0
+## Dead itself, and held in a roach's jaws (seize()).
+var _eater: Node3D
 
 @onready var health: Health = $Health
 @onready var _visual: Node3D = $Visual
@@ -205,6 +221,9 @@ func _roll_variety() -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
+	if _eater != null:
+		_held_in_jaws()
+		return
 	if _pop_pending:
 		_pop_pending = false
 		if _state == State.THROWN:
@@ -212,6 +231,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			_pop()
 		return
+	_eat_prey(delta)
 	match _state:
 		State.RUN:
 			_run(delta)
@@ -260,6 +280,10 @@ func _bite(target: Node3D, damage: float) -> void:
 	if target_health:
 		target_health.take_damage(damage, Health.NO_ATTACKER)
 		Factions.provoke(target, self)
+		if target_health.is_dead and _prey == null and target.has_method("seize") and target.call("seize", self):
+			_prey = target # a roach: it's dinner
+			_prey_left = prey_eat_time
+			_prey_bite = 0.0
 	_play(ANIM_ATTACK, false)
 	if swarm:
 		swarm.rat_bit(global_position)
@@ -272,6 +296,14 @@ func _maybe_leap(delta: float) -> void:
 		return
 	var target := swarm.target
 	if target == null or not is_instance_valid(target):
+		return
+	if target is FlyingRoach:
+		# Up in the air: judged sideways and by height, not straight-line
+		# distance, and tried far more often -- it's the only way to reach it.
+		var offset := target.global_position - global_position
+		if Vector2(offset.x, offset.z).length() <= leap_range_max and offset.y <= leap_max_height \
+				and randf() < leap_chance * flier_leap_chance_multiplier * delta:
+			leap(target)
 		return
 	var distance := global_position.distance_to(target.global_position)
 	if distance >= leap_range_min and distance <= leap_range_max and randf() < leap_chance * delta:
@@ -374,7 +406,11 @@ func _splat() -> void:
 
 func _remove() -> void:
 	_state = State.DEAD
+	_prey = null # anything in its jaws drops (it notices: is_holding() goes false)
 	if swarm:
+		var attacker = get_meta("provoked_by", null)
+		if Factions.provoked_by(self, attacker):
+			swarm.threatened_by(attacker) # killing one threatens the pack
 		swarm.forget(self)
 	queue_free()
 
@@ -401,6 +437,80 @@ func _ray(from: Vector3, to: Vector3) -> Dictionary:
 	query.exclude = [get_rid()]
 	query.collision_mask = 1
 	return get_world_3d().direct_space_state.intersect_ray(query)
+
+
+# ---- Eating prey (roaches it killed, and being eaten by roaches) -------------
+
+## Where whatever it's eating is held.
+func mouth_position() -> Vector3:
+	var forward := -_visual.global_basis.z
+	return global_position + forward * 0.2 * size + Vector3.UP * 0.12 * size
+
+
+## True while `prey` is still in its jaws and it's alive to hold it.
+func is_holding(prey: Node) -> bool:
+	return _prey == prey and not health.is_dead
+
+
+## Chewing a roach it killed: goo flies now and then; once it's eaten, a new
+## rat burrows up there -- one for one, and never past the pack's feed_limit.
+func _eat_prey(delta: float) -> void:
+	if _prey == null:
+		return
+	if not is_instance_valid(_prey):
+		_prey = null
+		return
+	var world := get_tree().current_scene
+	_prey_left -= delta
+	_prey_bite -= delta
+	if _prey_bite <= 0.0:
+		_prey_bite = randf_range(0.4, 0.7)
+		BloodFX.spawn_impact(world, mouth_position(), Vector3.UP, _prey.get("blood_color"), gore * 0.4)
+		_play(ANIM_ATTACK, false)
+	if _prey_left > 0.0:
+		return
+	var at := global_position
+	_prey.call("consumed")
+	_prey = null
+	BloodFX.spawn_impact(world, at + Vector3.UP * 0.2, Vector3.UP, blood_color, 1.5)
+	if swarm and swarm.count() < swarm.feed_limit:
+		swarm.spawn_rats(1, at, 0.0, 0.5)
+
+
+## A roach killed it and wants it in its jaws. True if it can be taken: just
+## killed (not already popped, splatted or blasted) and nobody has it yet.
+## It goes limp and stops being part of its pack.
+func seize(eater: Node3D) -> bool:
+	if not health.is_dead or _eater != null or _state == State.DEAD or _state == State.THROWN:
+		return false
+	_pop_pending = false
+	_eater = eater
+	_state = State.DEAD
+	eating = false # it was chewing on a body: not anymore
+	dragging = false
+	if swarm:
+		swarm.forget(self)
+	freeze = true
+	collision_layer = 0
+	collision_mask = 0
+	_visual.rotation = Vector3(0.0, _visual.rotation.y, PI * 0.5) # limp, on its side
+	return true
+
+
+## Held dead in a roach's jaws: rides along at its mouth. If the roach dies or
+## lets go, it bursts like any other dead rat.
+func _held_in_jaws() -> void:
+	if is_instance_valid(_eater) and _eater.call("is_holding", self):
+		global_position = _eater.call("mouth_position")
+		return
+	_eater = null
+	_pop()
+
+
+## Fully eaten: a last burst of blood, gone.
+func consumed() -> void:
+	BloodFX.spawn_impact(get_tree().current_scene, global_position, Vector3.UP, blood_color, death_gore * size)
+	queue_free()
 
 
 # ---- Look -------------------------------------------------------------------

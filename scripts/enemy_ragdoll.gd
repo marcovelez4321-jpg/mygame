@@ -594,18 +594,29 @@ func drag(velocity: Vector3) -> void:
 		bone.linear_velocity = Vector3(velocity.x, minf(bone.linear_velocity.y, 0.5), velocity.z)
 
 
-## Roaches carrying the body (RoachCarry): the torso bones -- hips, spine,
-## chest, neck -- all get the same velocity, so the body is held up by its
-## middle and the arms and legs hang off it on their joints. ZERO lets go.
-func carry(velocity: Vector3) -> void:
-	var holding := velocity != Vector3.ZERO
+## Roaches carrying the body by its limbs (RoachCarry): `held` maps each bone a
+## roach has hold of to the velocity it's being pulled at, and the whole body
+## weighs `weight` of normal (1 = full, 0 = weightless) -- every roach holding
+## on takes a share. Held at several points (hands, feet, hips, head) the body
+## hangs between them instead of every limb dangling off one held torso, which
+## used to outweigh the pull and stall the lift halfway up. Empty `held` lets
+## go and restores full weight.
+func carry(held: Dictionary, weight: float = 1.0) -> void:
+	var holding := not held.is_empty()
 	for bone in _bones:
 		bone.can_sleep = _settled and not holding
-		if not holding:
-			continue
-		if "Hips" in bone.name or "Spine" in bone.name or "Chest" in bone.name or "Neck" in bone.name:
+		bone.gravity_scale = bone_gravity_scale * (weight if holding else 1.0)
+		if held.has(bone):
 			bone.apply_central_impulse(Vector3.UP * 0.001) # wakes a sleeping body
-			bone.linear_velocity = velocity
+			bone.linear_velocity = held[bone]
+
+
+## The ragdoll bone for humanoid bone `bone_name` ("LeftHand", "Hips"...), or null.
+func bone_named(bone_name: String) -> PhysicalBone3D:
+	for bone in _bones:
+		if bone.bone_name == bone_name:
+			return bone
+	return null
 
 
 ## Any part of the body resting on (or just above) the ground.
