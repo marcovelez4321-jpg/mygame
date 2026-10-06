@@ -163,12 +163,13 @@ func _on_weapon_switched(_weapon: WeaponData, _draw_time: float) -> void:
 
 
 ## Scatters a handful of blood splats near the screen edges, holds, then
-## fades out -- see SCREEN_BLOOD_* consts' own comment.
-func _on_gory_kill_nearby() -> void:
+## fades out -- see SCREEN_BLOOD_* consts' own comment. In the colour of
+## whatever died: red blood, or green roach goo.
+func _on_gory_kill_nearby(blood_color: Color) -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	for i in SCREEN_BLOOD_COUNT:
 		var splat := TextureRect.new()
-		splat.texture = BloodFX.get_screen_splat_texture()
+		splat.texture = BloodFX.get_screen_splat_texture(blood_color)
 		splat.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var size := randf_range(60.0, 160.0)
 		splat.size = Vector2(size, size)

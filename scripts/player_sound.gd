@@ -91,6 +91,6 @@ func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	SoundPlayer.play_for_owner(death_sound, _player)
 
 
-func _on_gory_kill_nearby() -> void:
+func _on_gory_kill_nearby(_blood_color: Color) -> void:
 	if _player.is_multiplayer_authority():
 		SoundPlayer.play_2d(gory_kill_sound)

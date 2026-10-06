@@ -189,6 +189,7 @@ gone through section 2.
 | `monster_enemy` | Base melee enemy | Walks in, swings. |
 | `monster_enemy_rusher` | Fast melee enemy | Telegraphs, then dashes in. |
 | `monster_enemy_gunner` | Ranged enemy | Keeps its distance, bursts fire. |
+| `monster_roach` | Flying roach | Half-Life 2 manhack-style: dives, bites, bounces off, comes back. Place several for a swarm; only 2 dive at once. About 1 in 5 turns out to be a spitter (yellow-green, lobs arcing acid from range); set **kind** to force Normal or Spitter. Can float or sit on the floor. |
 | `item_weapon_starter_gun` | Starter pistol pickup | |
 | `item_weapon_machine_gun` | Machine gun pickup | |
 | `item_ammo` | Ammo pickup | Has editable properties in TrenchBroom: `ammo_type` (Bullets / Shells / Rockets) and `amount` (default 20). |

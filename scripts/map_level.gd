@@ -22,7 +22,9 @@ extends Node3D
 ## enemies' own collision capsule (enemy.tscn's CollisionShape3D: radius 0.4,
 ## height ~2.3) so the bake doesn't carve paths tighter or looser than what's
 ## actually walking them.
-@export var nav_agent_radius: float = 0.4
+## 0.5, not the enemies' true 0.4: the bake rounds it up to whole 0.25 m
+## cells anyway, and asking for 0.4 just printed a warning every load.
+@export var nav_agent_radius: float = 0.5
 @export var nav_agent_height: float = 2.0
 
 ## Every StaticBody3D under this level gets tagged into this group right

@@ -52,13 +52,16 @@ const MUTATION_BLAST_COLOR := Color(0.75, 0.05, 0.05)
 static var _splat_texture: ImageTexture
 static var _bullet_hole_texture: ImageTexture
 static var _impact_mesh: BoxMesh
+## Splat textures in colours other than blood (see _get_splat_texture()).
+static var _tinted_splat_textures: Dictionary = {}
 static var _trail_settings: BloodTrailSettings
 static var _trail_mesh: TubeTrailMesh
 
 
 ## A short, one-shot particle burst at a hit point, kicked out along the
-## surface normal it hit. Removes itself once it finishes.
-static func spawn_impact(world: Node, position: Vector3, normal: Vector3) -> void:
+## surface normal it hit. Removes itself once it finishes. `color` lets a
+## non-human enemy bleed something else (the roach's green goo).
+static func spawn_impact(world: Node, position: Vector3, normal: Vector3, color: Color = BLOOD_COLOR) -> void:
 	var particles := GPUParticles3D.new()
 	particles.amount = 18
 	particles.lifetime = 0.5
@@ -74,7 +77,7 @@ static func spawn_impact(world: Node, position: Vector3, normal: Vector3) -> voi
 	mat.gravity = Vector3(0.0, -9.8, 0.0)
 	mat.scale_min = 0.25
 	mat.scale_max = 0.6
-	mat.color = BLOOD_COLOR
+	mat.color = color
 	particles.process_material = mat
 
 	world.add_child(particles)
@@ -357,8 +360,15 @@ static func _spawn_blood_arc(world: Node, center: Vector3, horizontal: Vector3, 
 ## a wall behind the target) and, from enemy_ragdoll.gd, the ground pool
 ## (normal = Vector3.UP). Fades in rather than popping, and both the size and
 ## the facing get a little randomness so repeated hits don't look identical.
-static func spawn_splatter(world: Node, position: Vector3, normal: Vector3, base_size: float = 1.0) -> void:
-	_place_decal(world, _get_splat_texture(), position, normal, base_size, 0.4)
+static func spawn_splatter(world: Node, position: Vector3, normal: Vector3, base_size: float = 1.0, color: Color = BLOOD_COLOR) -> void:
+	_place_decal(world, _get_splat_texture(color), position, normal, base_size, 0.4)
+
+
+## Builds the splat texture for `color` ahead of time. Generating one takes a
+## moment, so an enemy that bleeds another colour calls this when it spawns
+## instead of hitching the game on its first death.
+static func warm_splat_texture(color: Color) -> void:
+	_get_splat_texture(color)
 
 
 ## A dark scorch/hole decal for a shot that hit plain world geometry (no
@@ -399,21 +409,35 @@ static func _place_decal(world: Node, texture: Texture2D, position: Vector3, nor
 	tween.tween_property(decal, "modulate:a", 1.0, fade_time)
 
 
+## The little cube every blood/goo particle is drawn with, for other effects
+## that drip the same way (AcidSpit's trail). Tinted by the particle colour.
+static func droplet_mesh() -> BoxMesh:
+	return _get_impact_mesh()
+
+
+## White and tinted per burst by each ParticleProcessMaterial's `color`
+## (vertex_color_use_as_albedo), so one shared mesh serves red blood, the
+## mutation blast and green roach goo alike.
 static func _get_impact_mesh() -> BoxMesh:
 	if _impact_mesh == null:
 		_impact_mesh = BoxMesh.new()
 		_impact_mesh.size = Vector3.ONE * 0.05
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = BLOOD_COLOR
+		mat.vertex_color_use_as_albedo = true
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_impact_mesh.material = mat
 	return _impact_mesh
 
 
-static func _get_splat_texture() -> ImageTexture:
-	if _splat_texture == null:
-		_splat_texture = _generate_splat_texture()
-	return _splat_texture
+## One splat texture per colour, generated once and kept.
+static func _get_splat_texture(color: Color = BLOOD_COLOR) -> ImageTexture:
+	if color == BLOOD_COLOR:
+		if _splat_texture == null:
+			_splat_texture = _generate_splat_texture(color)
+		return _splat_texture
+	if not _tinted_splat_textures.has(color):
+		_tinted_splat_textures[color] = _generate_splat_texture(color)
+	return _tinted_splat_textures[color]
 
 
 ## Public on purpose (unlike the underscore-prefixed getters here) -- hud.gd
@@ -423,9 +447,11 @@ static func _get_splat_texture() -> ImageTexture:
 ## fancier irregular-blob version here (per-pixel angle()/sin() calls over
 ## the whole 128x128 image), but generating it the first time it was needed
 ## -- mid-gameplay, right as a kill landed -- caused a real, reported hitch.
-## Simple and instant beats fancy and freezes.
-static func get_screen_splat_texture() -> ImageTexture:
-	return _get_splat_texture()
+## Simple and instant beats fancy and freezes. Same per-colour cache as the
+## world splats, so a roach's goo texture is already built (it warms it on
+## spawn) by the time one dies in your face.
+static func get_screen_splat_texture(color: Color = BLOOD_COLOR) -> ImageTexture:
+	return _get_splat_texture(color)
 
 
 static func _get_bullet_hole_texture() -> ImageTexture:
@@ -458,7 +484,7 @@ static func _generate_bullet_hole_texture() -> ImageTexture:
 ## circle -- the original shape, used for every 3D world decal (wall
 ## splatter, ground pools) where a soft, slightly-rounded splat reads right.
 ## Generated once and cached (see _get_splat_texture()).
-static func _generate_splat_texture() -> ImageTexture:
+static func _generate_splat_texture(color: Color) -> ImageTexture:
 	var size := SPLAT_TEXTURE_SIZE
 	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	var center := Vector2(size, size) * 0.5
@@ -480,6 +506,6 @@ static func _generate_splat_texture() -> ImageTexture:
 				var d: float = p.distance_to(blob["pos"]) / blob["radius"]
 				alpha = maxf(alpha, clampf(1.0 - d, 0.0, 1.0))
 			alpha = clampf(alpha * 1.7, 0.0, 1.0) # sharpen the falloff toward the edge
-			image.set_pixel(x, y, Color(BLOOD_COLOR.r, BLOOD_COLOR.g, BLOOD_COLOR.b, alpha))
+			image.set_pixel(x, y, Color(color.r, color.g, color.b, alpha))
 
 	return ImageTexture.create_from_image(image)

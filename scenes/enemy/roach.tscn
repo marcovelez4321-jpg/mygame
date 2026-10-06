@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://b3qfvpmbq2lhu"]
+
+[ext_resource type="Script" uid="uid://ceeqi5m4qi8mu" path="res://scripts/enemies/flying_roach.gd" id="1_roach"]
+[ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_health"]
+[ext_resource type="Script" uid="uid://b1a8b2lpkq34m" path="res://scripts/enemies/roach_visual.gd" id="3_visual"]
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_roach"]
+friction = 0.3
+bounce = 0.4
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_roach"]
+radius = 0.253
+
+[node name="Roach" type="RigidBody3D" unique_id=1400753730]
+physics_material_override = SubResource("PhysicsMaterial_roach")
+gravity_scale = 0.0
+continuous_cd = true
+linear_damp = 0.5
+angular_damp = 4.0
+script = ExtResource("1_roach")
+cruise_speed = 9.0
+acceleration = 11.0
+sight_range = 22.0
+kind = 2
+keep_distance = 7.0
+spit_speed = 14.0
+spit_aim_past = 0.6
+spit_guess_sideways = 1.0
+spit_scatter = 0.2
+spit_damage = 15.0
+turn_speed = 11.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=557849243]
+shape = SubResource("SphereShape3D_roach")
+
+[node name="Health" type="Node" parent="." unique_id=1543747847]
+script = ExtResource("2_health")
+max_health = 13.0
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=1118037143]
+path_height_offset = 1.3
+
+[node name="Visual" type="Node3D" parent="." unique_id=550244517]
+script = ExtResource("3_visual")

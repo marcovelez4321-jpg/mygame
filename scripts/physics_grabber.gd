@@ -106,6 +106,10 @@ func _try_grab(origin: Vector3, direction: Vector3) -> void:
 	# already centered on it, and "grab the exact point on a limb" is the
 	# more natural feel for dragging a body around by a specific arm/leg.
 	_held_local_center = _local_center(_held) if _held is RigidBody3D else Vector3.ZERO
+	# Anything that cares about being held (a flying roach stalls its engine,
+	# like a manhack in the gravity gun) gets told.
+	if _held.has_method("set_held"):
+		_held.set_held(true)
 	print("PhysicsGrabber: grabbed '%s'" % _held.name) # TEMPORARY diagnostic
 
 
@@ -115,6 +119,8 @@ func _release(reason: String = "let go") -> void:
 		# had it moving at -- see max_throw_speed's own comment.
 		var held_velocity: Vector3 = _held.linear_velocity # untyped _held -> explicit type, := can't infer through Variant
 		_held.linear_velocity = held_velocity.limit_length(max_throw_speed)
+		if _held.has_method("set_held"):
+			_held.set_held(false)
 		print("PhysicsGrabber: released '%s' (%s)" % [_held.name, reason]) # TEMPORARY diagnostic
 	_held = null
 

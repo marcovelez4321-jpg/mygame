@@ -80,6 +80,11 @@ signal shot_fired(end_point: Vector3)
 ## recovery should be about the length of the attack clip, so the whole
 ## animation plays out.
 @export var attack_recovery: float = 0.5
+## A melee hit shoves the player back: horizontal push in m/s, plus a small
+## hop so floor friction doesn't eat it instantly. A shove, not a launch --
+## about a meter or two. 0 = no shove. (The gunner's shots don't shove.)
+@export var melee_shove: float = 6.0
+@export var melee_shove_up: float = 2.0
 
 @export_group("Reactions")
 @export var pain_time: float = 0.25
@@ -500,6 +505,8 @@ func _land_hit() -> void:
 	var target_health := _target.get_node_or_null("Health") as Health
 	if target_health:
 		target_health.take_damage(attack_damage, Health.NO_ATTACKER)
+	if _target.has_method("shove") and (melee_shove > 0.0 or melee_shove_up > 0.0):
+		_target.call("shove", _flat_direction_to(_target) * melee_shove + Vector3.UP * melee_shove_up)
 
 
 ## Hitscan shot at the target, fired the moment the windup completes --

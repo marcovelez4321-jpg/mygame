@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FuncGodotFGDFile" load_steps=15 format=3]
+[gd_resource type="Resource" script_class="FuncGodotFGDFile" load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_file.gd" id="1"]
 [ext_resource type="Resource" uid="uid://crgpdahjaj" path="res://addons/func_godot/fgd/func_godot_fgd.tres" id="2"]
@@ -14,9 +14,10 @@
 [ext_resource type="Resource" path="res://fgd/func_button.tres" id="12"]
 [ext_resource type="Resource" path="res://fgd/func_lever.tres" id="13"]
 [ext_resource type="Resource" path="res://fgd/item_key.tres" id="14"]
+[ext_resource type="Resource" path="res://fgd/monster_roach.tres" id="15"]
 
 [resource]
 script = ExtResource("1")
 fgd_name = "game_entities"
 base_fgd_files = Array[Resource]([ExtResource("2")])
-entity_definitions = Array[Resource]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13"), ExtResource("14")])
+entity_definitions = Array[Resource]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10"), ExtResource("11"), ExtResource("12"), ExtResource("13"), ExtResource("14"), ExtResource("15")])

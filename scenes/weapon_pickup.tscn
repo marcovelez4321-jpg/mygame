@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cuih0sutv7aw4"]
 
 [ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
-[ext_resource type="Resource" uid="uid://brchhi77bg3bk" path="res://weapons/shotgun.tres" id="2"]
+[ext_resource type="Resource" path="res://weapons/shotgun.tres" id="2"]
 [ext_resource type="PackedScene" uid="uid://lui1ovefw3kb" path="res://shotgun_2.tscn" id="3_qjt78"]
 
 [sub_resource type="SphereShape3D" id="PickupZoneShape"]

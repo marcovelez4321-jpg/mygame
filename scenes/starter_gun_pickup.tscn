@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://basaei4sy2ydl"]
 
 [ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
-[ext_resource type="Resource" uid="uid://dd2w6ofsbor3k" path="res://weapons/starter_gun.tres" id="2"]
+[ext_resource type="Resource" path="res://weapons/starter_gun.tres" id="2"]
 [ext_resource type="PackedScene" uid="uid://i02bor72sm53" path="res://art/weapons/PSX_Guns/FBX/Pistol.fbx" id="3"]
 
 [sub_resource type="SphereShape3D" id="PickupZoneShape"]

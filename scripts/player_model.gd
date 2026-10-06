@@ -24,13 +24,23 @@ const IDLE_ANIMATION := "res://art/animations/IdlePlayer.res"
 const RUN_ANIMATION := "res://art/animations/RunningPlayer.res"
 
 ## Bones hidden from your own first-person view, with everything below them.
-@export var hidden_bones_local: PackedStringArray = ["Head", "LeftUpperArm", "RightUpperArm"]
+## From the Neck up: hiding only the Head left the neck stretching up to a
+## point just under the camera, which is what showed when looking down.
+@export var hidden_bones_local: PackedStringArray = ["Neck", "LeftUpperArm", "RightUpperArm"]
 ## The model is scaled so its Head bone (the base of the skull) sits this far
 ## below the camera -- so every character, tall or short, sees from its eyes.
 @export var head_bone_below_eyes: float = 0.1
 ## Pushes the body back behind the camera, so looking down doesn't put the
 ## camera inside your own chest.
 @export var body_back_offset: float = 0.15
+## Looking down slides the body further back by up to this much (meters, at
+## straight down), so your chest and collar move out from under the camera
+## and you see your legs instead -- the usual full-body first-person trick.
+## Your own view only; your buddy sees your body where it really is.
+@export var look_down_extra_offset: float = 0.25
+## How far down (degrees below level) you look before the body starts
+## sliding back. Below this, looking ahead, nothing moves.
+@export var look_down_start_degrees: float = 30.0
 ## Horizontal speed (m/s) at which the run animation plays at normal speed;
 ## faster or slower movement speeds it up or down to match.
 @export var run_animation_speed: float = 6.0
@@ -150,6 +160,8 @@ func _setup_animation() -> void:
 ## real speed so feet don't slide. Reads only velocity, so in co-op it works
 ## the same for a remote player from their replicated movement.
 func _process(_delta: float) -> void:
+	if _model and _player.is_multiplayer_authority():
+		_slide_back_when_looking_down()
 	if _animation_player == null:
 		return
 	var speed := Vector2(_player.velocity.x, _player.velocity.z).length()
@@ -157,6 +169,15 @@ func _process(_delta: float) -> void:
 		_play(&"moves/Run", clampf(speed / run_animation_speed, 0.5, 2.0))
 	else:
 		_play(&"moves/Idle", 1.0)
+
+
+## 0 until you look look_down_start_degrees below level, easing up to the
+## full look_down_extra_offset at straight down. The head's pitch is
+## negative when looking down.
+func _slide_back_when_looking_down() -> void:
+	var down_degrees := rad_to_deg(-_head.rotation.x)
+	var amount := clampf((down_degrees - look_down_start_degrees) / (90.0 - look_down_start_degrees), 0.0, 1.0)
+	_model.position.z = body_back_offset + look_down_extra_offset * smoothstep(0.0, 1.0, amount)
 
 
 func _play(animation_name: StringName, speed_scale: float) -> void:

@@ -228,6 +228,8 @@ var keys: Array[String] = []
 ## shows the "[F] Press" prompt from this.
 var usable_in_view: MapButton
 var _grab_held_prev: bool = false
+## A shove waiting to be applied on the next simulation tick (see shove()).
+var _pending_shove := Vector3.ZERO
 ## F went to a button/lever this press: don't also start grabbing a prop
 ## with the same press while it's held.
 var _use_took_press: bool = false
@@ -382,6 +384,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	# see _update_mantle()'s own comment for why this is a direct position
 	# move rather than velocity + move_and_slide like the rest of this file.
 	if _mantle_time_left > 0.0:
+		_pending_shove = Vector3.ZERO # a hit mid-climb doesn't fling you off the ledge
 		_update_mantle(delta)
 		_finish_tick(input, delta)
 		return
@@ -464,6 +467,8 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		velocity.x = _dash_dir.x * dash_speed
 		velocity.z = _dash_dir.z * dash_speed
 
+	_apply_pending_shove()
+
 	# Captured right before move_and_slide() changes anything, so the stomp
 	# check below judges the speed that actually went INTO the hit, not
 	# whatever's left after the collision itself slowed it down.
@@ -518,6 +523,29 @@ func _find_usable() -> MapButton:
 		return null
 	var usable := hit.collider as MapButton
 	return usable if usable and usable.can_use() else null
+
+
+## Pushed from outside -- an enemy's melee hit (Enemy.melee_shove). Stored,
+## then applied inside the next simulation tick (_apply_pending_shove())
+## rather than right now, so velocity only ever changes in one deterministic
+## place: in co-op the host sends the shove and both sides apply it the same
+## way (Rule 1). Shoves arriving in the same tick add up.
+func shove(push: Vector3) -> void:
+	_pending_shove += push
+
+
+## Cancels whatever speed you had heading INTO the shove (running at the
+## enemy doesn't eat the push), then adds the shove itself.
+func _apply_pending_shove() -> void:
+	if _pending_shove == Vector3.ZERO:
+		return
+	var away := Vector3(_pending_shove.x, 0.0, _pending_shove.z).normalized()
+	if away != Vector3.ZERO:
+		var into := velocity.dot(-away)
+		if into > 0.0:
+			velocity += away * into
+	velocity += _pending_shove
+	_pending_shove = Vector3.ZERO
 
 
 func give_key(key_name: String) -> void:
@@ -791,7 +819,7 @@ func _stomp(enemy: Enemy, impact_speed: float) -> void:
 	# standing on them), so the screen splatter always fires too, no
 	# distance check needed the way weapon_controller.gd's does.
 	BloodFX.spawn_impact(get_tree().current_scene, enemy.global_position, Vector3.UP)
-	weapons.gory_kill_nearby.emit()
+	weapons.gory_kill_nearby.emit(BloodFX.BLOOD_COLOR)
 
 	var look_dir := -head.global_transform.basis.z
 	look_dir.y = 0.0

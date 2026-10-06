@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://b1qyhipwwloq7"]
 
 [ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
-[ext_resource type="Resource" uid="uid://d28tnfcfttyin" path="res://weapons/machine_gun.tres" id="2"]
+[ext_resource type="Resource" path="res://weapons/machine_gun.tres" id="2"]
 [ext_resource type="PackedScene" uid="uid://doj6tojorb7yi" path="res://art/weapons/PSX_Guns/FBX/UZI.fbx" id="3"]
 
 [sub_resource type="SphereShape3D" id="PickupZoneShape"]

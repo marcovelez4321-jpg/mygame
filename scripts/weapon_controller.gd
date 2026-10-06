@@ -38,8 +38,9 @@ signal picked_up(weapon: WeaponData, ammo_type: WeaponData.AmmoType, ammo_amount
 ## on this (see viewmodel.gd's _on_reload_started()).
 signal reload_started(duration: float)
 ## Any kill (artery or otherwise) landed close enough to splash blood on the
-## player's own screen. Presentation only (hud.gd's screen droplets).
-signal gory_kill_nearby
+## player's own screen, in whatever colour that target bleeds (red, or a
+## roach's green goo). Presentation only (hud.gd's screen droplets).
+signal gory_kill_nearby(blood_color: Color)
 ## An artery (neck) hit landed -- a kill too unless artery_instant_kill is off.
 ## Presentation only (weapon_sound.gd's artery sounds) -- fires alongside
 ## hit_confirmed, not instead of it. Carries the neck bone itself (not just a
@@ -110,6 +111,12 @@ const TEST_WEAPON_PATHS := [
 @export var artery_damage_multiplier: float = 3.0
 ## Seconds a headshot wound keeps pouring blood (the artery pours for 7).
 @export var headshot_bleed_time: float = 4.0
+
+@export_group("Physics Push")
+## How much harder than a weapon's impact_force shots shove physics props
+## (chairs, crates, pickups). A body with its own shot_push_multiplier (the
+## roach) uses that instead.
+@export var prop_push_multiplier: float = 2.0
 
 ## Debug toggle (pause menu): firing never drains the magazine, so reload is
 ## effectively never needed. Runtime-only, not saved -- resets to off on
@@ -350,6 +357,7 @@ func resolve_shot(shot: Shot) -> void:
 			# Anything with a Health child can be hurt: targets, monsters, players.
 			var health := (result.collider as Node).get_node_or_null("Health") as Health
 			shot_resolved.emit(ray_origin, result.position, health != null)
+			_push_physics_body(result.collider, direction, result.position, shot.weapon.impact_force)
 			if health == null:
 				BloodFX.spawn_bullet_hole(_body.get_tree().current_scene, result.position, result.normal)
 				break # world geometry always stops it, penetration or not
@@ -403,6 +411,28 @@ func _hit_mutating_corpse(bone: Node, shot: Shot, ray_origin: Vector3, direction
 	hit_confirmed.emit(stopped, kind)
 
 
+## A target can bleed its own colour (the roach's green goo) by having a
+## blood_color property; everything else bleeds red.
+func _blood_color_of(target: Object) -> Color:
+	var custom: Variant = target.get("blood_color")
+	return custom if custom is Color else BloodFX.BLOOD_COLOR
+
+
+## Shots shove physics objects -- a flying roach, a crate, a barrel -- the
+## Half-Life "everything movable reacts" rule from RULES.md. Pushed at the
+## spot it was hit, so an off-centre shot spins it. Props get
+## prop_push_multiplier; a body can set its own with a shot_push_multiplier
+## property instead (the roach does). Host-only like the rest of
+## resolve_shot(); the body's movement then syncs like any host physics.
+func _push_physics_body(collider: Object, direction: Vector3, hit_position: Vector3, force: float) -> void:
+	var body := collider as RigidBody3D
+	if body == null or body.freeze:
+		return
+	var own_multiplier: Variant = body.get("shot_push_multiplier")
+	force *= own_multiplier if own_multiplier is float else prop_push_multiplier
+	body.apply_impulse(direction * force, hit_position - body.global_position)
+
+
 ## The Enemy a ragdoll bone belongs to (bones sit a few levels down, under its
 ## model's skeleton), or null.
 func _owning_enemy(node: Node) -> Enemy:
@@ -429,7 +459,7 @@ func _play_hit_effects(space: PhysicsDirectSpaceState3D, hit: Dictionary, direct
 	# ANY kill close enough splashes the screen, not just artery ones --
 	# see CLOSE_KILL_RANGE's own comment.
 	if killed and _body.global_position.distance_to(hit.position) <= CLOSE_KILL_RANGE:
-		gory_kill_nearby.emit()
+		gory_kill_nearby.emit(_blood_color_of(hit.collider))
 
 
 ## Blood off the body that got hit, plus a splatter decal on any wall caught
@@ -441,7 +471,8 @@ func _play_hit_effects(space: PhysicsDirectSpaceState3D, hit: Dictionary, direct
 ## cares what kind of CollisionShape3D produced the hit.
 func _spawn_blood(space: PhysicsDirectSpaceState3D, hit: Dictionary, direction: Vector3) -> void:
 	var world := _body.get_tree().current_scene
-	BloodFX.spawn_impact(world, hit.position, hit.normal)
+	var blood_color := _blood_color_of(hit.collider)
+	BloodFX.spawn_impact(world, hit.position, hit.normal, blood_color)
 
 	var behind_query := PhysicsRayQueryParameters3D.create(
 			hit.position + direction * 0.05, hit.position + direction * WALL_SPLATTER_MAX_DISTANCE)
@@ -449,7 +480,7 @@ func _spawn_blood(space: PhysicsDirectSpaceState3D, hit: Dictionary, direction: 
 	behind_query.collision_mask = 1
 	var behind_result := space.intersect_ray(behind_query)
 	if not behind_result.is_empty():
-		BloodFX.spawn_splatter(world, behind_result.position, behind_result.normal, 0.6)
+		BloodFX.spawn_splatter(world, behind_result.position, behind_result.normal, 0.6, blood_color)
 
 
 ## Artery, headshot, or a plain body hit. Measured against the live,

@@ -109,6 +109,24 @@ torn up later. In practice:
   a music producer and should be able to swap and tune any sound without
   touching code.
 
+## Rule 8 — Backtracking is the structure (Metroidvania-style)
+- Levels aren't one-and-done. Later missions hand you things — weapons,
+  movement abilities, keys, items bought with brownie points — that open
+  paths, secrets and shortcuts in EARLIER levels, so going back is rewarded.
+- Every new level, ability or item gets checked: what does it unlock that
+  already exists, and what in this level stays locked until something
+  later? A level should ship with at least one visible thing you can't
+  reach yet.
+- Reference (Rule 6): Super Metroid and Castlevania: Symphony of the Night
+  (ability gating — the "lock" is a gap you can't jump or a wall you can't
+  break yet), and Hollow Knight (shortcuts that loop back to earlier areas).
+- Map-side, this means locks are DATA a mapper places in TrenchBroom (a key
+  door, a breakable wall, a ledge that needs the rocket jump), never
+  hard-coded per level — same as the door/key system.
+- Progress (what you own, what's unlocked, secrets found) must persist
+  between missions and is per-player data that co-op will need to sync or
+  share (Rule 1).
+
 ---
 
 ## Creative Direction — what the game IS
