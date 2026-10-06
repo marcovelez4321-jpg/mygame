@@ -27,7 +27,7 @@ const RAT_SCENE := preload("res://scenes/enemy/rat.tscn")
 const CORPSE_GROUP := "corpses"
 
 @export_group("Pack")
-@export var rat_speed: float = 5.05
+@export var rat_speed: float = 5.3
 ## Following the Bender, rats spread between these distances around him.
 @export var follow_radius_min: float = 0.9
 @export var follow_radius_max: float = 2.4
