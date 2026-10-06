@@ -63,6 +63,14 @@ const CORPSE_GROUP := "corpses"
 ## Stop-start bursts: each rat's pace rises and falls on its own rhythm; at
 ## the bottom of a dip it stops for a beat. 0 = steady.
 @export_range(0.0, 1.0, 0.05) var burstiness: float = 0.45
+## Ebb and flow while not fighting: each rat's distance from the middle of
+## the pack swells and shrinks by up to ebb_amount (0.5 = half again in or
+## out), ebb_speed times a second on its own beat, while it slowly drifts
+## around the others at drift_speed radians a second -- so the pack
+## stretches, contracts and churns instead of holding a formation.
+@export_range(0.0, 1.0, 0.05) var ebb_amount: float = 0.5
+@export var ebb_speed: float = 0.2
+@export var drift_speed: float = 0.25
 ## Resting rats don't stand still: every this-many seconds (roughly) each one
 ## scurries to a new spot in the pack.
 @export var restless_time: float = 3.0
@@ -101,10 +109,13 @@ const CORPSE_GROUP := "corpses"
 @export var charge_range: float = 5.0
 @export_range(0.1, 1.0, 0.05) var creep_speed: float = 0.5
 @export var lose_range: float = 25.0
-## Roaming: every roam_interval seconds or so, the pack wanders to a new
-## spot within roam_radius of home.
-@export var roam_radius: float = 6.0
-@export var roam_interval: float = 6.0
+## Patrolling: the pack wanders between random walkable spots up to
+## roam_radius from home -- a new one when it gets there, or after about
+## roam_interval seconds -- heading for any body within corpse_seek_range
+## instead, to eat it.
+@export var roam_radius: float = 15.0
+@export var roam_interval: float = 10.0
+@export var corpse_seek_range: float = 20.0
 
 @export_group("Corpse Dragging")
 ## A pack of at least drag_min_rats near a body (drag_find_range from its
@@ -292,13 +303,15 @@ func _physics_process(delta: float) -> void:
 		center += p
 	center /= rats.size()
 	_update_drag(delta, center)
+	if bender == null and order == Order.FOLLOW:
+		_roam(delta, center)
 
 	var goal := _goal()
 	_path_timer -= delta
 	if _path_timer <= 0.0:
 		_path_timer = path_interval
 		_refresh_path(center, goal)
-		_corpse = _find_corpse() if order == Order.FOLLOW else null
+		_corpse = _find_corpse(center) if order == Order.FOLLOW else null
 
 	_time += delta
 	var speed := rat_speed * lerpf(1.0, frenzy_speed, _frenzy())
@@ -327,8 +340,6 @@ func _look_out(delta: float) -> void:
 	if target == null:
 		target = _noticed_player()
 	order = Order.HUNT if target else Order.FOLLOW
-	if target == null:
-		_roam(0.5)
 
 
 ## A living player some rat is within notice_range of, and can see.
@@ -362,13 +373,21 @@ func _is_dead(player: Node3D) -> bool:
 	return player_health == null or player_health.is_dead
 
 
-## Every so often, wander to a new walkable spot near home.
-func _roam(elapsed: float) -> void:
-	_roam_timer -= elapsed
-	if _roam_timer > 0.0:
+## Patrol: on to the next spot once the pack gets there (or after a while) --
+## a body to eat if there's one within corpse_seek_range, else a random
+## walkable spot near home.
+func _roam(delta: float, middle: Vector3) -> void:
+	_roam_timer -= delta
+	var arrived := Vector2(middle.x - _wander_to.x, middle.z - _wander_to.z).length() < 2.0
+	if _roam_timer > 0.0 and not (arrived and _corpse == null):
 		return
 	_roam_timer = randf_range(roam_interval * 0.5, roam_interval * 1.5)
-	var offset := Vector2.from_angle(randf() * TAU) * randf_range(1.0, roam_radius)
+	var body := _corpse_near(middle, corpse_seek_range)
+	if body:
+		var ragdoll := body.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
+		_wander_to = ragdoll.body_position() if ragdoll else body.global_position
+		return
+	var offset := Vector2.from_angle(randf() * TAU) * randf_range(roam_radius * 0.3, roam_radius)
 	_wander_to = _walkable(home + Vector3(offset.x, 0.0, offset.y))
 
 
@@ -389,7 +408,8 @@ func _goal() -> Vector3:
 				hunt = bender.global_position + reach.normalized() * leash_distance
 		return hunt
 	if _corpse and is_instance_valid(_corpse):
-		return _corpse.global_position
+		var ragdoll := _corpse.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
+		return ragdoll.body_position() if ragdoll else _corpse.global_position
 	if bender:
 		return bender.global_position
 	return _wander_to
@@ -459,6 +479,12 @@ func _spot_offset(rat: Rat) -> Vector3:
 		slot = slot.rotated(_time * churn)
 	elif _corpse:
 		radius = 0.7
+	else:
+		# Ebb and flow: breathing in and out, drifting around each other.
+		var ebb := 0.5 + 0.5 * sin(_time * ebb_speed * TAU + rat.rhythm_seed * 0.7)
+		radius *= lerpf(1.0 - ebb_amount, 1.0 + ebb_amount, ebb)
+		var drift := drift_speed if int(rat.rhythm_seed) % 2 == 0 else -drift_speed
+		slot = slot.rotated(_time * drift)
 	return Vector3(slot.x, 0.0, slot.y) * radius
 
 
@@ -631,16 +657,25 @@ func _steer_dragger(rat: Rat, index: int, speed: float) -> Vector3:
 	return steer.normalized() * speed * rat.speed_scale * clampf(distance, 0.3, 1.0)
 
 
-## A body on the floor near the Bender to eat (EnemyRagdoll adds dead
-## enemies to CORPSE_GROUP).
-func _find_corpse() -> Node3D:
-	if bender == null:
-		return null
+## A body on the floor near the Bender (or, with no Bender, near the pack)
+## to eat. EnemyRagdoll adds dead enemies to CORPSE_GROUP.
+func _find_corpse(middle: Vector3) -> Node3D:
+	return _corpse_near(bender.global_position if bender else middle, eat_range)
+
+
+## The nearest body within `within` of `point` that no pack is dragging.
+func _corpse_near(point: Vector3, within: float) -> Node3D:
+	var best: Node3D = null
+	var best_distance := within
 	for node in get_tree().get_nodes_in_group(CORPSE_GROUP):
 		var corpse := node as Node3D
-		if corpse and corpse.global_position.distance_to(bender.global_position) <= eat_range:
-			return corpse
-	return null
+		if corpse == null or corpse.has_meta("dragged"):
+			continue
+		var distance := corpse.global_position.distance_to(point)
+		if distance <= best_distance:
+			best_distance = distance
+			best = corpse
+	return best
 
 
 func _update_scurry(center: Vector3, moving: bool) -> void:
