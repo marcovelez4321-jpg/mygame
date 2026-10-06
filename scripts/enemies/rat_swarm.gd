@@ -157,6 +157,10 @@ var _drag_body: Node3D
 var _drag_ragdoll: EnemyRagdoll
 var _drag_body_pos := Vector3.ZERO
 var _drag_to := Vector3.ZERO
+## The walkable route to _drag_to, and stuck-checking while hauling.
+var _drag_path := PackedVector3Array()
+var _drag_check_pos := Vector3.ZERO
+var _drag_stuck_timer := 0.0
 var _drag_timer := 0.0
 var _drag_check := 2.0
 var _draggers: Array[Rat] = []
@@ -570,17 +574,22 @@ func _update_drag(delta: float, center: Vector3) -> void:
 			if _draggers_at_body() >= _draggers.size() * 0.6 or _drag_timer <= 0.0:
 				_drag_phase = DragPhase.DRAG
 				_drag_timer = 8.0
+				_drag_check_pos = _drag_body_pos
+				_drag_stuck_timer = 0.5
 		DragPhase.DRAG:
 			var to := _drag_to - _drag_body_pos
 			to.y = 0.0
-			if to.length() < 0.6 or _drag_timer <= 0.0:
+			var heading := _drag_heading()
+			# There (or out of time), a wall dead ahead, or not moving: eat it here.
+			if to.length() < 0.6 or _drag_timer <= 0.0 or _wall_ahead(heading) or _drag_stuck(delta):
 				_drag_ragdoll.drag(Vector3.ZERO)
 				_drag_phase = DragPhase.EAT
 				_drag_timer = eat_time
 			elif _draggers_at_body() >= _draggers.size() * 0.5:
-				_drag_ragdoll.drag(to.normalized() * drag_speed)
+				_drag_ragdoll.drag(heading * drag_speed)
 			else:
 				_drag_ragdoll.drag(Vector3.ZERO) # waiting for the stragglers
+				_drag_check_pos = _drag_body_pos # (not stuck, just waiting)
 		DragPhase.EAT:
 			if _drag_timer <= 0.0:
 				_end_drag()
@@ -611,11 +620,94 @@ func _start_drag(center: Vector3) -> void:
 			var rat: Rat = by_distance[i]
 			rat.dragging = true
 			_draggers.append(rat)
-		var away := Vector2.from_angle(randf() * TAU) * randf_range(drag_distance_min, drag_distance_max)
-		_drag_to = _walkable(at + Vector3(away.x, 0.0, away.y))
+		_drag_to = _pick_drag_spot(at)
+		_drag_path = _route(at, _drag_to)
 		_drag_phase = DragPhase.GATHER
 		_drag_timer = 6.0
 		return
+
+
+## Somewhere open to haul a body to: on the walkable map, a clear line from
+## the body with no wall in between, not too roundabout to reach, and not
+## tucked in a corner (nothing solid close around it). No good spot found:
+## stay put and eat it where it lies.
+func _pick_drag_spot(from: Vector3) -> Vector3:
+	for attempt in 12:
+		var away := Vector2.from_angle(randf() * TAU) * randf_range(drag_distance_min, drag_distance_max)
+		var spot := _walkable(from + Vector3(away.x, 0.0, away.y))
+		var straight := Vector2(spot.x - from.x, spot.z - from.z).length()
+		if straight < drag_distance_min * 0.6:
+			continue # the walkable spot snapped back toward a wall
+		if _blocked(from + Vector3.UP * 0.3, spot + Vector3.UP * 0.3):
+			continue
+		if _path_length(_route(from, spot)) > straight * 1.4:
+			continue # only reachable the long way round
+		if _hemmed_in(spot):
+			continue
+		return spot
+	return from
+
+
+## Something solid within an arm's length around `spot` -- a corner or a wall.
+func _hemmed_in(spot: Vector3) -> bool:
+	var at := spot + Vector3.UP * 0.3
+	for i in 8:
+		var out := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 8.0) * 0.9
+		if _blocked(at, at + out):
+			return true
+	return false
+
+
+func _route(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var map := get_viewport().find_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(map) > 0:
+		var path := NavigationServer3D.map_get_path(map, from, to, true)
+		if not path.is_empty():
+			return path
+	return PackedVector3Array([from, to])
+
+
+func _path_length(path: PackedVector3Array) -> float:
+	var length := 0.0
+	for i in range(1, path.size()):
+		length += path[i - 1].distance_to(path[i])
+	return length
+
+
+## Which way to haul right now: toward the next corner of the walkable route.
+func _drag_heading() -> Vector3:
+	var aim := _drag_to
+	for point in _drag_path:
+		if Vector2(point.x - _drag_body_pos.x, point.z - _drag_body_pos.z).length() > 0.5:
+			aim = point
+			break
+	var heading := aim - _drag_body_pos
+	heading.y = 0.0
+	return heading.normalized() if heading.length_squared() > 0.0001 else Vector3.ZERO
+
+
+func _wall_ahead(heading: Vector3) -> bool:
+	var at := _drag_body_pos + Vector3.UP * 0.25
+	return heading != Vector3.ZERO and _blocked(at, at + heading * 0.7)
+
+
+## Hauling but the body hasn't really moved in the last half second.
+func _drag_stuck(delta: float) -> bool:
+	_drag_stuck_timer -= delta
+	if _drag_stuck_timer > 0.0:
+		return false
+	_drag_stuck_timer = 0.5
+	var moved := _drag_body_pos.distance_to(_drag_check_pos)
+	_drag_check_pos = _drag_body_pos
+	return moved < drag_speed * 0.5 * 0.25 # under a quarter of the expected distance
+
+
+## A wall or other map geometry (a StaticBody3D) between two points.
+func _blocked(from: Vector3, to: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 1
+	var hit := get_viewport().find_world_3d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty() and hit.collider is StaticBody3D
 
 
 func _end_drag() -> void:
