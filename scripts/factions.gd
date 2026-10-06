@@ -38,11 +38,17 @@ const PRIORITY := {
 ## Whatever hurt you within REVENGE_TIME seconds counts this much higher.
 const REVENGE_BONUS := 2
 const REVENGE_TIME := 5.0
+## Sticking with the current target: it counts as this much closer than it
+## is, so an NPC only switches for something higher priority or clearly
+## nearer -- without it, two equally hated targets swapping places as they
+## move made NPCs flip between them twice a second (the "vibrating").
+const STICKINESS := 0.6
 
 
 ## The target `viewer` (on `side`, at `from`) wants most, within max_range:
-## highest priority (plus revenge), nearest among equals. Null if none.
-static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null) -> Node3D:
+## highest priority (plus revenge), nearest among equals -- `current`, its
+## target right now, counting as closer (STICKINESS). Null if none.
+static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null, current: Node3D = null) -> Node3D:
 	var best: Node3D = null
 	var best_priority := -1
 	var best_distance := INF
@@ -56,6 +62,8 @@ static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range
 			var distance := from.distance_to(target.global_position)
 			if distance > max_range:
 				continue
+			if target == current:
+				distance *= STICKINESS
 			var priority := priority_of(side, other, viewer, target)
 			if priority > best_priority or (priority == best_priority and distance < best_distance):
 				best_priority = priority

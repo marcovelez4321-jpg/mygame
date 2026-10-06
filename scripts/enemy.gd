@@ -705,7 +705,7 @@ func faction() -> int:
 ## The nearest living thing it's hostile to -- a player, or a roach or rat
 ## (Factions) -- or null. In co-op, players are just more candidates.
 func _find_nearest_hostile() -> Node3D:
-	return Factions.nearest_hostile(get_tree(), faction(), global_position, INF, self)
+	return Factions.nearest_hostile(get_tree(), faction(), global_position, INF, self, _target)
 
 
 ## Clear line of sight within range? A ray from our eyes to the player's
@@ -778,5 +778,7 @@ func _flat_distance_to_position(pos: Vector3) -> float:
 
 func _face_position(pos: Vector3) -> void:
 	var flat_target := Vector3(pos.x, global_position.y, pos.z)
-	if flat_target.distance_to(global_position) > 0.01:
+	# A target right overhead or underfoot (a roach, a rat) has no real
+	# direction -- turning toward it would spin it in place every tick.
+	if flat_target.distance_to(global_position) > 0.3:
 		look_at(flat_target, Vector3.UP)

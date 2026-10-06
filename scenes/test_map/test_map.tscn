@@ -379,14 +379,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44, 0, -12)
 [node name="EnemyGunner3" parent="." unique_id=1648655508 instance=ExtResource("12_gunner")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, -12)
 
-[node name="EnemyRusher4" parent="." unique_id=159459128 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28.8, 0, 18.8)
 
-[node name="EnemyRusher5" parent="." unique_id=357796914 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.4, 0, 33.2)
 
-[node name="EnemyRusher6" parent="." unique_id=1734333394 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27.8, 0, -25.2)
 
 
 

@@ -260,7 +260,7 @@ func _physics_process(delta: float) -> void:
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
-		_target = Factions.nearest_hostile(get_tree(), Factions.Side.ROACH, global_position, sight_range, self)
+		_target = Factions.nearest_hostile(get_tree(), Factions.Side.ROACH, global_position, sight_range, self, _target)
 
 	if _state == State.STUNNED:
 		_think_stunned()
