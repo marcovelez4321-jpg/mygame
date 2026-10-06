@@ -32,6 +32,8 @@ const CORPSE_GROUP := "corpses"
 ## times the health, on top of its own little variety. 1 = normal rats.
 @export var rat_scale: float = 1.0
 @export var rat_health_multiplier: float = 1.0
+## ...and bites (and leap-bites) this many times harder.
+@export var rat_damage_multiplier: float = 1.0
 ## Following the Bender, rats spread between these distances around him.
 @export var follow_radius_min: float = 0.9
 @export var follow_radius_max: float = 2.4

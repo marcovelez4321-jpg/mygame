@@ -96,9 +96,11 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 
 @export_group("Bodyguards")
 @export var guard_count: int = 4
-## Bodyguards are this much bigger, with this many times the health.
+## Bodyguards are this much bigger, with this many times the health, and
+## bite this many times harder, than a normal rat.
 @export var guard_rat_scale: float = 2.0
-@export var guard_health_multiplier: float = 2.0
+@export var guard_health_multiplier: float = 4.0
+@export var guard_damage_multiplier: float = 2.0
 ## How far from his feet they hover (at normal rat size; scaled up by
 ## guard_rat_scale).
 @export var guard_radius_min: float = 0.5
@@ -468,6 +470,7 @@ func _make_guards() -> void:
 	_guards.name = "Bodyguards"
 	_guards.rat_scale = guard_rat_scale
 	_guards.rat_health_multiplier = guard_health_multiplier
+	_guards.rat_damage_multiplier = guard_damage_multiplier
 	_guards.separation_distance *= guard_rat_scale
 	_guards.follow_radius_min = guard_radius_min * guard_rat_scale
 	_guards.follow_radius_max = guard_radius_max * guard_rat_scale

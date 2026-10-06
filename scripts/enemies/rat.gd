@@ -181,6 +181,9 @@ func _roll_variety() -> void:
 	health.max_health *= variety * variety * (swarm.rat_health_multiplier if swarm else 1.0)
 	health.current_health = health.max_health
 	bite_reach *= size
+	var damage_multiplier := swarm.rat_damage_multiplier if swarm else 1.0
+	bite_damage *= damage_multiplier
+	leap_damage *= damage_multiplier
 
 
 func _physics_process(delta: float) -> void:
