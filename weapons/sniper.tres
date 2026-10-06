@@ -1,12 +1,12 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cd1tqnoroiq4t"]
 
-[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
-[ext_resource type="PackedScene" path="res://art/weapons/NEWPSXWEAPONS/Rifle/Rifle.glb" id="2_rifle"]
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://c81wuhsopqanh" path="res://art/weapons/NEWPSXWEAPONS/Rifle/Rifle.glb" id="2_rifle"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_fire.tres" id="3_fire"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_switch.tres" id="5_switch"]
-[ext_resource type="Animation" path="res://art/animations/RifleAimingIdle.res" id="6_hold"]
-[ext_resource type="Texture2D" path="res://art/ui/scope.png" id="7_scope"]
+[ext_resource type="Animation" uid="uid://dbl27rf02bybf" path="res://art/animations/RifleAimingIdle.res" id="6_hold"]
+[ext_resource type="Texture2D" uid="uid://h3fnv3erkynk" path="res://art/ui/scope.png" id="7_scope"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_scope_in.tres" id="8_in"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_scope_out.tres" id="9_out"]
 
