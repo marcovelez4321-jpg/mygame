@@ -298,6 +298,10 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	# A target freed since the last re-pick (eaten, corpse removed) is gone, not
+	# "still there": drop it before anything below touches it.
+	if not is_instance_valid(_target):
+		_target = null
 	_attack_cooldown = maxf(_attack_cooldown - delta, 0.0)
 	_lunge_cooldown_left = maxf(_lunge_cooldown_left - delta, 0.0)
 	_retarget_timer -= delta

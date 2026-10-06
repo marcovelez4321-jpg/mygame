@@ -48,7 +48,13 @@ const STICKINESS := 0.6
 ## The target `viewer` (on `side`, at `from`) wants most, within max_range:
 ## highest priority (plus revenge), nearest among equals -- `current`, its
 ## target right now, counting as closer (STICKINESS). Null if none.
-static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null, current: Node3D = null) -> Node3D:
+## `current` is deliberately untyped: callers pass their old target straight
+## in, and it may have been freed since (a body eaten, a corpse removed).
+## Godot refuses to pass a freed object into a typed Node3D parameter ("argument
+## 6 (previously freed) is not a subclass..."), so it's checked here instead.
+static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null, current = null) -> Node3D:
+	if not is_instance_valid(current):
+		current = null
 	var best: Node3D = null
 	var best_priority := -1
 	var best_distance := INF

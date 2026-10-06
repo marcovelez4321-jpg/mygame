@@ -243,6 +243,10 @@ func _physics_process(delta: float) -> void:
 	_heal_cooldown_left = maxf(_heal_cooldown_left - delta, 0.0)
 	_escort_cooldown_left = maxf(_escort_cooldown_left - delta, 0.0)
 	_since_hurt += delta
+	# A target freed since the last re-pick (eaten, corpse removed) is gone, not
+	# "still there": drop it before anything below touches it.
+	if not is_instance_valid(_target):
+		_target = null
 	_retarget_timer -= delta
 	if _retarget_timer <= 0.0:
 		_retarget_timer = retarget_interval
