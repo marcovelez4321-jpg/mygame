@@ -151,6 +151,22 @@ func forget(rat: Rat) -> void:
 	rats.erase(rat)
 
 
+## The middle of the pack.
+func center() -> Vector3:
+	var sum := Vector3.ZERO
+	for rat in rats:
+		sum += rat.global_position
+	return sum / maxi(rats.size(), 1)
+
+
+## How close the nearest rat is to `point` (INF with no rats).
+func nearest_rat_distance(point: Vector3) -> float:
+	var nearest := INF
+	for rat in rats:
+		nearest = minf(nearest, rat.global_position.distance_squared_to(point))
+	return sqrt(nearest)
+
+
 ## A Bender spell: the whole horde goes for the player in a frenzy.
 func frenzy() -> void:
 	order = Order.HUNT

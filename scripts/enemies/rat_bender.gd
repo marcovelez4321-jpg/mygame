@@ -14,6 +14,9 @@ extends Enemy
 ##       rats leaping at you one after another;
 ##     - short on rats: SUMMON (Spell Casting) -- new rats appear around him,
 ##       back up to the cap.
+##   ESCORT - his whole horde has run off ahead of him: he summons a fresh
+##            swarm half its size at his feet (past the cap) -- bodyguards
+##            that stay with him and only swarm you if you come close.
 ##   HEAL - hurt and left alone a moment, he stands and channels a heal
 ##          (Spell Casting, slowed), flashing green faster and faster. Health
 ##          trickles in the whole time, so knocking him out of it early (enough
@@ -72,6 +75,16 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 ## The blinking tell while summoning.
 @export var summon_flash_color: Color = Color(1.0, 0.08, 0.05, 0.8)
 
+@export_group("Escort")
+## His horde counts as "run off ahead" when no rat is within this many meters
+## of him and the pack is out in front of him. Then he summons an escort
+## swarm half the horde's size (ignoring rat_cap), at most every
+## escort_cooldown seconds.
+@export var escort_lead_distance: float = 10.0
+@export var escort_cooldown: float = 15.0
+## The escort stays at his feet and only swarms you inside this range of him.
+@export var escort_engage_range: float = 6.0
+
 @export_group("Healing")
 ## Starts a heal once below this share of his health (0.75 = 75%) and not
 ## hurt for heal_delay seconds; at most every heal_cooldown seconds.
@@ -116,6 +129,11 @@ var _channel_damage := 0.0
 ## Rats this summon will bring, and how many are up so far.
 var _summon_goal := 0
 var _summoned := 0
+## Which swarm this summon fills: the horde, or the escort.
+var _summon_into: RatSwarm
+## His bodyguard swarm, made the first time the horde runs off ahead.
+var _escort: RatSwarm
+var _escort_cooldown_left := 0.0
 var _since_hurt := 999.0
 var _cast_time := 0.0
 var _cast_length := 1.0
@@ -182,6 +200,11 @@ func _physics_process(delta: float) -> void:
 		_retarget_timer = retarget_interval
 		_update_memory(_find_nearest_player())
 	swarm.target = _target
+	_escort_cooldown_left = maxf(_escort_cooldown_left - delta, 0.0)
+	if _escort:
+		_escort.target = _target
+		var close := _target != null and global_position.distance_to(_target.global_position) <= escort_engage_range
+		_escort.order = RatSwarm.Order.HUNT if close else RatSwarm.Order.FOLLOW
 
 	match _mode:
 		Mode.PATROL:
@@ -204,7 +227,7 @@ func _think_patrol(delta: float) -> void:
 		_start_cast(Mode.HEAL)
 		return
 	if swarm.count() < rat_cap and _summon_cooldown_left <= 0.0:
-		_start_cast(Mode.SUMMON)
+		_begin_summon(swarm, mini(summon_batch, rat_cap - swarm.count()))
 		return
 	swarm.order = RatSwarm.Order.FOLLOW
 	if _flat_distance_to_position(_patrol_point) < 1.0:
@@ -249,8 +272,11 @@ func _think_chase_target() -> void:
 	if can_see_now and distance >= rush_min_range and _rush_cooldown_left <= 0.0:
 		_start_cast(Mode.CAST_RUSH)
 		return
+	if _horde_ran_ahead():
+		_begin_summon(_escort_swarm(), _escort_shortfall())
+		return
 	if swarm.count() < rat_cap and _summon_cooldown_left <= 0.0 and distance > leap_range:
-		_start_cast(Mode.SUMMON)
+		_begin_summon(swarm, mini(summon_batch, rat_cap - swarm.count()))
 		return
 	swarm.order = RatSwarm.Order.HUNT # the horde goes for you
 	var direction := _nav_direction_to(aim)
@@ -271,7 +297,6 @@ func _start_cast(mode: Mode) -> void:
 		speed = heal_animation_speed
 	elif mode == Mode.SUMMON:
 		speed = summon_animation_speed
-		_summon_goal = mini(summon_batch, rat_cap - swarm.count())
 		_summoned = 0
 	_anim_name = "" # the same spell twice in a row still replays from the start
 	_play(key, false, speed)
@@ -302,7 +327,7 @@ func _think_cast(delta: float) -> void:
 		# Rats come up evenly over the whole cast, the last at its very end.
 		var due := ceili(_summon_goal * clampf(_cast_time / _cast_length, 0.0, 1.0))
 		if due > _summoned:
-			swarm.spawn_rats(due - _summoned, global_position, 0.15)
+			_summon_into.spawn_rats(due - _summoned, global_position, 0.15)
 			_summoned = due
 	elif not _cast_released and _cast_time >= _cast_length * cast_release:
 		_cast_released = true
@@ -317,8 +342,46 @@ func _end_cast() -> void:
 	if _mode == Mode.HEAL:
 		_heal_cooldown_left = heal_cooldown
 	elif _mode == Mode.SUMMON:
-		_summon_cooldown_left = summon_cooldown
+		if _summon_into == swarm:
+			_summon_cooldown_left = summon_cooldown
+		else:
+			_escort_cooldown_left = escort_cooldown
 	_mode = Mode.CHASE if _target else Mode.PATROL
+
+
+## A summon that brings `amount` rats up into `into` over the cast.
+func _begin_summon(into: RatSwarm, amount: int) -> void:
+	_summon_into = into
+	_summon_goal = amount
+	_start_cast(Mode.SUMMON)
+
+
+## No rat anywhere near him, and the pack is out in front of him.
+func _horde_ran_ahead() -> bool:
+	if _escort_cooldown_left > 0.0 or swarm.count() < 2 or _escort_shortfall() <= 0:
+		return false
+	if swarm.nearest_rat_distance(global_position) <= escort_lead_distance:
+		return false
+	var forward := -global_basis.z
+	return forward.dot(swarm.center() - global_position) > 0.0
+
+
+## How many rats short of half the horde's size the escort is -- he tops it
+## up to that, never past it, so it can't keep growing in a long fight.
+func _escort_shortfall() -> int:
+	var have := _escort.count() if _escort else 0
+	return swarm.count() / 2 - have
+
+
+## The escort swarm, made the first time it's needed -- a second RatSwarm
+## with the horde's settings, following him.
+func _escort_swarm() -> RatSwarm:
+	if _escort == null:
+		_escort = swarm.duplicate() as RatSwarm
+		_escort.name = "EscortSwarm"
+		add_child(_escort)
+		_escort.bender = self
+	return _escort
 
 
 func _release_spell() -> void:
@@ -357,9 +420,10 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 func _on_died(attacker_id: int, is_critical: bool) -> void:
 	_end_cast_look()
 	# The horde lives on without him: keep it in the world after his body goes.
-	if swarm.get_parent() == self:
-		swarm.bender = null
-		swarm.reparent.call_deferred(get_tree().current_scene)
+	for pack: RatSwarm in [swarm, _escort]:
+		if pack and pack.get_parent() == self:
+			pack.bender = null
+			pack.reparent.call_deferred(get_tree().current_scene)
 	super._on_died(attacker_id, is_critical)
 
 
