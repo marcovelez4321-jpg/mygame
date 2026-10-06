@@ -41,10 +41,10 @@ fog_depth_begin = 15.0
 fog_depth_end = 70.0
 
 [sub_resource type="BoxShape3D" id="GroundShape"]
-size = Vector3(60, 1, 60)
+size = Vector3(120, 1, 120)
 
 [sub_resource type="BoxMesh" id="GroundMesh"]
-size = Vector3(60, 1, 60)
+size = Vector3(120, 1, 120)
 
 [sub_resource type="BoxShape3D" id="PlatformShape"]
 size = Vector3(8, 1, 8)
@@ -53,19 +53,19 @@ size = Vector3(8, 1, 8)
 size = Vector3(8, 1, 8)
 
 [sub_resource type="BoxShape3D" id="WallShapeNS"]
-size = Vector3(60, 4, 1)
+size = Vector3(120, 4, 1)
 
 [sub_resource type="BoxMesh" id="WallMeshNS"]
-size = Vector3(60, 4, 1)
+size = Vector3(120, 4, 1)
 
 [sub_resource type="StandardMaterial3D" id="WallMat"]
 albedo_color = Color(0.5, 0.47, 0.42, 1)
 
 [sub_resource type="BoxShape3D" id="WallShapeEW"]
-size = Vector3(1, 4, 60)
+size = Vector3(1, 4, 120)
 
 [sub_resource type="BoxMesh" id="WallMeshEW"]
-size = Vector3(1, 4, 60)
+size = Vector3(1, 4, 120)
 
 [sub_resource type="CylinderShape3D" id="PillarShape"]
 height = 4.0
@@ -82,6 +82,17 @@ albedo_color = Color(0.9, 0.25, 0.15, 1)
 [sub_resource type="StandardMaterial3D" id="PillarMatB"]
 albedo_color = Color(0.9, 0.9, 0.85, 1)
 
+[sub_resource type="CylinderShape3D" id="CoverPillarShape"]
+height = 5.0
+radius = 1.2
+
+[sub_resource type="CylinderMesh" id="CoverPillarMesh"]
+top_radius = 1.2
+bottom_radius = 1.2
+height = 5.0
+
+[sub_resource type="StandardMaterial3D" id="CoverPillarMat"]
+albedo_color = Color(0.5, 0.5, 0.52, 1)
 [sub_resource type="BoxShape3D" id="WallJumpShape"]
 size = Vector3(1, 8, 6)
 
@@ -125,7 +136,7 @@ shape = SubResource("PlatformShape")
 mesh = SubResource("PlatformMesh")
 
 [node name="WallNorth" type="StaticBody3D" parent="." unique_id=660338006]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -60)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallNorth" unique_id=1409069209]
 shape = SubResource("WallShapeNS")
@@ -135,7 +146,7 @@ mesh = SubResource("WallMeshNS")
 surface_material_override/0 = SubResource("WallMat")
 
 [node name="WallSouth" type="StaticBody3D" parent="." unique_id=447960080]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 60)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouth" unique_id=1175850062]
 shape = SubResource("WallShapeNS")
@@ -145,7 +156,7 @@ mesh = SubResource("WallMeshNS")
 surface_material_override/0 = SubResource("WallMat")
 
 [node name="WallEast" type="StaticBody3D" parent="." unique_id=1617479107]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 2, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallEast" unique_id=997122853]
 shape = SubResource("WallShapeEW")
@@ -155,7 +166,7 @@ mesh = SubResource("WallMeshEW")
 surface_material_override/0 = SubResource("WallMat")
 
 [node name="WallWest" type="StaticBody3D" parent="." unique_id=823621024]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 2, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest" unique_id=668319240]
 shape = SubResource("WallShapeEW")
@@ -268,11 +279,11 @@ gravity = 40.0
 mutate_chance = 1.0
 
 [node name="EnemyRusher" parent="." unique_id=2144887308 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, 20)
 mutate_chance = 1.0
 
 [node name="EnemyGunner" parent="." unique_id=2144887309 instance=ExtResource("12_gunner")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0, 30)
 mutate_chance = 1.0
 
 [node name="PhysicsProp" parent="." unique_id=1 instance=ExtResource("6_yvibs")]
@@ -339,160 +350,342 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6886158, 0.5, 2.290947)
 
 
 [node name="RatNest" parent="." unique_id=1532451774 instance=ExtResource("27_ratnest")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, -14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0.1, -28)
 rat_count = 30
 
 [node name="RatNest2" parent="." unique_id=584691491 instance=ExtResource("27_ratnest")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0.1, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 0.1, 20)
 rat_count = 30
 
 [node name="Enemy2" parent="." unique_id=1075543839 instance=ExtResource("5_psl7s")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, -12)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -24)
 
 [node name="Enemy3" parent="." unique_id=278977751 instance=ExtResource("5_psl7s")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0, 6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36, 0, 12)
 
 [node name="EnemyRusher2" parent="." unique_id=1856501814 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, -22)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, -44)
 
 [node name="EnemyRusher3" parent="." unique_id=412644782 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, -22)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 0, -44)
 
 [node name="EnemyGunner2" parent="." unique_id=1548815580 instance=ExtResource("12_gunner")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0, -6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44, 0, -12)
 
 [node name="EnemyGunner3" parent="." unique_id=1648655508 instance=ExtResource("12_gunner")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, -6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, -12)
 
 [node name="EnemyRusher4" parent="." unique_id=159459128 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.4, 0, 9.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28.8, 0, 18.8)
 
 [node name="EnemyRusher5" parent="." unique_id=357796914 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.7, 0, 16.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.4, 0, 33.2)
 
 [node name="EnemyRusher6" parent="." unique_id=1734333394 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.9, 0, -12.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27.8, 0, -25.2)
 
 [node name="Roach" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.75, 2.29, 16.18)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 33.5, 2.29, 32.36)
 
 [node name="Roach2" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.6, 2.02, 16.65)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 33.2, 2.02, 33.3)
 kind = 1
 
 [node name="Roach3" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.77, 2.42, 17.18)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.54, 2.42, 34.36)
 
 [node name="Roach4" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.18, 2.22, 16.48)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30.36, 2.22, 32.96)
 kind = 1
 
 [node name="Roach5" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.34, 2.23, 15.78)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30.68, 2.23, 31.56)
 
 [node name="Roach6" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.67, 2.04, 15.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.34, 2.04, 30.72)
 kind = 1
 
 [node name="Roach7" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.05, 2.01, 14.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32.1, 2.01, 29.4)
 
 [node name="Roach8" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.89, 2.12, 15.34)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 33.78, 2.12, 30.68)
 kind = 1
 
 [node name="Roach9" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.87, 2.32, 2.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.74, 2.32, 4.72)
 
 [node name="Roach10" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.55, 2.34, 2.51)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35.1, 2.34, 5.02)
 kind = 1
 
 [node name="Roach11" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 2.15, 3.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -36, 2.15, 6.72)
 
 [node name="Roach12" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.38, 2.16, 2.29)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -38.76, 2.16, 4.58)
 kind = 1
 
 [node name="Roach13" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.8, 2.11, 1.74)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -37.6, 2.11, 3.48)
 
 [node name="Roach14" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.54, 2.29, 1.1)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -37.08, 2.29, 2.2)
 kind = 1
 
 [node name="Roach15" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.84, 2.05, 1.23)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35.68, 2.05, 2.46)
 
 [node name="Roach16" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.65, 2.23, 1.42)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -33.3, 2.23, 2.84)
 kind = 1
 
 [node name="Roach17" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21.19, 2.22, -7.81)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42.38, 2.22, -15.62)
 
 [node name="Roach18" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20.71, 1.9, -7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 41.42, 1.9, -14)
 kind = 1
 
 [node name="Roach19" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.83, 2, -6.96)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 39.66, 2, -13.92)
 
 [node name="Roach20" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.26, 2.38, -7.83)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 38.52, 2.38, -15.66)
 kind = 1
 
 [node name="Roach21" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.44, 2.13, -8.31)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 38.88, 2.13, -16.62)
 
 [node name="Roach22" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.38, 2.22, -8.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 38.76, 2.22, -17.4)
 kind = 1
 
 [node name="Roach23" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20.57, 2.42, -9.04)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 41.14, 2.42, -18.08)
 
 [node name="Roach24" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21.24, 2.39, -8.82)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42.48, 2.39, -17.64)
 kind = 1
 
 [node name="Roach25" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.16, 2.48, -23.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.32, 2.48, -47)
 
 [node name="Roach26" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.75, 2.12, -23.37)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.5, 2.12, -46.74)
 kind = 1
 
 [node name="Roach27" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.51, 1.94, -23.15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.02, 1.94, -46.3)
 
 [node name="Roach28" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.73, 2.2, -23.56)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.46, 2.2, -47.12)
 kind = 1
 
 [node name="Roach29" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.62, 2.24, -24.35)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17.24, 2.24, -48.7)
 
 [node name="Roach30" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.33, 2.38, -24.85)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.66, 2.38, -49.7)
 kind = 1
 
 [node name="Roach31" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.73, 1.97, -24.57)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.46, 1.97, -49.14)
 
 [node name="Roach32" parent="." instance=ExtResource("13_2420u")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.83, 2.19, -24.37)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.66, 2.19, -48.74)
 kind = 1
 
 [node name="EnemyGunner4" parent="." instance=ExtResource("12_gunner")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14.8, 0, 25.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.6, 0, 51)
 
 [node name="EnemyGunner5" parent="." instance=ExtResource("12_gunner")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.7, 0, -13.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4, 0, -27.4)
 
 [node name="EnemyRusher7" parent="." instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24.7, 0, -1)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 49.4, 0, -2)
 
 [node name="EnemyRusher8" parent="." instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25.4, 0, -17.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50.8, 0, -35.6)
+
+[node name="CoverPillars" type="Node3D" parent="."]
+
+[node name="Cover1" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40.9, 2.5, 52.9)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover1"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover1"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover2" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.5, 36)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover2"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover2"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover3" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.6, 2.5, -20.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover3"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover3"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover4" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24.3, 2.5, 41.9)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover4"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover4"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover5" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.5, 2.5, -24.2)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover5"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover5"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover6" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.6, 2.5, 33.1)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover6"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover6"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover7" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.2, 2.5, -52.3)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover7"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover7"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover8" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.8, 2.5, -50.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover8"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover8"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover9" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.3, 2.5, 19.4)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover9"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover9"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover10" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.9, 2.5, 38.6)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover10"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover10"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover11" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.6, 2.5, 25.4)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover11"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover11"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover12" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -21.7, 2.5, 32.3)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover12"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover12"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover13" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.3, 2.5, -35.6)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover13"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover13"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover14" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.5, 2.5, 21.2)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover14"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover14"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover15" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -53.3, 2.5, -39.4)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover15"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover15"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover16" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50.6, 2.5, 6.2)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover16"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover16"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover17" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31, 2.5, 4.3)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover17"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover17"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")
+
+[node name="Cover18" type="StaticBody3D" parent="CoverPillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50.1, 2.5, 25.4)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CoverPillars/Cover18"]
+shape = SubResource("CoverPillarShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CoverPillars/Cover18"]
+mesh = SubResource("CoverPillarMesh")
+surface_material_override/0 = SubResource("CoverPillarMat")

@@ -37,8 +37,11 @@ const PLATFORM_COLOR_B := Color(0.75, 0.4, 0.08)
 
 func _ready() -> void:
 	super._ready()
+	# The floor's real size (it differs between levels), so the checker tiles right.
+	var ground_box := ground_mesh.mesh as BoxMesh
+	var ground_size := Vector2(ground_box.size.x, ground_box.size.z) if ground_box else GROUND_SIZE
 	ground_mesh.set_surface_override_material(
-		0, DevChecker.make_material(GROUND_COLOR_A, GROUND_COLOR_B, GROUND_SIZE)
+		0, DevChecker.make_material(GROUND_COLOR_A, GROUND_COLOR_B, ground_size)
 	)
 	platform_mesh.set_surface_override_material(
 		0, DevChecker.make_material(PLATFORM_COLOR_A, PLATFORM_COLOR_B, PLATFORM_SIZE)
