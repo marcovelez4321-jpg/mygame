@@ -25,6 +25,8 @@ const FAR_ANIMATION_DISTANCE := 12.0
 const FAR_ANIMATION_RATE := 12.0
 
 @export_group("Movement")
+## Plays the running animation this much faster (1.5 = 1.5x speed).
+@export var run_animation_speed: float = 1.5
 ## How fast it reaches the swarm's chosen velocity, m/s².
 @export var acceleration: float = 30.0
 ## Hops this hard (m/s) when it's trying to move but stuck on a step or lip.
@@ -441,6 +443,6 @@ func _play(animation_name: String, loop: bool) -> void:
 		return
 	_anim_name = animation_name
 	animation.loop_mode = loop_mode
-	_anim.play(animation_name, 0.1)
+	_anim.play(animation_name, 0.1, run_animation_speed if animation_name == ANIM_RUN else 1.0)
 	if not loop:
 		_anim.seek(0.0, true) # a bite always starts from the top
