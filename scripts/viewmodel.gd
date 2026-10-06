@@ -57,6 +57,19 @@ const PUMP_SHAKE_MIN := 0.12
 const PUMP_SHAKE_MAX := 0.18
 const PUMP_ROTATION_WOBBLE := 22.0
 
+## -- Grenade throw (WeaponData.throws_grenade), Half-Life 2 style --
+## The arm draws back over the shoulder (up, back, tipped up), whips forward
+## and down through the release, then drops out of view until the next
+## grenade comes up. Positive rotation = tipped up, like the recoil kick.
+const THROW_WINDUP_OFFSET := Vector3(0.06, 0.1, 0.18)
+const THROW_WINDUP_TILT := 40.0
+const THROW_SWING_OFFSET := Vector3(-0.08, -0.12, -0.3)
+const THROW_SWING_TILT := -45.0
+## Share of the release delay spent winding up; the rest is the swing.
+const THROW_WINDUP_SHARE := 0.6
+const THROW_FOLLOW_TIME := 0.2
+const THROW_RAISE_TIME := 0.3
+
 ## Dev tool speeds while a key is held.
 const TUNE_MOVE_SPEED := 0.3     # meters per second
 const TUNE_ROTATE_SPEED := 45.0  # degrees per second
@@ -80,6 +93,10 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 @onready var _weapons: WeaponController = get_node(weapons_path)
 
 var _model: Node3D
+## The gun's own model inside _model (without the arms).
+var _gun: Node3D
+## Thrown the grenade, waiting for the next one to come into the hand.
+var _waiting_for_grenade := false
 var _model_rest_position: Vector3
 var _model_rest_rotation: Vector3
 var _model_rest_transform: Transform3D
@@ -136,6 +153,7 @@ func _ready() -> void:
 	_weapons.shot_fired.connect(_on_shot_fired)
 	_weapons.reload_started.connect(_on_reload_started)
 	_weapons.projectile_launched.connect(_on_projectile_launched)
+	_weapons.throw_started.connect(_on_throw_started)
 	call_deferred("_show_current_weapon")
 	if OS.is_debug_build():
 		_make_tune_label()
@@ -204,6 +222,45 @@ func _on_projectile_launched(rocket: Rocket) -> void:
 	if weapon and _model:
 		_spawn_backblast(_model.global_transform * weapon.backblast_offset,
 				_model.global_transform.basis * Vector3.BACK)
+
+
+## The grenade throw: wind up, swing through (the grenade leaves the hand at
+## the end of the swing, exactly when WeaponController releases it), follow
+## through out of view. _process brings the arm back up with the next one.
+func _on_throw_started(release_delay: float) -> void:
+	if _switch_tween:
+		_switch_tween.kill()
+	var windup := release_delay * THROW_WINDUP_SHARE
+	var swing := release_delay - windup
+	_switch_tween = create_tween()
+	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET, windup) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT, windup)
+	_switch_tween.tween_property(self, "position", THROW_SWING_OFFSET, swing).set_ease(Tween.EASE_IN)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_SWING_TILT, swing)
+	_switch_tween.tween_callback(_release_held_grenade)
+	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, THROW_FOLLOW_TIME).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, THROW_FOLLOW_TIME)
+
+
+func _release_held_grenade() -> void:
+	if _gun:
+		_gun.visible = false
+	_waiting_for_grenade = true
+
+
+## The next grenade is in the hand: show it and bring the arm back up.
+func _update_held_grenade() -> void:
+	if not _waiting_for_grenade or _weapons.get_magazine_ammo() <= 0:
+		return
+	_waiting_for_grenade = false
+	if _gun:
+		_gun.visible = true
+	if _switch_tween:
+		_switch_tween.kill()
+	_switch_tween = create_tween()
+	_switch_tween.tween_property(self, "position", Vector3.ZERO, THROW_RAISE_TIME).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, THROW_RAISE_TIME)
 
 
 ## Hides the gun and arms (a scope image is covering the view) or shows them.
@@ -402,6 +459,10 @@ func _show_weapon(weapon: WeaponData) -> void:
 	else:
 		gun = _make_placeholder(weapon)
 	_model.add_child(gun)
+	_gun = gun
+	# A grenade slot with nothing in hand yet: empty hand until one's ready.
+	_waiting_for_grenade = weapon.throws_grenade and _weapons.get_magazine_ammo() <= 0
+	gun.visible = not _waiting_for_grenade
 	_center_on_pivot(gun)
 	_apply_transform(weapon)
 	_attach_arms(weapon)
@@ -459,7 +520,10 @@ func _attach_arms(weapon: WeaponData) -> void:
 		skeleton = skeletons[0] as Skeleton3D
 	if skeleton:
 		var hider := HideBonesModifier.new()
-		hider.bone_names = PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
+		var hidden := PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
+		if weapon.hide_left_arm:
+			hidden.append("LeftUpperArm") # one hand only
+		hider.bone_names = hidden
 		skeleton.add_child(hider)
 		if weapon.arms_position == Vector3.ZERO:
 			_auto_place_arms(weapon, skeleton)
@@ -608,6 +672,7 @@ func _update_sway(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_held_grenade()
 	if not _tuning or _model == null:
 		return
 	var weapon := _weapons.current_weapon()

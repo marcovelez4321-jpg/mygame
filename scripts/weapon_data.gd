@@ -6,7 +6,7 @@ extends Resource
 ## Rule 3: balance numbers live here, in one obvious place, so tuning a gun
 ## never means digging through game logic.
 
-enum AmmoType { BULLETS, SHELLS, ROCKETS }
+enum AmmoType { BULLETS, SHELLS, ROCKETS, GRENADES }
 
 @export var weapon_name: String = "Weapon"
 
@@ -133,6 +133,7 @@ enum ReloadStyle {
 ## Where the backblast comes out of the rear of the launcher -- same space as
 ## muzzle_offset (tune with F2 then M for the muzzle; this one by hand).
 @export var backblast_offset: Vector3 = Vector3.ZERO
+## The explosion settings below are used by grenades too (Thrown group).
 ## Damage at the centre of the blast (a direct hit always takes all of it),
 ## falling off to 0 at explosion_radius metres.
 @export var explosion_damage: float = 100.0
@@ -143,6 +144,28 @@ enum ReloadStyle {
 ## (falling off the same way) -- you when rocket jumping, and in co-op your
 ## friends, so a stray rocket stings but never one-shots anyone.
 @export var explosion_player_damage: float = 10.0
+
+@export_group("Thrown (Grenade)")
+## Throws a grenade (Grenade) instead of shooting -- one at a time, held in
+## your hand. Its blast uses the explosion settings in the Projectile group.
+## The model is viewmodel_scene, both in your hand and in flight.
+@export var throws_grenade: bool = false
+## Seconds from the click to the grenade leaving your hand: the arm winds back
+## and swings through first, like Half-Life 2.
+@export var throw_release_delay: float = 0.25
+## How hard it's thrown, m/s, on top of your own running speed.
+@export var throw_speed: float = 16.0
+## The throw goes this many degrees above where you aim, so it arcs -- Half-
+## Life 2 tilts its grenade throw up by about 10.
+@export var throw_lift_degrees: float = 10.0
+## Seconds from leaving your hand to exploding (Half-Life 2's frag: 3).
+@export var fuse_time: float = 3.0
+## Hides your left arm, so one hand holds and throws.
+@export var hide_left_arm: bool = false
+## Plays each time it flashes -- the warning beep.
+@export var fuse_tick_sound: SoundEvent
+## Plays when it hits something, if it's moving fast enough.
+@export var bounce_sound: SoundEvent
 
 @export_group("Switching")
 ## Seconds to bring this weapon up after choosing it. You can't fire during

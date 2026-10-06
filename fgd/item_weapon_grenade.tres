@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/grenade_pickup.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+classname = "item_weapon_grenade"
+description = "A frag grenade pickup (3 grenades: 1 in hand + 2 spare). Already have grenades? It just adds 3 more. More grenades: item_ammo set to Grenades."
+scene_file = ExtResource("2")
+meta_properties = {
+"size": AABB(-8, -8, -8, 16, 16, 16),
+"color": Color(0.85, 0.3, 0.15, 1)
+}

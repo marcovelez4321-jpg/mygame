@@ -22,6 +22,10 @@ signal shot_fired
 ## A projectile weapon (the RPG) just launched this rocket. Presentation hook:
 ## the viewmodel hands it the rocket that was sitting in the launcher.
 signal projectile_launched(rocket: Rocket)
+## A grenade throw began: the arm winds up, and the grenade leaves the hand
+## `release_delay` seconds from now (grenade_thrown).
+signal throw_started(release_delay: float)
+signal grenade_thrown(grenade: Grenade)
 ## Emitted for every resolved ray with where it started and ended, and whether
 ## it hit something with Health. Presentation only (tracer lines).
 signal shot_resolved(from: Vector3, to: Vector3, hit_target: bool)
@@ -170,6 +174,11 @@ var _pending_recoil := Vector2.ZERO
 ## (WeaponData's Aim Down Sights). Part of the simulation, not just the look,
 ## because it decides each shot's spread -- in co-op the host needs it too.
 var _aim := 0.0
+## Seconds until a thrown grenade leaves the hand; below 0 = not throwing.
+var _throw_left := -1.0
+## The weapon held before this one -- where you go back to when you run out
+## of grenades.
+var _previous: int = 0
 
 @onready var _body: CollisionObject3D = get_parent() as CollisionObject3D
 
@@ -178,6 +187,7 @@ func _ready() -> void:
 	_ammo[WeaponData.AmmoType.BULLETS] = starting_bullets
 	_ammo[WeaponData.AmmoType.SHELLS] = starting_shells
 	_ammo[WeaponData.AmmoType.ROCKETS] = 0
+	_ammo[WeaponData.AmmoType.GRENADES] = 0
 
 	_owned.assign(starting_weapons)
 	if _owned.is_empty():
@@ -248,10 +258,7 @@ func pickup_weapon(weapon: WeaponData, ammo_amount: int) -> void:
 	# found); a duplicate you already have just adds ammo without yanking
 	# whatever you currently have out of your hands.
 	if not already_owned:
-		_current = _owned.find(weapon)
-		_cooldown = maxf(_cooldown, weapon.draw_time)
-		_reload_blocked_left = maxf(_reload_blocked_left, weapon.draw_time)
-		weapon_switched.emit(weapon, weapon.draw_time)
+		_select(_owned.find(weapon))
 
 
 ## Called by AmmoPickup, and internally by pickup_weapon(). `emit_signal`
@@ -271,16 +278,8 @@ func tick(fire: bool, reload: bool, aim: bool, select_weapon: int, delta: float,
 	_reload_blocked_left = maxf(_reload_blocked_left - delta, 0.0)
 	_time_since_shot += delta
 
-	if select_weapon >= 0 and select_weapon != _current and select_weapon < _owned.size():
-		_current = select_weapon
-		var new_weapon := _owned[_current]
-		# Can't fire until it's up, and any cooldown from the old weapon still
-		# counts, so switching never lets you fire faster.
-		_cooldown = maxf(_cooldown, new_weapon.draw_time)
-		_reload_blocked_left = maxf(_reload_blocked_left, new_weapon.draw_time)
-		_reload_time_left = 0.0 # switching cancels a reload in progress
-		_aim = 0.0 # the new gun comes up at the hip
-		weapon_switched.emit(new_weapon, new_weapon.draw_time)
+	if select_weapon >= 0 and select_weapon < _owned.size():
+		_select(select_weapon)
 
 	var weapon := current_weapon()
 	if weapon == null:
@@ -289,6 +288,10 @@ func tick(fire: bool, reload: bool, aim: bool, select_weapon: int, delta: float,
 	# Raise toward your eye while aiming, lower otherwise. Reloading lowers it.
 	var aiming := aim and weapon.can_aim and _reload_time_left <= 0.0
 	_aim = move_toward(_aim, 1.0 if aiming else 0.0, delta / maxf(weapon.aim_time, 0.01))
+
+	if weapon.throws_grenade:
+		_tick_throw(weapon, fire, delta, origin, direction, attacker_id)
+		return
 
 	if _reload_time_left > 0.0:
 		_reload_time_left = maxf(_reload_time_left - delta, 0.0)
@@ -328,6 +331,79 @@ func tick(fire: bool, reload: bool, aim: bool, select_weapon: int, delta: float,
 		_launch_rocket(shot)
 	else:
 		resolve_shot(shot)
+
+
+## Switches to the weapon at inventory `index`.
+func _select(index: int) -> void:
+	if index == _current:
+		return
+	# Switching away mid-throw keeps the grenade in your hand.
+	if _throw_left >= 0.0:
+		_throw_left = -1.0
+		var held := current_weapon()
+		_magazine[held] = _magazine.get(held, held.magazine_size) + 1
+	_previous = _current
+	_current = index
+	var new_weapon := _owned[_current]
+	# Can't fire until it's up, and any cooldown from the old weapon still
+	# counts, so switching never lets you fire faster.
+	_cooldown = maxf(_cooldown, new_weapon.draw_time)
+	_reload_blocked_left = maxf(_reload_blocked_left, new_weapon.draw_time)
+	_reload_time_left = 0.0 # switching cancels a reload in progress
+	_aim = 0.0 # the new gun comes up at the hip
+	weapon_switched.emit(new_weapon, new_weapon.draw_time)
+
+
+## Grenades, Half-Life 2 style: click and the arm winds up and throws, the
+## grenade leaving the hand throw_release_delay later. The next one comes
+## into your hand once fire_interval has passed; out of grenades, you switch
+## back to the weapon you had before.
+func _tick_throw(weapon: WeaponData, fire: bool, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
+	if _throw_left >= 0.0:
+		_throw_left -= delta
+		if _throw_left < 0.0:
+			_release_grenade(weapon, origin, direction, attacker_id)
+		return
+	var loaded: int = _magazine.get(weapon, weapon.magazine_size)
+	if loaded <= 0:
+		if _cooldown > 0.0:
+			return
+		if _ammo.get(weapon.ammo_type, 0) > 0:
+			_magazine[weapon] = 1
+			_ammo[weapon.ammo_type] -= 1
+		elif _owned.size() > 1:
+			_select(_previous if _previous != _current and _previous < _owned.size() else 0)
+		return
+	if not fire or _cooldown > 0.0:
+		return
+	if not infinite_ammo:
+		_magazine[weapon] = loaded - 1
+	_cooldown = weapon.fire_interval
+	_throw_left = weapon.throw_release_delay
+	throw_started.emit(weapon.throw_release_delay)
+
+
+## The grenade leaves the hand: thrown along the aim tilted up a little, plus
+## the thrower's own speed (Half-Life 2's ThrowGrenade adds the player's
+## velocity the same way). Rule 1 (co-op): like a shot, this is built only
+## from the aim and the body's velocity, so the host can throw the same one.
+func _release_grenade(weapon: WeaponData, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
+	var right := direction.cross(Vector3.UP).normalized()
+	var throw_direction := direction
+	if right != Vector3.ZERO:
+		throw_direction = direction.rotated(right, deg_to_rad(weapon.throw_lift_degrees))
+	# Out of the right hand, a little in front of the eye -- pulled back if
+	# that would put it inside a wall.
+	var start := origin + right * 0.15 + Vector3.DOWN * 0.1 + direction * 0.4
+	var query := PhysicsRayQueryParameters3D.create(origin, start)
+	query.exclude = [_body.get_rid()]
+	var wall := _body.get_world_3d().direct_space_state.intersect_ray(query)
+	if not wall.is_empty():
+		start = wall.position - direction * 0.1
+	var body_velocity: Vector3 = _body.get("velocity") if _body.get("velocity") is Vector3 else Vector3.ZERO
+	var grenade := Grenade.throw(_body.get_tree().current_scene, start, throw_direction * weapon.throw_speed + body_velocity,
+			weapon, attacker_id, _body as PhysicsBody3D, self)
+	grenade_thrown.emit(grenade)
 
 
 ## A projectile weapon's shot: a Rocket from the eye along the aim (so it
