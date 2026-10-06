@@ -54,9 +54,9 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON }
 @export var cast_swell: float = 0.15
 
 @export_group("Rats")
-@export var rat_cap: int = 30
+@export var rat_cap: int = 60
 ## Rats per SUMMON cast, and the least time between casts.
-@export var summon_batch: int = 6
+@export var summon_batch: int = 12
 @export var summon_cooldown: float = 8.0
 
 @export_group("Healing")

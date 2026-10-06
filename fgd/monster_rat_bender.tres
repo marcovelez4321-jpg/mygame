@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1")
 classname = "monster_rat_bender"
-description = "The Rat Bender: a spellcaster with a horde of up to 30 rats. Patrols around where you place him; spots you and sends the rats rushing or leaping at you, and summons more when they run low. Give him room -- the rats need floor space."
+description = "The Rat Bender: a spellcaster with a horde of up to 60 rats. Patrols around where you place him; spots you and sends the rats rushing or leaping at you, and summons more when they run low. Give him room -- the rats need floor space."
 scene_file = ExtResource("2")
 meta_properties = {
 "size": AABB(-16, -16, 0, 32, 32, 84),
