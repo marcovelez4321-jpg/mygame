@@ -389,3 +389,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0, -6)
 
 [node name="EnemyGunner3" parent="." instance=ExtResource("12_gunner")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, -6)
+
+[node name="EnemyRusher4" parent="." instance=ExtResource("11_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.4, 0, 9.4)
+
+[node name="EnemyRusher5" parent="." instance=ExtResource("11_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.7, 0, 16.6)
+
+[node name="EnemyRusher6" parent="." instance=ExtResource("11_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.9, 0, -12.6)
