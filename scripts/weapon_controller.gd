@@ -150,12 +150,15 @@ const TEST_WEAPON_PATHS := [
 ## past the top of the screen (Left 4 Dead 2's pills -- an instant top-up
 ## after a quick animation). Bandages (B): wrap one on and bandage_heal comes
 ## back over bandage_heal_time seconds.
+## *_use_time is the wind-up and swing of the throw animation they share
+## with the grenade (the grenade's own throw_release_delay is 0.25): the heal
+## lands as the item leaves the hand.
 @export var pills_heal: float = 50.0
-@export var pills_use_time: float = 0.9
+@export var pills_use_time: float = 0.25
 @export var max_pills: int = 2
 @export var bandage_heal: float = 40.0
 @export var bandage_heal_time: float = 8.0
-@export var bandage_use_time: float = 1.4
+@export var bandage_use_time: float = 0.25
 @export var max_bandages: int = 3
 ## Their slots: carrying any, they're in your inventory to equip like the
 ## grenade (click to use one); their model, place in your hand and arms are
