@@ -26,7 +26,6 @@
 [ext_resource type="PackedScene" path="res://scenes/pkm_pickup.tscn" id="33_pkm"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="36_spiders"]
 [ext_resource type="Script" path="res://scripts/enemies/barnacle_scatter.gd" id="37_scatter"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/burrow_worm.tscn" id="38_worm"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)
@@ -962,6 +961,3 @@ shape = SubResource("CeilingShapeNook")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CeilingSections/CeilingNookL1" unique_id=507811516]
 mesh = SubResource("CeilingMeshNook")
 surface_material_override/0 = SubResource("LWallMat")
-
-[node name="BurrowWorm" parent="." unique_id=1528839104 instance=ExtResource("38_worm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 0, 5)

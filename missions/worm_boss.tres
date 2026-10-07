@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MissionData" format=3]
+
+[ext_resource type="Script" path="res://scripts/missions/mission_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "The Thing Beneath"
+description = "The ground's been shaking under the old yard. Something huge is swimming down there -- and it's not alone. Kill it."
+scene = "res://scenes/worm_boss_level.tscn"
+order = 3
