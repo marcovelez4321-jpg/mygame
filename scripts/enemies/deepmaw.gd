@@ -57,7 +57,7 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 @export var acceleration: float = 20.8 # +30%
 ## Gravity in the air: heavier than the boss's 16, so the same leap height
 ## goes by faster -- quicker, snappier leaps (the arc aims for it itself).
-@export var air_gravity: float = 28.0
+@export var air_gravity: float = 17.92 # 20% slower in the air than 28: time scales with 1/sqrt(g), so g x 0.8²
 ## Lurking this far under the floor, circling home this far out.
 @export var lurk_depth: float = 2.5
 @export var lurk_radius: float = 4.0

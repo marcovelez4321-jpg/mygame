@@ -595,3 +595,5 @@ them:
 - 2026-10-07: Deepmaw escorts back to their dark-brown tint (0.39, 0.24, 0.185); the barnacle-colour tint stays only on the (shelved) crawlers.
 
 - 2026-10-07: Deepmaw escorts 30% faster (`max_speed` 9 -> 11.7, `acceleration` 16 -> 20.8, `rise_speed` 16 -> 20.8) so they actually reach the player, and a volley now breaches one after another: the first at the volley time, each next one `breach_stagger` (0.5 s) later, in the order they joined.
+
+- 2026-10-07: Deepmaw escorts 20% slower in the air: `air_gravity` 28 -> 17.92 (28 x 0.8²: a leap of the same height takes 1.25x as long, and the sideways speed -- distance / air time -- drops 20% with it). Same peak height and aim.
