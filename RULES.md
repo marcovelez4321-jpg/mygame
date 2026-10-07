@@ -589,3 +589,5 @@ them:
 - 2026-10-07: Fixed Deepmaw Crawlers drawn floating high above their hitboxes (you took damage from "nothing"): the model was lifted by its mesh AABB's lowest point, but on the skinned DEEPMAW FBX the mesh's own box isn't in the units it's drawn in. Now its spine (head-to-tail bones, centred on the body) rides `belly_height` (0.08 of its length) above the floor.
 
 - 2026-10-07: Deepmaws (burrowing escorts and crawlers) now the barnacles' colour: body tint (1.88, 0.83, 0.61) -- the barnacle texture's average (0.43, 0.18, 0.10) over the DEEPMAW body texture's (0.23, 0.21, 0.16), so the worm's texture averages out to the barnacle's reddish flesh (tint values above 1 brighten; the material multiplies). Replaces the dark-brown tint.
+
+- 2026-10-07: Deepmaw Crawlers shelved: `BarnacleCluster.guard_count` 4 -> 0, so clumps grow no crawler packs. deepmaw_crawler.gd/.tscn and deepmaw_pack.gd/.tscn are kept for later; set guard_count back above 0 to bring them back.
