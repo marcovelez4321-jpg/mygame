@@ -1,0 +1,31 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/burrow_worm.gd" id="1_worm"]
+[ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_health"]
+[ext_resource type="Texture2D" uid="uid://5eieikmsrqr6" path="res://art/props/PSX Creatures/Textures/tape_worm.png" id="3_skin"]
+[ext_resource type="Texture2D" uid="uid://dfm077mca87nt" path="res://art/props/PSX Creatures/Textures/barnacle.png" id="4_maw"]
+[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="5_breach"]
+[ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="6_bite"]
+[ext_resource type="Resource" path="res://audio/events/enemy/roach_splat.tres" id="7_death"]
+
+[sub_resource type="StandardMaterial3D" id="WormSkin"]
+albedo_texture = ExtResource("3_skin")
+roughness = 0.6
+texture_filter = 0
+
+[sub_resource type="StandardMaterial3D" id="WormMaw"]
+albedo_texture = ExtResource("4_maw")
+roughness = 0.8
+texture_filter = 0
+
+[node name="BurrowWorm" type="Node3D"]
+script = ExtResource("1_worm")
+skin_material = SubResource("WormSkin")
+maw_material = SubResource("WormMaw")
+breach_sound = ExtResource("5_breach")
+bite_sound = ExtResource("6_bite")
+death_sound = ExtResource("7_death")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 800.0
