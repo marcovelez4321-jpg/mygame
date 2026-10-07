@@ -51,12 +51,18 @@ var _message_label: Label
 var _use_prompt_label: Label
 
 
+## The rip-the-leech-off meter (_build_leech_meter()).
+var _leech_box: VBoxContainer
+var _leech_bar: ProgressBar
+
+
 func _ready() -> void:
 	add_to_group("hud")
 	_message_label = _make_center_label(0.62, 26)
 	_message_label.modulate.a = 0.0
 	_use_prompt_label = _make_center_label(0.56, 20)
 	_use_prompt_label.visible = false
+	_build_leech_meter()
 	call_deferred("_find_player")
 
 
@@ -69,10 +75,7 @@ func _find_player() -> void:
 	player.weapons.weapon_switched.connect(_on_weapon_switched)
 	player.weapons.picked_up.connect(_on_picked_up)
 	player.weapons.gory_kill_nearby.connect(_on_gory_kill_nearby)
-	player.weapons.leech_latched.connect(func(on: bool) -> void:
-		if on:
-			show_message("LEECH! Spam click to rip it off!")
-	)
+
 	# The wheel is local UI: it reports a pick, and the player turns that into
 	# part of its input packet.
 	weapon_wheel.weapon_chosen.connect(player.request_weapon)
@@ -86,6 +89,10 @@ func _process(_delta: float) -> void:
 	if not player:
 		_find_player()
 		return
+	var leeched: bool = player.weapons.has_leech()
+	_leech_box.visible = leeched
+	if leeched:
+		_leech_bar.value = player.weapons.leech_progress() * 100.0
 	var horiz_speed := Vector2(player.velocity.x, player.velocity.z).length()
 	speed_label.text = "Speed: %.1f m/s" % horiz_speed
 	var weapon: WeaponData = player.weapons.current_weapon()
@@ -134,6 +141,34 @@ func show_message(text: String) -> void:
 
 ## A full-width label centred horizontally, `height_fraction` of the way down
 ## the screen, outlined so it reads over any background.
+## A leech on your face: "SPAM CLICK!" over a meter you fill by clicking
+## (it drains if you stop) -- full, and it's ripped off.
+func _build_leech_meter() -> void:
+	_leech_box = VBoxContainer.new()
+	_leech_box.anchor_left = 0.3
+	_leech_box.anchor_right = 0.7
+	_leech_box.anchor_top = 0.72
+	_leech_box.anchor_bottom = 0.72
+	_leech_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_leech_box.visible = false
+	var label := Label.new()
+	label.text = "LEECH! SPAM CLICK TO RIP IT OFF!"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_constant_override("outline_size", 6)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_leech_box.add_child(label)
+	_leech_bar = ProgressBar.new()
+	_leech_bar.custom_minimum_size = Vector2(0, 22)
+	_leech_bar.show_percentage = false
+	_leech_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(0.75, 0.08, 0.06)
+	_leech_bar.add_theme_stylebox_override("fill", fill)
+	_leech_box.add_child(_leech_bar)
+	add_child(_leech_box)
+
+
 func _make_center_label(height_fraction: float, font_size: int) -> Label:
 	var label := Label.new()
 	label.anchor_left = 0.0

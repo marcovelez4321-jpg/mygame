@@ -6,10 +6,11 @@ extends RigidBody3D
 ## its width with a smooth tween, so it seems to writhe side to side -- and
 ## pulses. It crawls around its home within guard_radius; get within
 ## notice_range and it comes at you, and within leap_range it leaps at you
-## like a rat does. If it reaches you it latches on: it hangs off your face
-## biting every bite_interval, and your gun won't fire -- every fresh click
-## tugs at it instead, and tugs_to_remove clicks inside tug_window seconds of
-## each other rips it off and flings it away. Shoot it dead and it bursts in a
+## like a rat does. If it reaches you it latches onto your face: its
+## underside fills your view, writhing, biting every bite_interval, and your
+## gun won't fire. Every fresh click tugs at it instead, filling a meter
+## (HUD) by pull_per_click that drains back at meter_drain a second -- click
+## fast enough to fill it and you rip it off and fling it away. Shoot it dead and it bursts in a
 ## small spray of blood, leaving a red splat on the floor.
 ## Rule 1 (co-op): the host runs it; a latch is the host telling that
 ## player's WeaponController (latch_leech()).
@@ -34,13 +35,14 @@ enum State { CRAWL, LEAP, LATCHED, DEAD }
 @export_group("Latched")
 @export var bite_damage: float = 6.0
 @export var bite_interval: float = 0.8
-## Clicks to rip it off, each within tug_window seconds of the last (stop
-## clicking and the count starts over).
-@export var tugs_to_remove: int = 8
-@export var tug_window: float = 0.6
-## Where it hangs off you: up from your feet, and out in front of you.
-@export var latch_height: float = 1.35
-@export var latch_forward: float = 0.4
+## Each click fills this much of the rip-it-off meter (0.12 = about 9 clicks),
+## and the meter drains this much a second -- so you have to click fast.
+@export var pull_per_click: float = 0.12
+@export var meter_drain: float = 0.45
+## On your face: this far in front of your camera, this many times its size
+## (big enough to cover most of the screen).
+@export var face_distance: float = 0.22
+@export var face_scale: float = 2.4
 
 @export_group("Look")
 ## Mirror-flips per second while crawling (faster when latched).
@@ -65,8 +67,8 @@ var _victim: Node3D
 var _leap_cooldown_left := 0.0
 var _leap_time := 0.0
 var _bite_left := 0.0
-var _tugs := 0
-var _tug_left := 0.0
+## The rip-it-off meter, 0..1 (progress()).
+var _meter := 0.0
 var _wander_to := Vector3.ZERO
 var _wander_left := 0.0
 var _squirm: Tween
@@ -206,7 +208,7 @@ func _latch() -> void:
 	freeze = true
 	collision_layer = 0
 	collision_mask = 0
-	_tugs = 0
+	_meter = 0.0
 	_bite_left = 0.0
 	weapons.call("latch_leech", self)
 	_start_squirm(squirm_rate * 2.5)
@@ -216,12 +218,9 @@ func _think_latched(delta: float) -> void:
 	if not is_instance_valid(_victim) or not Factions.is_alive_target(_victim):
 		_fall_off(Vector3.ZERO)
 		return
-	var forward := -_victim.global_basis.z
-	global_position = _victim.global_position + Vector3.UP * latch_height + forward * latch_forward
-	_visual.global_basis = Basis.looking_at(-forward, Vector3.UP) # facing you
-	_tug_left -= delta
-	if _tug_left <= 0.0:
-		_tugs = 0 # too slow: it settles back in
+	_cling_to_face()
+	var toward_you := _face_camera().global_position - global_position if _face_camera() else Vector3.UP
+	_meter = maxf(_meter - meter_drain * delta, 0.0) # it settles back in
 	_bite_left -= delta
 	if _bite_left <= 0.0:
 		_bite_left = bite_interval
@@ -229,20 +228,43 @@ func _think_latched(delta: float) -> void:
 		if victim_health:
 			victim_health.take_damage(bite_damage, Health.NO_ATTACKER)
 		var world := get_tree().current_scene
-		BloodFX.spawn_impact(world, global_position, -forward, BloodFX.BLOOD_COLOR, 0.8)
+		BloodFX.spawn_impact(world, global_position, toward_you.normalized(), BloodFX.BLOOD_COLOR, 0.8)
 		SoundPlayer.play_3d(bite_sound, global_position, world)
 
 
-## A click while it's on you (WeaponController): enough of them, fast enough,
-## and it's ripped off.
+## Clamped over the victim's eyes: its underside toward the camera, its length
+## running up the screen, scaled up to cover most of the view.
+func _cling_to_face() -> void:
+	var camera := _face_camera()
+	if camera == null:
+		global_position = _victim.global_position + Vector3.UP * 1.4
+		return
+	var view := camera.global_basis
+	global_position = camera.global_position - view.z * face_distance - view.y * 0.03
+	var away := -view.z # its back faces away, its belly at you
+	var along := view.y
+	_visual.global_basis = Basis(away.cross(along), away, along) * Basis.from_scale(Vector3.ONE * face_scale)
+
+
+## The latched player's camera, if it has one.
+func _face_camera() -> Camera3D:
+	return _victim.get_node_or_null("Head/Camera3D") as Camera3D if is_instance_valid(_victim) else null
+
+
+## How full the rip-it-off meter is, 0..1 (the HUD's bar).
+func progress() -> float:
+	return _meter
+
+
+## A click while it's on you (WeaponController): fills the meter; fill it and
+## it's ripped off.
 func tug() -> void:
 	if _state != State.LATCHED:
 		return
-	_tugs += 1
-	_tug_left = tug_window
+	_meter += pull_per_click
 	_visual.position = Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), 0.0) * 0.06 # yanked
 	create_tween().tween_property(_visual, "position", Vector3.ZERO, 0.1)
-	if _tugs >= tugs_to_remove:
+	if _meter >= 1.0:
 		var away := _victim.global_basis.z + Vector3.UP * 0.6 # flung out in front of you
 		_fall_off(away.normalized() * 6.0)
 
@@ -257,7 +279,7 @@ func _fall_off(fling: Vector3) -> void:
 	collision_layer = 1
 	collision_mask = 1
 	linear_velocity = fling
-	_visual.rotation = Vector3.ZERO
+	_visual.transform = Transform3D.IDENTITY # off your face: back to its own size
 	_leap_cooldown_left = leap_cooldown * 1.5
 	_state = State.CRAWL
 	_start_squirm(squirm_rate)

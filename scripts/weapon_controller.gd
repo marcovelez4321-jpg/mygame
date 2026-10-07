@@ -319,6 +319,11 @@ func unlatch_leech(leech: Node) -> void:
 		leech_latched.emit(false)
 
 
+## How full the rip-it-off meter of the leech on you is (0..1), for the HUD.
+func leech_progress() -> float:
+	return float(_leeches[0].call("progress")) if has_leech() else 0.0
+
+
 func has_leech() -> bool:
 	if _leeches.is_empty():
 		return false
