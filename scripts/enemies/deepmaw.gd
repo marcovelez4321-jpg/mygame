@@ -83,6 +83,9 @@ enum State { LURK, HUNT, DEAD }
 @export var breach_sound: SoundEvent
 @export var bite_sound: SoundEvent
 @export var death_sound: SoundEvent
+## The rumble while it hunts under the floor (empty = the placeholder).
+@export var rumble_stream: AudioStream
+@export var rumble_volume_db: float = -4.0
 
 var home := Vector3.ZERO
 var target: Node3D
@@ -121,6 +124,7 @@ var _buried := false
 ## Lurking with nobody near: it thinks every few ticks instead of every one.
 var _idle_ticks := 0
 var _idle_delta := 0.0
+var _fx: WormFX
 
 @onready var health: Health = $Health
 @onready var _body: AnimatableBody3D = $Body
@@ -137,6 +141,11 @@ func _ready() -> void:
 	_body.top_level = true
 	_body.sync_to_physics = false
 	_lurk_angle = randf() * TAU
+	_fx = WormFX.new()
+	_fx.size = 0.55
+	_fx.rumble_stream = rumble_stream
+	_fx.rumble_volume_db = rumble_volume_db
+	add_child(_fx)
 	global_position = Vector3(home.x, _ground_y - lurk_depth, home.z)
 	_vel = Vector3.FORWARD.rotated(Vector3.UP, _lurk_angle) * max_speed * lurk_speed
 	_build_model()
@@ -338,6 +347,7 @@ func _physics_process(delta: float) -> void:
 	_update_joints()
 	_trail_fx(delta)
 	_try_bite()
+	_fx.follow(new_head, _vel, _ground_y, lurk_depth + 1.5, body_length * hitbox_radius, new_head.y < _ground_y and _state == State.HUNT)
 
 
 ## The head's path, kept a body's length long, and each spine joint placed
@@ -476,6 +486,7 @@ func _breach_fx(from: Vector3, to: Vector3, entering: bool) -> void:
 	if not hit.is_empty():
 		at = hit.position
 		normal = hit.normal
+	_fx.burst(at, normal)
 	BloodFX.spawn_splatter(world, at + normal * 0.01, normal, body_length * 0.35, dirt_color)
 	BloodFX.spawn_impact(world, at, normal, dirt_color.lightened(0.15), 2.5)
 	SoundPlayer.play_3d(breach_sound, at, world)
@@ -518,6 +529,7 @@ func _on_damaged(_amount: float, _attacker_id: int) -> void:
 
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	_state = State.DEAD
+	_fx.silence()
 	_dead_left = corpse_time
 	_body.collision_layer = 0
 	_play("dead", false)

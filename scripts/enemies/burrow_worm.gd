@@ -125,8 +125,20 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export var breach_sound: SoundEvent
 @export var bite_sound: SoundEvent
 @export var death_sound: SoundEvent
+## The low rumble from under the floor while it's down there (empty = the
+## generated placeholder, audio/sfx/worm_rumble.wav). Louder up close.
+@export var rumble_stream: AudioStream
+@export var rumble_volume_db: float = 2.0
+## Peristalsis: swallowing bulges rolling down the body -- how much fatter a
+## segment gets, how fast they travel (waves a second), and how many
+## segments apart they are.
+@export var bulge_amount: float = 0.28
+@export var bulge_speed: float = 0.8
+@export var bulge_spacing: float = 9.0
 
 var target: Node3D
+var _fx: WormFX
+var _time := 0.0
 
 ## The attack cycle (The Leap).
 enum Phase { WANDER, TUNNEL, WINDUP, RISE, AIR, DIVE }
@@ -171,6 +183,11 @@ func _ready() -> void:
 	var floor_hit := _static_ray(global_position + Vector3.UP * 2.0, global_position + Vector3.DOWN * 50.0)
 	_ground_y = (floor_hit.position as Vector3).y if not floor_hit.is_empty() else global_position.y
 	health.died.connect(_on_died)
+	_fx = WormFX.new()
+	_fx.size = 1.0
+	_fx.rumble_stream = rumble_stream
+	_fx.rumble_volume_db = rumble_volume_db
+	add_child(_fx)
 	var start := Vector3(_home.x, _ground_y - lurk_depth, _home.z)
 	var back := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 	_vel = -back * max_speed * 0.5
@@ -370,7 +387,9 @@ func _physics_process(delta: float) -> void:
 	_crossings()
 	_trail(delta)
 	_contact(delta)
+	_time += delta
 	_place_segments()
+	_fx.follow(_pos[0], _vel, _ground_y, lurk_depth + 2.0, _radii[0], _pos[0].y < _ground_y)
 
 
 func _place_segments() -> void:
@@ -380,6 +399,10 @@ func _place_segments() -> void:
 			forward = Vector3.FORWARD
 		var up := Vector3.UP if absf(forward.normalized().y) < 0.98 else Vector3.BACK
 		_segments[i].global_transform = Transform3D(Basis.looking_at(forward.normalized(), up), _pos[i])
+		# Peristalsis: a bulge rolling down the body (fatter across, not longer).
+		var wave := sin(_time * bulge_speed * TAU - float(i) * TAU / maxf(bulge_spacing, 1.0))
+		var swell := 1.0 + bulge_amount * pow(maxf(wave, 0.0), 6.0)
+		_visuals[i].scale = Vector3(swell, swell, 1.0)
 
 
 ## The attack cycle (see The Leap): hunting, it tunnels to the spot under
@@ -447,6 +470,7 @@ func _erupt(head: Vector3) -> void:
 		over = Vector3(target.global_position.x - head.x, 0.0, target.global_position.z - head.z) / time_to_top
 	_vel = Vector3(over.x, rise, over.z)
 	_shake_near(head, eruption_shake, shake_range)
+	_fx.fade_cracks()
 
 
 ## Winding up under its prey: the ground shakes harder and harder and cracks
@@ -460,6 +484,7 @@ func _telegraph(delta: float) -> void:
 	var spot := Vector3(_leap_from.x, _ground_y + 0.05, _leap_from.z)
 	var jitter := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * head_radius
 	BloodFX.spawn_impact(get_tree().current_scene, spot + jitter, Vector3.UP, dirt_color, 0.75 + t)
+	_fx.show_cracks(Vector3(_leap_from.x, _ground_y, _leap_from.z), 0.25 + 0.75 * t)
 	_shake_near(spot, rumble * (1.0 + t * 2.0), rumble_range)
 
 
@@ -552,6 +577,7 @@ func _breach_fx(from: Vector3, to: Vector3, entering: bool) -> void:
 		at = hit.position
 		normal = hit.normal
 	var size := _radii[0]
+	_fx.burst(at, normal)
 	BloodFX.spawn_splatter(world, at + normal * 0.01, normal, size * 3.0, dirt_color)
 	BloodFX.spawn_impact(world, at, normal, dirt_color.lightened(0.15), 3.0)
 	BloodFX.spawn_impact(world, at, (normal + Vector3(randf() - 0.5, 0.0, randf() - 0.5)).normalized(), dirt_color, 2.0)
@@ -657,6 +683,7 @@ func _on_segment_damaged(amount: float, attacker_id: int, index: int) -> void:
 ## Dead: it comes apart from the head down, a burst of blood per segment.
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	_dead = true
+	_fx.silence()
 	_death_step = 0.0
 	_death_index = 0
 	SoundPlayer.play_3d(death_sound, _pos[0], get_tree().current_scene)
