@@ -115,7 +115,7 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 ## flung out sideways and up at brood_speed in a spray of blood -- then it
 ## falls and lands. They join one spider pack of its own (Population caps
 ## them like any spider). Skimming hops don't do it; brood_chance per leap.
-@export var brood_count: int = 6
+@export var brood_count: int = 30
 @export_range(0.0, 1.0, 0.05) var brood_chance: float = 1.0
 @export var brood_speed: float = 7.0
 @export var brood_bulge: float = 0.7
@@ -587,9 +587,10 @@ func _update_brood(delta: float) -> void:
 			return # still rising
 		_brood_left = apex_hang
 		_brood_segments.clear()
-		var count := mini(brood_count, _segments.size() - 2)
-		for k in count:
-			_brood_segments.append(2 + int(float(k + 1) / (count + 1) * (_segments.size() - 3)))
+		# Spread down the body from just behind the head; with more spiders
+		# than segments, several burst from each.
+		for k in brood_count:
+			_brood_segments.append(2 + int(float(k) / maxf(brood_count, 1) * (_segments.size() - 2)))
 		_shake_near(_pos[0], breach_shake, shake_range)
 		return
 	_brood_left -= delta

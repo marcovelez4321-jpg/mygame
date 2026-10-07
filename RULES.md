@@ -569,3 +569,5 @@ them:
   - Untested at time of writing.
 
 - 2026-10-07: Worm tuning: boss 15% bigger (`segment_spacing` 0.75 -> 0.8625, `head_radius` 0.75 -> 0.8625, `tail_radius` 0.3 -> 0.345); leaps 40% higher (boss `leap_height` 9 -> 12.6, `hop_height` 3.5 -> 4.9; Deepmaw `leap_height` 4.5 -> 6.3 -- the aim works out the longer air time itself); the boss's drool twice as big and half again as often (strength x2, every ~0.2 s instead of ~0.3).
+
+- 2026-10-07: Worm boss brood 6 -> 30 spiders per big leap (`brood_count`): several burst from each segment as the swelling passes (spread from just behind the head to the tail). Population.MAX_SPIDERS is 40, so a second leap culls the oldest spiders to make room.
