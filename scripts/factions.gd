@@ -75,6 +75,8 @@ static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range
 			var target := node as Node3D
 			if target == null or not is_alive_target(target):
 				continue
+			if viewer and allied(viewer, target):
+				continue # the same boss commands both: a truce while it lives
 			var distance := from.distance_to(target.global_position)
 			if distance > max_range:
 				continue
@@ -127,6 +129,32 @@ static func danger_at(tree: SceneTree, side: int, point: Vector3, radius: float)
 		if distance < radius:
 			danger += 1.0 - distance / radius
 	return danger
+
+
+## The living boss commanding `node` -- one that controls BOTH rats and
+## roaches (it has controls_roaches(), true while it's alive: SwarmKing) --
+## or null. A roach's is its `master`; a rat's is its swarm's `bender`; the
+## boss is its own. A plain Rat Bender (rats only) counts as nobody's here.
+static func master_of(node: Node):
+	if node == null:
+		return null
+	if node.has_method("controls_roaches"):
+		return node if node.call("controls_roaches") else null
+	var boss = node.get("master")
+	if boss == null:
+		var pack = node.get("swarm")
+		if pack is RatSwarm:
+			boss = pack.bender
+	if is_instance_valid(boss) and boss.has_method("controls_roaches") and boss.call("controls_roaches"):
+		return boss
+	return null
+
+
+## `a` and `b` answer to the same living rat-and-roach boss: they leave each
+## other alone (and him) until he dies.
+static func allied(a: Node, b: Node) -> bool:
+	var boss = master_of(a)
+	return boss != null and boss == master_of(b)
 
 
 ## `attacker` just hurt `victim`: it jumps up the victim's list for a while.

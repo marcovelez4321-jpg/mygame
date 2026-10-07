@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MissionData" format=3]
+
+[ext_resource type="Script" path="res://scripts/missions/mission_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Dethrone the Swarm King"
+description = "Something down in the sewers commands the rats AND the roaches now. Put it down."
+scene = "res://scenes/swarm_king_level.tscn"
+order = 2

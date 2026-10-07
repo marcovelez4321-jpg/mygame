@@ -148,6 +148,24 @@ const SPLAT_HEIGHT := 0.35
 ## within flock_radius is fighting.
 @export var group_attack: bool = true
 
+@export_group("Controlled")
+## A boss that commands roaches (SwarmKing) sets `master`. While it lives, its
+## roaches don't flock, carry or eat: they swirl around it in a loose,
+## breathing cloud about escort_radius out -- each on its own drifting path,
+## pace and height, swelling out and drawing back in, darting off now and then
+## (still messy, never a neat ring) -- fight only what comes close
+## (threat_range), and do as it says: a Swarm Rush (every one of them dives at
+## its target for a few seconds, ignoring max_divers), a Spit Volley (every
+## spitter spits at once), or a Cloud Shield (they pull in tight around it,
+## about shield_radius out, swirling fast). Rats and roaches with the same
+## master don't fight (Factions.allied()) until it dies.
+@export var escort_radius: float = 3.5
+@export var shield_radius: float = 1.8
+## How much the cloud swells and draws back in (0.4 = 40% of its radius) and
+## how far each roach drifts off its spot (m) -- the ebb and flow.
+@export var cloud_breathing: float = 0.4
+@export var cloud_drift: float = 1.2
+
 @export_group("Spitter")
 ## Random, Normal or Spitter -- set per placement in TrenchBroom (the
 ## monster_roach "kind" choice); Random rolls spitter_chance.
@@ -272,6 +290,10 @@ var _own_spot := Vector3.ZERO
 var _own_spot_timer := 0.0
 var _dart_left := 0.0
 var _dart := Vector3.ZERO
+## The boss commanding it (see the Controlled exports), untyped since it may
+## be freed; and until when (in _time) a Swarm Rush order lasts.
+var master = null
+var _rush_until := -1.0
 ## A dead rat in its jaws, being eaten (_eat_prey()).
 var _prey: Node3D
 var _prey_left := 0.0
@@ -352,10 +374,11 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(_target):
 		_target = null
 	_retarget_timer -= delta
-	if _retarget_timer <= 0.0:
+	var rushing := _time < _rush_until and _target != null
+	if _retarget_timer <= 0.0 and not rushing: # under orders, it sticks with them
 		_retarget_timer = retarget_interval
 		_target = Factions.nearest_hostile(get_tree(), Factions.Side.ROACH, global_position, sight_range, self, _target, threat_range)
-		if _target == null and group_attack and _state == State.HUNT and _prey == null:
+		if _target == null and group_attack and _state == State.HUNT and _prey == null and not has_master():
 			_target = _flock_target()
 	_eat_prey(delta)
 
@@ -392,6 +415,9 @@ func _physics_process(delta: float) -> void:
 			_think_spit(delta)
 			return
 
+	if has_master() and (_target == null or (master.call("is_shielding") and not rushing)):
+		_think_escort(delta)
+		return
 	if _target == null:
 		_think_patrol(delta)
 		return
@@ -672,9 +698,13 @@ func _path_point(chest: Vector3) -> Vector3:
 
 
 func _can_start_dive(chest: Vector3, distance: float) -> bool:
-	if _dive_cooldown_left > 0.0 or distance > dive_range:
+	if distance > dive_range:
 		return false
 	if facing.dot((chest - global_position).normalized()) < dive_aim:
+		return false
+	if _time < _rush_until:
+		return true # a Swarm Rush: no waiting, no taking turns
+	if _dive_cooldown_left > 0.0:
 		return false
 	return get_tree().get_nodes_in_group(DIVING_GROUP).size() < max_divers
 
@@ -881,9 +911,67 @@ func consumed() -> void:
 
 # ---- Carrying bodies (RoachCarry) --------------------------------------------
 
-## Free to help carry a body: alive, nothing to fight, not busy.
+## Free to help carry a body: alive, nothing to fight, not busy, and nobody's
+## pet (a boss's roaches stay with it).
 func is_idle() -> bool:
-	return _target == null and _state == State.HUNT and not _held and _prey == null
+	return _target == null and _state == State.HUNT and not _held and _prey == null and not has_master()
+
+
+# ---- Under a boss's command (see the Controlled exports) ---------------------
+
+## Commanded by a living boss.
+func has_master() -> bool:
+	return is_instance_valid(master) and master.call("controls_roaches")
+
+
+## Its place in the cloud around the boss -- never a neat ring: the cloud
+## breathes in and out (cloud_breathing), each roach drifts on its own noise
+## path (cloud_drift) at its own pace and height, swirls at its own speed,
+## and now and then darts off and comes back. While the boss shields, the
+## whole cloud draws in tight (shield_radius) and swirls faster.
+func _think_escort(delta: float) -> void:
+	var shielding: bool = master.call("is_shielding")
+	if _dart_left > 0.0:
+		_dart_left -= delta
+		_turn_toward(_dart, delta)
+		_steer(_dart * cruise_speed * 0.8, delta)
+		return
+	if not shielding and randf() < dart_chance * messiness * delta:
+		_dart_left = randf_range(0.25, 0.5)
+		_dart = Vector3(randf_range(-1.0, 1.0), randf_range(-0.3, 0.5), randf_range(-1.0, 1.0)).normalized()
+	var phase := float(get_instance_id() % 1000)
+	var swirl := _noise.get_noise_2d(_time * 0.3, phase) # -1..1, slowly wandering
+	_circle_angle += TAU * (0.6 if shielding else 0.1 + swirl * 0.1) * _pace * delta
+	var breathe := 1.0 + sin(_time * 0.6 + phase) * cloud_breathing * (0.4 if shielding else 1.0)
+	var radius := (shield_radius if shielding else escort_radius) * breathe * (1.0 + _hover_bias * 0.25)
+	var drift := Vector3(_noise.get_noise_2d(_time * 0.5, phase + 100.0), _noise.get_noise_2d(_time * 0.5, phase + 200.0) * 0.5,
+			_noise.get_noise_2d(_time * 0.5, phase + 300.0)) * cloud_drift * (0.4 if shielding else 1.0)
+	var height := (1.3 if shielding else 1.8) + _hover_bias
+	var around: Vector3 = master.global_position
+	var spot := around + Vector3(cos(_circle_angle), 0.0, sin(_circle_angle)) * radius + Vector3.UP * height + drift
+	_turn_toward(linear_velocity if linear_velocity.length_squared() > 0.1 else facing, delta)
+	_steer(_seek(spot, cruise_speed * (1.3 if shielding else 0.8) * _pace), delta)
+
+
+## Swarm Rush order: go for `target` and dive at it again and again for
+## `duration` seconds, ignoring max_divers and the dive cooldown. Untyped
+## target: it may already be gone.
+func swarm_rush(target, duration: float) -> void:
+	if not is_instance_valid(target) or _state == State.DEAD or _state == State.CARRY:
+		return
+	_target = target
+	_rush_until = _time + duration
+
+
+## Spit Volley order: a spitter spits at `target` right now (if it isn't busy).
+## Untyped: it's called off a timer, by which time the target may be gone.
+func spit_now(target) -> void:
+	if not is_spitter or not is_instance_valid(target):
+		return
+	if _state != State.HUNT and _state != State.CIRCLE:
+		return
+	_target = target
+	_set_state(State.SPIT)
 
 
 func is_carrying(carry: RoachCarry) -> bool:

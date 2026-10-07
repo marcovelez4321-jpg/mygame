@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/enemy/rat_bender.tscn" id="1_bender"]
+[ext_resource type="Script" path="res://scripts/enemies/swarm_king.gd" id="2_king"]
+[ext_resource type="PackedScene" uid="uid://jav1k4rxxg0n" path="res://art/characters/Characters_psx/Models/Killers/Character_Monster_02.fbx" id="3_model"]
+
+[node name="SwarmKing" instance=ExtResource("1_bender")]
+script = ExtResource("2_king")
+tint_color = Color(0.75, 0.9, 0.55, 1)
+rush_min_range = 14.0
+heal_per_second = 2.5
+heal_animation_speed = 0.4
+
+[node name="Health" parent="."]
+max_health = 800.0
+
+[node name="Model" parent="."]
+variants = Array[PackedScene]([ExtResource("3_model")])

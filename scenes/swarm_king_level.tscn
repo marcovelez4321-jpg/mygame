@@ -1,0 +1,31 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://n2tgnc4ptc1o" path="res://scenes/test_map/test_map.tscn" id="1_map"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/swarm_king.tscn" id="2_king"]
+
+[node name="TestMap" instance=ExtResource("1_map")]
+
+[node name="Grandma" parent="."]
+visible = false
+process_mode = 4
+
+[node name="SwarmKing" parent="." instance=ExtResource("2_king")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, -20)
+patrol_speed = 2.8
+patrol_radius = 20.0
+rat_cap = 70
+summon_cooldown = 10.0
+summon_animation_speed = 2.0
+heal_delay = 6.0
+
+[node name="RatNest2" parent="."]
+rat_count = 0
+bodyguard_count = 0
+
+[node name="RatNest3" parent="."]
+rat_count = 0
+bodyguard_count = 0
+
+[node name="RatNest4" parent="."]
+rat_count = 0
+bodyguard_count = 0
