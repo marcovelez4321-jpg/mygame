@@ -21,6 +21,8 @@
 [ext_resource type="PackedScene" path="res://scenes/props/explosive_barrel.tscn" id="24_barrel"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/rat_nest.tscn" id="27_ratnest"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/barnacle_cluster.tscn" id="30_barnacles"]
+[ext_resource type="PackedScene" path="res://scenes/pills_pickup.tscn" id="31_pills"]
+[ext_resource type="PackedScene" path="res://scenes/bandage_pickup.tscn" id="32_bandage"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)
@@ -777,3 +779,24 @@ transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 15, 1.8, -59.45)
 
 [node name="BarnacleClusterEastWall" parent="." unique_id=1291546742 instance=ExtResource("30_barnacles")]
 transform = Transform3D(0, 0, 1, -1, 0, 0, 0, -1, 0, 59.45, 1.5, -15)
+
+[node name="BarnacleClusterSouthEast" parent="." unique_id=1857638232 instance=ExtResource("30_barnacles")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0, 35)
+
+[node name="PillsPickup" parent="." unique_id=1671629152 instance=ExtResource("31_pills")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0.5, 18)
+
+[node name="PillsPickup2" parent="." unique_id=1333944772 instance=ExtResource("31_pills")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0.5, 10)
+
+[node name="PillsPickup3" parent="." unique_id=1174181887 instance=ExtResource("31_pills")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0.5, -40)
+
+[node name="BandagePickup" parent="." unique_id=292238139 instance=ExtResource("32_bandage")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.5, 18)
+
+[node name="BandagePickup2" parent="." unique_id=662865394 instance=ExtResource("32_bandage")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 0.5, -5)
+
+[node name="BandagePickup3" parent="." unique_id=2004614820 instance=ExtResource("32_bandage")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.5, -40)

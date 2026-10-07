@@ -181,6 +181,8 @@ class PlayerInput:
 	var fire: bool = false
 	var aim: bool = false # right mouse: aim down the sights
 	var quick_throw: bool = false # Q: throw a grenade without switching to it
+	var use_pills: bool = false # H: pop pills
+	var use_bandage: bool = false # B: wrap a bandage
 	var reload: bool = false
 	var grab: bool = false
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
@@ -382,6 +384,10 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_Q)
 	input.reload = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_R)
+	input.use_pills = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_physical_key_pressed(KEY_H)
+	input.use_bandage = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_physical_key_pressed(KEY_B)
 	input.grab = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_F)
 
@@ -523,6 +529,7 @@ func _finish_tick(input: PlayerInput, delta: float) -> void:
 	# from the camera, so a server can rebuild the same shot (Rule 1).
 	# multiplayer.get_unique_id() is 1 offline, which matches the host's id.
 	weapons.tick(input.fire, input.reload, input.aim, input.quick_throw, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
+	weapons.tick_items(input.use_pills, input.use_bandage, delta)
 	_update_view_recoil(delta)
 	_tick_use(input.grab)
 	grabber.tick(input.grab and not _use_took_press, delta, head.global_position, -head.global_transform.basis.z)

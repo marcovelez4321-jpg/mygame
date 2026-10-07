@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/item_pickup.gd" id="1_item"]
+[ext_resource type="PackedScene" uid="uid://dsl7lbslxjrlo" path="res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/bandage_mp_1.glb" id="2_model"]
+
+[sub_resource type="SphereShape3D" id="PickupZoneShape"]
+radius = 0.8
+
+[node name="BandagePickup" type="RigidBody3D"]
+mass = 0.3
+script = ExtResource("1_item")
+item = 1
+model_scene = ExtResource("2_model")
+
+[node name="PickupArea" type="Area3D" parent="."]
+collision_layer = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea"]
+shape = SubResource("PickupZoneShape")

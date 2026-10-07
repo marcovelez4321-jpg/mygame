@@ -162,6 +162,7 @@ func _ready() -> void:
 	_weapons.projectile_launched.connect(_on_projectile_launched)
 	_weapons.throw_started.connect(_on_throw_started)
 	_weapons.quick_throw_started.connect(_on_quick_throw_started)
+	_weapons.item_used.connect(_on_item_used)
 	call_deferred("_show_current_weapon")
 	if OS.is_debug_build():
 		_make_tune_label()
@@ -280,6 +281,63 @@ func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_del
 	_switch_tween.tween_callback(_show_weapon.bind(gun_weapon))
 	_switch_tween.tween_property(self, "position", Vector3.ZERO, recover_time - follow).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time - follow)
+
+
+## H / B: the gun drops out of view and the item comes up in the other hand
+## (in camera space, so it moves on its own path while the gun's down).
+## Pills: Left 4 Dead 2's pill pop -- the bottle comes up, tips back toward
+## your mouth and lifts on up past the top of the screen. Bandage: up into
+## view, wrapped round in a couple of quick circles, then down and away.
+## Then the gun comes back up. Timed to WeaponController's, so the heal lands
+## as the item leaves the screen.
+func _on_item_used(item: int, model: PackedScene, use_time: float, lower_time: float, recover_time: float) -> void:
+	var gun_weapon := _weapons.current_weapon()
+	if _switch_tween:
+		_switch_tween.kill()
+	_switch_tween = create_tween()
+	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, lower_time).set_ease(Tween.EASE_IN)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, lower_time)
+	_switch_tween.tween_callback(_hide_held_gun)
+	_switch_tween.tween_interval(use_time)
+	_switch_tween.tween_callback(func() -> void:
+		if _gun and _weapons.current_weapon() == gun_weapon:
+			_gun.visible = true
+	)
+	_switch_tween.tween_property(self, "position", Vector3.ZERO, recover_time).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time)
+
+	var camera := get_parent() as Node3D
+	if model == null or camera == null:
+		return
+	var held := Node3D.new()
+	camera.add_child(held)
+	held.add_child(model.instantiate())
+	held.position = Vector3(0.06, -0.38, -0.32)
+	held.visible = false
+	var tween := held.create_tween()
+	tween.tween_interval(lower_time)
+	tween.tween_callback(held.show)
+	var up := use_time * 0.2
+	tween.tween_property(held, "position", Vector3(0.04, -0.13, -0.3), up).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	if item == WeaponController.Item.PILLS:
+		# Tip it back to the mouth and up, out past the top of the screen.
+		var lift := use_time - up
+		tween.tween_property(held, "position", Vector3(0.0, 0.3, -0.2), lift).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tween.parallel().tween_property(held, "rotation_degrees", Vector3(115.0, 0.0, -12.0), lift).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	else:
+		# A couple of quick wraps round, then down and away.
+		var wrap := (use_time - up) * 0.7
+		var drop := use_time - up - wrap
+		tween.tween_method(_wrap_bandage.bind(held), 0.0, 1.0, wrap)
+		tween.tween_property(held, "position", Vector3(0.05, -0.4, -0.3), drop).set_ease(Tween.EASE_IN)
+	tween.tween_callback(held.queue_free)
+
+
+## One step of the bandage wrap: two small circles round its spot, turning.
+func _wrap_bandage(t: float, held: Node3D) -> void:
+	var angle := t * TAU * 2.0
+	held.position = Vector3(0.04, -0.13, -0.3) + Vector3(cos(angle), sin(angle), 0.0) * 0.035
+	held.rotation.z = sin(angle) * 0.4
 
 
 func _hide_held_gun() -> void:

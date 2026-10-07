@@ -107,6 +107,11 @@ func _process(_delta: float) -> void:
 	# Grenades for Q, once you've found some.
 	if player.weapons.grenade_weapon() and not (weapon and weapon.throws_grenade):
 		ammo_label.text += "   [Q] Grenades: %d" % player.weapons.grenade_count()
+	# Healing items, once you're carrying some.
+	if player.weapons.pills > 0:
+		ammo_label.text += "   [H] Pills: %d" % player.weapons.pills
+	if player.weapons.bandages > 0:
+		ammo_label.text += "   [B] Bandages: %d" % player.weapons.bandages
 	health_label.text = "Health: %d" % ceili(_player_health.current_health)
 	# Aiming down the sights: the sights (or scope) are the crosshair now.
 	$Crosshair.visible = player.weapons.aim_amount() <= 0.0

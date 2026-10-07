@@ -40,11 +40,14 @@ var _last_hit_msec: int = -1000
 var _bleed_rate := 0.0
 var _bleed_left := 0.0
 var _bleed_attacker := NO_ATTACKER
+## Healing over time (regenerate()): health gained per second, seconds left.
+var _regen_rate := 0.0
+var _regen_left := 0.0
 
 
 func _ready() -> void:
 	current_health = max_health
-	set_physics_process(false) # only runs while bleeding
+	set_physics_process(false) # only runs while bleeding or healing over time
 
 
 ## hit_direction, hit_position and impact_force are optional and only describe
@@ -75,10 +78,35 @@ func bleed(total: float, duration: float, attacker_id: int = NO_ATTACKER) -> voi
 	set_physics_process(true)
 
 
+## Healed right now (pills): up to max_health. Host only, like damage.
+func heal(amount: float) -> void:
+	if is_dead or amount <= 0.0:
+		return
+	current_health = minf(current_health + amount, max_health)
+
+
+## Healed `total` over `duration` seconds (a bandage). A new one adds what's
+## left of the old one on top, like bleed().
+func regenerate(total: float, duration: float) -> void:
+	if is_dead or total <= 0.0 or duration <= 0.0:
+		return
+	var remaining := _regen_rate * _regen_left + total
+	_regen_left = maxf(_regen_left, duration)
+	_regen_rate = remaining / _regen_left
+	set_physics_process(true)
+
+
 func _physics_process(delta: float) -> void:
-	if is_dead or _bleed_left <= 0.0:
+	if is_dead or (_bleed_left <= 0.0 and _regen_left <= 0.0):
 		_bleed_left = 0.0
+		_regen_left = 0.0
 		set_physics_process(false)
+		return
+	if _regen_left > 0.0:
+		var heal_step := minf(delta, _regen_left)
+		_regen_left -= heal_step
+		current_health = minf(current_health + _regen_rate * heal_step, max_health)
+	if _bleed_left <= 0.0:
 		return
 	var step := minf(delta, _bleed_left)
 	_bleed_left -= step

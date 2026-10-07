@@ -63,6 +63,13 @@ signal artery_kill(bone: Node3D)
 ## A leech (Leech) latched on (true) or the last one came off (false). While
 ## one's on, the gun won't fire: each fresh click tugs at it instead.
 signal leech_latched(on: bool)
+## H (pills) / B (bandage) pressed with one to use: the gun goes down, the
+## item comes up in one hand (Viewmodel), and the heal lands at the end.
+signal item_used(item: int, model: PackedScene, use_time: float, lower_time: float, recover_time: float)
+## Carried pills or bandages changed (picked up or used), for the HUD.
+signal items_changed
+
+enum Item { PILLS, BANDAGE }
 
 ## Everything the host needs to judge one shot.
 class Shot:
@@ -136,6 +143,24 @@ const TEST_WEAPON_PATHS := [
 ## roach) uses that instead.
 @export var prop_push_multiplier: float = 2.0
 
+@export_group("Healing Items (H, B)")
+## Pills (H): pop them and pills_heal comes back the moment the bottle's gone
+## past the top of the screen (Left 4 Dead 2's pills -- an instant top-up
+## after a quick animation). Bandages (B): wrap one on and bandage_heal comes
+## back over bandage_heal_time seconds.
+@export var pills_heal: float = 50.0
+@export var pills_use_time: float = 0.9
+@export var max_pills: int = 2
+@export var bandage_heal: float = 40.0
+@export var bandage_heal_time: float = 8.0
+@export var bandage_use_time: float = 1.4
+@export var max_bandages: int = 3
+## The one-handed models (the PSX Mega Pack's), and the gun's drop/return.
+@export var pills_model: PackedScene = preload("res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/pills_bottle_2.glb")
+@export var bandage_model: PackedScene = preload("res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/bandage_mp_1.glb")
+@export var item_lower_time: float = 0.15
+@export var item_recover_time: float = 0.35
+
 @export_group("Quick Grenade (Q)")
 ## Q throws a grenade without switching to it: the gun drops out of view
 ## (this long), the throw plays, then the gun comes back up (this long).
@@ -197,6 +222,14 @@ var _throw_left := -1.0
 var _throw_weapon: WeaponData
 var _quick_throw_held_prev := false
 var _fire_held_prev := false
+## Healing items carried, and the one being used (-1 = none) with the time
+## left until its heal lands.
+var pills := 0
+var bandages := 0
+var _item_using := -1
+var _item_left := 0.0
+var _pills_held_prev := false
+var _bandage_held_prev := false
 ## Leeches stuck on this player (untyped: any may be freed).
 var _leeches: Array = []
 ## The weapon held before this one -- where you go back to when you run out
@@ -303,6 +336,67 @@ func pickup_weapon(weapon: WeaponData, ammo_amount: int) -> void:
 ## Called by AmmoPickup, and internally by pickup_weapon(). `emit_signal`
 ## lets a weapon pickup's own ammo top-off fold into ONE picked_up signal
 ## instead of firing two.
+## Takes up to `amount` pills or bandages (ItemPickup), as many as there's
+## room for; returns how many it took.
+func add_item(item: int, amount: int) -> int:
+	var room := (max_pills - pills) if item == Item.PILLS else (max_bandages - bandages)
+	var taken := clampi(amount, 0, room)
+	if taken <= 0:
+		return 0
+	if item == Item.PILLS:
+		pills += taken
+	else:
+		bandages += taken
+	items_changed.emit()
+	return taken
+
+
+## Called every physics tick next to tick(): H pops pills, B wraps a bandage
+## (if you have one, aren't busy throwing, and no leech is on you), and the
+## heal lands when the item's animation is done. Rule 1: built from the
+## player's input like tick(), so the host can run it.
+func tick_items(use_pills: bool, use_bandage: bool, delta: float) -> void:
+	var pills_pressed := use_pills and not _pills_held_prev
+	var bandage_pressed := use_bandage and not _bandage_held_prev
+	_pills_held_prev = use_pills
+	_bandage_held_prev = use_bandage
+	if _item_using >= 0:
+		_item_left -= delta
+		if _item_left <= 0.0:
+			_finish_item()
+		return
+	if has_leech() or _throw_left >= 0.0:
+		return
+	if pills_pressed and pills > 0:
+		_start_item(Item.PILLS, pills_model, pills_use_time)
+	elif bandage_pressed and bandages > 0:
+		_start_item(Item.BANDAGE, bandage_model, bandage_use_time)
+
+
+func _start_item(item: int, model: PackedScene, use_time: float) -> void:
+	_item_using = item
+	_item_left = item_lower_time + use_time
+	_reload_time_left = 0.0 # a reload in progress is dropped
+	_aim = 0.0
+	item_used.emit(item, model, use_time, item_lower_time, item_recover_time)
+
+
+## The animation's done: the item's used up and the heal lands.
+func _finish_item() -> void:
+	var health := _body.get_node_or_null("Health") as Health
+	if _item_using == Item.PILLS:
+		pills -= 1
+		if health:
+			health.heal(pills_heal)
+	else:
+		bandages -= 1
+		if health:
+			health.regenerate(bandage_heal, bandage_heal_time)
+	_item_using = -1
+	_cooldown = maxf(_cooldown, item_recover_time) # the gun's still coming back up
+	items_changed.emit()
+
+
 ## A leech got you (Leech._latch()).
 func latch_leech(leech: Node) -> void:
 	if _leeches.has(leech):
@@ -349,6 +443,8 @@ func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon:
 		if fire_pressed:
 			_leeches[0].call("tug")
 		return
+	if _item_using >= 0:
+		return # both hands busy with pills or a bandage (tick_items())
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_reload_blocked_left = maxf(_reload_blocked_left - delta, 0.0)
 	_time_since_shot += delta
