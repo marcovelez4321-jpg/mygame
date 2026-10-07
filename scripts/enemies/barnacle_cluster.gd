@@ -44,7 +44,7 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 ## A pack of surface Deepmaws (DeepmawCrawler, the rats' pack behaviour)
 ## guarding the clump from the floor under it; 0 = none.
 @export var guard_pack_scene: PackedScene = preload("res://scenes/enemy/deepmaw_pack.tscn")
-@export var guard_count: int = 4
+@export var guard_count: int = 0 # off for now: the crawlers are shelved (scripts and scenes kept)
 
 const GROUP := "barnacle_clusters"
 
