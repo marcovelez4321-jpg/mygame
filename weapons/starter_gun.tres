@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bnjpiq8h0wxyh"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
-[ext_resource type="PackedScene" uid="uid://dxh5oybljgwgu" path="res://art/weapons/NEWPSXWEAPONS/Revolver/Revolver_glb.glb" id="2_revolver"]
+[ext_resource type="PackedScene" uid="uid://cbgd0ds051qau" path="res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/pistol_mp_1.glb" id="2_pistol"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_fire.tres" id="3_fire"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_switch.tres" id="5_switch"]
@@ -9,16 +9,17 @@
 
 [resource]
 script = ExtResource("1")
-weapon_name = "Revolver"
+weapon_name = "Pistol"
 magazine_size = 6
 recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-0.05, 0.7), Vector2(0.1, 0.75), Vector2(0.15, 0.8), Vector2(0.25, 0.7), Vector2(0.3, 0.6), Vector2(0.3, 0.5), Vector2(0.2, 0.45), Vector2(-0.1, 0.45), Vector2(-0.3, 0.4), Vector2(-0.4, 0.4), Vector2(-0.35, 0.35), Vector2(-0.2, 0.35), Vector2(0.2, 0.35), Vector2(0.35, 0.3)])
 recoil_scale = 4.0
 recoil_jitter = 0.32
 aim_position = Vector3(-0.00096765015, -0.11331543, -0.3)
-viewmodel_scene = ExtResource("2_revolver")
+viewmodel_scene = ExtResource("2_pistol")
 viewmodel_position = Vector3(0.115640216, -0.12794662, -0.5408055)
-viewmodel_scale = 0.105
-muzzle_offset = Vector3(0, 0.77, -1.82)
+viewmodel_rotation_degrees = Vector3(0, 90, 0)
+viewmodel_scale = 1.4
+muzzle_offset = Vector3(0.14, 0.073, 0)
 muzzle_flash_time = 0.1
 placeholder_color = Color(0.85, 0.75, 0.3, 1)
 hold_animation = ExtResource("6_hold")
