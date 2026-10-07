@@ -591,3 +591,5 @@ them:
 - 2026-10-07: Deepmaws (burrowing escorts and crawlers) now the barnacles' colour: body tint (1.88, 0.83, 0.61) -- the barnacle texture's average (0.43, 0.18, 0.10) over the DEEPMAW body texture's (0.23, 0.21, 0.16), so the worm's texture averages out to the barnacle's reddish flesh (tint values above 1 brighten; the material multiplies). Replaces the dark-brown tint.
 
 - 2026-10-07: Deepmaw Crawlers shelved: `BarnacleCluster.guard_count` 4 -> 0, so clumps grow no crawler packs. deepmaw_crawler.gd/.tscn and deepmaw_pack.gd/.tscn are kept for later; set guard_count back above 0 to bring them back.
+
+- 2026-10-07: Deepmaw escorts back to their dark-brown tint (0.39, 0.24, 0.185); the barnacle-colour tint stays only on the (shelved) crawlers.
