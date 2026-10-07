@@ -1,0 +1,36 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/deepmaw.gd" id="1_deepmaw"]
+[ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_health"]
+[ext_resource type="Texture2D" uid="uid://c1yka1rm1tp2b" path="res://art/DEEPMAW- Retro psx  monster/Texture/cuerpo gusano.png" id="3_body"]
+[ext_resource type="Texture2D" uid="uid://dqgcvrly6lyb3" path="res://art/DEEPMAW- Retro psx  monster/Texture/dientes.png" id="4_teeth"]
+[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="5_breach"]
+[ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="6_bite"]
+[ext_resource type="Resource" path="res://audio/events/enemy/roach_splat.tres" id="7_death"]
+
+[sub_resource type="StandardMaterial3D" id="DeepmawBody"]
+albedo_color = Color(0.78, 0.48, 0.37, 1)
+albedo_texture = ExtResource("3_body")
+roughness = 0.6
+texture_filter = 0
+
+[sub_resource type="StandardMaterial3D" id="DeepmawTeeth"]
+albedo_texture = ExtResource("4_teeth")
+roughness = 0.5
+texture_filter = 0
+
+[node name="Deepmaw" type="Node3D"]
+script = ExtResource("1_deepmaw")
+body_material = SubResource("DeepmawBody")
+teeth_material = SubResource("DeepmawTeeth")
+breach_sound = ExtResource("5_breach")
+bite_sound = ExtResource("6_bite")
+death_sound = ExtResource("7_death")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 150.0
+
+[node name="Body" type="AnimatableBody3D" parent="."]
+collision_mask = 0
+sync_to_physics = false

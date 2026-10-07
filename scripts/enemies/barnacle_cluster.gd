@@ -37,6 +37,10 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 ## Off for now: leeches are switched off game-wide until they're fixed. Turn
 ## this on to bring back a clump's leech guards.
 @export var spawn_leeches: bool = false
+## Deepmaws lurking under the floor below the clump, coming up at anyone
+## who gets near it (on a wall or ceiling clump: under the floor beneath it).
+@export var defender_scene: PackedScene = preload("res://scenes/enemy/deepmaw.tscn")
+@export var defender_count: int = 1
 
 const GROUP := "barnacle_clusters"
 
@@ -76,6 +80,7 @@ func _grow() -> void:
 			barnacle.spider_pack = pack
 			add_child(barnacle)
 			barnacle.global_transform = Transform3D(_basis_on(hit.normal), hit.position)
+		_spawn_defenders()
 		for i in (leech_count if spawn_leeches else 0):
 			var flat := Vector2.from_angle(randf() * TAU) * randf_range(radius, radius * 1.8)
 			var leech := leech_scene.instantiate() as Node3D
@@ -134,3 +139,18 @@ func _add_fungus(at: Vector3, normal: Vector3) -> void:
 	var width := randf_range(0.35, 0.9)
 	var mound_basis := _basis_on(normal) * Basis.from_scale(Vector3(width, width * randf_range(0.25, 0.45), width * randf_range(0.7, 1.0)))
 	mound.global_transform = Transform3D(mound_basis, at)
+
+
+func _spawn_defenders() -> void:
+	if defender_scene == null or defender_count <= 0:
+		return
+	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.5, global_position + Vector3.DOWN * 30.0)
+	query.collision_mask = 1
+	query.exclude = _barnacle_rids()
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var floor_at: Vector3 = hit.position if not hit.is_empty() else global_position
+	for i in defender_count:
+		var defender := defender_scene.instantiate() as Node3D
+		var around := Vector2.from_angle(randf() * TAU) * randf_range(1.0, radius * 1.5)
+		defender.position = floor_at + Vector3(around.x, 0.0, around.y) # the level's root sits at the origin
+		get_tree().current_scene.add_child(defender)

@@ -52,24 +52,47 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export var maw_size: float = 1.15
 
 @export_group("Movement")
-@export var max_speed: float = 11.0
+## Tunnelling speed under the floor (15% up on the first version's 11).
+@export var max_speed: float = 12.65
 ## How fast it can change velocity inside the ground (m/s²): lower = wider,
 ## lazier arcs and more overshoot.
-@export var acceleration: float = 14.0
-## Out of the ground: gravity, and the little steering it has left.
+@export var acceleration: float = 16.1
+## Out of the ground: gravity (it has no control in the air).
 @export var air_gravity: float = 16.0
-@export var air_control: float = 2.0
-## Far from its prey it tunnels this far under the floor...
+## Tunnelling this far under the floor...
 @export var lurk_depth: float = 3.0
-## ...never deeper than this...
-@export var max_depth: float = 7.0
-## ...and within this (flat distance) it comes straight up at them.
-@export var breach_range: float = 14.0
+## ...never deeper than this.
+@export var max_depth: float = 10.0
 ## Players further than this are ignored: it wanders, breaching now and then.
 @export var notice_range: float = 45.0
 @export var wander_radius: float = 25.0
 ## Chance a wander goal is up in the air (so it breaches just to show off).
 @export_range(0.0, 1.0, 0.05) var wander_breach_chance: float = 0.3
+
+@export_group("The Leap")
+## Its attack, over and over: it tunnels to a spot under its prey, sinks to
+## dive_depth while the ground shakes and cracks where it'll come out
+## (windup_time -- your warning), then shoots up and erupts from under them
+## on a huge arc that peaks leap_height above the floor right over them and
+## comes down leap_lead beyond -- the whole body pouring out after it -- and
+## dives back in, swings round underground (dive_time) and goes again.
+@export var leap_height: float = 9.0
+## It erupts this far short of the prey (along its approach) and lands as far
+## past them: 0 = straight up through them.
+@export var leap_lead: float = 3.0
+@export var dive_depth: float = 7.0
+@export var windup_time: float = 1.1
+@export var rise_speed: float = 22.0
+@export var dive_time: float = 1.4
+## Every so often a smaller skimming hop instead (a quick breach and back in).
+@export_range(0.0, 1.0, 0.05) var hop_chance: float = 0.25
+@export var hop_height: float = 3.5
+
+@export_group("Escorts")
+## Deepmaws that swim along under it and come up at anyone near it
+## (Deepmaw.guard_node = this worm). Host only, spawned with it.
+@export var escort_scene: PackedScene = preload("res://scenes/enemy/deepmaw.tscn")
+@export var escort_count: int = 3
 
 @export_group("Attack")
 ## The head's bite and any other segment's touch, and how often each can
@@ -91,14 +114,28 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export var trail_interval: float = 0.18
 @export var rumble_range: float = 10.0
 @export var rumble: float = 0.6
-## Camera shake when it bursts out of or dives into a surface near you.
+## Camera shake when it bursts out of or dives into a surface near you, and
+## how big the eruption under you is.
 @export var breach_shake: float = 4.0
+@export var eruption_shake: float = 9.0
 @export var shake_range: float = 20.0
+## Breaching effects (sound, dirt, hole) at most this often -- the head
+## grazing the floor line mustn't fire them every frame.
+@export var breach_fx_cooldown: float = 0.6
 @export var breach_sound: SoundEvent
 @export var bite_sound: SoundEvent
 @export var death_sound: SoundEvent
 
 var target: Node3D
+
+## The attack cycle (The Leap).
+enum Phase { WANDER, TUNNEL, WINDUP, RISE, AIR, DIVE }
+var _phase := Phase.WANDER
+var _phase_left := 0.0
+## Where it'll erupt (on the floor) and the velocity it leaves the ground with.
+var _leap_from := Vector3.ZERO
+var _leap_height := 0.0
+var _breach_fx_left := 0.0
 
 var _segments: Array[AnimatableBody3D] = []
 var _visuals: Array[Node3D] = []
@@ -147,6 +184,25 @@ func _ready() -> void:
 	_pick_wander()
 	_place_segments()
 	_ignore_players()
+	if multiplayer.is_server():
+		_spawn_escorts.call_deferred()
+
+
+func _spawn_escorts() -> void:
+	if escort_scene == null:
+		return
+	var world := get_tree().current_scene
+	for i in escort_count:
+		var escort := escort_scene.instantiate() as Node3D
+		var around := Vector2.from_angle(TAU * i / maxf(escort_count, 1)) * 4.0
+		escort.position = Vector3(_home.x + around.x, _ground_y, _home.z + around.y) # the level's root sits at the origin
+		escort.set("guard_node", self)
+		world.add_child(escort)
+
+
+## The floor right under its head (what its escorts guard).
+func ground_position() -> Vector3:
+	return Vector3(_pos[0].x, _ground_y, _pos[0].z)
 
 
 # ---- Building the body ------------------------------------------------------
@@ -169,12 +225,12 @@ func _build_segment(index: int, radius: float) -> void:
 	segment_health.max_health = 1000000.0
 	body.add_child(segment_health)
 	segment_health.damaged.connect(_on_segment_damaged.bind(index))
+	add_child(body) # in the tree before measuring the maw (global transforms)
 	var visual := Node3D.new()
 	body.add_child(visual)
 	_add_slices(visual, radius, index)
 	if index == 0:
 		_add_maw(visual, radius)
-	add_child(body)
 	_segments.append(body)
 	_visuals.append(visual)
 
@@ -225,6 +281,12 @@ func _add_slices(visual: Node3D, radius: float, index: int) -> void:
 		var basis := spin * stretch * lay
 		slice.transform = Transform3D(basis, -(basis * center))
 		_skin(slice, skin_material)
+		# 60 slices in the shadow pass cost frames: only the head's maw
+		# casts a shadow (the dirt and the eruption sell it anyway).
+		for mesh in slice.find_children("*", "GeometryInstance3D", true, false):
+			(mesh as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if slice is GeometryInstance3D:
+			(slice as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 ## The barnacle's maw on the head, its mouth facing forward (-Z).
@@ -276,26 +338,28 @@ func _physics_process(delta: float) -> void:
 		_retarget = 0.5
 		target = _nearest_player()
 		_ignore_players()
+	_breach_fx_left = maxf(_breach_fx_left - delta, 0.0)
 	var head := _pos[0]
 	var was_inside := _inside
 	_inside = _in_ground(head)
-	var goal := _goal(head, delta)
-	if _inside:
+	_update_phase(head, delta)
+	if _phase == Phase.AIR:
+		_vel.y -= air_gravity * delta # no control up there: the arc is set
+	elif _phase == Phase.RISE:
+		_vel = _vel.move_toward((_leap_from - head).normalized() * rise_speed, rise_speed * 4.0 * delta)
+	elif _inside:
 		# In the ground: full control, but only so much acceleration -- it
 		# overshoots and comes round in arcs.
-		_vel = _vel.move_toward((goal - head).normalized() * max_speed, acceleration * delta)
+		_vel = _vel.move_toward((_goal(head, delta) - head).normalized() * max_speed, acceleration * delta)
 	else:
-		# In the open: gravity has it.
-		_vel.y -= air_gravity * delta
-		var flat := Vector3(goal.x - head.x, 0.0, goal.z - head.z)
-		if flat.length_squared() > 0.01:
-			_vel += flat.normalized() * air_control * delta
+		_vel.y -= air_gravity * delta # breached while wandering: falls back in
 	if head.y < _ground_y - max_depth:
 		_vel.y = maxf(_vel.y, 2.0)
-	_vel = _vel.limit_length(max_speed * 1.6)
+	if _phase != Phase.AIR:
+		_vel = _vel.limit_length(maxf(max_speed, rise_speed) * 1.2)
 	var new_head := head + _vel * delta
 	if was_inside != _inside:
-		_breach_fx(head, new_head, _inside)
+		_on_crossed(head, new_head, _inside)
 	_pos[0] = new_head
 	# Follow the leader.
 	for i in range(1, _pos.size()):
@@ -318,15 +382,99 @@ func _place_segments() -> void:
 		_segments[i].global_transform = Transform3D(Basis.looking_at(forward.normalized(), up), _pos[i])
 
 
-## Where the head's headed: under the floor toward its prey from afar, then
-## straight at them; with nobody about, wandering (now and then breaching).
+## The attack cycle (see The Leap): hunting, it tunnels to the spot under
+## its prey, winds up deep under it, rises, erupts and arcs over, dives back
+## in and comes round again. With no prey, it wanders.
+func _update_phase(head: Vector3, delta: float) -> void:
+	_phase_left -= delta
+	var hunting := target != null and is_instance_valid(target)
+	if not hunting and _phase != Phase.AIR and _phase != Phase.RISE:
+		_phase = Phase.WANDER
+	match _phase:
+		Phase.WANDER:
+			if hunting:
+				_phase = Phase.TUNNEL
+		Phase.TUNNEL:
+			_plan_leap()
+			var under := Vector3(_leap_from.x, head.y, _leap_from.z)
+			if head.distance_to(under) < 2.5 and head.y < _ground_y - 0.5:
+				_phase = Phase.WINDUP
+				_phase_left = windup_time
+		Phase.WINDUP:
+			_plan_leap()
+			_telegraph(delta)
+			if _phase_left <= 0.0:
+				_phase = Phase.RISE
+		Phase.RISE:
+			if not _inside:
+				_erupt(head)
+			elif head.y > _ground_y + 1.0:
+				_erupt(head) # came up inside something (a platform): go anyway
+		Phase.AIR:
+			if _inside and _vel.y < 0.0:
+				_phase = Phase.DIVE
+				_phase_left = dive_time
+		Phase.DIVE:
+			if _phase_left <= 0.0:
+				_phase = Phase.TUNNEL
+
+
+## Where to come up: leap_lead short of the prey along the way it's coming
+## (so it erupts in front of / under them and arcs over), and how high --
+## a skimming hop now and then.
+func _plan_leap() -> void:
+	if not is_instance_valid(target):
+		return
+	var prey := target.global_position
+	var head := _pos[0]
+	var approach := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
+	if approach.length_squared() < 0.25:
+		approach = Vector3(_vel.x, 0.0, _vel.z)
+	approach = approach.normalized() if approach.length_squared() > 0.0001 else Vector3.FORWARD
+	_leap_from = Vector3(prey.x, _ground_y, prey.z) - approach * leap_lead
+
+
+## Breaking the surface: it leaves the ground on exactly the arc that peaks
+## over its prey -- straight up at sqrt(2 g h), across at whatever gets it
+## over them by the top -- and the ground explodes.
+func _erupt(head: Vector3) -> void:
+	_phase = Phase.AIR
+	var height := hop_height if randf() < hop_chance else leap_height
+	var rise := sqrt(2.0 * air_gravity * maxf(height, 0.5))
+	var time_to_top := rise / air_gravity
+	var over := Vector3.ZERO
+	if is_instance_valid(target):
+		over = Vector3(target.global_position.x - head.x, 0.0, target.global_position.z - head.z) / time_to_top
+	_vel = Vector3(over.x, rise, over.z)
+	_shake_near(head, eruption_shake, shake_range)
+
+
+## Winding up under its prey: the ground shakes harder and harder and cracks
+## open where it's about to come out.
+func _telegraph(delta: float) -> void:
+	_trail_left -= delta
+	if _trail_left > 0.0:
+		return
+	_trail_left = 0.15
+	var t := 1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)
+	var spot := Vector3(_leap_from.x, _ground_y + 0.05, _leap_from.z)
+	var jitter := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * head_radius
+	BloodFX.spawn_impact(get_tree().current_scene, spot + jitter, Vector3.UP, dirt_color, 0.75 + t)
+	_shake_near(spot, rumble * (1.0 + t * 2.0), rumble_range)
+
+
+## Where the head is going while it has control: hunting, the tunnel under
+## its prey (or, winding up, straight down under the eruption spot; diving,
+## on down and round); with nobody about, wandering.
 func _goal(head: Vector3, delta: float) -> Vector3:
-	if target and is_instance_valid(target):
-		var prey := Factions.aim_point(target)
-		var flat := Vector2(prey.x - head.x, prey.z - head.z).length()
-		if flat > breach_range:
-			return Vector3(prey.x, _ground_y - lurk_depth, prey.z)
-		return prey
+	match _phase:
+		Phase.TUNNEL:
+			return Vector3(_leap_from.x, _ground_y - lurk_depth, _leap_from.z)
+		Phase.WINDUP:
+			return Vector3(_leap_from.x, _ground_y - dive_depth, _leap_from.z)
+		Phase.DIVE:
+			var on := Vector3(_vel.x, 0.0, _vel.z).normalized() * 6.0
+			return Vector3(head.x + on.x, _ground_y - lurk_depth - 1.0, head.z + on.z)
 	_wander_left -= delta
 	if _wander_left <= 0.0 or head.distance_to(_wander_to) < 2.0:
 		_pick_wander()
@@ -384,6 +532,16 @@ func _in_ground(point: Vector3) -> bool:
 
 ## Bursting out of (or diving into) a surface: a spray of dirt and a dark
 ## hole where it went through, a crunch, and the camera shakes nearby.
+## Crossed a surface: the full effects, at most every breach_fx_cooldown --
+## the head grazing the floor line would otherwise fire them every frame
+## (that was the flood of digging noises).
+func _on_crossed(from: Vector3, to: Vector3, entering: bool) -> void:
+	if _breach_fx_left > 0.0:
+		return
+	_breach_fx_left = breach_fx_cooldown
+	_breach_fx(from, to, entering)
+
+
 func _breach_fx(from: Vector3, to: Vector3, entering: bool) -> void:
 	var world := get_tree().current_scene
 	var hit := _static_ray(from, to + (to - from).normalized() * 0.5) if entering \
@@ -398,11 +556,15 @@ func _breach_fx(from: Vector3, to: Vector3, entering: bool) -> void:
 	BloodFX.spawn_impact(world, at, normal, dirt_color.lightened(0.15), 3.0)
 	BloodFX.spawn_impact(world, at, (normal + Vector3(randf() - 0.5, 0.0, randf() - 0.5)).normalized(), dirt_color, 2.0)
 	SoundPlayer.play_3d(breach_sound, at, world)
+	_shake_near(at, breach_shake, shake_range)
+
+
+func _shake_near(at: Vector3, strength: float, within: float) -> void:
 	for node in get_tree().get_nodes_in_group("player"):
 		var player := node as Node3D
 		var distance := player.global_position.distance_to(at)
-		if distance < shake_range and player.get("camera") is CameraJuice:
-			(player.get("camera") as CameraJuice).shake(breach_shake * (1.0 - distance / shake_range))
+		if distance < within and player.get("camera") is CameraJuice:
+			(player.get("camera") as CameraJuice).shake(strength * (1.0 - distance / within))
 
 
 ## Body segments crossing the floor (out or back in): a smaller puff of dirt
@@ -411,7 +573,7 @@ func _crossings() -> void:
 	var world := get_tree().current_scene
 	for i in range(1, _pos.size()):
 		var below := 1 if _pos[i].y < _ground_y else 0
-		if below != _below[i] and i % 2 == 0:
+		if below != _below[i] and i % 4 == 0:
 			BloodFX.spawn_impact(world, Vector3(_pos[i].x, _ground_y + 0.05, _pos[i].z), Vector3.UP, dirt_color, 1.0)
 		_below[i] = below
 
@@ -420,7 +582,7 @@ func _crossings() -> void:
 ## rumbling under anyone it's passing beneath.
 func _trail(delta: float) -> void:
 	var head := _pos[0]
-	if head.y >= _ground_y or head.y < _ground_y - lurk_depth - 1.5:
+	if _phase != Phase.TUNNEL or head.y >= _ground_y or head.y < _ground_y - lurk_depth - 1.5:
 		return
 	_trail_left -= delta
 	if _trail_left > 0.0:
@@ -428,12 +590,7 @@ func _trail(delta: float) -> void:
 	_trail_left = trail_interval
 	var surface := Vector3(head.x, _ground_y + 0.05, head.z)
 	BloodFX.spawn_impact(get_tree().current_scene, surface, Vector3.UP, dirt_color, 0.75)
-	if randf() < 0.3:
-		BloodFX.spawn_splatter(get_tree().current_scene, surface, Vector3.UP, _radii[0] * 1.2, dirt_color.darkened(0.2))
-	for node in get_tree().get_nodes_in_group("player"):
-		var player := node as Node3D
-		if player.global_position.distance_to(surface) < rumble_range and player.get("camera") is CameraJuice:
-			(player.get("camera") as CameraJuice).shake(rumble)
+	_shake_near(surface, rumble, rumble_range)
 
 
 # ---- Hurting and being hurt -------------------------------------------------
