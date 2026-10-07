@@ -311,7 +311,9 @@ func _on_item_used(item: int, model: PackedScene, use_time: float, lower_time: f
 		return
 	var held := Node3D.new()
 	camera.add_child(held)
-	held.add_child(model.instantiate())
+	var held_model := model.instantiate() as Node3D
+	held_model.scale = Vector3.ONE * _weapons.item_view_scale
+	held.add_child(held_model)
 	held.position = Vector3(0.06, -0.38, -0.32)
 	held.visible = false
 	var tween := held.create_tween()

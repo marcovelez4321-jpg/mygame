@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
+[ext_resource type="Resource" path="res://weapons/pkm.tres" id="2"]
+[ext_resource type="PackedScene" uid="uid://dg37twuejxids" path="res://art/weapons/NEWPSXWEAPONS/PKM/PKM.glb" id="3"]
+
+[sub_resource type="SphereShape3D" id="PickupZoneShape"]
+radius = 0.8
+
+[sub_resource type="BoxShape3D" id="GunShape"]
+size = Vector3(0.16, 0.3, 1.2)
+
+[node name="PKMPickup" type="RigidBody3D"]
+mass = 7.5
+script = ExtResource("1")
+weapon = ExtResource("2")
+ammo_amount = 200
+
+[node name="PickupArea" type="Area3D" parent="."]
+collision_layer = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea"]
+shape = SubResource("PickupZoneShape")
+
+[node name="PKM" parent="." instance=ExtResource("3")]
+transform = Transform3D(0.27, 0, 0, 0, 0.27, 0, 0, 0, 0.27, 0, -0.01, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0)
+shape = SubResource("GunShape")

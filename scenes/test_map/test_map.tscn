@@ -23,6 +23,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemy/barnacle_cluster.tscn" id="30_barnacles"]
 [ext_resource type="PackedScene" path="res://scenes/pills_pickup.tscn" id="31_pills"]
 [ext_resource type="PackedScene" path="res://scenes/bandage_pickup.tscn" id="32_bandage"]
+[ext_resource type="PackedScene" path="res://scenes/pkm_pickup.tscn" id="33_pkm"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)
@@ -800,3 +801,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 0.5, -5)
 
 [node name="BandagePickup3" parent="." unique_id=2004614820 instance=ExtResource("32_bandage")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.5, -40)
+
+[node name="PKMPickup" parent="." unique_id=1813813055 instance=ExtResource("33_pkm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.6, 20)
