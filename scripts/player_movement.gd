@@ -181,7 +181,7 @@ class PlayerInput:
 	var fire: bool = false
 	var aim: bool = false # right mouse: aim down the sights
 	var quick_throw: bool = false # Q: throw a grenade without switching to it
-	var use_pills: bool = false # H: pop pills
+	var use_pills: bool = false # T: pop pills (H is the viewmodel tool's arms key)
 	var use_bandage: bool = false # B: wrap a bandage
 	var reload: bool = false
 	var grab: bool = false
@@ -385,7 +385,7 @@ func _gather_input() -> PlayerInput:
 	input.reload = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_R)
 	input.use_pills = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
-			and Input.is_physical_key_pressed(KEY_H)
+			and Input.is_physical_key_pressed(KEY_T)
 	input.use_bandage = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_B)
 	input.grab = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \

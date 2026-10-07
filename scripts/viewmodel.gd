@@ -118,7 +118,7 @@ var _gun: Node3D
 ## Thrown the grenade, waiting for the next one to come into the hand.
 var _waiting_for_grenade := false
 ## The weapon whose model is in your hand right now (it can differ from the
-## equipped one for a moment: a quick throw or an H / B heal shows its own).
+## equipped one for a moment: a quick throw or an T / B heal shows its own).
 var _shown_weapon: WeaponData
 var _model_rest_position: Vector3
 var _model_rest_rotation: Vector3
@@ -313,7 +313,7 @@ func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_del
 ## -- so whatever you line up with F2 is what you see. It comes up low and
 ## forward where a throw ends, swings back up toward your face where a throw
 ## winds up, and on up past the top of the screen (Left 4 Dead 2's pill pop);
-## the heal lands as it goes. Used off a gun (H / B), the gun drops first and
+## the heal lands as it goes. Used off a gun (T / B), the gun drops first and
 ## comes back up after; used from its own slot, the next one comes up into
 ## your hand (or, with none left, WeaponController switches you back).
 func _on_item_used(item: int, item_weapon: WeaponData, use_time: float, lower_time: float, recover_time: float, equipped: bool) -> void:

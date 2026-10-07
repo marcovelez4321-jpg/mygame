@@ -66,7 +66,7 @@ signal leech_latched(on: bool)
 ## H (pills) / B (bandage) pressed with one to use: the gun goes down, the
 ## item comes up in one hand (Viewmodel), and the heal lands at the end.
 ## `weapon` is the item's own slot (pills.tres / bandage.tres); `equipped` =
-## it was already in your hand (clicked), not used off the gun with H / B.
+## it was already in your hand (clicked), not used off the gun with T / B.
 signal item_used(item: int, weapon: WeaponData, use_time: float, lower_time: float, recover_time: float, equipped: bool)
 ## Carried pills or bandages changed (picked up or used), for the HUD.
 signal items_changed
@@ -145,8 +145,8 @@ const TEST_WEAPON_PATHS := [
 ## roach) uses that instead.
 @export var prop_push_multiplier: float = 2.0
 
-@export_group("Healing Items (H, B)")
-## Pills (H): pop them and pills_heal comes back the moment the bottle's gone
+@export_group("Healing Items (T, B)")
+## Pills (T): pop them and pills_heal comes back the moment the bottle's gone
 ## past the top of the screen (Left 4 Dead 2's pills -- an instant top-up
 ## after a quick animation). Bandages (B): wrap one on and bandage_heal comes
 ## back over bandage_heal_time seconds.
@@ -159,11 +159,11 @@ const TEST_WEAPON_PATHS := [
 @export var max_bandages: int = 3
 ## Their slots: carrying any, they're in your inventory to equip like the
 ## grenade (click to use one); their model, place in your hand and arms are
-## set on these (tune with F2, save with F3). H / B still use one straight
+## set on these (tune with F2, save with F3). T / B still use one straight
 ## off whatever you're holding.
 @export var pills_weapon: WeaponData = preload("res://weapons/pills.tres")
 @export var bandage_weapon: WeaponData = preload("res://weapons/bandage.tres")
-## The gun's drop before an H / B use, and everything's return after.
+## The gun's drop before an T / B use, and everything's return after.
 @export var item_lower_time: float = 0.15
 @export var item_recover_time: float = 0.35
 
@@ -403,7 +403,7 @@ func _remove_slot(index: int) -> void:
 		_current = _owned.find(current)
 
 
-## Called every physics tick next to tick(): H pops pills, B wraps a bandage
+## Called every physics tick next to tick(): T pops pills, B wraps a bandage
 ## (if you have one, aren't busy throwing, and no leech is on you), and the
 ## heal lands when the item's animation is done. Rule 1: built from the
 ## player's input like tick(), so the host can run it.

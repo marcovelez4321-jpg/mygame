@@ -157,6 +157,9 @@ var speed_scale := 1.0
 var rhythm_seed := 0.0
 ## Goes for walls and ceilings first (rolled from wall_preference).
 var wall_lover := false
+## One of the pack hauling a body (SpiderPack): it goes where the pack says
+## and doesn't bite or leap at anything.
+var dragging := false
 ## A wall the pack found for it to climb (has_wall_spot), refreshed now and then.
 var wall_spot := Vector3.ZERO
 var has_wall_spot := false
@@ -409,7 +412,7 @@ func _launch(velocity: Vector3, state: State) -> void:
 
 
 func _try_bite() -> void:
-	if _bite_cooldown > 0.0 or pack == null or not is_instance_valid(pack.target):
+	if dragging or _bite_cooldown > 0.0 or pack == null or not is_instance_valid(pack.target):
 		return
 	if global_position.distance_to(Factions.aim_point(pack.target)) > bite_reach \
 			and global_position.distance_to(pack.target.global_position) > bite_reach:
@@ -430,7 +433,7 @@ func _bite(target: Node3D, damage: float) -> void:
 ## Close enough to its prey and it can see them: now and then, leap -- much
 ## more eagerly, and from much further, off a wall or ceiling.
 func _maybe_leap(delta: float) -> void:
-	if _leap_cooldown > 0.0 or pack == null or pack.order != SpiderPack.Order.HUNT or not is_instance_valid(pack.target):
+	if dragging or _leap_cooldown > 0.0 or pack == null or pack.order != SpiderPack.Order.HUNT or not is_instance_valid(pack.target):
 		return
 	var target := pack.target
 	var distance := global_position.distance_to(Factions.aim_point(target))
@@ -458,7 +461,7 @@ func leap(target: Node3D) -> void:
 ## Up a wall but not getting any closer, and too far to leap: drop off and go
 ## along the floor for a while.
 func _watch_stall(delta: float) -> void:
-	if not on_wall() or pack == null or not is_instance_valid(pack.target) or pack.order != SpiderPack.Order.HUNT:
+	if dragging or not on_wall() or pack == null or not is_instance_valid(pack.target) or pack.order != SpiderPack.Order.HUNT:
 		_stall_time = 0.0
 		_best_distance = INF
 		return
@@ -486,6 +489,11 @@ func place_on(at: Vector3, normal: Vector3) -> void:
 	_velocity = Vector3.ZERO
 	_state = State.CRAWL
 	_plant_all()
+
+
+## A bite of the body it's hauling: fangs open (the blood is the pack's).
+func chew() -> void:
+	_fang_open = 1.0
 
 
 ## Spat out of a barnacle (or thrown): flying, legs flailing, until it grabs on.

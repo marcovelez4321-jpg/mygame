@@ -96,6 +96,44 @@ const SPIDER_SCENE := preload("res://scenes/enemy/spider.tscn")
 ## height of home (meters) and spread out sideways along the wall.
 @export var roam_height: float = 3.0
 
+@export_group("Hauling Bodies")
+## Like the rats (RatSwarm's corpse dragging) and roaches (RoachCarry), a
+## pack eats the dead to breed -- spider-style: when it isn't hunting and has
+## at least haul_min_spiders, now and then (haul_chance a second) the spiders
+## nearest a body within haul_find_range grab a limb each (HAUL_GRIP_BONES)
+## and haul it -- real pulls on the ragdoll's bones, like the rats -- along
+## the floor to the quietest wall nearby (haul_seek_range; fewest hostiles,
+## Factions.danger_at()), then UP it to haul_height (or into the corner under
+## a ceiling), and hold it pinned there while they eat it.
+@export var haul_min_spiders: int = 4
+@export var haul_max_spiders: int = 8
+@export_range(0.0, 1.0, 0.05) var haul_chance: float = 0.3
+@export var haul_find_range: float = 14.0
+@export var haul_seek_range: float = 14.0
+@export var haul_height: float = 3.0
+## Hauling along the floor: the pace (m/s) and each spider's pull, as a share
+## of the body's weight (rats pull 0.08: spiders are stronger).
+@export var haul_speed: float = 2.0
+@export var haul_pull: float = 0.15
+## Hoisting it up the wall: each spider's lift (share of the body's weight),
+## and the share of the weight each one bears overall (the body's gravity is
+## scaled down) -- 4 spiders: 4 x 0.3 + 4 x 0.12 = 1.7x its weight, enough.
+@export var hoist_strength: float = 0.3
+@export var hoist_support: float = 0.12
+## Hoisting faster than this (m/s), they ease off to just holding it.
+@export var hoist_speed: float = 1.5
+## A spider counts as holding on within this of its body part (x its size).
+@export var hold_reach: float = 1.2
+## Eating it, pinned up there: for eat_time seconds; every bites_per_spider
+## bites (all of them together) a new spider hatches out of the body -- at
+## most spiders_per_body from one body, never past feed_limit in the pack.
+@export var eat_time: float = 12.0
+@export var bite_interval: float = 0.6
+@export var bites_per_spider: int = 12
+@export var spiders_per_body: int = 4
+@export var feed_limit: int = 30
+@export var blood_color: Color = Color(0.55, 0.02, 0.02)
+
 var order := Order.ROAM
 var target: Node3D
 var home := Vector3.ZERO
@@ -111,6 +149,30 @@ var _wander_to := Vector3.ZERO
 var _had_spiders := false
 var _threat = null # untyped: may be freed by the time it's checked
 var _threat_at := -INF
+
+## Hauling a body: GATHER (grabbing limbs), DRAG (along the floor to the
+## wall), HOIST (up the wall), EAT (pinned up there, eating and breeding).
+enum Haul { NONE, GATHER, DRAG, HOIST, EAT }
+## Grabbed in this order as spiders join: hands and feet first (a body hauled
+## by its limbs), then the head, the hips and the chest.
+const HAUL_GRIP_BONES := ["LeftHand", "RightHand", "LeftFoot", "RightFoot", "Head", "Hips", "Chest", "LeftLowerArm"]
+var _haul := Haul.NONE
+var _haul_body: Node3D
+var _haul_ragdoll: EnemyRagdoll
+var _haul_pos := Vector3.ZERO
+## Where it's going: a spot up a wall (_haul_dest), out of that wall's face
+## (_haul_normal), and the foot of the wall below it (_haul_base).
+var _haul_dest := Vector3.ZERO
+var _haul_normal := Vector3.UP
+var _haul_base := Vector3.ZERO
+var _haulers: Array[Spider] = []
+var _grips := {} # Spider -> PhysicalBone3D
+var _haul_timer := 0.0
+var _haul_check := 2.0
+var _haul_check_pos := Vector3.ZERO
+var _haul_stuck := 0.0
+var _bite_left := 0.0
+var _bites := 0
 
 
 func _ready() -> void:
@@ -169,6 +231,8 @@ func spawn_spiders(amount: int, center: Vector3, launch := Vector3.ZERO) -> Arra
 
 func forget(spider: Spider) -> void:
 	spiders.erase(spider)
+	_haulers.erase(spider)
+	_grips.erase(spider)
 
 
 func pack_center() -> Vector3:
@@ -198,6 +262,7 @@ func _physics_process(delta: float) -> void:
 	var center := pack_center()
 	if order == Order.ROAM:
 		_roam(delta, center)
+	_update_haul(delta, center)
 	var speed := spider_speed
 	if order == Order.HUNT and target and center.distance_to(target.global_position) > charge_range:
 		speed *= creep_pace
@@ -207,7 +272,10 @@ func _physics_process(delta: float) -> void:
 		var spider := spiders[i]
 		if not spider.is_crawling():
 			continue
-		spider.desired_velocity = _steer(spider, i, speed, delta)
+		if spider.dragging:
+			spider.desired_velocity = _steer_hauler(spider, i)
+		else:
+			spider.desired_velocity = _steer(spider, i, speed, delta)
 
 
 ## Every half second: keep after the target unless it's dead or every spider
@@ -398,3 +466,307 @@ func _separation(spider: Spider, index: int) -> Vector3:
 		if d < spacing and d > 0.001:
 			push += away / d * (1.0 - d / spacing)
 	return push
+
+
+# ---- Hauling bodies up the walls to eat and breed ---------------------------
+
+func _update_haul(delta: float, center: Vector3) -> void:
+	if _haul == Haul.NONE:
+		_haul_check -= delta
+		if _haul_check <= 0.0:
+			_haul_check = 1.0
+			if order == Order.ROAM and spiders.size() >= haul_min_spiders and randf() < haul_chance:
+				_start_haul(center)
+		return
+	if not is_instance_valid(_haul_body) or not is_instance_valid(_haul_ragdoll) or _haulers.size() < 2:
+		_end_haul()
+		return
+	_haul_timer -= delta
+	_haul_pos = _haul_ragdoll.body_position()
+	var holders := _holding_haulers()
+	match _haul:
+		Haul.GATHER:
+			if holders.size() >= maxi(int(_haulers.size() * 0.6), 2) or _haul_timer <= 0.0:
+				_haul = Haul.DRAG
+				_haul_timer = 12.0
+				_haul_check_pos = _haul_pos
+				_haul_stuck = 1.0
+		Haul.DRAG:
+			var to_base := _haul_base - _haul_pos
+			to_base.y = 0.0
+			if to_base.length() < 0.9:
+				_haul = Haul.HOIST
+				_haul_timer = 10.0
+			elif _haul_timer <= 0.0 or _haul_is_stuck(delta):
+				_haul = Haul.EAT # couldn't get it there: eat it where it lies
+				_haul_timer = eat_time
+				_haul_dest = _haul_pos
+				_haul_normal = Vector3.UP
+			elif holders.size() >= 2:
+				_drag(holders, to_base.normalized())
+			else:
+				_haul_ragdoll.carry({}) # waiting for the others to get hold again
+		Haul.HOIST:
+			if _haul_pos.distance_to(_haul_dest) < 0.7 or _haul_timer <= 0.0:
+				_haul = Haul.EAT
+				_haul_timer = eat_time
+			if holders.size() >= 2:
+				_hoist(holders)
+			else:
+				_haul_ragdoll.carry({})
+		Haul.EAT:
+			if _haul_timer <= 0.0:
+				_end_haul() # done: they let go and it drops
+				return
+			if _haul_normal != Vector3.UP and holders.size() >= 2:
+				_hoist(holders) # pinned up on the wall
+			else:
+				_haul_ragdoll.carry({})
+			_feed(delta, holders)
+
+
+## Picks a body near the pack, somewhere up a wall to take it, and the
+## spiders nearest it to haul it there.
+func _start_haul(center: Vector3) -> void:
+	for node in get_tree().get_nodes_in_group(RatSwarm.CORPSE_GROUP):
+		var body := node as Node3D
+		if body == null or body.has_meta("dragged"):
+			continue
+		var ragdoll := body.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
+		if ragdoll == null:
+			continue
+		var at := ragdoll.body_position()
+		if at.distance_to(center) > haul_find_range or int(body.get_meta("spiders_bred", 0)) >= spiders_per_body:
+			continue
+		if not _pick_haul_spot(at):
+			continue
+		_haul_body = body
+		_haul_ragdoll = ragdoll
+		_haul_pos = at
+		body.set_meta("dragged", true)
+		var by_distance := spiders.duplicate()
+		by_distance.sort_custom(func(a: Spider, b: Spider) -> bool:
+			return a.global_position.distance_squared_to(at) < b.global_position.distance_squared_to(at))
+		_haulers.clear()
+		_grips.clear()
+		for i in mini(haul_max_spiders, by_distance.size()):
+			var spider: Spider = by_distance[i]
+			if not spider.is_crawling():
+				continue
+			spider.dragging = true
+			_haulers.append(spider)
+			_assign_haul_grip(spider)
+			# Its legs and body don't shove the body it's hauling about.
+			for bone in body.find_children("*", "PhysicalBone3D", true, false):
+				spider.add_collision_exception_with(bone as PhysicsBody3D)
+		_haul = Haul.GATHER
+		_haul_timer = 6.0
+		_bites = 0
+		return
+
+
+## The quietest wall within haul_seek_range of `from` that's tall enough to
+## hang a body on: haul_height up it, or tucked into the corner under a
+## ceiling if one comes first. False if there's none.
+func _pick_haul_spot(from: Vector3) -> bool:
+	var space := get_viewport().find_world_3d().direct_space_state
+	var best_danger := INF
+	var found := false
+	var eye := from + Vector3.UP * 0.5
+	for i in 8:
+		var direction := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 8.0 + randf() * 0.4)
+		var hit := _static_ray(space, eye, eye + direction * haul_seek_range)
+		if hit.is_empty():
+			continue
+		var normal := hit.normal as Vector3
+		if absf(normal.y) > 0.3:
+			continue
+		var foot := hit.position as Vector3
+		var floor_hit := _static_ray(space, foot + normal * 0.4, foot + normal * 0.4 + Vector3.DOWN * 3.0)
+		if floor_hit.is_empty():
+			continue
+		var base := (floor_hit.position as Vector3) + normal * 0.4
+		# How high: haul_height, or just under a ceiling if there's one lower.
+		var height := haul_height
+		var ceiling := _static_ray(space, base + Vector3.UP * 0.3, base + Vector3.UP * (haul_height + 1.0))
+		if not ceiling.is_empty():
+			height = minf(height, (ceiling.position as Vector3).y - base.y - 0.6)
+		if height < 1.5:
+			continue
+		var dest := base + Vector3.UP * height
+		# The wall really goes up that far.
+		if _static_ray(space, dest, dest - normal * 1.0).is_empty():
+			continue
+		var danger := Factions.danger_at(get_tree(), Factions.Side.SPIDER, dest, 15.0) + from.distance_to(base) * 0.02
+		if danger < best_danger:
+			best_danger = danger
+			_haul_dest = dest
+			_haul_base = base
+			_haul_normal = normal
+			found = true
+	return found
+
+
+func _static_ray(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> Dictionary:
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 1
+	var exclude: Array[RID] = []
+	for attempt in 4:
+		query.exclude = exclude
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or (hit.collider is StaticBody3D and not hit.collider is AnimatableBody3D):
+			return hit
+		exclude.append(hit.rid)
+	return {}
+
+
+func _assign_haul_grip(spider: Spider) -> void:
+	var bone_name: String = HAUL_GRIP_BONES[_grips.size() % HAUL_GRIP_BONES.size()]
+	var bone := _haul_ragdoll.bone_named(bone_name)
+	_grips[spider] = bone if bone else _haul_ragdoll.bone_named("Hips")
+
+
+func _grip_position(spider: Spider) -> Vector3:
+	var bone = _grips.get(spider)
+	return bone.global_position if is_instance_valid(bone) else _haul_pos
+
+
+## The haulers with hold of their body part right now.
+func _holding_haulers() -> Array[Spider]:
+	var holding: Array[Spider] = []
+	for spider in _haulers:
+		if is_instance_valid(spider) and spider.is_crawling() \
+				and spider.global_position.distance_to(_grip_position(spider)) < hold_reach * spider.size:
+			holding.append(spider)
+	return holding
+
+
+## Along the floor toward the wall: each holder pulls its limb toward the
+## wall and a little up -- a real tug against the body's weight, the same
+## way the rats drag (RatSwarm._haul()).
+func _drag(holders: Array[Spider], heading: Vector3) -> void:
+	var delta := get_physics_process_delta_time()
+	var weight := _haul_ragdoll.total_mass() * _haul_ragdoll.gravity_strength()
+	var pace := haul_speed * clampf(holders.size() / float(maxi(haul_min_spiders, 1)), 0.5, 1.5)
+	var floor_y := _haul_pos.y - 0.15
+	var pushes := {}
+	for spider in holders:
+		var bone = _grips.get(spider)
+		if not is_instance_valid(bone):
+			continue
+		var bone_body := bone as PhysicalBone3D
+		var velocity := bone_body.linear_velocity
+		var pull := clampf((pace - velocity.dot(heading)) / maxf(pace, 0.1) * 2.0, 0.0, 1.0)
+		var lift := clampf(0.5 + (floor_y + 0.3 - bone_body.global_position.y) * 3.0 - velocity.y * 0.5, 0.0, 1.0)
+		var push := (heading * haul_pull * pull + Vector3.UP * haul_pull * 0.4 * lift) * weight * delta
+		pushes[bone_body] = pushes.get(bone_body, Vector3.ZERO) + push
+	_haul_ragdoll.carry(pushes, maxf(1.0 - hoist_support * 0.5 * holders.size(), 0.3))
+
+
+## Up the wall to the spot, then held there: each holder lifts its limb with
+## just enough to hold the body's weight between them, more the further
+## below the spot it is, less while it's already rising (the roaches' lift,
+## RoachCarry._lift()); steers it sideways onto the spot; and presses it
+## against the wall. Real forces: the body sways and sags between them.
+func _hoist(holders: Array[Spider]) -> void:
+	var delta := get_physics_process_delta_time()
+	var mass := _haul_ragdoll.total_mass()
+	var weight := mass * _haul_ragdoll.gravity_strength()
+	var carried := maxf(1.0 - hoist_support * holders.size(), 0.3)
+	var hover := carried / maxf(holders.size() * hoist_strength, 0.01)
+	var pushes := {}
+	for spider in holders:
+		var bone = _grips.get(spider)
+		if not is_instance_valid(bone):
+			continue
+		var bone_body := bone as PhysicalBone3D
+		var at := bone_body.global_position
+		var velocity := bone_body.linear_velocity
+		# Its part's own spot: the body's spot, keeping the part where it
+		# hangs from the body (so it spreads out across the wall).
+		var spot := _haul_dest + (at - _haul_pos) * 0.6
+		var rise := clampf(hover + (spot.y - at.y) * 1.5 - velocity.y * 0.5, 0.0, 1.0)
+		if velocity.y > hoist_speed:
+			rise = minf(rise, hover) # rising fast enough: just hold
+		var flat := Vector3(spot.x - at.x, 0.0, spot.z - at.z)
+		var flat_velocity := Vector3(velocity.x, 0.0, velocity.z)
+		var steer := (flat * 2.0 - flat_velocity) * 3.0 / maxf(holders.size(), 1) * mass * delta
+		var press := -_haul_normal * hoist_strength * 0.15 * weight * delta # against the wall
+		var push := Vector3.UP * hoist_strength * rise * weight * delta + steer.limit_length(hoist_strength * weight * delta) + press
+		pushes[bone_body] = pushes.get(bone_body, Vector3.ZERO) + push
+	_haul_ragdoll.carry(pushes, carried)
+
+
+func _haul_is_stuck(delta: float) -> bool:
+	_haul_stuck -= delta
+	if _haul_stuck > 0.0:
+		return false
+	_haul_stuck = 1.0
+	var moved := _haul_pos.distance_to(_haul_check_pos)
+	_haul_check_pos = _haul_pos
+	return moved < haul_speed * 0.15
+
+
+## Feeding: each holder bites every bite_interval (blood flies); enough bites
+## between them and a new spider hatches out of the body.
+func _feed(delta: float, holders: Array[Spider]) -> void:
+	_bite_left -= delta
+	if _bite_left > 0.0 or holders.is_empty():
+		return
+	_bite_left = bite_interval / holders.size()
+	var spider: Spider = holders[randi() % holders.size()]
+	var at := _grip_position(spider)
+	spider.chew()
+	BloodFX.spawn_impact(get_tree().current_scene, at, (spider.global_position - at).normalized(), blood_color, 1.0)
+	_bites += 1
+	if _bites < bites_per_spider:
+		return
+	_bites = 0
+	var bred := int(_haul_body.get_meta("spiders_bred", 0))
+	if bred >= spiders_per_body or spiders.size() >= feed_limit:
+		return
+	_haul_body.set_meta("spiders_bred", bred + 1)
+	BloodFX.spawn_impact(get_tree().current_scene, _haul_pos, _haul_normal, blood_color, 2.0)
+	# Bursts out of the body onto the wall it's hanging on (or the floor).
+	spawn_spiders(1, _haul_pos + _haul_normal * 0.2, -_haul_normal * 2.0 + Vector3.UP * 0.5)
+
+
+## Where a hauler goes: its body part -- just ahead of it while hauling, up
+## the wall beside it while hoisting -- crowding in with the others.
+func _steer_hauler(spider: Spider, index: int) -> Vector3:
+	var grip := _grip_position(spider)
+	var lead := Vector3.ZERO
+	match _haul:
+		Haul.DRAG:
+			var to_base := _haul_base - _haul_pos
+			to_base.y = 0.0
+			lead = to_base.normalized() * 0.4 * spider.size
+		Haul.HOIST, Haul.EAT:
+			lead = Vector3.UP * 0.3 * spider.size
+			if spider.surface_normal().y >= Spider.WALL_DOT:
+				lead -= _haul_normal * 0.8 # still on the floor: onto the wall first
+	var to_spot := grip + lead - spider.global_position
+	var distance := to_spot.length()
+	if distance < 0.2:
+		return _separation(spider, index) * spider_speed * 0.2
+	var steer := to_spot / distance + _separation(spider, index) * separation_strength * 0.4
+	return steer.normalized() * spider_speed * 0.5 * spider.speed_scale * clampf(distance, 0.3, 1.0)
+
+
+func _end_haul() -> void:
+	for spider in _haulers:
+		if is_instance_valid(spider):
+			spider.dragging = false
+			if is_instance_valid(_haul_body):
+				for bone in _haul_body.find_children("*", "PhysicalBone3D", true, false):
+					spider.remove_collision_exception_with(bone as PhysicsBody3D)
+	_haulers.clear()
+	_grips.clear()
+	if is_instance_valid(_haul_ragdoll):
+		_haul_ragdoll.carry({})
+	if is_instance_valid(_haul_body):
+		_haul_body.remove_meta("dragged")
+	_haul_body = null
+	_haul_ragdoll = null
+	_haul = Haul.NONE
+	_haul_check = 4.0

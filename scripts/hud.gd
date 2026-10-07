@@ -115,7 +115,7 @@ func _process(_delta: float) -> void:
 	# Healing items, once you're carrying some: their own line, bottom centre.
 	var items: PackedStringArray = []
 	if player.weapons.pills > 0:
-		items.append("[H] Pills x%d" % player.weapons.pills)
+		items.append("[T] Pills x%d" % player.weapons.pills)
 	if player.weapons.bandages > 0:
 		items.append("[B] Bandages x%d" % player.weapons.bandages)
 	_items_label.text = "     ".join(items)
