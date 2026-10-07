@@ -19,6 +19,11 @@ static var _settings: BulletTrailSettings
 static var _mesh: TubeTrailMesh
 
 
+## Most tracers alive at once (see spawn()).
+const MAX_LIVE_TRACERS := 24
+const TRACER_GROUP := "bullet_tracers"
+
+
 ## `from_enemy` picks the enemy colour instead of the player's.
 static func spawn(world: Node, from: Vector3, to: Vector3, from_enemy: bool = false) -> void:
 	var settings := _get_settings()
@@ -28,8 +33,13 @@ static func spawn(world: Node, from: Vector3, to: Vector3, from_enemy: bool = fa
 	if distance < 0.05:
 		return
 	var travel_time := maxf(distance / settings.speed, MIN_VISIBLE_TIME)
+	# Capped like BloodFX's bursts: every tracer is a particle system holding
+	# GPU descriptors, and a firefight of machine guns stacked them up.
+	if world.get_tree().get_nodes_in_group(TRACER_GROUP).size() >= MAX_LIVE_TRACERS:
+		return
 
 	var particles := GPUParticles3D.new()
+	particles.add_to_group(TRACER_GROUP)
 	particles.amount = 1
 	particles.one_shot = true
 	particles.explosiveness = 1.0

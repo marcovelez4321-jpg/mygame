@@ -61,7 +61,19 @@ const MUTATION_BLAST_COLOR := Color(0.75, 0.05, 0.05)
 const SPLAT_TEXTURE := preload("res://art/fx/splat.png")
 const BULLET_HOLE_TEXTURE := preload("res://art/fx/bullet_hole.png")
 
+## Most impact bursts alive at once. Every GPU particle system holds GPU
+## descriptors while it lives; a few minutes of rats eating and roaches biting
+## (a burst every fraction of a second each) used to pile up hundreds and
+## run the D3D12 descriptor heap dry ("not enough room in the RESOURCES
+## descriptor heap", thousands of errors). Past the cap a new burst is just
+## skipped -- in a pile of gore nobody misses one.
+const MAX_LIVE_BURSTS := 48
+const BURST_GROUP := "blood_bursts"
+
 static var _impact_mesh: BoxMesh
+## One shared ParticleProcessMaterial per colour and size (each new material
+## cost GPU descriptors of its own); bursts aim by turning their node instead.
+static var _impact_materials := {}
 static var _trail_settings: BloodTrailSettings
 static var _trail_mesh: TubeTrailMesh
 
@@ -72,15 +84,34 @@ static var _trail_mesh: TubeTrailMesh
 ## scales it up for a bigger, more dramatic burst (2 = twice the droplets,
 ## flying further, a bit bigger).
 static func spawn_impact(world: Node, position: Vector3, normal: Vector3, color: Color = BLOOD_COLOR, strength: float = 1.0) -> void:
+	if world == null or world.get_tree().get_nodes_in_group(BURST_GROUP).size() >= MAX_LIVE_BURSTS:
+		return
+	strength = snappedf(strength, 0.25) # so similar bursts share a material
 	var particles := GPUParticles3D.new()
-	particles.amount = int(18 * strength)
+	particles.add_to_group(BURST_GROUP)
+	particles.amount = maxi(int(18 * strength), 1)
 	particles.lifetime = 0.5 + 0.15 * (strength - 1.0)
 	particles.one_shot = true
 	particles.explosiveness = 0.9
 	particles.draw_pass_1 = _get_impact_mesh()
+	particles.process_material = _impact_material(color, strength)
 
+	world.add_child(particles)
+	# The material sprays along its +Y; the node turns that onto `normal`.
+	var up := normal.normalized() if normal.length_squared() > 0.0001 else Vector3.UP
+	var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
+	particles.global_transform = Transform3D(Basis(side, up, side.cross(up)), position)
+	particles.emitting = true
+	particles.finished.connect(particles.queue_free)
+
+
+## The shared spray material for this colour and (snapped) strength.
+static func _impact_material(color: Color, strength: float) -> ParticleProcessMaterial:
+	var key := "%s|%s" % [color.to_html(), strength]
+	if _impact_materials.has(key):
+		return _impact_materials[key]
 	var mat := ParticleProcessMaterial.new()
-	mat.direction = normal
+	mat.direction = Vector3.UP
 	mat.spread = 35.0
 	var reach := 1.0 + 0.4 * (strength - 1.0)
 	mat.initial_velocity_min = 2.125 * reach
@@ -89,12 +120,8 @@ static func spawn_impact(world: Node, position: Vector3, normal: Vector3, color:
 	mat.scale_min = 0.25 * sqrt(strength)
 	mat.scale_max = 0.6 * sqrt(strength)
 	mat.color = color
-	particles.process_material = mat
-
-	world.add_child(particles)
-	particles.global_position = position
-	particles.emitting = true
-	particles.finished.connect(particles.queue_free)
+	_impact_materials[key] = mat
+	return mat
 
 
 ## A sustained, pulsing spray -- an artery hit, not a normal impact.

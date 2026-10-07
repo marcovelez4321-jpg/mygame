@@ -577,26 +577,9 @@ func _show_emerging() -> void:
 func _dig_fx() -> void:
 	var world := get_tree().current_scene
 	BloodFX.spawn_splatter(world, global_position + Vector3.UP * 0.01, Vector3.UP, hole_size * size, dirt_color)
-	var dirt := GPUParticles3D.new()
-	dirt.amount = 10
-	dirt.lifetime = 0.6
-	dirt.one_shot = true
-	dirt.explosiveness = 0.9
-	dirt.draw_pass_1 = BloodFX.droplet_mesh()
-	var material := ParticleProcessMaterial.new()
-	material.direction = Vector3.UP
-	material.spread = 35.0
-	material.initial_velocity_min = 1.5
-	material.initial_velocity_max = 3.0
-	material.gravity = Vector3(0.0, -9.8, 0.0)
-	material.scale_min = 0.6
-	material.scale_max = 1.2
-	material.color = dirt_color.lightened(0.15)
-	dirt.process_material = material
-	world.add_child(dirt)
-	dirt.global_position = global_position + Vector3.UP * 0.05
-	dirt.emitting = true
-	dirt.finished.connect(dirt.queue_free)
+	# Through BloodFX's shared, capped bursts: a horde burrowing up at once
+	# used to make a particle system (and material) per rat.
+	BloodFX.spawn_impact(world, global_position + Vector3.UP * 0.05, Vector3.UP, dirt_color.lightened(0.15), 0.5)
 
 
 func _play(animation_name: String, loop: bool) -> void:
