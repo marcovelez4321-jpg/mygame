@@ -131,7 +131,7 @@ func _release(count: int) -> void:
 	var world := get_tree().current_scene
 	var up := global_basis.y.normalized()
 	var alive := get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.ROACH]).size()
-	for i in mini(count, maxi(roach_cap - alive, 0)):
+	for i in mini(count, mini(maxi(roach_cap - alive, 0), RoachCarry.room_for_roaches(get_tree()))):
 		var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 0.45
 		var direction := (up + spread).normalized()
 		RoachCarry.hatch(world, _mouth.global_position + direction * 0.2, direction)

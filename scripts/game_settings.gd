@@ -31,6 +31,11 @@ var mouse_sensitivity: float = 0.0
 ## Path of the character FBX the player wears (PlayerModel); "" = first one.
 var player_character: String = ""
 var outline_mode: OutlineMode = OutlineMode.LOOKING
+## The sewer-city look (SewerLook), each its own switch in Graphics.
+var color_grade: bool = true
+var grime: bool = true
+var ground_fog: bool = true
+var texture_warp: bool = true
 
 
 func _ready() -> void:
@@ -157,6 +162,10 @@ func save_settings() -> void:
 	if not player_character.is_empty():
 		config.set_value("player", "character", player_character)
 	config.set_value("display", "outline_mode", outline_mode)
+	config.set_value("graphics", "color_grade", color_grade)
+	config.set_value("graphics", "grime", grime)
+	config.set_value("graphics", "ground_fog", ground_fog)
+	config.set_value("graphics", "texture_warp", texture_warp)
 	config.save(SETTINGS_PATH)
 
 
@@ -175,3 +184,7 @@ func load_settings() -> void:
 	mouse_sensitivity = config.get_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	player_character = config.get_value("player", "character", player_character)
 	outline_mode = config.get_value("display", "outline_mode", outline_mode) as OutlineMode
+	color_grade = config.get_value("graphics", "color_grade", color_grade)
+	grime = config.get_value("graphics", "grime", grime)
+	ground_fog = config.get_value("graphics", "ground_fog", ground_fog)
+	texture_warp = config.get_value("graphics", "texture_warp", texture_warp)

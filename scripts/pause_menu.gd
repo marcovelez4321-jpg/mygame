@@ -48,6 +48,7 @@ const AUDIO_MAX_PERCENT := 200.0
 var _resolutions: Array[Vector2i] = []
 var player: CharacterBody3D
 var _audio_panel: Panel
+var _graphics_panel: Panel
 ## Character dropdown index -> FBX path (PlayerModel.available_characters()).
 var _characters: Array[String] = []
 ## Bus name -> [HSlider, value Label]
@@ -88,6 +89,7 @@ func _ready() -> void:
 	)
 	audio_button.pressed.connect(_show_audio_panel)
 	_build_audio_panel()
+	_build_graphics_panel()
 	_populate_character_options()
 	character_option.item_selected.connect(_on_character_selected)
 	# Same order as GameSettings.OutlineMode.
@@ -158,21 +160,20 @@ func _on_sensitivity_changed(value: float) -> void:
 	sensitivity_value_label.text = "%.1f" % value
 
 
-## A second panel the same size and spot as the main one, built from
-## GameSettings.AUDIO_BUSES: a slider per bus. Built in code so adding a
-## sound category later is one line in GameSettings, not hand-made nodes.
-func _build_audio_panel() -> void:
-	_audio_panel = Panel.new()
-	_audio_panel.anchor_left = 0.5
-	_audio_panel.anchor_top = 0.5
-	_audio_panel.anchor_right = 0.5
-	_audio_panel.anchor_bottom = 0.5
-	_audio_panel.offset_left = menu_panel.offset_left
-	_audio_panel.offset_top = menu_panel.offset_top
-	_audio_panel.offset_right = menu_panel.offset_right
-	_audio_panel.offset_bottom = menu_panel.offset_bottom
-	_audio_panel.visible = false
-	dim.add_child(_audio_panel)
+## A panel the same size and spot as the main one, hidden, with a title --
+## returns its VBoxContainer to fill. Audio and Graphics are built this way.
+func _make_sub_panel(title_text: String) -> VBoxContainer:
+	var panel := Panel.new()
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = menu_panel.offset_left
+	panel.offset_top = menu_panel.offset_top
+	panel.offset_right = menu_panel.offset_right
+	panel.offset_bottom = menu_panel.offset_bottom
+	panel.visible = false
+	dim.add_child(panel)
 
 	var vbox := VBoxContainer.new()
 	vbox.anchor_right = 1.0
@@ -182,13 +183,35 @@ func _build_audio_panel() -> void:
 	vbox.offset_right = -20.0
 	vbox.offset_bottom = -20.0
 	vbox.add_theme_constant_override("separation", 10)
-	_audio_panel.add_child(vbox)
+	panel.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "Audio"
+	title.text = title_text
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 28)
 	vbox.add_child(title)
+	return vbox
+
+
+## Pushes what's below to the bottom and adds the Back button.
+func _finish_sub_panel(vbox: VBoxContainer) -> void:
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer)
+	var back := Button.new()
+	back.text = "Back"
+	back.custom_minimum_size = Vector2(120, 36)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	back.pressed.connect(_show_main_panel)
+	vbox.add_child(back)
+
+
+## A second panel built from GameSettings.AUDIO_BUSES: a slider per bus.
+## Built in code so adding a sound category later is one line in
+## GameSettings, not hand-made nodes.
+func _build_audio_panel() -> void:
+	var vbox := _make_sub_panel("Audio")
+	_audio_panel = vbox.get_parent() as Panel
 
 	for bus in GameSettings.AUDIO_BUSES:
 		var row := HBoxContainer.new()
@@ -210,16 +233,53 @@ func _build_audio_panel() -> void:
 		vbox.add_child(row)
 		_audio_rows[bus] = [slider, value_label]
 		slider.value_changed.connect(_on_audio_slider_changed.bind(bus))
+	_finish_sub_panel(vbox)
 
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
-	var back := Button.new()
-	back.text = "Back"
-	back.custom_minimum_size = Vector2(120, 36)
-	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	back.pressed.connect(_show_main_panel)
-	vbox.add_child(back)
+
+## Everything about how the game looks, in one place: the display settings
+## (moved here from the main panel) and the sewer-look switches (SewerLook).
+## Opened by a Graphics button added next to Audio.
+func _build_graphics_panel() -> void:
+	var vbox := _make_sub_panel("Graphics")
+	_graphics_panel = vbox.get_parent() as Panel
+	for row in [resolution_option.get_parent(), window_mode_option.get_parent(),
+			vsync_check.get_parent(), outlines_option.get_parent()]:
+		(row as Node).reparent(vbox, false)
+	_add_toggle(vbox, "Sickly Color Grade", GameSettings.color_grade, func(on: bool) -> void: GameSettings.color_grade = on)
+	_add_toggle(vbox, "Grime & Wet Floors", GameSettings.grime, func(on: bool) -> void: GameSettings.grime = on)
+	_add_toggle(vbox, "Ground Fog", GameSettings.ground_fog, func(on: bool) -> void: GameSettings.ground_fog = on)
+	_add_toggle(vbox, "PS1 Texture Warp", GameSettings.texture_warp, func(on: bool) -> void: GameSettings.texture_warp = on)
+	_finish_sub_panel(vbox)
+
+	var graphics_button := Button.new()
+	graphics_button.text = "Graphics"
+	graphics_button.custom_minimum_size = audio_button.custom_minimum_size
+	audio_button.get_parent().add_child(graphics_button)
+	audio_button.get_parent().move_child(graphics_button, audio_button.get_index())
+	graphics_button.pressed.connect(_show_graphics_panel)
+
+
+## A labelled on/off switch: `apply` stores it, then the look updates live.
+func _add_toggle(vbox: VBoxContainer, text: String, on: bool, apply: Callable) -> void:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = text
+	label.custom_minimum_size = Vector2(160, 0)
+	var check := CheckButton.new()
+	check.button_pressed = on
+	check.toggled.connect(func(pressed: bool) -> void:
+		apply.call(pressed)
+		SewerLook.apply_settings()
+		GameSettings.save_settings()
+	)
+	row.add_child(label)
+	row.add_child(check)
+	vbox.add_child(row)
+
+
+func _show_graphics_panel() -> void:
+	menu_panel.visible = false
+	_graphics_panel.visible = true
 
 
 func _show_audio_panel() -> void:
@@ -233,6 +293,7 @@ func _show_audio_panel() -> void:
 
 func _show_main_panel() -> void:
 	_audio_panel.visible = false
+	_graphics_panel.visible = false
 	menu_panel.visible = true
 
 

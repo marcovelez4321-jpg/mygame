@@ -24,6 +24,7 @@ buses/default_bus_layout="uid://c7rqaqmls4uen"
 GameSettings="*res://scripts/game_settings.gd"
 PauseMenu="*res://scenes/ui/pause_menu.tscn"
 PS1Dither="*res://scenes/ui/ps1_dither.tscn"
+SewerLook="*res://scenes/sewer_look.tscn"
 
 [display]
 
@@ -57,3 +58,18 @@ jolt_physics_3d/simulation/position_steps=8
 rendering_device/driver.windows="d3d12"
 scaling_3d/mode=5
 scaling_3d/scale=0.35
+
+[shader_globals]
+
+sewer_affine={
+"type": "float",
+"value": 0.0
+}
+sewer_grime={
+"type": "float",
+"value": 0.0
+}
+sewer_grime_noise={
+"type": "sampler2D",
+"value": ""
+}

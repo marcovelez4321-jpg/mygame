@@ -153,7 +153,7 @@ func _top_up_roaches() -> void:
 	if _state == State.DEAD:
 		return
 	var world := get_tree().current_scene
-	for i in roach_count - _living_roaches().size():
+	for i in mini(roach_count - _living_roaches().size(), RoachCarry.room_for_roaches(get_tree())):
 		var roach := RoachCarry.ROACH_SCENE.instantiate() as FlyingRoach
 		roach.kind = FlyingRoach.Kind.SPITTER if randf() < RoachCarry.BRED_SPITTER_CHANCE else FlyingRoach.Kind.NORMAL
 		roach.master = self
