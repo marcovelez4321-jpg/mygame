@@ -10,17 +10,17 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "PKM"
-damage = 13.0
-fire_interval = 0.092
+damage = 10.0
+fire_interval = 0.055
 max_range = 60.0
-spread_degrees = 4.5
+spread_degrees = 3.8
 impact_force = 1.6
 max_penetrations = 2
 magazine_size = 100
 reload_time = 3.2
-recoil_pattern = Array[Vector2]([Vector2(0, 0.8), Vector2(0.1, 0.9), Vector2(-0.1, 1.0), Vector2(0.2, 1.0), Vector2(0.3, 0.9), Vector2(0.4, 0.8), Vector2(0.3, 0.7), Vector2(0.1, 0.65), Vector2(-0.2, 0.6), Vector2(-0.4, 0.6), Vector2(-0.5, 0.55), Vector2(-0.4, 0.5), Vector2(-0.2, 0.5), Vector2(0.2, 0.5), Vector2(0.4, 0.45), Vector2(0.5, 0.45)])
-recoil_scale = 5.0
-recoil_jitter = 0.5
+recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-0.05, 0.7), Vector2(0.1, 0.75), Vector2(0.15, 0.8), Vector2(0.25, 0.7), Vector2(0.3, 0.6), Vector2(0.3, 0.5), Vector2(0.2, 0.45), Vector2(-0.1, 0.45), Vector2(-0.3, 0.4), Vector2(-0.4, 0.4), Vector2(-0.35, 0.35), Vector2(-0.2, 0.35), Vector2(0.2, 0.35), Vector2(0.35, 0.3)])
+recoil_scale = 5.2
+recoil_jitter = 0.45
 draw_time = 0.9
 viewmodel_scene = ExtResource("2_pkm")
 viewmodel_position = Vector3(0.12, -0.21, -0.6)
