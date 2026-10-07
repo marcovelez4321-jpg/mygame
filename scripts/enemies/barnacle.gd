@@ -3,7 +3,7 @@ extends StaticBody3D
 
 ## A fleshy roach-birthing growth stuck to a floor or wall (the PSX Creatures
 ## kit's barnacle model), grown in little fungal clumps by BarnacleCluster.
-## Every spit_interval_min..max seconds it throbs and swells -- three pulses,
+## Every spit_interval_min..max (10-20) seconds it throbs and swells -- three pulses,
 ## each bigger than the last -- then spits roaches out of its mouth (a random
 ## normal or spitter each, RoachCarry.hatch()). Bigger barnacles spit more:
 ## the smallest (size_min) 1 roach, the biggest (size_max) 3, in between 2.
@@ -41,8 +41,8 @@ enum Brood { ROACHES, SPIDERS }
 
 @export_group("Spitting")
 ## Seconds between spits, rolled fresh each time.
-@export var spit_interval_min: float = 5.0
-@export var spit_interval_max: float = 10.0
+@export var spit_interval_min: float = 10.0
+@export var spit_interval_max: float = 20.0
 ## How long the throb-and-swell before a spit takes, and how much bigger it
 ## gets at the last (biggest) pulse (0.3 = 30% taller).
 @export var swell_time: float = 1.2

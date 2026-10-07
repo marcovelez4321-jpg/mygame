@@ -503,3 +503,5 @@ them:
   - Untested at time of writing.
 
 - 2026-10-07: Healing now plays exactly the grenade throw (`Viewmodel._on_item_used()`): same wind-up, swing and follow-through offsets/tilts as the grenade slot and Q, with the item in the hand; it's used up as it leaves the hand, and the heal lands then. Off a gun (T / B) it's the Q sequence (gun down, item up, throw, gun back); from its own slot it's the grenade slot's (next one comes up into the hand). The reverse animation (ITEM_RISE_FROM / ITEM_AWAY / ITEM_AWAY_TILT, which tipped the view rig ~110 degrees and swung the arms model's torso across the camera) is gone. `pills_use_time` / `bandage_use_time` 0.9 / 1.4 -> 0.25 (= the grenade's throw_release_delay, so the throw plays at the grenade's speed); heal amounts unchanged. Untested at time of writing.
+
+- 2026-10-07: Barnacles spawn half as often: `spit_interval_min/max` 5-10 s -> 10-20 s (roach and spider nests alike). What one spills when killed is unchanged.
