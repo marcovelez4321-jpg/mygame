@@ -19,6 +19,18 @@ const DUST_COLOR := Color(0.36, 0.3, 0.24, 0.55)
 const RUBBLE_COLOR := Color(0.17, 0.12, 0.08)
 const MOUND_COLOR := Color(0.2, 0.15, 0.1)
 const RUMBLE_PATH := "res://audio/sfx/worm_rumble.wav"
+const SPIT_COLOR := Color(0.72, 0.68, 0.42)
+const BLOOD_COLOR := Color(0.55, 0.03, 0.03)
+const DIRT_COLOR := Color(0.13, 0.09, 0.06)
+## Tremors (ceiling dust, props jittering) at most this often, and how far
+## up a ceiling can be / how far out props feel it.
+const TREMOR_INTERVAL := 0.4
+const CEILING_REACH := 14.0
+const PROP_REACH := 3.5
+## Jaws: a drip of drool this often while it's out; dirt shed off its body
+## this often while it's in the air.
+const DROOL_INTERVAL := 0.3
+const SHED_INTERVAL := 0.12
 
 ## How big this worm's effects are (1 = the boss).
 var size := 1.0
@@ -35,6 +47,7 @@ static var _dust_process: ParticleProcessMaterial
 static var _dust_mesh: QuadMesh
 static var _rubble_process: ParticleProcessMaterial
 static var _rubble_mesh: BoxMesh
+static var _fall_process: ParticleProcessMaterial
 static var _ring_mesh: TorusMesh
 static var _ring_material: StandardMaterial3D
 
@@ -47,6 +60,10 @@ var _rubble: GPUParticles3D
 var _rumble: AudioStreamPlayer3D
 var _ring: MeshInstance3D
 var _ring_tween: Tween
+var _fall: GPUParticles3D
+var _tremor_left := 0.0
+var _drool_left := 0.0
+var _shed_left := 0.0
 
 
 func _ready() -> void:
@@ -167,6 +184,80 @@ func shockwave(at: Vector3, radius: float) -> void:
 	burst(at, Vector3.UP)
 
 
+## Passing under the floor at `surface` (the floor point above it): every
+## TREMOR_INTERVAL, dust and pebbles shake loose from a ceiling or overhang
+## above (one ray up), and loose props on the floor nearby jitter (host:
+## one small sphere query -- they're physics).
+func tremor(surface: Vector3, delta: float) -> void:
+	_tremor_left -= delta
+	if _tremor_left > 0.0:
+		return
+	_tremor_left = TREMOR_INTERVAL * randf_range(0.8, 1.2)
+	var space := get_world_3d().direct_space_state
+	var up := PhysicsRayQueryParameters3D.create(surface + Vector3.UP * 2.2, surface + Vector3.UP * CEILING_REACH)
+	up.collision_mask = 1
+	var hit := space.intersect_ray(up)
+	if not hit.is_empty() and hit.collider is StaticBody3D and (hit.normal as Vector3).y < -0.5:
+		if _fall == null:
+			_fall = _make_emitter(_fall_process, _rubble_mesh, 10, 1.2)
+			_fall.explosiveness = 0.6
+		_fall.global_transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * 0.5), (hit.position as Vector3) - Vector3.UP * 0.1)
+		_fall.restart()
+		BloodFX.spawn_impact(get_tree().current_scene, (hit.position as Vector3) - Vector3.UP * 0.15, Vector3.DOWN, Color(DUST_COLOR, 1.0), 0.5)
+	if not multiplayer.is_server():
+		return
+	var sphere := SphereShape3D.new()
+	sphere.radius = PROP_REACH * size
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = sphere
+	query.transform = Transform3D(Basis.IDENTITY, surface + Vector3.UP * 0.5)
+	query.collision_mask = 1
+	for result in space.intersect_shape(query, 12):
+		var prop := result.collider as RigidBody3D
+		if prop == null or prop.has_method("stun") or prop.freeze:
+			continue # creatures (rats, roaches) aren't props
+		var kick := Vector3(randf_range(-0.6, 0.6), randf_range(0.8, 1.6), randf_range(-0.6, 0.6))
+		prop.apply_central_impulse(kick * prop.mass)
+
+
+## A quick zoom-out punch on the camera of anyone within `within` of `at`
+## (stronger closer). Static: any worm (or anything) can call it.
+static func punch(tree: SceneTree, at: Vector3, amount: float, within: float) -> void:
+	for node in tree.get_nodes_in_group("player"):
+		var player := node as Node3D
+		var distance := player.global_position.distance_to(at)
+		if distance < within and player.get("camera") is CameraJuice:
+			(player.get("camera") as CameraJuice).kick_fov(amount * (1.0 - distance / within))
+
+
+## Out of the ground: drool dripping from its jaws now and then.
+func drool(jaws: Vector3, delta: float) -> void:
+	_drool_left -= delta
+	if _drool_left > 0.0:
+		return
+	_drool_left = DROOL_INTERVAL * randf_range(0.6, 1.4)
+	BloodFX.spawn_impact(get_tree().current_scene, jaws, Vector3.DOWN, SPIT_COLOR, 0.25 * size + 0.15)
+
+
+## A bite: gore and spit spraying out of its jaws along `forward`.
+func bite_spray(jaws: Vector3, forward: Vector3) -> void:
+	var world := get_tree().current_scene
+	BloodFX.spawn_impact(world, jaws, forward, BLOOD_COLOR, 1.5 * size + 0.5)
+	BloodFX.spawn_impact(world, jaws, (forward + Vector3.UP * 0.5).normalized(), SPIT_COLOR, 1.0 * size + 0.3)
+
+
+## Flying out of the ground: clods of dirt shedding off its body (one of
+## `points`, picked at random, each time).
+func shed(points: PackedVector3Array, ground_y: float, delta: float) -> void:
+	_shed_left -= delta
+	if _shed_left > 0.0 or points.is_empty():
+		return
+	_shed_left = SHED_INTERVAL
+	var at := points[randi() % points.size()]
+	if at.y > ground_y + 0.3:
+		BloodFX.spawn_impact(get_tree().current_scene, at, Vector3.DOWN, DIRT_COLOR, 0.5 * size + 0.25)
+
+
 func _make_emitter(process: ParticleProcessMaterial, mesh: Mesh, amount: int, lifetime: float) -> GPUParticles3D:
 	var emitter := GPUParticles3D.new()
 	emitter.process_material = process
@@ -269,6 +360,19 @@ static func _make_shared() -> void:
 	_rubble_process.angular_velocity_max = 360.0
 	_rubble_process.scale_min = 0.6
 	_rubble_process.scale_max = 1.8
+	# Ceiling dust: pebbles shaken loose, dropping.
+	_fall_process = ParticleProcessMaterial.new()
+	_fall_process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	_fall_process.emission_box_extents = Vector3(1.2, 0.05, 1.2)
+	_fall_process.direction = Vector3.DOWN
+	_fall_process.spread = 10.0
+	_fall_process.initial_velocity_min = 0.0
+	_fall_process.initial_velocity_max = 0.5
+	_fall_process.gravity = Vector3(0.0, -12.0, 0.0)
+	_fall_process.angular_velocity_min = -180.0
+	_fall_process.angular_velocity_max = 180.0
+	_fall_process.scale_min = 0.3
+	_fall_process.scale_max = 0.8
 	# Shockwave ring: a thin, low torus of dust, scaled out and faded per use.
 	_ring_mesh = TorusMesh.new()
 	_ring_mesh.inner_radius = 0.82

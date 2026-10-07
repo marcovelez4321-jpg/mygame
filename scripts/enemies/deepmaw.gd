@@ -385,6 +385,15 @@ func _physics_process(delta: float) -> void:
 	_trail_fx(delta)
 	_try_bite()
 	_fx.follow(new_head, _vel, _ground_y, lurk_depth + 1.5, body_length * hitbox_radius, new_head.y < _ground_y and _state == State.HUNT)
+	# Extras: tremors under the floor while hunting, drool while out, dirt
+	# shedding off it as it flies.
+	if new_head.y < _ground_y:
+		if _state == State.HUNT:
+			_fx.tremor(Vector3(new_head.x, _ground_y, new_head.z), delta)
+	else:
+		_fx.drool(new_head + _facing * body_length * 0.1, delta)
+		if _phase == Phase.AIR:
+			_fx.shed(_joints, _ground_y, delta)
 
 
 ## The head's path, kept a body's length long, and each spine joint placed
@@ -516,6 +525,7 @@ func _erupt(head: Vector3) -> void:
 	var across := (gap + onward * land_beyond) / (time_to_top * 2.0)
 	_vel = Vector3(across.x, rise, across.z)
 	_fx.fade_cracks(1.5)
+	WormFX.punch(get_tree(), head, 4.0, shake_range)
 
 
 func _goal(head: Vector3, delta: float) -> Vector3:
@@ -572,6 +582,7 @@ func _try_bite() -> void:
 	if target.has_method("shove"):
 		target.call("shove", (away.normalized() if away.length_squared() > 0.001 else Vector3.FORWARD) * knockback + Vector3.UP * knockback * 0.5)
 	SoundPlayer.play_3d(bite_sound, jaws, get_tree().current_scene)
+	_fx.bite_spray(jaws, (middle - jaws).normalized())
 
 
 func _in_ground(point: Vector3) -> bool:

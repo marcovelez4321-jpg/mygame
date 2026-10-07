@@ -404,6 +404,7 @@ func _physics_process(delta: float) -> void:
 	_time += delta
 	_place_segments()
 	_fx.follow(_pos[0], _vel, _ground_y, lurk_depth + 2.0, _radii[0], _pos[0].y < _ground_y)
+	_jaw_fx(delta)
 
 
 func _place_segments() -> void:
@@ -491,7 +492,23 @@ func _erupt(head: Vector3) -> void:
 		across = (gap + onward * land_beyond) / (time_to_top * 2.0)
 	_vel = Vector3(across.x, rise, across.z)
 	_shake_near(head, eruption_shake, shake_range)
+	WormFX.punch(get_tree(), head, 8.0, shake_range)
 	_fx.fade_cracks()
+
+
+## The extras: tremors (ceiling dust, props jittering) while it's under the
+## floor near the surface, drool from its jaws while it's out, and dirt
+## shedding off its body while it flies.
+func _jaw_fx(delta: float) -> void:
+	var head := _pos[0]
+	var depth := _ground_y - head.y
+	if depth > 0.0 and depth < lurk_depth + 3.0:
+		_fx.tremor(Vector3(head.x, _ground_y, head.z), delta)
+	elif depth <= 0.0:
+		var forward := _vel.normalized() if _vel.length_squared() > 0.01 else Vector3.FORWARD
+		_fx.drool(head + forward * _radii[0], delta)
+		if _phase == Phase.AIR:
+			_fx.shed(_pos, _ground_y, delta)
 
 
 ## Where its prey will be aim_ahead seconds from now (on the floor).
@@ -509,6 +526,7 @@ func _shockwave(at: Vector3) -> void:
 	var center := Vector3(at.x, _ground_y, at.z)
 	_fx.shockwave(center, shockwave_radius)
 	_shake_near(center, eruption_shake, shake_range)
+	WormFX.punch(get_tree(), center, 5.0, shake_range)
 	SoundPlayer.play_3d(breach_sound, center, get_tree().current_scene)
 	if not multiplayer.is_server():
 		return
@@ -730,6 +748,7 @@ func _contact(delta: float) -> void:
 			player.call("shove", throw)
 		if touching == 0:
 			SoundPlayer.play_3d(bite_sound, _pos[0], get_tree().current_scene)
+			_fx.bite_spray(_pos[0], (middle - _pos[0]).normalized())
 
 
 ## A segment was hit: it bleeds and flashes, and the worm takes the damage --

@@ -546,3 +546,10 @@ them:
   - `Enemy.shove(push)`: throws a tweaker (horizontal speed overrules its walking until it slides to a stop: 18 m/s² on the floor, 5 in the air; vertical added to its velocity).
   - Deepmaws: body material twice as dark (tint 0.78/0.48/0.37 -> 0.39/0.24/0.185, a dark brown). They "flopped" and had no direction: the model never moved itself (only the spine bend was meant to place it), and their lunge was a soft steer-up-and-fall. Now the whole model is placed every tick nose-first along its velocity (`_place_model()`: its rest pose's nose-to-tail line turned onto the direction of travel, head on the head), the spine bend on top; and they attack with the boss's leap cycle, smaller (`Leap` exports: `leap_height` 4.5, `leap_lead` 0.6, `land_beyond` 4, `windup_time` 0.5 with small ground cracks, `rise_speed` 16, `dive_time` 1). `breach_range` and `air_control` are gone.
   - Untested at time of writing.
+
+- 2026-10-07: **More worm effects** (boss + Deepmaws), all rate-limited:
+  - Cracks judder and throb faster as the eruption nears (worm_cracks.gdshader: UV jitter ∝ grow², glow pulse 8 -> 30 Hz with grow; `shake` uniform).
+  - Tremors (`WormFX.tremor()`, every ~0.4 s while it's under the floor near the surface -- boss always, Deepmaws while hunting): one ray straight up from the floor above it; a ceiling/overhang there sheds dust and a drop of pebbles (one pooled emitter); and (host) loose physics props within 3.5 m get a small random hop (one sphere query; creatures and frozen bodies skipped).
+  - Camera punch (`WormFX.punch()`, CameraJuice.kick_fov, subtle): boss eruption 8, boss landing 5, Deepmaw eruption 4, fading with distance. The rumble loop's 3D falloff already makes it louder as it nears.
+  - Jaws: drool dripping (every ~0.3 s) while out of the ground; a bite sprays gore and spit (blood + a pale spit burst) along the bite; while flying, clods of dirt shed off random points along the body (every 0.12 s). All through BloodFX's capped bursts.
+  - Untested at time of writing.
