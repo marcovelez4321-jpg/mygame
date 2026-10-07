@@ -524,6 +524,7 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 func _make_guards() -> void:
 	_guards = swarm.duplicate() as RatSwarm
 	_guards.name = "Bodyguards"
+	_guards.bodyguards = true
 	_guards.rat_scale = guard_rat_scale
 	_guards.rat_health_multiplier = guard_health_multiplier
 	_guards.rat_damage_multiplier = guard_damage_multiplier

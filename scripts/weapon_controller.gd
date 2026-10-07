@@ -734,8 +734,8 @@ func resolve_shot(shot: Shot) -> void:
 			var kind: HitKind = _hit_kind(result.collider, ray_origin, direction) if not health.is_dead else HitKind.NORMAL
 			var damage := _damage_for(shot.weapon, kind, health.current_health, shot.origin.distance_to(result.position), result.collider)
 			# Any one shotgun pellet kills a normal rat outright (not the big,
-			# tough bodyguards: health_bonus above 1).
-			if shot.weapon.pellets > 1 and result.collider is Rat and (result.collider as Rat).health_bonus <= 1.0:
+			# tough bodyguards).
+			if shot.weapon.pellets > 1 and result.collider is Rat and not (result.collider as Rat).is_bodyguard:
 				damage = maxf(damage, health.current_health)
 			# is_critical = a headshot kill, the one clean finish that rules out
 			# a mutation. Artery and body kills can still mutate (see enemy.gd's

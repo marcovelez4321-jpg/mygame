@@ -26,6 +26,9 @@ const ANIM_ATTACK := "Attack"
 const FAR_ANIMATION_DISTANCE := 12.0
 const FAR_ANIMATION_RATE := 12.0
 
+## Flat extra health every bodyguard rat gets on top of its multiplied health.
+@export var bodyguard_extra_health: float = 20.0
+
 @export_group("Movement")
 ## Plays the running animation this much faster (1.5 = 1.5x speed).
 @export var run_animation_speed: float = 1.5
@@ -119,6 +122,9 @@ var emerge_delay := -1.0
 ## swarm's own rat_scale / rat_health_multiplier / rat_damage_multiplier).
 var scale_bonus := 1.0
 var health_bonus := 1.0
+## One of the big, tough bodyguards: a nest's (health_bonus above 1) or a Rat
+## Bender's (his Bodyguards swarm). Set when it spawns (_roll_variety()).
+var is_bodyguard := false
 var damage_bonus := 1.0
 
 var _state := State.RUN
@@ -210,6 +216,9 @@ func _roll_variety() -> void:
 	shape.position *= size
 	mass *= size * size * size
 	health.max_health *= variety * variety * (swarm.rat_health_multiplier if swarm else 1.0) * health_bonus
+	is_bodyguard = health_bonus > 1.0 or (swarm != null and swarm.bodyguards)
+	if is_bodyguard:
+		health.max_health += bodyguard_extra_health
 	health.current_health = health.max_health
 	bite_reach *= size
 	var damage_multiplier := (swarm.rat_damage_multiplier if swarm else 1.0) * damage_bonus

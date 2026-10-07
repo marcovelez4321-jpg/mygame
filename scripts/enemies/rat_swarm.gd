@@ -176,6 +176,8 @@ const DRAG_GRIP_BONES := ["LeftHand", "RightHand", "LeftFoot", "RightFoot", "Hea
 @export var bites_per_rat: int = 30
 @export var rats_per_body: int = 6
 @export var feed_limit: int = 60
+## A swarm of bodyguards (the Rat Bender's): its rats are Rat.is_bodyguard.
+@export var bodyguards: bool = false
 
 @export_group("Sound")
 ## One scurrying loop for the whole pack, at its middle -- not one per rat.
