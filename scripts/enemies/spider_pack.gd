@@ -31,8 +31,9 @@ const SPIDER_SCENE := preload("res://scenes/enemy/spider.tscn")
 @export var start_count: int = 8
 ## Twice a rat's top speed (RatSwarm.rat_speed is 5.3).
 @export var spider_speed: float = 10.6
-## Roaming, they creep along at this fraction of top speed.
-@export_range(0.05, 1.0, 0.05) var roam_pace: float = 0.3
+## Patrolling, they go at this fraction of top speed: 0.5 = a rat pack's
+## patrol pace (the same stop-start bursts and breathing spread too).
+@export_range(0.05, 1.0, 0.05) var roam_pace: float = 0.5
 ## How spread out the pack sits, and how much room each keeps.
 @export var pack_radius_min: float = 0.6
 @export var pack_radius_max: float = 2.4
@@ -86,8 +87,14 @@ const SPIDER_SCENE := preload("res://scenes/enemy/spider.tscn")
 @export var perch_spread: float = 2.0
 
 @export_group("Roaming")
-@export var roam_radius: float = 16.0
-@export var roam_interval: float = 9.0
+## Patrol, the same as a rat pack's (RatSwarm roam_radius / roam_interval):
+## a new spot within roam_radius of home (at least 30% of it out) every
+## roam_interval x 0.5-1.5 seconds, or as soon as the pack gets there.
+@export var roam_radius: float = 30.0
+@export var roam_interval: float = 10.0
+## A pack that lives on a wall patrols across it: its spots stay within this
+## height of home (meters) and spread out sideways along the wall.
+@export var roam_height: float = 3.0
 
 var order := Order.ROAM
 var target: Node3D
@@ -288,12 +295,14 @@ func _nearest_spider_distance(point: Vector3) -> float:
 ## On to a new spot around home now and then (or once the pack gets there).
 func _roam(delta: float, center: Vector3) -> void:
 	_roam_left -= delta
-	var arrived := Vector2(center.x - _wander_to.x, center.z - _wander_to.z).length() < 1.5
+	var arrived := center.distance_to(_wander_to) < 2.0
 	if _roam_left > 0.0 and not arrived:
 		return
 	_roam_left = randf_range(roam_interval * 0.5, roam_interval * 1.5)
 	var offset := Vector2.from_angle(randf() * TAU) * randf_range(roam_radius * 0.3, roam_radius)
-	_wander_to = home + _home_basis * Vector3(offset.x, 0.0, offset.y)
+	var step := _home_basis * Vector3(offset.x, 0.0, offset.y)
+	step.y = clampf(step.y, -roam_height, roam_height) # a wall pack: along the wall
+	_wander_to = home + step
 
 
 ## One spider's velocity (world space -- it keeps the part along its surface).

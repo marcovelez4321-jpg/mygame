@@ -930,12 +930,10 @@ surface_material_override/0 = SubResource("WallMat")
 [node name="SpiderHordeWestWall" parent="." unique_id=1462093817 instance=ExtResource("36_spiders")]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -59.45, 5, 10)
 start_count = 10
-roam_radius = 8.0
 
 [node name="SpiderHordeNorthWall" parent="." unique_id=1071477686 instance=ExtResource("36_spiders")]
 transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -15, 5, -59.45)
 start_count = 10
-roam_radius = 8.0
 
 [node name="BarnacleScatter" type="Node3D" parent="." unique_id=873214560]
 script = ExtResource("37_scatter")
