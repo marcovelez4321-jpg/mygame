@@ -24,6 +24,10 @@ enum State { MOVE, ATTACK, DEAD }
 @export var turn_rate: float = 6.0
 ## The slither ("Glide") plays this fast at full pace, slower as it slows.
 @export var glide_speed: float = 1.4
+## How high its spine rides above the floor, as a share of its length (its
+## body's radius, about) -- raise it if it sinks into the floor, lower it if
+## it floats.
+@export var belly_height: float = 0.08
 
 @export_group("Melee")
 ## A target within bite_range of its jaws, in front of it: BITE. Within
@@ -139,15 +143,12 @@ func _build_model() -> void:
 	var turn := axes.inverse()
 	var rig := turn.scaled(Vector3.ONE * scale_by)
 	var middle := (head + tail) * 0.5
-	_model.transform = Transform3D(rig, -(rig * middle))
-	# Belly on the floor: lift it by its lowest point.
-	var bottom := INF
-	for node in _model.find_children("*", "MeshInstance3D", true, false):
-		var mesh := node as MeshInstance3D
-		var box := global_transform.affine_inverse() * mesh.global_transform * mesh.get_aabb()
-		bottom = minf(bottom, box.position.y)
-	if bottom < INF:
-		_model.position.y -= bottom
+	# Centred on this body along its length, and lifted so its belly is on
+	# the floor: its spine (head-to-tail bone line, now through the origin)
+	# one body radius up. (Measured from the bones, not the mesh's bounding
+	# box: on this skinned FBX the mesh's own box isn't in the same units as
+	# where it's drawn -- that put them floating high above their hitboxes.)
+	_model.transform = Transform3D(rig, -(rig * middle) + Vector3.UP * body_length * belly_height)
 	_play("glide", true)
 
 
