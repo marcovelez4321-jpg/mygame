@@ -69,8 +69,6 @@ const THROW_SWING_TILT := -45.0
 const THROW_WINDUP_SHARE := 0.6
 const THROW_FOLLOW_TIME := 0.2
 const THROW_RAISE_TIME := 0.3
-## Frames a newly made arms model stays hidden (see _attach_arms()).
-const ARMS_REVEAL_FRAMES := 2
 
 ## How far in front of your eye the middle of a scope sits when aimed
 ## (WeaponData.aim_sight_node), in meters.
@@ -89,8 +87,9 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 ## character's arms.
 @export_file("*.fbx") var arms_character: String = "res://art/characters/Characters_psx/Models/Male/Character_18_Police.fbx"
 
-## Hide everything of the first-person arms model but the arms themselves
-## (its torso would otherwise swing up into view as the gun tilts down).
+## Show only the arms of the first-person arms model: its mesh is cut down to
+## the shoulders, arms and hands (its torso would otherwise swing up into
+## view as the gun tilts down). Off = the old way (head and legs shrunk away).
 @export var hide_torso: bool = true
 
 @export_group("Sway")
@@ -124,6 +123,9 @@ var _model_rest_transform: Transform3D
 ## Placed in camera space (WeaponData.arms_position) and converted into
 ## _model's space in _apply_arms_transform().
 var _arms: Node3D
+## Arms-only cuts of the arms model's meshes, made once and shared:
+## "<mesh id>|<skin id>|<keep left>" -> [ArrayMesh, kept surface indices].
+static var _arms_only_meshes := {}
 ## The arms model's size (PlayerModel.fit_scale_for() of ITS head height).
 var _arms_fit_scale := 1.0
 var _player_model: PlayerModel
@@ -682,27 +684,19 @@ func _attach_arms(weapon: WeaponData) -> void:
 	if not skeletons.is_empty():
 		skeleton = skeletons[0] as Skeleton3D
 	if skeleton:
-		var hider := HideBonesModifier.new()
-		var hidden := PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
-		var kept := PackedStringArray()
-		if hide_torso and skeleton.find_bone("RightShoulder") != -1:
-			# Just the arms: the whole body goes, the shoulders (and the arms
-			# hanging off them) are put back. Otherwise the torso swings up
-			# into view whenever the gun tilts down (switching, throwing).
-			hidden = PackedStringArray(["Hips"])
-			kept.append("RightShoulder")
-			if not weapon.hide_left_arm:
-				kept.append("LeftShoulder")
-		elif weapon.hide_left_arm:
-			hidden.append("LeftUpperArm") # one hand only
-		hider.bone_names = hidden
-		hider.keep_bones = kept
-		if not kept.is_empty():
-			for chest in ["UpperChest", "Chest"]:
-				if skeleton.find_bone(chest) != -1:
-					hider.collapse_in_place = PackedStringArray([chest])
-					break
-		skeleton.add_child(hider)
+		# Just the arms: the arms model's mesh is cut down to the triangles
+		# skinned to the shoulders and arms (_strip_to_arms()), so there's no
+		# torso, head or legs left to swing into view however the view rig
+		# tilts. (Your full body is a separate model: look down and your
+		# legs are still there.) If the model can't be cut, fall back to
+		# shrinking the head and legs away.
+		if not (hide_torso and _strip_to_arms(skeleton, not weapon.hide_left_arm)):
+			var hider := HideBonesModifier.new()
+			var hidden := PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
+			if weapon.hide_left_arm:
+				hidden.append("LeftUpperArm") # one hand only
+			hider.bone_names = hidden
+			skeleton.add_child(hider)
 		# Sized like the body would size this character, from its own head height.
 		var head := skeleton.find_bone("Head")
 		_arms_fit_scale = _player_model.model_scale
@@ -715,19 +709,104 @@ func _attach_arms(weapon: WeaponData) -> void:
 	for node in _arms.find_children("*", "GeometryInstance3D", true, false):
 		(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_apply_arms_transform(weapon)
-	# A fresh arms model is drawn whole (torso and all) until its
-	# HideBonesModifier has run once -- that was the torso flashing up at the
-	# bottom of the screen on every swap (throws, heals, switches). Kept
-	# hidden until the hiding has happened.
-	_arms.visible = false
-	_reveal_arms(_arms)
 
 
-func _reveal_arms(arms: Node3D) -> void:
-	for i in ARMS_REVEAL_FRAMES:
-		await get_tree().process_frame
-	if is_instance_valid(arms):
-		arms.visible = true
+## Cuts every skinned mesh of the arms model down to the triangles whose
+## corners are all mostly (half their skin weight or more) on a shoulder, arm
+## or hand bone -- the right one, and the left too when `keep_left`. Anything
+## else in the model (unskinned bits: hats, gear) is hidden. The cut meshes
+## are made once per model and shared (_arms_only_meshes). False if the
+## model has no shoulder/arm bones to keep, or no skinned mesh to cut.
+func _strip_to_arms(skeleton: Skeleton3D, keep_left: bool) -> bool:
+	var keep_bones := {}
+	for side in (["Right", "Left"] if keep_left else ["Right"]):
+		var root := skeleton.find_bone(side + "Shoulder")
+		if root == -1:
+			root = skeleton.find_bone(side + "UpperArm")
+		if root != -1:
+			_add_with_children(skeleton, root, keep_bones)
+	if keep_bones.is_empty():
+		return false
+	var cut_any := false
+	for node in _arms.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh == null or mesh_instance.skin == null:
+			mesh_instance.visible = false
+			continue
+		var key := "%d|%d|%s" % [mesh_instance.mesh.get_instance_id(), mesh_instance.skin.get_instance_id(), keep_left]
+		var cut: Array = _arms_only_meshes.get(key, [])
+		if cut.is_empty():
+			cut = _arms_only_mesh(mesh_instance.mesh, mesh_instance.skin, skeleton, keep_bones)
+			_arms_only_meshes[key] = cut
+		var mesh: ArrayMesh = cut[0]
+		var kept_surfaces: PackedInt32Array = cut[1]
+		# The node's own per-surface materials follow their surfaces.
+		var overrides: Array[Material] = []
+		for surface in kept_surfaces:
+			overrides.append(mesh_instance.get_surface_override_material(surface))
+		mesh_instance.mesh = mesh
+		for i in overrides.size():
+			mesh_instance.set_surface_override_material(i, overrides[i])
+		cut_any = true
+	return cut_any
+
+
+func _add_with_children(skeleton: Skeleton3D, bone: int, into: Dictionary) -> void:
+	into[bone] = true
+	for child in skeleton.get_bone_children(bone):
+		_add_with_children(skeleton, child, into)
+
+
+## [the cut ArrayMesh, the original index of each surface it kept].
+func _arms_only_mesh(mesh: Mesh, skin: Skin, skeleton: Skeleton3D, keep_bones: Dictionary) -> Array:
+	# Skin bind slots -> skeleton bones (vertex bone indices are bind slots).
+	var bind_bones := PackedInt32Array()
+	for bind in skin.get_bind_count():
+		var bone := skin.get_bind_bone(bind)
+		if bone < 0:
+			bone = skeleton.find_bone(skin.get_bind_name(bind))
+		bind_bones.append(bone)
+	var out := ArrayMesh.new()
+	var kept_surfaces := PackedInt32Array()
+	for surface in mesh.get_surface_count():
+		if mesh.surface_get_primitive_type(surface) != Mesh.PRIMITIVE_TRIANGLES:
+			continue
+		var arrays := mesh.surface_get_arrays(surface)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var bones = arrays[Mesh.ARRAY_BONES]
+		var weights = arrays[Mesh.ARRAY_WEIGHTS]
+		if vertices.is_empty() or bones == null or weights == null or (bones as PackedInt32Array).is_empty():
+			continue
+		var per_vertex := (bones as PackedInt32Array).size() / vertices.size()
+		var keep := PackedByteArray()
+		keep.resize(vertices.size())
+		for v in vertices.size():
+			var on_arms := 0.0
+			for k in per_vertex:
+				var bind: int = bones[v * per_vertex + k]
+				if bind >= 0 and bind < bind_bones.size() and keep_bones.has(bind_bones[bind]):
+					on_arms += weights[v * per_vertex + k]
+			keep[v] = 1 if on_arms >= 0.5 else 0
+		var indices = arrays[Mesh.ARRAY_INDEX]
+		if indices == null or (indices as PackedInt32Array).is_empty():
+			indices = PackedInt32Array(range(vertices.size()))
+		var kept := PackedInt32Array()
+		for i in range(0, (indices as PackedInt32Array).size() - 2, 3):
+			var a: int = indices[i]
+			var b: int = indices[i + 1]
+			var c: int = indices[i + 2]
+			if keep[a] and keep[b] and keep[c]:
+				kept.append(a)
+				kept.append(b)
+				kept.append(c)
+		if kept.is_empty():
+			continue
+		arrays[Mesh.ARRAY_INDEX] = kept
+		var flags := mesh.surface_get_format(surface) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
+		out.surface_set_material(out.get_surface_count() - 1, mesh.surface_get_material(surface))
+		kept_surfaces.append(surface)
+	return [out, kept_surfaces]
 
 
 ## The arms' facing and size in camera space: turned to face forward (Mixamo
