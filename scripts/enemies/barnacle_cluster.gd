@@ -41,6 +41,10 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 ## who gets near it (on a wall or ceiling clump: under the floor beneath it).
 @export var defender_scene: PackedScene = preload("res://scenes/enemy/deepmaw.tscn")
 @export var defender_count: int = 0 # off: Deepmaws guard the worm boss, not the barnacles
+## A pack of surface Deepmaws (DeepmawCrawler, the rats' pack behaviour)
+## guarding the clump from the floor under it; 0 = none.
+@export var guard_pack_scene: PackedScene = preload("res://scenes/enemy/deepmaw_pack.tscn")
+@export var guard_count: int = 4
 
 const GROUP := "barnacle_clusters"
 
@@ -81,6 +85,7 @@ func _grow() -> void:
 			add_child(barnacle)
 			barnacle.global_transform = Transform3D(_basis_on(hit.normal), hit.position)
 		_spawn_defenders()
+		_spawn_guard_pack()
 		for i in (leech_count if spawn_leeches else 0):
 			var flat := Vector2.from_angle(randf() * TAU) * randf_range(radius, radius * 1.8)
 			var leech := leech_scene.instantiate() as Node3D
@@ -154,3 +159,16 @@ func _spawn_defenders() -> void:
 		var around := Vector2.from_angle(randf() * TAU) * randf_range(1.0, radius * 1.5)
 		defender.position = floor_at + Vector3(around.x, 0.0, around.y) # the level's root sits at the origin
 		get_tree().current_scene.add_child(defender)
+
+
+func _spawn_guard_pack() -> void:
+	if guard_pack_scene == null or guard_count <= 0:
+		return
+	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.5, global_position + Vector3.DOWN * 30.0)
+	query.collision_mask = 1
+	query.exclude = _barnacle_rids()
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var pack := guard_pack_scene.instantiate() as Node3D
+	pack.set("count", guard_count)
+	pack.position = hit.position if not hit.is_empty() else global_position # the level's root sits at the origin
+	get_tree().current_scene.add_child(pack)
