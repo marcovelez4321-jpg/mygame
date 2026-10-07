@@ -48,7 +48,6 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 @export_group("Patrol")
 @export var patrol_speed: float = 1.84
 ## Wanders anywhere within this many meters of where he started.
-@export var patrol_radius: float = 10.0
 @export var patrol_wait_min: float = 1.0
 @export var patrol_wait_max: float = 3.0
 
@@ -152,7 +151,6 @@ enum Mode { PATROL, CHASE, CAST_RUSH, CAST_LEAP, SUMMON, HEAL }
 const LIBRARY := "bender"
 
 var _mode := Mode.PATROL
-var _home := Vector3.ZERO
 var _patrol_point := Vector3.ZERO
 var _patrol_wait := 0.0
 var _rush_cooldown_left := 0.0
