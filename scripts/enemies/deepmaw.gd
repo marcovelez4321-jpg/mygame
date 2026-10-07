@@ -13,10 +13,10 @@ extends Node3D
 ## Movement is the Terraria worm's (see BurrowWorm): in the ground, full
 ## steering with limited acceleration (wide arcs, overshoot); in the air,
 ## gravity. It lurks lurk_depth under its home, circling. A player within
-## guard_range of home is attacked the boss's way (see Leap): it tunnels to
-## just short of them, the ground cracks, and it bursts out under them nose
-## first ("jump attack") on an arc through them and beyond, biting anyone its
-## jaws reach ("BITE"), dives back in and comes round again. The whole model
+## guard_range of home is attacked the boss's way (see Leap): it tunnels in,
+## and from up to leap_distance away bursts out nose first ("jump attack")
+## on an arc down onto where it guesses they'll be, biting anyone its jaws
+## reach ("BITE"), dives back in and comes round again. The whole model
 ## faces where it's going every tick, and its spine bends along the path on
 ## top. Leave its ground (guard_range x 1.5 from home) and it goes back to
 ## lurking.
@@ -55,7 +55,9 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 @export var max_speed: float = 9.0
 ## Inside the ground: how fast it can change velocity (lower = wider arcs).
 @export var acceleration: float = 16.0
-@export var air_gravity: float = 16.0
+## Gravity in the air: heavier than the boss's 16, so the same leap height
+## goes by faster -- quicker, snappier leaps (the arc aims for it itself).
+@export var air_gravity: float = 28.0
 ## Lurking this far under the floor, circling home this far out.
 @export var lurk_depth: float = 2.5
 @export var lurk_radius: float = 4.0
@@ -67,18 +69,22 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 @export var guard_range: float = 14.0
 
 @export_group("Leap")
-## Its attack, like the boss's: it tunnels to a spot leap_distance away from
-## where it means to come down, sinks briefly while the ground cracks there
+## Its attack, like the boss's: it tunnels toward where it means to come
+## down until it's within leap_distance (or has tunnelled tunnel_timeout
+## seconds -- it never just follows you around), sinks briefly there
 ## (windup_time), then bursts out nose first on a simple arc leap_height high
 ## down onto its guess at where you'll be (the spitter roach's lead,
-## WormLeap); dives back in, comes round (dive_time) and goes again.
+## WormLeap); dives back in, comes round (dive_time) and goes again. Its own
+## air_gravity is heavier than the boss's, so its leaps are quicker and
+## snappier at the same height.
 ## Deepmaws guarding the same thing leap as a horde: the first one in
 ## position calls a volley volley_gather seconds out and the rest that get
 ## there in time go with it -- each with its own guess (sideways guesses
 ## spread guess_spread times wider than the boss's), so between them they
 ## cover where you might run.
 @export var leap_height: float = 6.3
-@export var leap_distance: float = 4.5
+@export var leap_distance: float = 11.0
+@export var tunnel_timeout: float = 3.0
 @export var volley_gather: float = 1.2
 @export var guess_spread: float = 1.8
 ## In the air it eases its sideways drift toward its updated guess, at most
@@ -516,14 +522,15 @@ func _update_phase(head: Vector3, delta: float) -> void:
 	match _phase:
 		Phase.TUNNEL:
 			_plan_leap(head)
-			var under := Vector3(_leap_from.x, head.y, _leap_from.z)
-			if head.distance_to(under) < 1.5 and head.y < _ground_y - 0.4:
+			# Close enough to leap from (or tunnelled long enough): stop here.
+			var gap := Vector2(_leap_to.x - head.x, _leap_to.z - head.z).length()
+			if (gap <= leap_distance or _phase_left <= 0.0) and head.y < _ground_y - 0.4:
+				_leap_from = Vector3(head.x, _ground_y, head.z)
 				_phase = Phase.WINDUP
 				# Leap with the horde: join the volley being called, or call one.
 				_phase_left = maxf(windup_time, _join_volley() - _now())
 		Phase.WINDUP:
 			_plan_leap(head)
-			_fx.show_cracks(_leap_from, 0.3 + 0.7 * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)))
 			if _phase_left <= 0.0:
 				_phase = Phase.RISE
 		Phase.RISE:
@@ -536,8 +543,14 @@ func _update_phase(head: Vector3, delta: float) -> void:
 				_phase_left = dive_time
 		Phase.DIVE:
 			if _phase_left <= 0.0:
-				_phase = Phase.TUNNEL
-				_roll_guess()
+				_start_tunnel()
+
+
+## A new attack: a fresh guess at your path, and the clock on tunnelling.
+func _start_tunnel() -> void:
+	_phase = Phase.TUNNEL
+	_phase_left = tunnel_timeout
+	_roll_guess()
 
 
 ## This leap's own guess at your path: the roach's, sideways spread wider.
@@ -561,15 +574,12 @@ static func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
 
 
-## Where to burst out: leap_distance short of where it'll come down (its
-## guess at where you'll be by then), along the way it's coming.
+## Where it means to come down: its guess at where you'll be by then.
+## Where it comes up is wherever it is when it's close enough.
 func _plan_leap(head: Vector3) -> void:
 	var until_out := _phase_left + 0.3 if _phase == Phase.WINDUP else (0.2 if _phase == Phase.RISE else windup_time + 0.4)
 	var flight := WormLeap.air_time(leap_height, air_gravity, 1.0)
 	_leap_to = WormLeap.landing(head, target, until_out + flight, _guess)
-	var approach := Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z)
-	approach = approach.normalized() if approach.length_squared() > 0.01 else Vector3(_vel.x, 0.0, _vel.z).normalized()
-	_leap_from = Vector3(_leap_to.x, _ground_y, _leap_to.z) - approach * leap_distance
 
 
 ## Out of the ground: up at sqrt(2 g h), across at whatever brings it down
@@ -582,7 +592,6 @@ func _erupt(head: Vector3) -> void:
 	var across := Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z) / flight
 	_vel = Vector3(across.x, rise, across.z)
 	_air_left = 0.0
-	_fx.fade_cracks(1.5)
 	WormFX.punch(get_tree(), head, 4.0, shake_range)
 
 
@@ -594,7 +603,7 @@ func _goal(head: Vector3, delta: float) -> Vector3:
 			Phase.DIVE:
 				var on := Vector3(_vel.x, 0.0, _vel.z).normalized() * 4.0
 				return Vector3(head.x + on.x, _ground_y - lurk_depth - 0.5, head.z + on.z)
-		return Vector3(_leap_from.x, _ground_y - lurk_depth, _leap_from.z)
+		return Vector3(_leap_to.x, _ground_y - lurk_depth, _leap_to.z)
 	# Lurking: circling under home.
 	_lurk_angle += delta * max_speed * lurk_speed / maxf(lurk_radius, 0.5)
 	return Vector3(home.x, _ground_y - lurk_depth, home.z) + Vector3.FORWARD.rotated(Vector3.UP, _lurk_angle) * lurk_radius
@@ -621,8 +630,7 @@ func _look_out() -> void:
 				target = player
 		if target:
 			_state = State.HUNT
-			_phase = Phase.TUNNEL
-			_roll_guess()
+			_start_tunnel()
 
 
 func _try_bite() -> void:

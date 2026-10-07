@@ -53,14 +53,15 @@ static func flash(root: Node, color: Color = FLASH_COLOR, time: float = FLASH_TI
 	)
 
 
-static func _find_mesh_instances(node: Node) -> Array[MeshInstance3D]:
-	var result: Array[MeshInstance3D] = []
+static func _find_mesh_instances(node: Node) -> Array[GeometryInstance3D]:
+	var result: Array[GeometryInstance3D] = []
 	_collect_mesh_instances(node, result)
 	return result
 
 
-static func _collect_mesh_instances(node: Node, result: Array[MeshInstance3D]) -> void:
-	if node is MeshInstance3D:
+static func _collect_mesh_instances(node: Node, result: Array[GeometryInstance3D]) -> void:
+	# Meshes and multimeshes (a worm's whole body is one MultiMesh).
+	if node is MeshInstance3D or node is MultiMeshInstance3D:
 		result.append(node)
 	for child in node.get_children():
 		_collect_mesh_instances(child, result)

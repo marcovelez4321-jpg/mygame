@@ -29,6 +29,8 @@ extends Node3D
 
 const TAPE_WORM := preload("res://art/props/PSX Creatures/Models/FBX/tape_worm.fbx")
 const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
+## Where the baked body segment is kept (see _segment_mesh()).
+const BAKED_SEGMENT := "res://art/worm_boss/worm_segment_mesh.res"
 
 @export_group("Body")
 @export var segment_count: int = 20
@@ -70,17 +72,19 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export_range(0.0, 1.0, 0.05) var wander_breach_chance: float = 0.3
 
 @export_group("The Leap")
-## Its attack, over and over: it tunnels to a spot leap_distance away from
-## where it means to come down, sinks to dive_depth while the ground there
-## shakes and cracks and the rumble swells (windup_time -- your warning),
-## then erupts in a column of dirt with a roar and arcs leap_height high
-## down onto where it guesses you'll be -- the spitter roach's lead
-## (WormLeap) -- the whole body pouring out after it; landing sends out a
-## shockwave; it dives back in, swings round underground (dive_time) and
-## goes again.
+## Its attack, over and over: it tunnels toward where it means to come down
+## until it's within leap_distance of it (or has been tunnelling
+## tunnel_timeout seconds -- it never just follows you around underground),
+## stops there and sinks to dive_depth while the ground shakes and the
+## rumble swells (windup_time -- your warning), then erupts in a column of
+## dirt with a roar and arcs leap_height high down onto where it guesses
+## you'll be -- the spitter roach's lead (WormLeap) -- the whole body pouring
+## out after it; landing sends out a shockwave; it dives back in, swings
+## round underground (dive_time) and goes again.
 @export var leap_height: float = 12.6
-## How far from its landing spot it erupts.
-@export var leap_distance: float = 7.0
+## It breaches from as far as this from its landing spot.
+@export var leap_distance: float = 16.0
+@export var tunnel_timeout: float = 4.0
 ## In the air it keeps re-guessing and eases its sideways drift toward the
 ## new guess, at most this many m/s² -- a smooth correction, the arc stays
 ## an arc (0 = committed once it leaves the ground).
@@ -200,6 +204,9 @@ var _breach_fx_left := 0.0
 
 var _segments: Array[AnimatableBody3D] = []
 var _visuals: Array[Node3D] = []
+## The whole body's segments, one MultiMesh (one draw call): _build_body().
+var _body_mm: MultiMeshInstance3D
+static var _baked_segment: ArrayMesh
 var _pos := PackedVector3Array()
 var _radii := PackedFloat32Array()
 var _below := PackedByteArray() # each segment under the floor plane last tick
@@ -247,6 +254,7 @@ func _ready() -> void:
 		_pos.append(start + back * segment_spacing * i)
 		_below.append(1)
 		_build_segment(i, radius)
+	_build_body()
 	_pick_wander()
 	_place_segments()
 	_ignore_players()
@@ -294,7 +302,6 @@ func _build_segment(index: int, radius: float) -> void:
 	add_child(body) # in the tree before measuring the maw (global transforms)
 	var visual := Node3D.new()
 	body.add_child(visual)
-	_add_slices(visual, radius, index)
 	if index == 0:
 		_add_maw(visual, radius)
 	_segments.append(body)
@@ -328,31 +335,107 @@ func _measure_slice() -> Array:
 	return _slice_fit
 
 
-## slices_per_segment tape worms fanned round the body's axis, each stretched
-## to the segment's length (overlapping the next) and width.
-func _add_slices(visual: Node3D, radius: float, index: int) -> void:
+## The body, drawn in ONE draw call: one segment mesh -- slices_per_segment
+## tape worms fanned round the axis, merged -- stamped once per segment by a
+## MultiMesh, each copy placed, twisted, sized (radius) and swollen
+## (peristalsis, brood) per tick in _place_segments(). Was 60 separate
+## tape-worm meshes (60 draw calls).
+func _build_body() -> void:
+	_body_mm = MultiMeshInstance3D.new()
+	_body_mm.top_level = true
+	_body_mm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_body_mm.material_override = skin_material
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = _segment_mesh()
+	multimesh.instance_count = segment_count
+	_body_mm.multimesh = multimesh
+	# Instances move all over: never cull the body by a stale box.
+	_body_mm.custom_aabb = AABB(Vector3(-500, -500, -500), Vector3(1000, 1000, 1000))
+	add_child(_body_mm)
+	_body_mm.global_transform = Transform3D.IDENTITY
+
+
+## The one segment mesh (radius 1, segment_spacing long): loaded from
+## BAKED_SEGMENT if it was baked with these same settings, else baked now --
+## and, running from the editor, saved there, so it's a real file you can
+## open and look at, and the next run skips the baking. Shared by every
+## worm (static).
+func _segment_mesh() -> ArrayMesh:
+	var key := "%d|%.3f|%.3f|%.3f" % [slices_per_segment, slice_overlap, slice_thickness, segment_spacing]
+	if _baked_segment and _baked_segment.get_meta("bake_key", "") == key:
+		return _baked_segment
+	if ResourceLoader.exists(BAKED_SEGMENT):
+		var saved := load(BAKED_SEGMENT) as ArrayMesh
+		if saved and saved.get_meta("bake_key", "") == key:
+			_baked_segment = saved
+			return saved
+	_baked_segment = _bake_segment()
+	_baked_segment.set_meta("bake_key", key)
+	if OS.has_feature("editor"):
+		DirAccess.make_dir_recursive_absolute(BAKED_SEGMENT.get_base_dir())
+		ResourceSaver.save(_baked_segment, BAKED_SEGMENT)
+	return _baked_segment
+
+
+## The tape worm's mesh copied slices_per_segment times, each laid along Z,
+## stretched to the segment (radius 1) and turned round the axis, merged
+## into one mesh (positions, normals, UVs).
+func _bake_segment() -> ArrayMesh:
 	var fit := _measure_slice()
 	var lay: Basis = fit[0]
 	var center: Vector3 = fit[1]
 	var size: Vector3 = fit[2]
 	var stretch := Basis.from_scale(Vector3(
-			radius * 2.0 / maxf(size.x, 0.0001),
-			radius * slice_thickness / maxf(size.y, 0.0001),
+			2.0 / maxf(size.x, 0.0001),
+			slice_thickness / maxf(size.y, 0.0001),
 			segment_spacing * slice_overlap / maxf(size.z, 0.0001)))
-	var twist := deg_to_rad(twist_per_segment) * index
+	var probe := TAPE_WORM.instantiate() as Node3D
+	add_child(probe)
+	var meshes := probe.find_children("*", "MeshInstance3D", true, false)
+	if probe is MeshInstance3D:
+		meshes.append(probe)
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
 	for k in slices_per_segment:
-		var spin := Basis(Vector3.BACK, twist + PI * k / maxf(slices_per_segment, 1))
-		var slice := TAPE_WORM.instantiate() as Node3D
-		visual.add_child(slice)
-		var basis := spin * stretch * lay
-		slice.transform = Transform3D(basis, -(basis * center))
-		_skin(slice, skin_material)
-		# 60 slices in the shadow pass cost frames: only the head's maw
-		# casts a shadow (the dirt and the eruption sell it anyway).
-		for mesh in slice.find_children("*", "GeometryInstance3D", true, false):
-			(mesh as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if slice is GeometryInstance3D:
-			(slice as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var spin := Basis(Vector3.BACK, PI * k / maxf(slices_per_segment, 1))
+		var shape := spin * stretch * lay
+		var slice := Transform3D(shape, -(shape * center))
+		for node in meshes:
+			var mesh_instance := node as MeshInstance3D
+			if mesh_instance.mesh == null:
+				continue
+			var place := slice * (probe.global_transform.affine_inverse() * mesh_instance.global_transform)
+			var turn_normals := place.basis.inverse().transposed()
+			for surface in mesh_instance.mesh.get_surface_count():
+				var arrays := mesh_instance.mesh.surface_get_arrays(surface)
+				var surface_vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+				var surface_normals = arrays[Mesh.ARRAY_NORMAL]
+				var surface_uvs = arrays[Mesh.ARRAY_TEX_UV]
+				var surface_indices = arrays[Mesh.ARRAY_INDEX]
+				var base := vertices.size()
+				for v in surface_vertices.size():
+					vertices.append(place * surface_vertices[v])
+					normals.append((turn_normals * (surface_normals[v] as Vector3)).normalized() if surface_normals != null and v < (surface_normals as PackedVector3Array).size() else Vector3.UP)
+					uvs.append(surface_uvs[v] if surface_uvs != null and v < (surface_uvs as PackedVector2Array).size() else Vector2.ZERO)
+				if surface_indices == null or (surface_indices as PackedInt32Array).is_empty():
+					for v in surface_vertices.size():
+						indices.append(base + v)
+				else:
+					for index in (surface_indices as PackedInt32Array):
+						indices.append(base + index)
+	probe.queue_free()
+	var merged := []
+	merged.resize(Mesh.ARRAY_MAX)
+	merged[Mesh.ARRAY_VERTEX] = vertices
+	merged[Mesh.ARRAY_NORMAL] = normals
+	merged[Mesh.ARRAY_TEX_UV] = uvs
+	merged[Mesh.ARRAY_INDEX] = indices
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, merged)
+	return out
 
 
 ## The barnacle's maw on the head, its mouth facing forward (-Z).
@@ -457,7 +540,10 @@ func _place_segments() -> void:
 		# Peristalsis: a bulge rolling down the body (fatter across, not longer).
 		var wave := sin(_time * bulge_speed * TAU - float(i) * TAU / maxf(bulge_spacing, 1.0))
 		var swell := 1.0 + bulge_amount * pow(maxf(wave, 0.0), 6.0) + _brood_swell(i)
-		_visuals[i].scale = Vector3(swell, swell, 1.0)
+		_visuals[i].scale = Vector3(swell, swell, 1.0) # the head's maw swells with it
+		var twist := Basis(Vector3.BACK, deg_to_rad(twist_per_segment) * i)
+		var girth := _radii[i] * swell
+		_body_mm.multimesh.set_instance_transform(i, Transform3D(_segments[i].global_basis * twist * Basis.from_scale(Vector3(girth, girth, 1.0)), _pos[i]))
 
 
 ## The attack cycle (see The Leap): hunting, it tunnels to the spot under
@@ -471,12 +557,13 @@ func _update_phase(head: Vector3, delta: float) -> void:
 	match _phase:
 		Phase.WANDER:
 			if hunting:
-				_phase = Phase.TUNNEL
-				_guess = WormLeap.roll_guess()
+				_start_tunnel()
 		Phase.TUNNEL:
 			_plan_leap()
-			var under := Vector3(_leap_from.x, head.y, _leap_from.z)
-			if head.distance_to(under) < 2.5 and head.y < _ground_y - 0.5:
+			# Close enough to leap from (or tunnelled long enough): stop here.
+			var gap := Vector2(_leap_to.x - head.x, _leap_to.z - head.z).length()
+			if (gap <= leap_distance or _phase_left <= 0.0) and head.y < _ground_y - 0.5:
+				_leap_from = Vector3(head.x, _ground_y, head.z)
 				_phase = Phase.WINDUP
 				_phase_left = windup_time
 		Phase.WINDUP:
@@ -497,13 +584,19 @@ func _update_phase(head: Vector3, delta: float) -> void:
 				_shockwave(head)
 		Phase.DIVE:
 			if _phase_left <= 0.0:
-				_phase = Phase.TUNNEL
-				_guess = WormLeap.roll_guess()
+				_start_tunnel()
 	_fx.rumble_boost(windup_rumble_boost * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)) if _phase == Phase.WINDUP else 0.0)
 
 
-## Where to come up: leap_distance short of where it'll come down (its
-## guess at where you'll be by then -- WormLeap), along the way it's coming.
+## A new attack: a fresh guess at your path, and the clock on tunnelling.
+func _start_tunnel() -> void:
+	_phase = Phase.TUNNEL
+	_phase_left = tunnel_timeout
+	_guess = WormLeap.roll_guess()
+
+
+## Where it means to come down: its guess at where you'll be by then
+## (WormLeap). Where it comes up is wherever it is when it's close enough.
 func _plan_leap() -> void:
 	if not is_instance_valid(target):
 		return
@@ -515,11 +608,6 @@ func _plan_leap() -> void:
 		until_out = 0.2
 	var flight := WormLeap.air_time(leap_height, air_gravity, 1.0)
 	_leap_to = WormLeap.landing(head, target, until_out + flight, _guess)
-	var approach := Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z)
-	if approach.length_squared() < 0.25:
-		approach = Vector3(_vel.x, 0.0, _vel.z)
-	approach = approach.normalized() if approach.length_squared() > 0.0001 else Vector3.FORWARD
-	_leap_from = Vector3(_leap_to.x, _ground_y, _leap_to.z) - approach * leap_distance
 
 
 ## Breaking the surface: up at sqrt(2 g h), across at whatever brings it
@@ -541,7 +629,6 @@ func _erupt(head: Vector3) -> void:
 	var surface := Vector3(head.x, _ground_y, head.z)
 	_shake_near(head, eruption_shake, shake_range)
 	WormFX.punch(get_tree(), head, 9.0, shake_range)
-	_fx.fade_cracks()
 	_fx.rumble_boost(0.0)
 	_fx.eruption(surface, _radii[0])
 	SoundPlayer.play_3d(roar_sound, surface, get_tree().current_scene)
@@ -698,8 +785,8 @@ func _shockwave(at: Vector3) -> void:
 			(body as PhysicalBone3D).apply_central_impulse(push * (body as PhysicalBone3D).mass)
 
 
-## Winding up under its prey: the ground shakes harder and harder and cracks
-## open where it's about to come out.
+## Winding up: the ground shakes harder and harder and kicks up dirt where
+## it's about to come out.
 func _telegraph(delta: float) -> void:
 	_trail_left -= delta
 	if _trail_left > 0.0:
@@ -709,17 +796,16 @@ func _telegraph(delta: float) -> void:
 	var spot := Vector3(_leap_from.x, _ground_y + 0.05, _leap_from.z)
 	var jitter := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * head_radius
 	BloodFX.spawn_impact(get_tree().current_scene, spot + jitter, Vector3.UP, dirt_color, 0.75 + t)
-	_fx.show_cracks(Vector3(_leap_from.x, _ground_y, _leap_from.z), 0.25 + 0.75 * t)
 	_shake_near(spot, rumble * (1.0 + t * 2.0), rumble_range)
 
 
-## Where the head is going while it has control: hunting, the tunnel under
-## its prey (or, winding up, straight down under the eruption spot; diving,
-## on down and round); with nobody about, wandering.
+## Where the head is going while it has control: hunting, toward where it
+## means to land (or, winding up, straight down under the eruption spot;
+## diving, on down and round); with nobody about, wandering.
 func _goal(head: Vector3, delta: float) -> Vector3:
 	match _phase:
 		Phase.TUNNEL:
-			return Vector3(_leap_from.x, _ground_y - lurk_depth, _leap_from.z)
+			return Vector3(_leap_to.x, _ground_y - lurk_depth, _leap_to.z)
 		Phase.WINDUP:
 			return Vector3(_leap_from.x, _ground_y - dive_depth, _leap_from.z)
 		Phase.DIVE:
@@ -887,7 +973,7 @@ func _on_segment_damaged(amount: float, attacker_id: int, index: int) -> void:
 		return
 	var segment_health := _segments[index].get_node("Health") as Health
 	segment_health.current_health = segment_health.max_health
-	HitFlash.flash(_visuals[index])
+	HitFlash.flash(_body_mm)
 	BloodFX.spawn_impact(get_tree().current_scene, _pos[index], Vector3.UP, blood_color, 1.0)
 	var frame := Engine.get_physics_frames()
 	if frame != _hit_frame:
@@ -931,6 +1017,7 @@ func _die_step(delta: float) -> void:
 		if not floor_hit.is_empty():
 			BloodFX.spawn_splatter(world, floor_hit.position, floor_hit.normal, _radii[_death_index] * 2.5, blood_color)
 	_segments[_death_index].visible = false
+	_body_mm.multimesh.set_instance_transform(_death_index, Transform3D(Basis.from_scale(Vector3.ZERO), at))
 	_segments[_death_index].collision_layer = 0
 	_death_index += 1
 

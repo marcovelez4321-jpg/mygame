@@ -4,8 +4,6 @@ extends Node3D
 ## The extra show for a burrowing worm (BurrowWorm, Deepmaw), kept cheap:
 ##   - a mound of dirt ploughing along the floor above it while it tunnels
 ##     near the surface (Tremors/Dune) -- one flattened sphere;
-##   - ground cracking open where it's about to erupt (a procedural crack
-##     shader on one quad, worm_cracks.gdshader), fading after;
 ##   - slow, lingering dust clouds and a fling of rubble when it breaks the
 ##     surface (two dust emitters used in turn, one rubble emitter);
 ##   - a low rumble loop from its head while it's underground, louder the
@@ -41,8 +39,6 @@ var rumble_range := 30.0
 
 static var _mound_mesh: SphereMesh
 static var _mound_material: StandardMaterial3D
-static var _crack_mesh: PlaneMesh
-static var _crack_material: ShaderMaterial
 static var _dust_process: ParticleProcessMaterial
 static var _dust_mesh: QuadMesh
 static var _rubble_process: ParticleProcessMaterial
@@ -52,8 +48,6 @@ static var _ring_mesh: TorusMesh
 static var _ring_material: StandardMaterial3D
 
 var _mound: MeshInstance3D
-var _cracks: MeshInstance3D
-var _crack_tween: Tween
 var _dust: Array[GPUParticles3D] = []
 var _next_dust := 0
 var _rubble: GPUParticles3D
@@ -76,12 +70,6 @@ func _ready() -> void:
 	_mound.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_mound.visible = false
 	add_child(_mound)
-	_cracks = MeshInstance3D.new()
-	_cracks.mesh = _crack_mesh
-	_cracks.material_override = _crack_material
-	_cracks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_cracks.visible = false
-	add_child(_cracks)
 	_rumble = AudioStreamPlayer3D.new()
 	var stream := rumble_stream
 	if stream == null and ResourceLoader.exists(RUMBLE_PATH):
@@ -118,11 +106,10 @@ func follow(head: Vector3, velocity: Vector3, ground_y: float, max_depth: float,
 			_rumble.stop()
 
 
-## Dead (or gone): the rumble stops and the mound and cracks go.
+## Dead (or gone): the rumble stops and the mound goes.
 func silence() -> void:
 	_rumble.stop()
 	_mound.visible = false
-	fade_cracks(0.5)
 
 
 ## The rumble swelling (dB on top of its normal volume) -- the wind-up.
@@ -144,30 +131,6 @@ func eruption(at: Vector3, radius: float) -> void:
 		get_tree().create_timer(delay).timeout.connect(func() -> void:
 			if is_instance_valid(world):
 				BloodFX.spawn_impact(world, at + Vector3.UP * height, Vector3.UP, DIRT_COLOR, 3.0 - i * 0.5))
-
-
-## The ground cracking open at `at` (on the floor), `grow` 0..1.
-func show_cracks(at: Vector3, grow: float) -> void:
-	if _crack_tween:
-		_crack_tween.kill()
-		_crack_tween = null
-	_cracks.visible = true
-	var span := 5.0 * size
-	_cracks.global_transform = Transform3D(Basis.from_scale(Vector3(span, 1.0, span)), at + Vector3.UP * 0.03)
-	_cracks.set_instance_shader_parameter("grow", clampf(grow, 0.0, 1.0))
-	_cracks.set_instance_shader_parameter("fade", 1.0)
-
-
-## It's out: the cracks stay open a moment, then fade away.
-func fade_cracks(time: float = 2.5) -> void:
-	if not _cracks.visible:
-		return
-	if _crack_tween:
-		_crack_tween.kill()
-	_crack_tween = create_tween()
-	_crack_tween.tween_method(func(value: float) -> void:
-		_cracks.set_instance_shader_parameter("fade", value), 1.0, 0.0, time)
-	_crack_tween.tween_callback(func() -> void: _cracks.visible = false)
 
 
 ## Breaking the surface at `at`: a slow cloud of dust and a fling of rubble.
@@ -314,10 +277,6 @@ static func _make_shared() -> void:
 	_mound_material = StandardMaterial3D.new()
 	_mound_material.albedo_color = MOUND_COLOR
 	_mound_material.roughness = 1.0
-	_crack_mesh = PlaneMesh.new()
-	_crack_mesh.size = Vector2.ONE
-	_crack_material = ShaderMaterial.new()
-	_crack_material.shader = load("res://shaders/worm_cracks.gdshader")
 	# Dust: soft round puffs that billow up slowly, swell and fade.
 	var puff := GradientTexture2D.new()
 	puff.fill = GradientTexture2D.FILL_RADIAL
