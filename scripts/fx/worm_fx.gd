@@ -240,10 +240,11 @@ func drool(jaws: Vector3, delta: float) -> void:
 
 
 ## A bite: gore and spit spraying out of its jaws along `forward`.
-func bite_spray(jaws: Vector3, forward: Vector3) -> void:
+func bite_spray(jaws: Vector3, forward: Vector3, with_spit: bool = true) -> void:
 	var world := get_tree().current_scene
 	BloodFX.spawn_impact(world, jaws, forward, BLOOD_COLOR, 1.5 * size + 0.5)
-	BloodFX.spawn_impact(world, jaws, (forward + Vector3.UP * 0.5).normalized(), SPIT_COLOR, 1.0 * size + 0.3)
+	if with_spit:
+		BloodFX.spawn_impact(world, jaws, (forward + Vector3.UP * 0.5).normalized(), SPIT_COLOR, 1.0 * size + 0.3)
 
 
 ## Flying out of the ground: clods of dirt shedding off its body (one of
