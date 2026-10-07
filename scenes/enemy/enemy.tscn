@@ -23,7 +23,7 @@
 [ext_resource type="Resource" path="res://audio/events/enemy_footstep.tres" id="35_step"]
 [ext_resource type="Script" uid="uid://dvhw5j37ebnvh" path="res://scripts/ragdoll_audio.gd" id="36_rag_audio"]
 [ext_resource type="PackedScene" uid="uid://d3euijk7144vt" path="res://art/characters/Characters_psx/Models/Killers/Character_Monster_01.fbx" id="21_monster01"]
-[ext_resource type="PackedScene" uid="uid://cdlr3kta7edii" path="res://art/characters/Characters_psx/Models/Killers/Character_Monster_04.fbx" id="22_monster04"]
+[ext_resource type="PackedScene" uid="uid://dlg8wg31e7dfd" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_01.fbx" id="22_killer01"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_tt7e2"]
 radius = 0.4
@@ -64,7 +64,7 @@ metadata/_custom_type_script = "uid://nnai8cso0red"
 [node name="Model" type="Node3D" parent="." unique_id=1788697101]
 transform = Transform3D(-0.45, 0, -3.934025e-08, 0, 0.45, 0, 3.934025e-08, 0, -0.45, -0.0032939315, 0, 0)
 script = ExtResource("20_model")
-variants = Array[PackedScene]([ExtResource("21_monster01"), ExtResource("22_monster04"), ExtResource("3_gl05p")])
+variants = Array[PackedScene]([ExtResource("21_monster01"), ExtResource("22_killer01"), ExtResource("3_gl05p")])
 
 [node name="EnemyAnimator" type="Node" parent="." unique_id=1038340105]
 script = ExtResource("4_tjssy")

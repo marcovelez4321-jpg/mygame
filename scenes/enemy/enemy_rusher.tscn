@@ -7,6 +7,7 @@
 [ext_resource type="Resource" path="res://audio/events/enemy/rusher_death.tres" id="52_snd_death"]
 [ext_resource type="Resource" path="res://audio/events/enemy/rusher_attack.tres" id="53_snd_attack"]
 [ext_resource type="PackedScene" uid="uid://4snvtkl220uh" path="res://art/characters/Characters_psx/Models/Killers/Character_Monster.fbx" id="3_monster"]
+[ext_resource type="PackedScene" uid="uid://d3euijk7144vt" path="res://art/characters/Characters_psx/Models/Killers/Character_Monster_01.fbx" id="5_monster01"]
 
 [node name="Enemy" instance=ExtResource("1")]
 move_speed = 7.5
@@ -24,7 +25,7 @@ corpse_time = 120.0
 max_health = 35.0
 
 [node name="Model" parent="." index="2"]
-variants = Array[PackedScene]([ExtResource("3_monster"), ExtResource("2_killer02")])
+variants = Array[PackedScene]([ExtResource("3_monster"), ExtResource("2_killer02"), ExtResource("5_monster01")])
 
 [node name="EnemyAnimator" parent="." index="3"]
 walk_animations = Array[String](["moves/Run"])

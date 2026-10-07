@@ -69,6 +69,10 @@ func _find_player() -> void:
 	player.weapons.weapon_switched.connect(_on_weapon_switched)
 	player.weapons.picked_up.connect(_on_picked_up)
 	player.weapons.gory_kill_nearby.connect(_on_gory_kill_nearby)
+	player.weapons.leech_latched.connect(func(on: bool) -> void:
+		if on:
+			show_message("LEECH! Spam click to rip it off!")
+	)
 	# The wheel is local UI: it reports a pick, and the player turns that into
 	# part of its input packet.
 	weapon_wheel.weapon_chosen.connect(player.request_weapon)

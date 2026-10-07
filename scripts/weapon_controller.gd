@@ -60,6 +60,9 @@ signal gory_kill_nearby(blood_color: Color)
 ## following the spurt as the ragdoll falls and settles, instead of playing
 ## from one fixed point in empty air.
 signal artery_kill(bone: Node3D)
+## A leech (Leech) latched on (true) or the last one came off (false). While
+## one's on, the gun won't fire: each fresh click tugs at it instead.
+signal leech_latched(on: bool)
 
 ## Everything the host needs to judge one shot.
 class Shot:
@@ -193,6 +196,9 @@ var _throw_left := -1.0
 ## The grenade weapon being thrown (the equipped one, or a Q quick throw's).
 var _throw_weapon: WeaponData
 var _quick_throw_held_prev := false
+var _fire_held_prev := false
+## Leeches stuck on this player (untyped: any may be freed).
+var _leeches: Array = []
 ## The weapon held before this one -- where you go back to when you run out
 ## of grenades.
 var _previous: int = 0
@@ -297,6 +303,29 @@ func pickup_weapon(weapon: WeaponData, ammo_amount: int) -> void:
 ## Called by AmmoPickup, and internally by pickup_weapon(). `emit_signal`
 ## lets a weapon pickup's own ammo top-off fold into ONE picked_up signal
 ## instead of firing two.
+## A leech got you (Leech._latch()).
+func latch_leech(leech: Node) -> void:
+	if _leeches.has(leech):
+		return
+	_leeches.append(leech)
+	if _leeches.size() == 1:
+		leech_latched.emit(true)
+
+
+## A leech came off (ripped off, or it died).
+func unlatch_leech(leech: Node) -> void:
+	_leeches.erase(leech)
+	if not has_leech():
+		leech_latched.emit(false)
+
+
+func has_leech() -> bool:
+	if _leeches.is_empty():
+		return false
+	_leeches = _leeches.filter(func(leech) -> bool: return is_instance_valid(leech))
+	return not _leeches.is_empty()
+
+
 func add_ammo(type: WeaponData.AmmoType, amount: int, emit_signal: bool = true) -> void:
 	_ammo[type] = _ammo.get(type, 0) + amount
 	if emit_signal:
@@ -307,6 +336,14 @@ func add_ammo(type: WeaponData.AmmoType, amount: int, emit_signal: bool = true) 
 ## select_weapon is an inventory index, or -1 for "no change". aim = right
 ## mouse held, quick_throw = Q held.
 func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon: int, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
+	var fire_pressed := fire and not _fire_held_prev
+	_fire_held_prev = fire
+	if has_leech():
+		# A leech on your face: no shooting, switching or throwing -- every
+		# fresh click is a tug at it (Leech.tug()).
+		if fire_pressed:
+			_leeches[0].call("tug")
+		return
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_reload_blocked_left = maxf(_reload_blocked_left - delta, 0.0)
 	_time_since_shot += delta

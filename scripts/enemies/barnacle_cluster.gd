@@ -7,7 +7,8 @@ extends Node3D
 ## it grows `count` barnacles (Barnacle) scattered within radius of itself
 ## across that surface, their sizes spread from size_min to size_max (the
 ## biggest in the middle, a little jitter on each), among fungus_count flat
-## fungal mounds.
+## fungal mounds -- and leech_count leeches (Leech) set around it as guards
+## (on a wall or ceiling clump they drop to the floor below and guard there).
 ##
 ## Rule 1 (co-op): the host grows the barnacles; the mounds are just the look.
 
@@ -20,6 +21,8 @@ extends Node3D
 ## Flat fungal mounds around the barnacles (no collision, look only).
 @export var fungus_count: int = 7
 @export var fungus_color: Color = Color(0.26, 0.24, 0.12)
+@export var leech_scene: PackedScene = preload("res://scenes/enemy/leech.tscn")
+@export var leech_count: int = 3
 
 static var _fungus_mesh: SphereMesh
 var _fungus_material: StandardMaterial3D
@@ -43,6 +46,11 @@ func _grow() -> void:
 			barnacle.size = clampf(lerpf(size_min, size_max, t) + randf_range(-0.08, 0.08), size_min, size_max)
 			add_child(barnacle)
 			barnacle.global_transform = Transform3D(_basis_on(hit.normal), hit.position)
+		for i in leech_count:
+			var flat := Vector2.from_angle(randf() * TAU) * randf_range(radius, radius * 1.8)
+			var leech := leech_scene.instantiate() as Node3D
+			add_child(leech)
+			leech.global_position = global_position + global_basis * Vector3(flat.x, 0.0, flat.y) + up * 0.4
 	for i in fungus_count:
 		var hit := _surface_near(up, radius * 1.2)
 		if not hit.is_empty():

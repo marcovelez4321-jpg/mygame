@@ -1,0 +1,45 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/leech.gd" id="1_leech"]
+[ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_health"]
+[ext_resource type="PackedScene" uid="uid://bd73rywbk5kv7" path="res://art/props/PSX Creatures/Models/FBX/tape_worm.fbx" id="3_model"]
+[ext_resource type="Texture2D" uid="uid://5eieikmsrqr6" path="res://art/props/PSX Creatures/Textures/tape_worm.png" id="4_skin"]
+[ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="5_bite"]
+[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="6_splat"]
+
+[sub_resource type="StandardMaterial3D" id="LeechSkin"]
+albedo_texture = ExtResource("4_skin")
+roughness = 0.6
+texture_filter = 0
+
+[sub_resource type="SphereShape3D" id="LeechShape"]
+radius = 0.16
+
+[sub_resource type="PhysicsMaterial" id="LeechPhysics"]
+friction = 1.0
+bounce = 0.1
+
+[node name="Leech" type="RigidBody3D"]
+physics_material_override = SubResource("LeechPhysics")
+continuous_cd = true
+linear_damp = 0.3
+script = ExtResource("1_leech")
+skin_material = SubResource("LeechSkin")
+bite_sound = ExtResource("5_bite")
+death_sound = ExtResource("6_splat")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 25.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.16, 0)
+shape = SubResource("LeechShape")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Flip" type="Node3D" parent="Visual"]
+
+[node name="Swell" type="Node3D" parent="Visual/Flip"]
+
+[node name="Model" parent="Visual/Flip/Swell" instance=ExtResource("3_model")]
