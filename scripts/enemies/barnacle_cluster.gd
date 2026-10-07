@@ -10,9 +10,20 @@ extends Node3D
 ## fungal mounds -- and leech_count leeches (Leech) set around it as guards
 ## (on a wall or ceiling clump they drop to the floor below and guard there).
 ##
+## Each clump is a roach nest or a spider nest (nest; RANDOM rolls it, a
+## spider nest spider_nest_chance of the time): a spider nest's barnacles
+## are paler, its fungus webby grey, and they spit spiders into one shared
+## SpiderPack, so a clump's spiders swarm together.
+##
 ## Rule 1 (co-op): the host grows the barnacles; the mounds are just the look.
 
+enum Nest { RANDOM, ROACHES, SPIDERS }
+
 @export var barnacle_scene: PackedScene = preload("res://scenes/enemy/barnacle.tscn")
+## Roach nest, spider nest, or roll it (spider_nest_chance of a spider nest).
+@export var nest: Nest = Nest.RANDOM
+@export_range(0.0, 1.0, 0.05) var spider_nest_chance: float = 0.4
+@export var spider_fungus_color: Color = Color(0.5, 0.5, 0.47)
 @export var count: int = 6
 ## How far from the middle barnacles and mounds can grow.
 @export var radius: float = 1.8
@@ -24,17 +35,31 @@ extends Node3D
 @export var leech_scene: PackedScene = preload("res://scenes/enemy/leech.tscn")
 @export var leech_count: int = 3
 
+const GROUP := "barnacle_clusters"
+
 static var _fungus_mesh: SphereMesh
 var _fungus_material: StandardMaterial3D
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	_grow.call_deferred() # once the level around it exists
 
 
 func _grow() -> void:
 	var up := global_basis.y.normalized()
+	if nest == Nest.RANDOM:
+		nest = Nest.SPIDERS if randf() < spider_nest_chance else Nest.ROACHES
+	if nest == Nest.SPIDERS:
+		fungus_color = spider_fungus_color
+	var pack: SpiderPack = null
 	if multiplayer.is_server():
+		if nest == Nest.SPIDERS:
+			pack = SpiderPack.new()
+			pack.start_count = 0
+			pack.free_when_empty = false # more are coming
+			pack.position = global_position # the level's root sits at the origin
+			get_tree().current_scene.add_child(pack)
 		for i in count:
 			var hit := _surface_near(up, 0.0 if i == 0 else radius)
 			if hit.is_empty():
@@ -44,6 +69,8 @@ func _grow() -> void:
 			# clump has a spread of sizes -- each nudged a little.
 			var t := 1.0 - float(i) / maxf(count - 1, 1)
 			barnacle.size = clampf(lerpf(size_min, size_max, t) + randf_range(-0.08, 0.08), size_min, size_max)
+			barnacle.brood = Barnacle.Brood.SPIDERS if nest == Nest.SPIDERS else Barnacle.Brood.ROACHES
+			barnacle.spider_pack = pack
 			add_child(barnacle)
 			barnacle.global_transform = Transform3D(_basis_on(hit.normal), hit.position)
 		for i in leech_count:

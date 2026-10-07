@@ -27,6 +27,12 @@ extends Node3D
 		if Engine.is_editor_hint() and is_inside_tree():
 			_show_editor_preview()
 
+## Sizes every model to this height in meters (its rest-pose mesh bounds),
+## whatever scale it was made at -- for a set of models that aren't all built
+## at the same size (the zombies are real-sized; the Killers are made big and
+## scaled down by this node). 0 = leave them at this node's own scale.
+@export var fit_height: float = 0.0
+
 var model_seed: int = 0
 
 var _model: Node3D
@@ -54,6 +60,20 @@ func _spawn(scene: PackedScene) -> void:
 		return
 	_model = scene.instantiate() as Node3D
 	add_child(_model)
+	if fit_height > 0.0:
+		_fit_to_height()
+
+
+func _fit_to_height() -> void:
+	var bounds := AABB()
+	var has_bounds := false
+	for node in _model.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		var box := mesh.global_transform * mesh.get_aabb()
+		bounds = box if not has_bounds else bounds.merge(box)
+		has_bounds = true
+	if has_bounds and bounds.size.y > 0.01:
+		_model.scale *= fit_height / bounds.size.y
 
 
 ## Editor only: shows the first variant so the enemy isn't an invisible capsule

@@ -1,0 +1,33 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/spider.gd" id="1_spider"]
+[ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_health"]
+[ext_resource type="Texture2D" uid="uid://cjmpr724mgd7t" path="res://NEWPSXMODELS/PSX Mega Pack/Models/Spider/SpiderTexture.jpg" id="3_skin"]
+[ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="4_bite"]
+[ext_resource type="Resource" path="res://audio/events/enemy/roach_splat.tres" id="5_death"]
+
+[sub_resource type="StandardMaterial3D" id="SpiderSkin"]
+albedo_texture = ExtResource("3_skin")
+roughness = 0.8
+texture_filter = 0
+
+[sub_resource type="SphereShape3D" id="SpiderShape"]
+radius = 0.2
+
+[node name="Spider" type="AnimatableBody3D"]
+sync_to_physics = false
+script = ExtResource("1_spider")
+skin_material = SubResource("SpiderSkin")
+bite_sound = ExtResource("4_bite")
+death_sound = ExtResource("5_death")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 12.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SpiderShape")
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="Pivot" type="Node3D" parent="Visual"]

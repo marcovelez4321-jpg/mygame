@@ -1,7 +1,7 @@
 class_name Population
 extends RefCounted
 
-## Hard caps on how many rats and roaches can be alive at once, game-wide --
+## Hard caps on how many rats, roaches and spiders can be alive at once, game-wide --
 ## so a long fight can't pile up hundreds of them and sink the frame rate.
 ## When something new is about to be born at the cap, the OLDEST living ones
 ## (by when they spawned: their "born" meta) die on the spot -- a normal death,
@@ -11,6 +11,7 @@ extends RefCounted
 
 const MAX_RATS := 60
 const MAX_ROACHES := 60
+const MAX_SPIDERS := 40
 
 
 ## Stamps when `creature` was born (Rat/FlyingRoach call this in _ready()).
@@ -43,3 +44,7 @@ static func make_room_for_rats(tree: SceneTree, needed: int) -> void:
 
 static func make_room_for_roaches(tree: SceneTree, needed: int) -> void:
 	make_room(tree, Factions.GROUPS[Factions.Side.ROACH], FlyingRoach, MAX_ROACHES, needed)
+
+
+static func make_room_for_spiders(tree: SceneTree, needed: int) -> void:
+	make_room(tree, Factions.GROUPS[Factions.Side.SPIDER], Spider, MAX_SPIDERS, needed)

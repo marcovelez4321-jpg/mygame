@@ -7,6 +7,7 @@ extends RefCounted
 ##   TWEAKER - the human enemies: melee, rushers, gunners (Enemy)
 ##   ROACH   - flying roaches, spitters included (FlyingRoach)
 ##   RAT     - rats and the Rat Bender (Rat, RatBender)
+##   SPIDER  - wall-crawling spider packs (Spider)
 ## Every side hates every other side, but not equally -- Source's NPC
 ## relationships (CBaseCombatCharacter: a relationship type and a PRIORITY
 ## per class). An NPC picks its enemy the way CAI_BaseNPC::BestEnemy() does:
@@ -19,20 +20,22 @@ extends RefCounted
 
 ## Sides are passed around as plain ints (Side values) -- Godot's type check
 ## treats "Side" here and "Factions.Side" elsewhere as different types.
-enum Side { PLAYER, TWEAKER, ROACH, RAT }
+enum Side { PLAYER, TWEAKER, ROACH, RAT, SPIDER }
 
 const GROUPS := {
 	Side.PLAYER: "player",
 	Side.TWEAKER: "tweakers",
 	Side.ROACH: "roaches",
 	Side.RAT: "rats",
+	Side.SPIDER: "spiders",
 }
 
 ## How much each side wants to fight each other side (higher = first).
 const PRIORITY := {
-	Side.TWEAKER: {Side.PLAYER: 3, Side.ROACH: 2, Side.RAT: 1},
-	Side.ROACH: {Side.PLAYER: 3, Side.RAT: 2, Side.TWEAKER: 1},
-	Side.RAT: {Side.PLAYER: 3, Side.TWEAKER: 2, Side.ROACH: 1},
+	Side.TWEAKER: {Side.PLAYER: 3, Side.ROACH: 2, Side.RAT: 1, Side.SPIDER: 1},
+	Side.ROACH: {Side.PLAYER: 3, Side.RAT: 2, Side.TWEAKER: 1, Side.SPIDER: 1},
+	Side.RAT: {Side.PLAYER: 3, Side.TWEAKER: 2, Side.ROACH: 1, Side.SPIDER: 1},
+	Side.SPIDER: {Side.PLAYER: 3, Side.RAT: 2, Side.ROACH: 2, Side.TWEAKER: 1},
 	Side.PLAYER: {},
 }
 ## Whatever hurt you within REVENGE_TIME seconds counts this much higher.
@@ -200,13 +203,13 @@ static func is_alive_target(target: Node3D) -> bool:
 static func height_of(target: Node3D) -> float:
 	if target.is_in_group(GROUPS[Side.RAT]) and not target is CharacterBody3D:
 		return 0.25
-	if target.is_in_group(GROUPS[Side.ROACH]):
+	if target.is_in_group(GROUPS[Side.ROACH]) or target.is_in_group(GROUPS[Side.SPIDER]):
 		return 0.3
 	return 1.8
 
 
 ## Where to aim at the target: a person's chest, or the middle of a rat/roach.
 static func aim_point(target: Node3D) -> Vector3:
-	if target.is_in_group(GROUPS[Side.ROACH]):
-		return target.global_position # a roach's origin is its middle already
+	if target.is_in_group(GROUPS[Side.ROACH]) or target.is_in_group(GROUPS[Side.SPIDER]):
+		return target.global_position # a roach's or spider's origin is its middle already
 	return target.global_position + Vector3.UP * height_of(target) * 0.55

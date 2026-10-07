@@ -12,7 +12,19 @@ extends StaticBody3D
 ##
 ## Its own "up" is the way its mouth faces (out of the floor or wall it's on).
 ## Nothing hunts it (it's in no Factions group); it's yours to clear.
+## A nest is a roach nest or a spider nest (brood, rolled per clump by
+## BarnacleCluster): a spider nest is paler and spits spiders instead, into
+## its clump's SpiderPack so they swarm together.
 ## Rule 1 (co-op): the host runs the timers and spawns the roaches.
+
+enum Brood { ROACHES, SPIDERS }
+
+## What it spits out.
+@export var brood: Brood = Brood.ROACHES
+## A spider nest's skin is tinted this colour, so you can tell them apart.
+@export var spider_nest_tint: Color = Color(0.72, 0.76, 0.9)
+## How hard spiders are flung out of its mouth, m/s.
+@export var spider_launch_speed: float = 3.5
 
 @export_group("Size")
 ## How big this one is (1 = the model's own size). BarnacleCluster rolls it.
@@ -46,8 +58,11 @@ extends StaticBody3D
 @export var spit_sound: SoundEvent
 @export var death_sound: SoundEvent
 
-## Roaches it spits each time (and spills when it dies): 1 to 3 by size.
+## Roaches (or spiders) it spits each time (and spills when it dies): 1 to 3
+## by size.
 var roaches_per_spit := 1
+## A spider nest's pack (set by BarnacleCluster; made here if not).
+var spider_pack: SpiderPack
 var _spit_left := 0.0
 var _swelling := false
 var _dead := false
@@ -76,8 +91,12 @@ func _ready() -> void:
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
 	if skin_material:
+		var skin := skin_material
+		if brood == Brood.SPIDERS and skin is StandardMaterial3D:
+			skin = skin.duplicate() as StandardMaterial3D
+			(skin as StandardMaterial3D).albedo_color = spider_nest_tint
 		for mesh in _model.find_children("*", "MeshInstance3D", true, false):
-			(mesh as MeshInstance3D).material_override = skin_material
+			(mesh as MeshInstance3D).material_override = skin
 	_spit_left = randf_range(spit_interval_min, spit_interval_max)
 
 
@@ -122,11 +141,19 @@ func _spit() -> void:
 	tween.tween_property(_model, "scale", rest, 0.2).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 
-## Pops `count` roaches out of its mouth, fanned out around the way it faces
-## (at the game's roach cap the oldest roaches die to make room: Population).
+## Pops `count` roaches (or spiders) out of its mouth, fanned out around the
+## way it faces (at the game's cap the oldest die to make room: Population).
 func _release(count: int) -> void:
 	var world := get_tree().current_scene
 	var up := global_basis.y.normalized()
+	if brood == Brood.SPIDERS:
+		if not is_instance_valid(spider_pack):
+			spider_pack = SpiderPack.new()
+			spider_pack.start_count = 0
+			spider_pack.position = global_position # the level's root sits at the origin
+			world.add_child(spider_pack)
+		spider_pack.spawn_spiders(count, _mouth.global_position + up * 0.2, up * spider_launch_speed)
+		return
 	for i in count:
 		var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 0.45
 		var direction := (up + spread).normalized()

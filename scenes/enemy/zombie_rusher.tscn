@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/enemy/enemy_rusher.tscn" id="1_base"]
+[ext_resource type="PackedScene" uid="uid://v2u6muk3yq24" path="res://NEWPSXMODELS/PSX Mega Pack/Models/PSX Retro Zombies 5 Low-Poly Characters (Static)/zombie 1/zombie 1.glb" id="2_zombie1"]
+[ext_resource type="PackedScene" uid="uid://fdollgltgl7x" path="res://NEWPSXMODELS/PSX Mega Pack/Models/PSX Retro Zombies 5 Low-Poly Characters (Static)/zombie 2/zombie 2.glb" id="3_zombie2"]
+[ext_resource type="PackedScene" uid="uid://cmyladmemiab3" path="res://NEWPSXMODELS/PSX Mega Pack/Models/PSX Retro Zombies 5 Low-Poly Characters (Static)/zombie 3/zombie 3.glb" id="4_zombie3"]
+[ext_resource type="PackedScene" uid="uid://2eg668fq03x2" path="res://NEWPSXMODELS/PSX Mega Pack/Models/PSX Retro Zombies 5 Low-Poly Characters (Static)/zombie 4/zombie 4.glb" id="5_zombie4"]
+[ext_resource type="PackedScene" uid="uid://dux4dhw1gx72o" path="res://NEWPSXMODELS/PSX Mega Pack/Models/PSX Retro Zombies 5 Low-Poly Characters (Static)/zombie 5/zombie 5.glb" id="6_zombie5"]
+
+[node name="ZombieRusher" instance=ExtResource("1_base")]
+
+[node name="Model" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+variants = Array[PackedScene]([ExtResource("2_zombie1"), ExtResource("3_zombie2"), ExtResource("4_zombie3"), ExtResource("5_zombie4"), ExtResource("6_zombie5")])
+fit_height = 1.75

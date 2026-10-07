@@ -24,6 +24,10 @@
 [ext_resource type="PackedScene" path="res://scenes/pills_pickup.tscn" id="31_pills"]
 [ext_resource type="PackedScene" path="res://scenes/bandage_pickup.tscn" id="32_bandage"]
 [ext_resource type="PackedScene" path="res://scenes/pkm_pickup.tscn" id="33_pkm"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/zombie.tscn" id="34_zombie"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/zombie_rusher.tscn" id="35_zombie_rusher"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="36_spiders"]
+[ext_resource type="Script" path="res://scripts/enemies/barnacle_scatter.gd" id="37_scatter"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)
@@ -57,19 +61,49 @@ size = Vector3(8, 1, 8)
 size = Vector3(8, 1, 8)
 
 [sub_resource type="BoxShape3D" id="WallShapeNS"]
-size = Vector3(120, 4, 1)
+size = Vector3(120, 13.5, 1)
 
 [sub_resource type="BoxMesh" id="WallMeshNS"]
-size = Vector3(120, 4, 1)
+size = Vector3(120, 13.5, 1)
 
 [sub_resource type="StandardMaterial3D" id="WallMat"]
 albedo_color = Color(0.5, 0.47, 0.42, 1)
 
 [sub_resource type="BoxShape3D" id="WallShapeEW"]
-size = Vector3(1, 4, 120)
+size = Vector3(1, 13.5, 120)
 
 [sub_resource type="BoxMesh" id="WallMeshEW"]
-size = Vector3(1, 4, 120)
+size = Vector3(1, 13.5, 120)
+
+[sub_resource type="BoxShape3D" id="CeilingShapeWest"]
+size = Vector3(6, 0.5, 14)
+
+[sub_resource type="BoxMesh" id="CeilingMeshWest"]
+size = Vector3(6, 0.5, 14)
+
+[sub_resource type="BoxShape3D" id="CeilingShapeNorth"]
+size = Vector3(14, 0.5, 6)
+
+[sub_resource type="BoxMesh" id="CeilingMeshNorth"]
+size = Vector3(14, 0.5, 6)
+
+[sub_resource type="BoxShape3D" id="CeilingShapeNook"]
+size = Vector3(4.75, 0.4, 5)
+
+[sub_resource type="BoxMesh" id="CeilingMeshNook"]
+size = Vector3(4.75, 0.4, 5)
+
+[sub_resource type="BoxShape3D" id="TallWallShapeNS"]
+size = Vector3(1.2, 13.5, 8)
+
+[sub_resource type="BoxMesh" id="TallWallMeshNS"]
+size = Vector3(1.2, 13.5, 8)
+
+[sub_resource type="BoxShape3D" id="TallWallShapeEW"]
+size = Vector3(8, 13.5, 1.2)
+
+[sub_resource type="BoxMesh" id="TallWallMeshEW"]
+size = Vector3(8, 13.5, 1.2)
 
 [sub_resource type="CylinderShape3D" id="PillarShape"]
 height = 4.0
@@ -108,19 +142,19 @@ height = 5.0
 albedo_color = Color(0.5, 0.5, 0.52, 1)
 
 [sub_resource type="BoxShape3D" id="LWallLongShape"]
-size = Vector3(5, 4.5, 0.5)
+size = Vector3(5, 9, 0.5)
 
 [sub_resource type="BoxMesh" id="LWallLongMesh"]
-size = Vector3(5, 4.5, 0.5)
+size = Vector3(5, 9, 0.5)
 
 [sub_resource type="StandardMaterial3D" id="LWallMat"]
 albedo_color = Color(0.36, 0.3, 0.27, 1)
 
 [sub_resource type="BoxShape3D" id="LWallShortShape"]
-size = Vector3(0.5, 4.5, 3.5)
+size = Vector3(0.5, 9, 3.5)
 
 [sub_resource type="BoxMesh" id="LWallShortMesh"]
-size = Vector3(0.5, 4.5, 3.5)
+size = Vector3(0.5, 9, 3.5)
 
 [node name="TestMap" type="Node3D" unique_id=1614722928]
 script = ExtResource("3")
@@ -156,7 +190,7 @@ shape = SubResource("PlatformShape")
 mesh = SubResource("PlatformMesh")
 
 [node name="WallNorth" type="StaticBody3D" parent="." unique_id=660338006]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -60)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.75, -60)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallNorth" unique_id=1409069209]
 shape = SubResource("WallShapeNS")
@@ -166,7 +200,7 @@ mesh = SubResource("WallMeshNS")
 surface_material_override/0 = SubResource("WallMat")
 
 [node name="WallSouth" type="StaticBody3D" parent="." unique_id=447960080]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 60)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.75, 60)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouth" unique_id=1175850062]
 shape = SubResource("WallShapeNS")
@@ -176,7 +210,7 @@ mesh = SubResource("WallMeshNS")
 surface_material_override/0 = SubResource("WallMat")
 
 [node name="WallEast" type="StaticBody3D" parent="." unique_id=1617479107]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 6.75, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallEast" unique_id=997122853]
 shape = SubResource("WallShapeEW")
@@ -186,7 +220,7 @@ mesh = SubResource("WallMeshEW")
 surface_material_override/0 = SubResource("WallMat")
 
 [node name="WallWest" type="StaticBody3D" parent="." unique_id=823621024]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 6.75, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest" unique_id=668319240]
 shape = SubResource("WallShapeEW")
@@ -583,20 +617,20 @@ surface_material_override/0 = SubResource("CoverPillarMat")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -4)
 
 [node name="Long" type="CollisionShape3D" parent="MazeWalls/L1" unique_id=348319799]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 shape = SubResource("LWallLongShape")
 
 [node name="LongMesh" type="MeshInstance3D" parent="MazeWalls/L1" unique_id=226106303]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 mesh = SubResource("LWallLongMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
 [node name="Short" type="CollisionShape3D" parent="MazeWalls/L1" unique_id=1427092022]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 1.75)
 shape = SubResource("LWallShortShape")
 
 [node name="ShortMesh" type="MeshInstance3D" parent="MazeWalls/L1" unique_id=2002394642]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
@@ -604,20 +638,20 @@ surface_material_override/0 = SubResource("LWallMat")
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 5, 0, -12)
 
 [node name="Long" type="CollisionShape3D" parent="MazeWalls/L2" unique_id=159783844]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 shape = SubResource("LWallLongShape")
 
 [node name="LongMesh" type="MeshInstance3D" parent="MazeWalls/L2" unique_id=1553270033]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 mesh = SubResource("LWallLongMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
 [node name="Short" type="CollisionShape3D" parent="MazeWalls/L2" unique_id=37913945]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 1.75)
 shape = SubResource("LWallShortShape")
 
 [node name="ShortMesh" type="MeshInstance3D" parent="MazeWalls/L2" unique_id=824028197]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
@@ -625,20 +659,20 @@ surface_material_override/0 = SubResource("LWallMat")
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -3, 0, -14)
 
 [node name="Long" type="CollisionShape3D" parent="MazeWalls/L3" unique_id=1891378076]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 shape = SubResource("LWallLongShape")
 
 [node name="LongMesh" type="MeshInstance3D" parent="MazeWalls/L3" unique_id=513833097]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 mesh = SubResource("LWallLongMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
 [node name="Short" type="CollisionShape3D" parent="MazeWalls/L3" unique_id=169804480]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 1.75)
 shape = SubResource("LWallShortShape")
 
 [node name="ShortMesh" type="MeshInstance3D" parent="MazeWalls/L3" unique_id=352330423]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
@@ -713,20 +747,20 @@ kind = 1
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, 4)
 
 [node name="Long" type="CollisionShape3D" parent="MazeWallsMirrored/L1" unique_id=1473600762]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 shape = SubResource("LWallLongShape")
 
 [node name="LongMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L1" unique_id=1040033867]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 mesh = SubResource("LWallLongMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
 [node name="Short" type="CollisionShape3D" parent="MazeWallsMirrored/L1" unique_id=1503972055]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, -1.75)
 shape = SubResource("LWallShortShape")
 
 [node name="ShortMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L1" unique_id=420579850]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, -1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
@@ -734,20 +768,20 @@ surface_material_override/0 = SubResource("LWallMat")
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 5, 0, 12)
 
 [node name="Long" type="CollisionShape3D" parent="MazeWallsMirrored/L2" unique_id=579111599]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 shape = SubResource("LWallLongShape")
 
 [node name="LongMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L2" unique_id=1622249429]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 mesh = SubResource("LWallLongMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
 [node name="Short" type="CollisionShape3D" parent="MazeWallsMirrored/L2" unique_id=1382565156]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, -1.75)
 shape = SubResource("LWallShortShape")
 
 [node name="ShortMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L2" unique_id=865666776]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, -1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
@@ -755,20 +789,20 @@ surface_material_override/0 = SubResource("LWallMat")
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -3, 0, 14)
 
 [node name="Long" type="CollisionShape3D" parent="MazeWallsMirrored/L3" unique_id=450011639]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 shape = SubResource("LWallLongShape")
 
 [node name="LongMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L3" unique_id=580606620]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 4.5, 0)
 mesh = SubResource("LWallLongMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
 [node name="Short" type="CollisionShape3D" parent="MazeWallsMirrored/L3" unique_id=785543052]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, -1.75)
 shape = SubResource("LWallShortShape")
 
 [node name="ShortMesh" type="MeshInstance3D" parent="MazeWallsMirrored/L3" unique_id=1121925082]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, -1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
@@ -804,3 +838,136 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.5, -40)
 
 [node name="PKMPickup" parent="." unique_id=1813813055 instance=ExtResource("33_pkm")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.6, 20)
+
+[node name="ZombieTest" parent="." unique_id=1938475521 instance=ExtResource("34_zombie")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 30)
+
+[node name="ZombieRusherTest" parent="." unique_id=1203948577 instance=ExtResource("35_zombie_rusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 30)
+
+[node name="TallEdgeWalls" type="Node3D" parent="." unique_id=795425564]
+
+[node name="TallNorth1" type="StaticBody3D" parent="TallEdgeWalls" unique_id=423946139]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 6.75, -55.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallNorth1" unique_id=947876999]
+shape = SubResource("TallWallShapeNS")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallNorth1" unique_id=1497871144]
+mesh = SubResource("TallWallMeshNS")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="TallNorth2" type="StaticBody3D" parent="TallEdgeWalls" unique_id=203694312]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 6.75, -55.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallNorth2" unique_id=255555737]
+shape = SubResource("TallWallShapeNS")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallNorth2" unique_id=1863673106]
+mesh = SubResource("TallWallMeshNS")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="TallSouth1" type="StaticBody3D" parent="TallEdgeWalls" unique_id=1250797845]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 6.75, 55.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallSouth1" unique_id=302142728]
+shape = SubResource("TallWallShapeNS")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallSouth1" unique_id=885310972]
+mesh = SubResource("TallWallMeshNS")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="TallSouth2" type="StaticBody3D" parent="TallEdgeWalls" unique_id=1351527726]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 6.75, 55.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallSouth2" unique_id=224551738]
+shape = SubResource("TallWallShapeNS")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallSouth2" unique_id=1189709946]
+mesh = SubResource("TallWallMeshNS")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="TallEast1" type="StaticBody3D" parent="TallEdgeWalls" unique_id=561060838]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55.5, 6.75, -30)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallEast1" unique_id=180521324]
+shape = SubResource("TallWallShapeEW")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallEast1" unique_id=284570285]
+mesh = SubResource("TallWallMeshEW")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="TallEast2" type="StaticBody3D" parent="TallEdgeWalls" unique_id=1031247021]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55.5, 6.75, 30)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallEast2" unique_id=998017869]
+shape = SubResource("TallWallShapeEW")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallEast2" unique_id=250013383]
+mesh = SubResource("TallWallMeshEW")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="TallWest1" type="StaticBody3D" parent="TallEdgeWalls" unique_id=616819858]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -55.5, 6.75, -30)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallWest1" unique_id=294804716]
+shape = SubResource("TallWallShapeEW")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallWest1" unique_id=1283364967]
+mesh = SubResource("TallWallMeshEW")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="TallWest2" type="StaticBody3D" parent="TallEdgeWalls" unique_id=1011648019]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -55.5, 6.75, 30)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TallEdgeWalls/TallWest2" unique_id=226938843]
+shape = SubResource("TallWallShapeEW")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TallEdgeWalls/TallWest2" unique_id=1875651415]
+mesh = SubResource("TallWallMeshEW")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="SpiderHordeWestWall" parent="." unique_id=1462093817 instance=ExtResource("36_spiders")]
+transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -59.45, 5, 10)
+start_count = 10
+roam_radius = 8.0
+
+[node name="SpiderHordeNorthWall" parent="." unique_id=1071477686 instance=ExtResource("36_spiders")]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, -15, 5, -59.45)
+start_count = 10
+roam_radius = 8.0
+
+[node name="BarnacleScatter" type="Node3D" parent="." unique_id=873214560]
+script = ExtResource("37_scatter")
+
+[node name="CeilingSections" type="Node3D" parent="." unique_id=1959167398]
+
+[node name="CeilingWest" type="StaticBody3D" parent="CeilingSections" unique_id=1302102035]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -56.5, 7, 10)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CeilingSections/CeilingWest" unique_id=1940099285]
+shape = SubResource("CeilingShapeWest")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CeilingSections/CeilingWest" unique_id=1777652994]
+mesh = SubResource("CeilingMeshWest")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="CeilingNorth" type="StaticBody3D" parent="CeilingSections" unique_id=1099975904]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 7, -56.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CeilingSections/CeilingNorth" unique_id=1070302523]
+shape = SubResource("CeilingShapeNorth")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CeilingSections/CeilingNorth" unique_id=1190580830]
+mesh = SubResource("CeilingMeshNorth")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="CeilingNookL1" type="StaticBody3D" parent="CeilingSections" unique_id=1936196520]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.375, 4, -1.25)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CeilingSections/CeilingNookL1" unique_id=1361399321]
+shape = SubResource("CeilingShapeNook")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CeilingSections/CeilingNookL1" unique_id=507811516]
+mesh = SubResource("CeilingMeshNook")
+surface_material_override/0 = SubResource("LWallMat")
