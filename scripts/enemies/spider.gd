@@ -100,6 +100,16 @@ const WALL_DOT := 0.7
 ## Furthest a hip (the first leg segment) swings forward or back from rest,
 ## radians.
 @export var hip_swing_limit: float = 1.0
+## Where the feet stand, out from each hip, as a fraction of the leg's
+## length (lower = feet tucked closer in, legs more curled)...
+@export_range(0.2, 1.0, 0.05) var foot_reach: float = 0.55
+## ...and how high the body rides, as a fraction of a leg's length (higher =
+## up on its toes, lower = crouched).
+@export_range(0.05, 0.8, 0.05) var ride_height: float = 0.3
+## How hard the knees are pushed up before each solve, as a fraction of the
+## leg's length: the IK keeps the bend it starts from, so this is what makes
+## the legs arch up high like a spider's instead of bowing out flat.
+@export_range(0.0, 1.0, 0.05) var knee_lift: float = 0.35
 ## Past this far from the camera the legs solve every other frame, and past
 ## ik_far_distance not at all (they hold their pose).
 @export var ik_full_distance: float = 15.0
@@ -733,20 +743,28 @@ func _orient_model(model: Node3D) -> void:
 	# Where each foot rests, in our own space: its rest spot, flat on the
 	# surface the body rides ride-height above.
 	var to_visual := _visual.global_transform.affine_inverse() * _skeleton.global_transform
-	var drop := 0.0
+	var to_meters := to_visual.basis.get_scale().x
+	# Where each foot rests: out from its hip toward its rest tip, but only
+	# foot_reach of the leg's length, with the body ride_height of a leg
+	# length up -- well inside the leg's reach, so it stands with its knees
+	# bent high instead of stretched out straight.
+	var leg_length := 0.0
 	var walking := 0
 	for leg in _legs:
-		leg.home = to_visual * (_body_rest * leg.rest_joints[4])
 		if not leg.palp:
-			drop -= leg.home.y
+			for length in leg.lengths:
+				leg_length += length * to_meters
 			walking += 1
-	_ride = drop / maxi(walking, 1)
-	if _ride < 0.12 * _span:
-		_ride = 0.2 * _span # rest pose has its feet up: give it some legs to stand on
+	leg_length /= maxi(walking, 1)
+	_ride = ride_height * leg_length
 	for leg in _legs:
-		if not leg.palp:
-			leg.home.y = -_ride
-		leg.home.x *= 1.05 # a touch wider than rest: a lower, more spidery stance
+		var tip := to_visual * (_body_rest * leg.rest_joints[4])
+		if leg.palp:
+			leg.home = tip
+			continue
+		var hip := to_visual * (_body_rest * leg.rest_joints[0])
+		var out := Vector3(tip.x - hip.x, 0.0, tip.z - hip.z).normalized()
+		leg.home = Vector3(hip.x, -_ride, hip.z) + out * foot_reach * leg_length
 
 
 ## Every foot straight down onto the surface under its rest spot (spawning,
@@ -998,6 +1016,13 @@ func _solve(leg: Leg, target: Vector3) -> void:
 	var total := 0.0
 	for length in leg.lengths:
 		total += length
+	# Knees up: arch the starting pose (most at the knee, the C joint) so
+	# FABRIK settles into a high bend rather than a flat or straight one.
+	if not leg.palp:
+		var lift := _up_skeleton * knee_lift * total
+		joints[1] += lift * 0.4
+		joints[2] += lift
+		joints[3] += lift * 0.6
 	if root.distance_to(target) >= total:
 		var out := (target - root).normalized()
 		for i in 4:
