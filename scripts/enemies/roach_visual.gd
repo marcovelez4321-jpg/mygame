@@ -5,20 +5,23 @@ extends Node3D
 ## the roach's facing, speed and state and never changes them, so in co-op
 ## each player's game animates and plays its own copy from the synced roach.
 ##
-## Until there's a real model (set model_scene), it builds a placeholder
-## low-poly roach out of simple shapes, wings and all.
+## The model is a scene (roach_model.tscn, roach_spitter_model.tscn: the
+## low-poly shell, head, antennae and wings that used to be built in code for
+## every roach). Open them and tweak them like any scene; every roach shares
+## their meshes and materials, so fifty roaches cost one set, not fifty.
 
 @export_group("Model")
-## The real roach model, when you have one. Empty = the placeholder. If it
-## has an AnimationPlayer, its first animation loops (a wing-flap cycle).
-@export var model_scene: PackedScene
-## The spitter's own model, if it gets one. Empty = model_scene (or the
-## spitter placeholder: yellower, with a swollen abdomen).
-@export var spitter_model_scene: PackedScene
-## Size of the model (real or placeholder). Keep the roach's collision
-## sphere (roach.tscn, radius 0.22 x this) in step if you change it a lot.
+## The roach's model. If it has an AnimationPlayer, its first animation loops
+## (a wing-flap cycle); otherwise any nodes named WingPivot* flap in code.
+@export var model_scene: PackedScene = preload("res://scenes/enemy/roach_model.tscn")
+## The spitter's model (yellower, with a swollen glowing acid sac). Empty =
+## model_scene.
+@export var spitter_model_scene: PackedScene = preload("res://scenes/enemy/roach_spitter_model.tscn")
+## Size of the model. Keep the roach's collision sphere (roach.tscn, radius
+## 0.22 x this) in step if you change it a lot.
 @export var model_scale: float = 1.15
-## Placeholder only: wing flaps per second.
+## Wing flaps per second (WingPivot* nodes: the first flaps one way, the
+## second the mirror of it).
 @export var wing_beats_per_second: float = 22.0
 ## Spitter: how far (m) it rears back during the wind-up and lunges forward
 ## when the glob leaves -- the spit's visible kick.
@@ -67,11 +70,12 @@ func _ready() -> void:
 func _build_model(spitter: bool) -> void:
 	var scene := spitter_model_scene if spitter and spitter_model_scene else model_scene
 	if scene == null:
-		_build_placeholder(spitter)
 		return
 	_model = scene.instantiate() as Node3D
 	_model.scale = Vector3.ONE * model_scale
 	add_child(_model)
+	for pivot in _model.find_children("WingPivot*", "Node3D", true, false):
+		_wings.append(pivot as Node3D)
 	var animator := _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if animator and not animator.get_animation_list().is_empty():
 		var clip := animator.get_animation_list()[0]
@@ -166,76 +170,6 @@ func _tween_model_z(z: float, duration: float, easing: Tween.EaseType) -> void:
 		_spit_tween.kill()
 	_spit_tween = create_tween()
 	_spit_tween.tween_property(_model, "position:z", z, duration).set_ease(easing)
-
-
-## A fist-sized-and-then-some roach, facing -Z: a long, flattened brown
-## shell, a dark head, two antennae and two clear wings that flap. The
-## spitter is yellow-green with a swollen, faintly glowing acid sac at the
-## back, so you can pick it out of a swarm.
-func _build_placeholder(spitter: bool) -> void:
-	_model = Node3D.new()
-	_model.scale = Vector3.ONE * model_scale
-	add_child(_model)
-	var shell_color := Color(0.42, 0.45, 0.1) if spitter else Color(0.32, 0.17, 0.07)
-	var shell := _material(shell_color, 0.45)
-	if spitter:
-		var sac := _material(_roach.spit_color, 0.3)
-		sac.emission_enabled = true
-		sac.emission = _roach.spit_color
-		sac.emission_energy_multiplier = 0.4
-		var abdomen := SphereMesh.new()
-		abdomen.radius = 0.1
-		abdomen.height = 0.2
-		abdomen.radial_segments = 8
-		abdomen.rings = 4
-		_part(_model, abdomen, sac, Vector3(0.0, 0.02, 0.2), Vector3.ZERO, Vector3(1.1, 0.8, 1.3))
-	var dark := _material(Color(0.12, 0.07, 0.03), 0.6)
-	var wing := _material(Color(0.75, 0.68, 0.5, 0.45), 0.2)
-	wing.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wing.cull_mode = BaseMaterial3D.CULL_DISABLED
-
-	var body := SphereMesh.new()
-	body.radius = 0.12
-	body.height = 0.24
-	body.radial_segments = 8
-	body.rings = 4
-	_part(_model, body, shell, Vector3.ZERO, Vector3.ZERO, Vector3(1.0, 0.5, 1.7))
-	var head := SphereMesh.new()
-	head.radius = 0.06
-	head.height = 0.12
-	head.radial_segments = 6
-	head.rings = 3
-	_part(_model, head, dark, Vector3(0.0, 0.0, -0.22), Vector3.ZERO, Vector3.ONE)
-	var antenna := BoxMesh.new()
-	antenna.size = Vector3(0.008, 0.008, 0.28)
-	_part(_model, antenna, dark, Vector3(-0.03, 0.03, -0.38), Vector3(0.35, -0.3, 0.0), Vector3.ONE)
-	_part(_model, antenna, dark, Vector3(0.03, 0.03, -0.38), Vector3(0.35, 0.3, 0.0), Vector3.ONE)
-
-	var wing_mesh := BoxMesh.new()
-	wing_mesh.size = Vector3(0.22, 0.004, 0.3)
-	for side in [-1.0, 1.0]:
-		var pivot := Node3D.new()
-		pivot.position = Vector3(0.0, 0.05, 0.0)
-		_model.add_child(pivot)
-		_part(pivot, wing_mesh, wing, Vector3(0.11 * side, 0.0, 0.03), Vector3.ZERO, Vector3.ONE)
-		_wings.append(pivot)
-
-
-func _part(parent: Node3D, mesh: Mesh, material: Material, offset: Vector3, angles: Vector3, size: Vector3) -> void:
-	var part := MeshInstance3D.new()
-	part.mesh = mesh
-	part.material_override = material
-	part.position = offset
-	part.rotation = angles
-	part.scale = size
-	parent.add_child(part)
-
-
-func _material(color: Color, roughness: float) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = roughness
-	return material
 
 
 ## Born out of a body: grows from almost nothing to full size with a little

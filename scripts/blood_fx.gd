@@ -4,15 +4,13 @@ extends RefCounted
 ## Shared blood visual effects: a particle spray off a hit body, a splatter
 ## decal on any wall caught behind that hit, a sustained spurt (artery or
 ## headshot wound) that splats wherever its stream lands, and a pool that
-## fades in on the ground once a ragdoll settles. No texture assets needed -- the splat
-## shape is generated once in code the first time it's needed and reused for
-## every spray/pool/splatter after that (Rule 2: regenerating it per-instance
-## would be pure wasted work for a shape that's identical every time).
+## fades in on the ground once a ragdoll settles. Every splat is the one white
+## art/fx/splat.png tinted per colour (SPLAT_TEXTURE), so there's nothing to
+## generate or cache per colour (Rule 2).
 ##
 ## Called from weapon_controller.gd (impact spray + wall splatter, right when
 ## a shot lands) and enemy_ragdoll.gd (ground pool, once the corpse settles).
 
-const SPLAT_TEXTURE_SIZE := 128
 ## Every decal (blood, goo, bullet holes, dig holes) stays about DECAL_LIFETIME
 ## seconds -- each one randomly up to DECAL_LIFETIME_VARIANCE either side, so
 ## they don't all vanish at once -- then fades out over DECAL_FADE_OUT_TIME
@@ -56,11 +54,14 @@ const MUTATION_ARC_MAX_DISTANCE := 4.5
 ## it needs to read as a burst of fresh blood, not another dark pool.
 const MUTATION_BLAST_COLOR := Color(0.75, 0.05, 0.05)
 
-static var _splat_texture: ImageTexture
-static var _bullet_hole_texture: ImageTexture
+## The splat (white, so one texture tints to any colour through the decal's
+## modulate -- blood, roach goo, dirt) and the bullet hole, baked to PNGs from
+## the shapes this file used to paint pixel by pixel at runtime. Edit them in
+## any image editor; keep the splat white.
+const SPLAT_TEXTURE := preload("res://art/fx/splat.png")
+const BULLET_HOLE_TEXTURE := preload("res://art/fx/bullet_hole.png")
+
 static var _impact_mesh: BoxMesh
-## Splat textures in colours other than blood (see _get_splat_texture()).
-static var _tinted_splat_textures: Dictionary = {}
 static var _trail_settings: BloodTrailSettings
 static var _trail_mesh: TubeTrailMesh
 
@@ -371,14 +372,7 @@ static func _spawn_blood_arc(world: Node, center: Vector3, horizontal: Vector3, 
 ## (normal = Vector3.UP). Fades in rather than popping, and both the size and
 ## the facing get a little randomness so repeated hits don't look identical.
 static func spawn_splatter(world: Node, position: Vector3, normal: Vector3, base_size: float = 1.0, color: Color = BLOOD_COLOR) -> void:
-	_place_decal(world, _get_splat_texture(color), position, normal, base_size, 0.4)
-
-
-## Builds the splat texture for `color` ahead of time. Generating one takes a
-## moment, so an enemy that bleeds another colour calls this when it spawns
-## instead of hitching the game on its first death.
-static func warm_splat_texture(color: Color) -> void:
-	_get_splat_texture(color)
+	_place_decal(world, SPLAT_TEXTURE, position, normal, base_size, 0.4, color)
 
 
 ## A dark scorch/hole decal for a shot that hit plain world geometry (no
@@ -388,7 +382,7 @@ static func warm_splat_texture(color: Color) -> void:
 ## instantly; blood spatter reading as it "arrives" a beat later is the part
 ## that felt right for that one, not this).
 static func spawn_bullet_hole(world: Node, position: Vector3, normal: Vector3, base_size: float = 0.25) -> void:
-	_place_decal(world, _get_bullet_hole_texture(), position, normal, base_size, 0.1)
+	_place_decal(world, BULLET_HOLE_TEXTURE, position, normal, base_size, 0.1)
 
 
 ## Shared decal placement: builds a basis whose Y axis points INTO the
@@ -396,13 +390,14 @@ static func spawn_bullet_hole(world: Node, position: Vector3, normal: Vector3, b
 ## surface is a floor, wall, or ceiling (a Decal projects along its own
 ## local -Y), with some randomness in size/orientation so repeated hits don't
 ## look identical, then fades it in over `fade_time`, and out again after its
-## lifetime (DECAL_LIFETIME).
-static func _place_decal(world: Node, texture: Texture2D, position: Vector3, normal: Vector3, base_size: float, fade_time: float) -> void:
+## lifetime (DECAL_LIFETIME). `tint` colours it (the white splat).
+static func _place_decal(world: Node, texture: Texture2D, position: Vector3, normal: Vector3, base_size: float, fade_time: float,
+		tint: Color = Color.WHITE) -> void:
 	var decal := Decal.new()
 	decal.texture_albedo = texture
 	var size := base_size * randf_range(0.8, 1.3)
 	decal.size = Vector3(size, size * 0.4, size)
-	decal.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	decal.modulate = Color(tint.r, tint.g, tint.b, 0.0)
 	decal.upper_fade = 0.0
 	decal.lower_fade = 0.0
 
@@ -444,83 +439,6 @@ static func _get_impact_mesh() -> BoxMesh:
 	return _impact_mesh
 
 
-## One splat texture per colour, generated once and kept.
-static func _get_splat_texture(color: Color = BLOOD_COLOR) -> ImageTexture:
-	if color == BLOOD_COLOR:
-		if _splat_texture == null:
-			_splat_texture = _generate_splat_texture(color)
-		return _splat_texture
-	if not _tinted_splat_textures.has(color):
-		_tinted_splat_textures[color] = _generate_splat_texture(color)
-	return _tinted_splat_textures[color]
-
-
-## Public on purpose (unlike the underscore-prefixed getters here) -- hud.gd
-## calls this directly for the screen blood droplets.
-##
-## Just reuses the plain circular splat texture. There WAS a separate,
-## fancier irregular-blob version here (per-pixel angle()/sin() calls over
-## the whole 128x128 image), but generating it the first time it was needed
-## -- mid-gameplay, right as a kill landed -- caused a real, reported hitch.
-## Simple and instant beats fancy and freezes. Same per-colour cache as the
-## world splats, so a roach's goo texture is already built (it warms it on
-## spawn) by the time one dies in your face.
-static func get_screen_splat_texture(color: Color = BLOOD_COLOR) -> ImageTexture:
-	return _get_splat_texture(color)
-
-
-static func _get_bullet_hole_texture() -> ImageTexture:
-	if _bullet_hole_texture == null:
-		_bullet_hole_texture = _generate_bullet_hole_texture()
-	return _bullet_hole_texture
-
-
-## A dark core with a soft grey scorch ring around it -- reads as a punched-
-## in hole with charring, not just a flat dot. Generated once and cached.
-static func _generate_bullet_hole_texture() -> ImageTexture:
-	var size := SPLAT_TEXTURE_SIZE
-	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var center := Vector2(size, size) * 0.5
-
-	for y in range(size):
-		for x in range(size):
-			var d := Vector2(x, y).distance_to(center) / (size * 0.5)
-			var hole := clampf(1.0 - d / 0.35, 0.0, 1.0) # small solid dark core
-			var scorch := clampf(1.0 - d, 0.0, 1.0) * 0.5 # wider, fainter grey char
-			var alpha := maxf(hole, scorch)
-			var shade := lerpf(0.35, 0.05, hole) # core darker than the scorch ring
-			image.set_pixel(x, y, Color(shade, shade, shade, alpha))
-
-	return ImageTexture.create_from_image(image)
-
-
-## A handful of overlapping SOFT-EDGED CIRCULAR blobs, offset randomly around
-## a center, so the splat reads as an organic splash instead of one perfect
-## circle -- the original shape, used for every 3D world decal (wall
-## splatter, ground pools) where a soft, slightly-rounded splat reads right.
-## Generated once and cached (see _get_splat_texture()).
-static func _generate_splat_texture(color: Color) -> ImageTexture:
-	var size := SPLAT_TEXTURE_SIZE
-	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var center := Vector2(size, size) * 0.5
-
-	var blobs: Array[Dictionary] = [{"pos": center, "radius": size * 0.4}]
-	for i in range(6):
-		var angle := randf() * TAU
-		var dist := randf_range(0.08, 0.32) * size
-		blobs.append({
-			"pos": center + Vector2(cos(angle), sin(angle)) * dist,
-			"radius": randf_range(0.12, 0.28) * size,
-		})
-
-	for y in range(size):
-		for x in range(size):
-			var p := Vector2(x, y)
-			var alpha := 0.0
-			for blob in blobs:
-				var d: float = p.distance_to(blob["pos"]) / blob["radius"]
-				alpha = maxf(alpha, clampf(1.0 - d, 0.0, 1.0))
-			alpha = clampf(alpha * 1.7, 0.0, 1.0) # sharpen the falloff toward the edge
-			image.set_pixel(x, y, Color(color.r, color.g, color.b, alpha))
-
-	return ImageTexture.create_from_image(image)
+## The splat for HUD screen blood (hud.gd tints it with self_modulate).
+static func get_screen_splat_texture() -> Texture2D:
+	return SPLAT_TEXTURE

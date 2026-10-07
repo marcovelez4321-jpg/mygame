@@ -81,7 +81,6 @@ func _ready() -> void:
 	if skin_material:
 		for mesh in _model.find_children("*", "MeshInstance3D", true, false):
 			(mesh as MeshInstance3D).material_override = skin_material
-	BloodFX.warm_splat_texture(blood_color)
 	_spit_left = randf_range(spit_interval_min, spit_interval_max)
 
 

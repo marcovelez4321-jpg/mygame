@@ -160,7 +160,6 @@ func _ready() -> void:
 		add_collision_exception_with(player as PhysicsBody3D)
 	if swarm and is_instance_valid(swarm.bender):
 		add_collision_exception_with(swarm.bender as PhysicsBody3D)
-	BloodFX.warm_splat_texture(blood_color)
 	_anim = find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if _anim:
 		# Advanced by hand in _process, so far-away rats can animate less often.
@@ -175,7 +174,6 @@ func _ready() -> void:
 func _start_burrow() -> void:
 	_state = State.EMERGE
 	_emerge_time = -emerge_delay
-	BloodFX.warm_splat_texture(dirt_color) # no hitch on the first hole
 	freeze = true
 	_visual.position.y = -emerge_depth * size
 	_visual.rotation.y = randf() * TAU

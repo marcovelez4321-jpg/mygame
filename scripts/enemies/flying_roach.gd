@@ -298,7 +298,6 @@ func _ready() -> void:
 	_noise.frequency = 0.6
 	_circle_angle = randf() * TAU
 	_retarget_timer = randf() * retarget_interval # spread a swarm's checks out
-	BloodFX.warm_splat_texture(blood_color) # no hitch on its first death
 	# Deferred: when a map is built while the game runs, func_godot sets a
 	# mapper's "kind" choice only after this node is added.
 	_decide_kind.call_deferred()
@@ -334,8 +333,6 @@ func _decide_kind() -> void:
 			is_spitter = false
 		_:
 			is_spitter = randf() < spitter_chance
-	if is_spitter:
-		BloodFX.warm_splat_texture(spit_color)
 	kind_decided.emit(is_spitter)
 
 

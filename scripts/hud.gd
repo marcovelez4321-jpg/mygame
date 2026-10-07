@@ -175,7 +175,8 @@ func _on_gory_kill_nearby(blood_color: Color) -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	for i in SCREEN_BLOOD_COUNT:
 		var splat := TextureRect.new()
-		splat.texture = BloodFX.get_screen_splat_texture(blood_color)
+		splat.texture = BloodFX.get_screen_splat_texture()
+		splat.self_modulate = blood_color # the splat is white: tinted here
 		splat.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var size := randf_range(60.0, 160.0)
 		splat.size = Vector2(size, size)
