@@ -593,3 +593,5 @@ them:
 - 2026-10-07: Deepmaw Crawlers shelved: `BarnacleCluster.guard_count` 4 -> 0, so clumps grow no crawler packs. deepmaw_crawler.gd/.tscn and deepmaw_pack.gd/.tscn are kept for later; set guard_count back above 0 to bring them back.
 
 - 2026-10-07: Deepmaw escorts back to their dark-brown tint (0.39, 0.24, 0.185); the barnacle-colour tint stays only on the (shelved) crawlers.
+
+- 2026-10-07: Deepmaw escorts 30% faster (`max_speed` 9 -> 11.7, `acceleration` 16 -> 20.8, `rise_speed` 16 -> 20.8) so they actually reach the player, and a volley now breaches one after another: the first at the volley time, each next one `breach_stagger` (0.5 s) later, in the order they joined.

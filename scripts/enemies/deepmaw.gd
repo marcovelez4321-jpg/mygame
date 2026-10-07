@@ -52,9 +52,9 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 @export var wiggle_speed: float = 1.6
 
 @export_group("Movement")
-@export var max_speed: float = 9.0
+@export var max_speed: float = 11.7 # +30%
 ## Inside the ground: how fast it can change velocity (lower = wider arcs).
-@export var acceleration: float = 16.0
+@export var acceleration: float = 20.8 # +30%
 ## Gravity in the air: heavier than the boss's 16, so the same leap height
 ## goes by faster -- quicker, snappier leaps (the arc aims for it itself).
 @export var air_gravity: float = 28.0
@@ -79,13 +79,17 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 ## snappier at the same height.
 ## Deepmaws guarding the same thing leap as a horde: the first one in
 ## position calls a volley volley_gather seconds out and the rest that get
-## there in time go with it -- each with its own guess (sideways guesses
+## there in time go with it, one after another (breach_stagger apart) --
+## each with its own guess (sideways guesses
 ## spread guess_spread times wider than the boss's), so between them they
 ## cover where you might run.
 @export var leap_height: float = 6.3
 @export var leap_distance: float = 11.0
 @export var tunnel_timeout: float = 3.0
 @export var volley_gather: float = 1.2
+## In a volley they breach one after another, this many seconds apart (the
+## first at the volley time, the next breach_stagger later, and so on).
+@export var breach_stagger: float = 0.5
 @export var guess_spread: float = 1.8
 ## In the air it eases its sideways drift toward its updated guess, at most
 ## this many m/s² (0 = committed once out).
@@ -96,7 +100,7 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 @export var turn_rate: float = 5.0
 @export var dive_depth: float = 4.0
 @export var windup_time: float = 0.5
-@export var rise_speed: float = 16.0
+@export var rise_speed: float = 20.8 # +30%
 @export var dive_time: float = 1.0
 
 @export_group("Attack")
@@ -135,6 +139,8 @@ var _guess := Vector2.ONE
 var _air_left := 0.0
 ## Horde volleys: what they guard (instance id) -> when its next leap goes.
 static var _volleys := {}
+## How many have joined each volley so far (their breaching order).
+static var _volley_joined := {}
 ## The model's own forward/up at rest, and its head (root bone) in its own
 ## space: the whole model is turned to face where it's going every tick, so
 ## it always reads as nose-first even before the spine bends.
@@ -567,7 +573,11 @@ func _join_volley() -> float:
 	if at < _now() + 0.15:
 		at = _now() + volley_gather
 		_volleys[key] = at
-	return at
+		_volley_joined[key] = 0
+	# One after another: each one that joins goes breach_stagger after the last.
+	var order: int = _volley_joined.get(key, 0)
+	_volley_joined[key] = order + 1
+	return at + order * breach_stagger
 
 
 static func _now() -> float:
