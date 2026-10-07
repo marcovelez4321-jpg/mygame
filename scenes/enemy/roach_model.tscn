@@ -1,18 +1,4 @@
-[gd_scene format=3]
-
-[sub_resource type="StandardMaterial3D" id="Shell"]
-albedo_color = Color(0.32, 0.17, 0.07, 1)
-roughness = 0.45
-
-[sub_resource type="StandardMaterial3D" id="Dark"]
-albedo_color = Color(0.12, 0.07, 0.03, 1)
-roughness = 0.6
-
-[sub_resource type="StandardMaterial3D" id="Wing"]
-transparency = 1
-cull_mode = 2
-albedo_color = Color(0.75, 0.68, 0.5, 0.45)
-roughness = 0.2
+[gd_scene format=3 uid="uid://cu6qnrjdifx21"]
 
 [sub_resource type="SphereMesh" id="BodyMesh"]
 radius = 0.12
@@ -20,11 +6,19 @@ height = 0.24
 radial_segments = 8
 rings = 4
 
+[sub_resource type="StandardMaterial3D" id="Shell"]
+albedo_color = Color(0.32, 0.17, 0.07, 1)
+roughness = 0.45
+
 [sub_resource type="SphereMesh" id="HeadMesh"]
 radius = 0.06
 height = 0.12
 radial_segments = 6
 rings = 3
+
+[sub_resource type="StandardMaterial3D" id="Dark"]
+albedo_color = Color(0.12, 0.07, 0.03, 1)
+roughness = 0.6
 
 [sub_resource type="BoxMesh" id="AntennaMesh"]
 size = Vector3(0.008, 0.008, 0.28)
@@ -32,40 +26,46 @@ size = Vector3(0.008, 0.008, 0.28)
 [sub_resource type="BoxMesh" id="WingMesh"]
 size = Vector3(0.22, 0.004, 0.3)
 
-[node name="RoachModel" type="Node3D"]
+[sub_resource type="StandardMaterial3D" id="Wing"]
+transparency = 1
+cull_mode = 2
+albedo_color = Color(0.75, 0.68, 0.5, 0.45)
+roughness = 0.2
 
-[node name="Body" type="MeshInstance3D" parent="."]
+[node name="RoachModel" type="Node3D" unique_id=2106315080]
+
+[node name="Body" type="MeshInstance3D" parent="." unique_id=1783217629]
 transform = Transform3D(1, 0, 0, 0, 0.5, 0, 0, 0, 1.7, 0, 0, 0)
 mesh = SubResource("BodyMesh")
 surface_material_override/0 = SubResource("Shell")
 
-[node name="Head" type="MeshInstance3D" parent="."]
+[node name="Head" type="MeshInstance3D" parent="." unique_id=1581621504]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.22)
 mesh = SubResource("HeadMesh")
 surface_material_override/0 = SubResource("Dark")
 
-[node name="AntennaL" type="MeshInstance3D" parent="."]
-transform = Transform3D(0.955336, 0, 0.29552, -0.101333, 0.939373, 0.327583, -0.277604, -0.342898, 0.897417, -0.03, 0.03, -0.38)
+[node name="AntennaR" type="MeshInstance3D" parent="." unique_id=1564452520]
+transform = Transform3D(0.9821182, -0.09705172, 0.16131936, 0.1078092, 0.9924012, -0.059306372, -0.15433766, 0.07563762, 0.9851186, 0.015015371, -0.012997113, -0.35926867)
 mesh = SubResource("AntennaMesh")
 surface_material_override/0 = SubResource("Dark")
 
-[node name="AntennaR" type="MeshInstance3D" parent="."]
-transform = Transform3D(0.955336, 0, -0.29552, 0.101333, 0.939373, 0.327583, 0.277604, -0.342898, 0.897417, 0.03, 0.03, -0.38)
+[node name="AntennaL" type="MeshInstance3D" parent="." unique_id=1210216103]
+transform = Transform3D(0.98470646, -0.111441925, -0.1339125, 0.107939914, 0.9936046, -0.033155177, 0.13675086, 0.018193632, 0.9904382, -0.020621747, -0.00894811, -0.35926867)
 mesh = SubResource("AntennaMesh")
 surface_material_override/0 = SubResource("Dark")
 
-[node name="WingPivotL" type="Node3D" parent="."]
+[node name="WingPivotL" type="Node3D" parent="." unique_id=546982205]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
 
-[node name="Wing" type="MeshInstance3D" parent="WingPivotL"]
+[node name="Wing" type="MeshInstance3D" parent="WingPivotL" unique_id=208916618]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.11, 0, 0.03)
 mesh = SubResource("WingMesh")
 surface_material_override/0 = SubResource("Wing")
 
-[node name="WingPivotR" type="Node3D" parent="."]
+[node name="WingPivotR" type="Node3D" parent="." unique_id=482471524]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
 
-[node name="Wing" type="MeshInstance3D" parent="WingPivotR"]
+[node name="Wing" type="MeshInstance3D" parent="WingPivotR" unique_id=98914281]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.11, 0, 0.03)
 mesh = SubResource("WingMesh")
 surface_material_override/0 = SubResource("Wing")
