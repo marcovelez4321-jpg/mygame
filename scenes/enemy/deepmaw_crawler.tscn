@@ -9,7 +9,7 @@
 [ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="7_burst"]
 
 [sub_resource type="StandardMaterial3D" id="CrawlerBody"]
-albedo_color = Color(0.39, 0.24, 0.185, 1)
+albedo_color = Color(1.88, 0.83, 0.61, 1)
 albedo_texture = ExtResource("3_body")
 roughness = 0.6
 texture_filter = 0
