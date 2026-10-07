@@ -940,9 +940,9 @@ func _think_carry(delta: float) -> void:
 
 ## Born out of a body (RoachCarry): bursts up and off to one side with a
 ## springy pop, drifting a moment (RECOVER) before it gets its bearings.
-func burst_out() -> void:
+func burst_out(direction: Vector3 = Vector3.UP) -> void:
 	var side := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)).limit_length(1.0)
-	linear_velocity = Vector3.UP * 3.5 + side * 1.5
+	linear_velocity = direction * 3.5 + side * 1.5
 	_set_state(State.RECOVER)
 	var visual := get_node_or_null("Visual") as RoachVisual
 	if visual:

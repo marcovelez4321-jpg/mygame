@@ -20,6 +20,7 @@
 [ext_resource type="PackedScene" path="res://scenes/sniper_pickup.tscn" id="23_sniper"]
 [ext_resource type="PackedScene" path="res://scenes/props/explosive_barrel.tscn" id="24_barrel"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/rat_nest.tscn" id="27_ratnest"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/barnacle_cluster.tscn" id="30_barnacles"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)
@@ -767,3 +768,12 @@ shape = SubResource("LWallShortShape")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, -1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
+
+[node name="BarnacleClusterFloor" parent="." unique_id=1454074812 instance=ExtResource("30_barnacles")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, -8)
+
+[node name="BarnacleClusterNorthWall" parent="." unique_id=1099413429 instance=ExtResource("30_barnacles")]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 15, 1.8, -59.45)
+
+[node name="BarnacleClusterEastWall" parent="." unique_id=1291546742 instance=ExtResource("30_barnacles")]
+transform = Transform3D(0, 0, 1, -1, 0, 0, 0, -1, 0, 59.45, 1.5, -15)

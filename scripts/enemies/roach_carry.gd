@@ -362,12 +362,13 @@ func bitten() -> void:
 ## (BRED_SPITTER_CHANCE). Shared by every roach birth -- a carried body
 ## (bitten()) and a rat eaten in mid-air (FlyingRoach). Rule 1: host only;
 ## the roll goes with the spawn in co-op.
-static func hatch(world: Node, at: Vector3) -> void:
+## `direction` is which way it pops out (a barnacle on a wall spits sideways).
+static func hatch(world: Node, at: Vector3, direction: Vector3 = Vector3.UP) -> void:
 	var roach := ROACH_SCENE.instantiate() as FlyingRoach
 	roach.kind = FlyingRoach.Kind.SPITTER if randf() < BRED_SPITTER_CHANCE else FlyingRoach.Kind.NORMAL
 	world.add_child(roach)
 	roach.global_position = at
-	roach.burst_out.call_deferred() # after its own setup: a springy pop out of the body
+	roach.burst_out.call_deferred(direction) # after its own setup: a springy pop out
 
 
 func _finish() -> void:
