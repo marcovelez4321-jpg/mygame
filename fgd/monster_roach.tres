@@ -1,25 +1,26 @@
-[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="FuncGodotFGDPointClass" format=3 uid="uid://cmet6wffa45lr"]
 
-[ext_resource type="Script" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/roach.tscn" id="2"]
+[ext_resource type="Script" uid="uid://cxsqwtsqd8w33" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class.gd" id="1"]
+[ext_resource type="Script" uid="uid://d1nwwgcrner8b" path="res://addons/func_godot/src/fgd/func_godot_fgd_point_class_display_descriptor.gd" id="1_qetmj"]
+[ext_resource type="PackedScene" uid="uid://b3qfvpmbq2lhu" path="res://scenes/enemy/roach.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
+scene_file = ExtResource("2")
 classname = "monster_roach"
 description = "Flying roach. Normal ones dart at you Half-Life 2 manhack-style: dive, bite, bounce off, come back (only 2 dive at once). About 1 in 5 is a spitter that hangs back and lobs arcing acid. Can float in the air or sit on the floor -- it lifts off by itself."
-scene_file = ExtResource("2")
-auto_apply_to_matching_node_properties = true
-class_properties = {
+class_properties = Dictionary[String, Variant]({
 "kind": {
-"Random (1 in 5 spits)": 0,
 "Normal": 1,
+"Random (1 in 5 spits)": 0,
 "Spitter": 2
 }
-}
-class_property_descriptions = {
+})
+class_property_descriptions = Dictionary[String, Variant]({
 "kind": ["Random rolls normal or spitter (20% spitter) when the level starts; or force one.", 0]
-}
-meta_properties = {
-"size": AABB(-8, -8, -8, 16, 16, 16),
-"color": Color(0.55, 0.35, 0.15, 1)
-}
+})
+auto_apply_to_matching_node_properties = true
+meta_properties = Dictionary[String, Variant]({
+"color": Color(0.55, 0.35, 0.15, 1),
+"size": AABB(-8, -8, -8, 16, 16, 16)
+})
