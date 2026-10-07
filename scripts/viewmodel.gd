@@ -93,6 +93,10 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 ## character's arms.
 @export_file("*.fbx") var arms_character: String = "res://art/characters/Characters_psx/Models/Male/Character_18_Police.fbx"
 
+## Hide everything of the first-person arms model but the arms themselves
+## (its torso would otherwise swing up into view as the gun tilts down).
+@export var hide_torso: bool = true
+
 @export_group("Sway")
 ## The gun lags behind when you turn and swings back. Cosmetic only.
 @export var sway_enabled: bool = true
@@ -113,6 +117,9 @@ var _model: Node3D
 var _gun: Node3D
 ## Thrown the grenade, waiting for the next one to come into the hand.
 var _waiting_for_grenade := false
+## The weapon whose model is in your hand right now (it can differ from the
+## equipped one for a moment: a quick throw or an H / B heal shows its own).
+var _shown_weapon: WeaponData
 var _model_rest_position: Vector3
 var _model_rest_rotation: Vector3
 var _model_rest_transform: Transform3D
@@ -191,6 +198,10 @@ func _show_current_weapon() -> void:
 
 
 func _on_weapon_switched(weapon: WeaponData, draw_time: float) -> void:
+	# Not waiting on the next grenade any more: you've put the grenades away
+	# (otherwise _update_held_grenade() would cut this switch off halfway and
+	# leave the grenade showing with the new gun equipped).
+	_waiting_for_grenade = false
 	if draw_time <= 0.0:
 		_show_weapon(weapon) # the very first weapon just appears
 		return
@@ -365,6 +376,12 @@ func _release_held_grenade() -> void:
 func _update_held_grenade() -> void:
 	if not _waiting_for_grenade or _weapons.get_magazine_ammo() <= 0:
 		return
+	var weapon := _weapons.current_weapon()
+	if weapon == null or not weapon.throws_grenade or _shown_weapon != weapon:
+		_waiting_for_grenade = false # switched away: not ours to raise
+		return
+	if _switch_tween and _switch_tween.is_running():
+		return # the throw's follow-through (or a switch) is still playing
 	_waiting_for_grenade = false
 	if _gun:
 		_gun.visible = true
@@ -373,6 +390,19 @@ func _update_held_grenade() -> void:
 	_switch_tween = create_tween()
 	_switch_tween.tween_property(self, "position", Vector3.ZERO, THROW_RAISE_TIME).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, THROW_RAISE_TIME)
+
+
+## Safety net: whenever nothing's animating, the model in your hand is the
+## weapon you have equipped -- so an interrupted animation can never leave
+## you holding one thing (a grenade) while firing another (the pistol).
+func _keep_in_step() -> void:
+	if _switch_tween and _switch_tween.is_running():
+		return
+	var weapon := _weapons.current_weapon()
+	if weapon and weapon != _shown_weapon:
+		_show_weapon(weapon)
+		position = Vector3.ZERO
+		rotation_degrees.x = 0.0
 
 
 ## Where the gun goes when fully aimed. With an aim_sight_node: wherever
@@ -596,6 +626,7 @@ func _show_weapon(weapon: WeaponData) -> void:
 		gun = _make_placeholder(weapon)
 	_model.add_child(gun)
 	_gun = gun
+	_shown_weapon = weapon
 	# A grenade slot with nothing in hand yet: empty hand until one's ready.
 	_waiting_for_grenade = weapon.throws_grenade and _weapons.get_magazine_ammo() <= 0
 	gun.visible = not _waiting_for_grenade
@@ -661,9 +692,24 @@ func _attach_arms(weapon: WeaponData) -> void:
 	if skeleton:
 		var hider := HideBonesModifier.new()
 		var hidden := PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
-		if weapon.hide_left_arm:
+		var kept := PackedStringArray()
+		if hide_torso and skeleton.find_bone("RightShoulder") != -1:
+			# Just the arms: the whole body goes, the shoulders (and the arms
+			# hanging off them) are put back. Otherwise the torso swings up
+			# into view whenever the gun tilts down (switching, throwing).
+			hidden = PackedStringArray(["Hips"])
+			kept.append("RightShoulder")
+			if not weapon.hide_left_arm:
+				kept.append("LeftShoulder")
+		elif weapon.hide_left_arm:
 			hidden.append("LeftUpperArm") # one hand only
 		hider.bone_names = hidden
+		hider.keep_bones = kept
+		if not kept.is_empty():
+			for chest in ["UpperChest", "Chest"]:
+				if skeleton.find_bone(chest) != -1:
+					hider.collapse_in_place = PackedStringArray([chest])
+					break
 		skeleton.add_child(hider)
 		# Sized like the body would size this character, from its own head height.
 		var head := skeleton.find_bone("Head")
@@ -757,7 +803,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning_aim = not _tuning_aim
 		_tuning_arms = false
 		_tuning_muzzle = false
-		var weapon := _weapons.current_weapon()
+		var weapon := _shown_weapon
 		if weapon and _model:
 			_apply_transform(weapon) # back to the hip pose when leaving
 			_update_muzzle_marker(weapon)
@@ -766,7 +812,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning_muzzle = not _tuning_muzzle
 		_tuning_arms = false
 		_tuning_aim = false
-		var weapon := _weapons.current_weapon()
+		var weapon := _shown_weapon
 		if weapon:
 			_update_muzzle_marker(weapon)
 		_update_label("")
@@ -774,7 +820,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning_arms = not _tuning_arms
 		_tuning_muzzle = false
 		_tuning_aim = false
-		var weapon := _weapons.current_weapon()
+		var weapon := _shown_weapon
 		if weapon:
 			_update_muzzle_marker(weapon)
 		_update_label("")
@@ -820,9 +866,12 @@ func _update_sway(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_update_held_grenade()
+	_keep_in_step()
 	if not _tuning or _model == null:
 		return
-	var weapon := _weapons.current_weapon()
+	if _switch_tween and _switch_tween.is_running():
+		return # mid-switch: the model in hand isn't settled yet
+	var weapon := _shown_weapon
 	if weapon == null:
 		return
 
@@ -886,7 +935,7 @@ func _update_muzzle_marker(weapon: WeaponData) -> void:
 
 
 func _save_weapon() -> void:
-	var weapon := _weapons.current_weapon()
+	var weapon := _shown_weapon
 	if weapon == null or weapon.resource_path.is_empty():
 		return
 	var result := ResourceSaver.save(weapon, weapon.resource_path)
@@ -905,7 +954,7 @@ func _make_tune_label() -> void:
 
 
 func _update_label(message: String) -> void:
-	var weapon := _weapons.current_weapon()
+	var weapon := _shown_weapon
 	if weapon == null:
 		return
 	var target := "GUN"
