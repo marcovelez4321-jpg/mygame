@@ -292,13 +292,12 @@ func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_del
 
 
 ## H / B: the gun drops out of view and the item comes up in the other hand
-## (in camera space, so it moves on its own path while the gun's down).
-## Pills: Left 4 Dead 2's pill pop -- the bottle comes up, tips back toward
-## your mouth and lifts on up past the top of the screen. Bandage: up into
-## view, wrapped round in a couple of quick circles, then down and away.
-## Then the gun comes back up. Timed to WeaponController's, so the heal lands
+## (in camera space, so it moves on its own path while the gun's down), then
+## swings back up toward your face and on past the top of the screen -- the
+## grenade throw in reverse, the same for pills and bandages (Left 4 Dead 2's
+## pill pop). Then the gun comes back up. Timed to WeaponController's, so the heal lands
 ## as the item leaves the screen.
-func _on_item_used(item: int, model: PackedScene, use_time: float, lower_time: float, recover_time: float) -> void:
+func _on_item_used(_item: int, model: PackedScene, use_time: float, lower_time: float, recover_time: float) -> void:
 	var gun_weapon := _weapons.current_weapon()
 	if _switch_tween:
 		_switch_tween.kill()
@@ -327,27 +326,21 @@ func _on_item_used(item: int, model: PackedScene, use_time: float, lower_time: f
 	var tween := held.create_tween()
 	tween.tween_interval(lower_time)
 	tween.tween_callback(held.show)
-	var up := use_time * 0.2
-	tween.tween_property(held, "position", Vector3(0.04, -0.13, -0.3), up).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	if item == WeaponController.Item.PILLS:
-		# Tip it back to the mouth and up, out past the top of the screen.
-		var lift := use_time - up
-		tween.tween_property(held, "position", Vector3(0.0, 0.3, -0.2), lift).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-		tween.parallel().tween_property(held, "rotation_degrees", Vector3(115.0, 0.0, -12.0), lift).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	else:
-		# A couple of quick wraps round, then down and away.
-		var wrap := (use_time - up) * 0.7
-		var drop := use_time - up - wrap
-		tween.tween_method(_wrap_bandage.bind(held), 0.0, 1.0, wrap)
-		tween.tween_property(held, "position", Vector3(0.05, -0.4, -0.3), drop).set_ease(Tween.EASE_IN)
+	# The grenade throw run backwards (same offsets and tilts): up into the
+	# hand low and forward where a throw ends, swung back up toward your face
+	# where a throw winds up, then on up past the top of the screen.
+	var hand := Vector3(0.04, -0.13, -0.3)
+	var rise := use_time * 0.25
+	var swing := use_time * 0.45
+	var away := use_time - rise - swing
+	held.position = hand + THROW_SWING_OFFSET + Vector3(0.0, -0.25, 0.0)
+	held.rotation_degrees.x = THROW_SWING_TILT
+	tween.tween_property(held, "position", hand + THROW_SWING_OFFSET, rise).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(held, "position", hand + THROW_WINDUP_OFFSET, swing).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.parallel().tween_property(held, "rotation_degrees:x", THROW_WINDUP_TILT, swing).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(held, "position", hand + THROW_WINDUP_OFFSET + Vector3(0.0, 0.4, 0.05), away).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(held, "rotation_degrees:x", THROW_WINDUP_TILT + 70.0, away).set_ease(Tween.EASE_IN)
 	tween.tween_callback(held.queue_free)
-
-
-## One step of the bandage wrap: two small circles round its spot, turning.
-func _wrap_bandage(t: float, held: Node3D) -> void:
-	var angle := t * TAU * 2.0
-	held.position = Vector3(0.04, -0.13, -0.3) + Vector3(cos(angle), sin(angle), 0.0) * 0.035
-	held.rotation.z = sin(angle) * 0.4
 
 
 func _hide_held_gun() -> void:

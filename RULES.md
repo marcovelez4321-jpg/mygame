@@ -452,3 +452,5 @@ them:
   - Untested at time of writing.
 
 - 2026-10-07: First-person arms are always Character_18_Police's (`Viewmodel.arms_character`; empty = your own character's), whichever character your body is: every gun's hand placement was tuned on those arms, and other characters' arm lengths knocked the hands off the grips. Their size comes from their own head height (`PlayerModel.fit_scale_for()`, the same fit the body uses), not the chosen body's scale.
+
+- 2026-10-07: Pills and bandages back to real size in hand (`item_view_scale` 1.0), and one shared use animation for both: the grenade quick-throw played backwards (`THROW_SWING_OFFSET`/`TILT` -> `THROW_WINDUP_OFFSET`/`TILT`, in camera space from the hand spot), then on up past the top of the screen. The bandage's circling wrap is gone.

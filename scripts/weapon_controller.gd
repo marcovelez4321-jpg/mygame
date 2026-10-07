@@ -160,7 +160,7 @@ const TEST_WEAPON_PATHS := [
 @export var bandage_model: PackedScene = preload("res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/bandage_mp_1.glb")
 ## How big the item is in your hand, times its real size (the pickups lying
 ## in the level are sized on their own scenes).
-@export var item_view_scale: float = 3.0
+@export var item_view_scale: float = 1.0
 @export var item_lower_time: float = 0.15
 @export var item_recover_time: float = 0.35
 
