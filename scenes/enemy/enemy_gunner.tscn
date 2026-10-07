@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://c2sc1shdn5nr1"]
 
 [ext_resource type="PackedScene" uid="uid://c4wyibydlt1yd" path="res://scenes/enemy/enemy.tscn" id="1"]
-[ext_resource type="PackedScene" uid="uid://gj5wbcaem12n" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_04.fbx" id="2_killer04"]
 [ext_resource type="PackedScene" uid="uid://d3325wl704r3b" path="res://art/characters/Characters_psx/Models/Killers/Character_Killer_07.fbx" id="3_killer07"]
 [ext_resource type="Resource" path="res://audio/events/enemy/gunner_idle.tres" id="50_snd_idle"]
 [ext_resource type="Resource" path="res://audio/events/enemy/gunner_hurt.tres" id="51_snd_hurt"]
@@ -29,7 +28,7 @@ shot_unfocused_multiplier = 3.3
 max_health = 45.0
 
 [node name="Model" parent="." index="2" unique_id=1788697101]
-variants = Array[PackedScene]([ExtResource("2_killer04"), ExtResource("3_killer07")])
+variants = Array[PackedScene]([ExtResource("3_killer07")])
 
 [node name="EnemyAnimator" parent="." index="3" unique_id=1038340105]
 aim_animation = ExtResource("60_aim")
