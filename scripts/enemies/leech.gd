@@ -49,7 +49,7 @@ enum State { CRAWL, LEAP, LATCHED, DEAD }
 @export var squirm_rate: float = 1.4
 ## How much it swells on each pulse (0.15 = 15%).
 @export var pulse_amount: float = 0.15
-@export var model_scale: float = 1.0
+@export var model_scale: float = 1.2
 ## Turns the model if its head points the wrong way (degrees). (Which way is
 ## up it works out itself: see _lay_flat().)
 @export var model_yaw: float = 0.0
@@ -110,7 +110,13 @@ func _lay_flat() -> void:
 	var bounds := AABB()
 	var has_bounds := false
 	var to_model := model.global_transform.affine_inverse()
-	for node in model.find_children("*", "MeshInstance3D", true, false):
+	# A one-mesh FBX can import with the mesh itself as the scene's root --
+	# find_children() skips the root, which is why it used to find nothing and
+	# leave the worm standing on its edge.
+	var meshes := model.find_children("*", "MeshInstance3D", true, false)
+	if model is MeshInstance3D:
+		meshes.append(model)
+	for node in meshes:
 		var mesh := node as MeshInstance3D
 		var box := to_model * mesh.global_transform * mesh.get_aabb()
 		bounds = box if not has_bounds else bounds.merge(box)
