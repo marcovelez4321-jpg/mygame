@@ -65,7 +65,9 @@ signal artery_kill(bone: Node3D)
 signal leech_latched(on: bool)
 ## H (pills) / B (bandage) pressed with one to use: the gun goes down, the
 ## item comes up in one hand (Viewmodel), and the heal lands at the end.
-signal item_used(item: int, model: PackedScene, use_time: float, lower_time: float, recover_time: float)
+## `weapon` is the item's own slot (pills.tres / bandage.tres); `equipped` =
+## it was already in your hand (clicked), not used off the gun with H / B.
+signal item_used(item: int, weapon: WeaponData, use_time: float, lower_time: float, recover_time: float, equipped: bool)
 ## Carried pills or bandages changed (picked up or used), for the HUD.
 signal items_changed
 
@@ -155,12 +157,13 @@ const TEST_WEAPON_PATHS := [
 @export var bandage_heal_time: float = 8.0
 @export var bandage_use_time: float = 1.4
 @export var max_bandages: int = 3
-## The one-handed models (the PSX Mega Pack's), and the gun's drop/return.
-@export var pills_model: PackedScene = preload("res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/pills_bottle_2.glb")
-@export var bandage_model: PackedScene = preload("res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/bandage_mp_1.glb")
-## How big the item is in your hand, times its real size (the pickups lying
-## in the level are sized on their own scenes).
-@export var item_view_scale: float = 1.0
+## Their slots: carrying any, they're in your inventory to equip like the
+## grenade (click to use one); their model, place in your hand and arms are
+## set on these (tune with F2, save with F3). H / B still use one straight
+## off whatever you're holding.
+@export var pills_weapon: WeaponData = preload("res://weapons/pills.tres")
+@export var bandage_weapon: WeaponData = preload("res://weapons/bandage.tres")
+## The gun's drop before an H / B use, and everything's return after.
 @export var item_lower_time: float = 0.15
 @export var item_recover_time: float = 0.35
 
@@ -351,7 +354,53 @@ func add_item(item: int, amount: int) -> int:
 	else:
 		bandages += taken
 	items_changed.emit()
+	_sync_item_slots()
 	return taken
+
+
+func heal_weapon_for(item: int) -> WeaponData:
+	return pills_weapon if item == Item.PILLS else bandage_weapon
+
+
+func heal_count(item: int) -> int:
+	return pills if item == Item.PILLS else bandages
+
+
+## The pills / bandage slots are in the inventory exactly while you carry
+## any: added when you pick the first up, gone when you use the last (if it
+## was in your hand, you switch back to what you had before).
+func _sync_item_slots() -> void:
+	for item in [Item.PILLS, Item.BANDAGE]:
+		var weapon := heal_weapon_for(item)
+		if weapon == null:
+			continue
+		var index := _owned.find(weapon)
+		if heal_count(item) > 0 and index < 0:
+			_owned.append(weapon)
+			inventory_changed.emit()
+		elif heal_count(item) <= 0 and index >= 0:
+			_remove_slot(index)
+
+
+func _remove_slot(index: int) -> void:
+	var was_current := index == _current
+	var current := current_weapon()
+	var previous: WeaponData = _owned[_previous] if _previous < _owned.size() and _previous != index else null
+	_owned.remove_at(index)
+	inventory_changed.emit()
+	if _owned.is_empty():
+		_current = 0
+		_previous = 0
+		return
+	_previous = maxi(_owned.find(previous), 0) if previous else 0
+	if was_current:
+		_current = _previous
+		var weapon := _owned[_current]
+		_cooldown = maxf(_cooldown, weapon.draw_time)
+		_aim = 0.0
+		weapon_switched.emit(weapon, weapon.draw_time)
+	else:
+		_current = _owned.find(current)
 
 
 ## Called every physics tick next to tick(): H pops pills, B wraps a bandage
@@ -371,17 +420,23 @@ func tick_items(use_pills: bool, use_bandage: bool, delta: float) -> void:
 	if has_leech() or _throw_left >= 0.0:
 		return
 	if pills_pressed and pills > 0:
-		_start_item(Item.PILLS, pills_model, pills_use_time)
+		_start_item(Item.PILLS)
 	elif bandage_pressed and bandages > 0:
-		_start_item(Item.BANDAGE, bandage_model, bandage_use_time)
+		_start_item(Item.BANDAGE)
 
 
-func _start_item(item: int, model: PackedScene, use_time: float) -> void:
+## Uses one: straight away if it's the slot in your hand, otherwise after
+## the gun drops (item_lower_time).
+func _start_item(item: int) -> void:
+	var weapon := heal_weapon_for(item)
+	var equipped := current_weapon() == weapon
+	var lower_time := 0.0 if equipped else item_lower_time
+	var use_time := pills_use_time if item == Item.PILLS else bandage_use_time
 	_item_using = item
-	_item_left = item_lower_time + use_time
+	_item_left = lower_time + use_time
 	_reload_time_left = 0.0 # a reload in progress is dropped
 	_aim = 0.0
-	item_used.emit(item, model, use_time, item_lower_time, item_recover_time)
+	item_used.emit(item, weapon, use_time, lower_time, item_recover_time, equipped)
 
 
 ## The animation's done: the item's used up and the heal lands.
@@ -398,6 +453,7 @@ func _finish_item() -> void:
 	_item_using = -1
 	_cooldown = maxf(_cooldown, item_recover_time) # the gun's still coming back up
 	items_changed.emit()
+	_sync_item_slots() # the last one: its slot goes (back to your gun if it was in hand)
 
 
 ## A leech got you (Leech._latch()).
@@ -474,6 +530,13 @@ func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon:
 		else:
 			_start_quick_throw()
 			return
+
+	# Pills or a bandage in hand: a click uses one.
+	if weapon.heal_item >= 0:
+		_aim = 0.0
+		if fire_pressed and _cooldown <= 0.0 and heal_count(weapon.heal_item) > 0:
+			_start_item(weapon.heal_item)
+		return
 
 	# Raise toward your eye while aiming, lower otherwise. Reloading lowers it.
 	var aiming := aim and weapon.can_aim and _reload_time_left <= 0.0

@@ -69,6 +69,12 @@ const THROW_SWING_TILT := -45.0
 const THROW_WINDUP_SHARE := 0.6
 const THROW_FOLLOW_TIME := 0.2
 const THROW_RAISE_TIME := 0.3
+## Pills / bandage use (the throw in reverse): it rises into view from this
+## far below the throw's end, and leaves past the top of the screen this far
+## above the wind-up, tipping this many more degrees back.
+const ITEM_RISE_FROM := Vector3(0.0, -0.25, 0.0)
+const ITEM_AWAY := Vector3(0.0, 0.4, 0.05)
+const ITEM_AWAY_TILT := 70.0
 
 ## How far in front of your eye the middle of a scope sits when aimed
 ## (WeaponData.aim_sight_node), in meters.
@@ -291,56 +297,50 @@ func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_del
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time - follow)
 
 
-## H / B: the gun drops out of view and the item comes up in the other hand
-## (in camera space, so it moves on its own path while the gun's down), then
-## swings back up toward your face and on past the top of the screen -- the
-## grenade throw in reverse, the same for pills and bandages (Left 4 Dead 2's
-## pill pop). Then the gun comes back up. Timed to WeaponController's, so the heal lands
-## as the item leaves the screen.
-func _on_item_used(_item: int, model: PackedScene, use_time: float, lower_time: float, recover_time: float) -> void:
-	var gun_weapon := _weapons.current_weapon()
+## Pills or a bandage used: the grenade throw played in reverse, by the same
+## arms holding the item where its slot (pills.tres / bandage.tres) puts it
+## -- so whatever you line up with F2 is what you see. It comes up low and
+## forward where a throw ends, swings back up toward your face where a throw
+## winds up, and on up past the top of the screen (Left 4 Dead 2's pill pop);
+## the heal lands as it goes. Used off a gun (H / B), the gun drops first and
+## comes back up after; used from its own slot, the next one comes up into
+## your hand (or, with none left, WeaponController switches you back).
+func _on_item_used(item: int, item_weapon: WeaponData, use_time: float, lower_time: float, recover_time: float, equipped: bool) -> void:
+	var back_to := _weapons.current_weapon()
 	if _switch_tween:
 		_switch_tween.kill()
 	_switch_tween = create_tween()
-	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, lower_time).set_ease(Tween.EASE_IN)
-	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, lower_time)
-	_switch_tween.tween_callback(_hide_held_gun)
-	_switch_tween.tween_interval(use_time)
-	_switch_tween.tween_callback(func() -> void:
-		if _gun and _weapons.current_weapon() == gun_weapon:
-			_gun.visible = true
-	)
-	_switch_tween.tween_property(self, "position", Vector3.ZERO, recover_time).set_ease(Tween.EASE_OUT)
-	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time)
-
-	var camera := get_parent() as Node3D
-	if model == null or camera == null:
-		return
-	var held := Node3D.new()
-	camera.add_child(held)
-	var held_model := model.instantiate() as Node3D
-	held_model.scale = Vector3.ONE * _weapons.item_view_scale
-	held.add_child(held_model)
-	held.position = Vector3(0.06, -0.38, -0.32)
-	held.visible = false
-	var tween := held.create_tween()
-	tween.tween_interval(lower_time)
-	tween.tween_callback(held.show)
-	# The grenade throw run backwards (same offsets and tilts): up into the
-	# hand low and forward where a throw ends, swung back up toward your face
-	# where a throw winds up, then on up past the top of the screen.
-	var hand := Vector3(0.04, -0.13, -0.3)
+	if not equipped:
+		_switch_tween.tween_property(self, "position", LOWERED_OFFSET, lower_time).set_ease(Tween.EASE_IN)
+		_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, lower_time)
+		_switch_tween.tween_callback(_show_weapon.bind(item_weapon))
 	var rise := use_time * 0.25
 	var swing := use_time * 0.45
 	var away := use_time - rise - swing
-	held.position = hand + THROW_SWING_OFFSET + Vector3(0.0, -0.25, 0.0)
-	held.rotation_degrees.x = THROW_SWING_TILT
-	tween.tween_property(held, "position", hand + THROW_SWING_OFFSET, rise).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.tween_property(held, "position", hand + THROW_WINDUP_OFFSET, swing).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tween.parallel().tween_property(held, "rotation_degrees:x", THROW_WINDUP_TILT, swing).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tween.tween_property(held, "position", hand + THROW_WINDUP_OFFSET + Vector3(0.0, 0.4, 0.05), away).set_ease(Tween.EASE_IN)
-	tween.parallel().tween_property(held, "rotation_degrees:x", THROW_WINDUP_TILT + 70.0, away).set_ease(Tween.EASE_IN)
-	tween.tween_callback(held.queue_free)
+	var low := THROW_SWING_OFFSET + ITEM_RISE_FROM
+	_switch_tween.tween_callback(func() -> void:
+		position = low
+		rotation_degrees.x = THROW_SWING_TILT
+		if _gun:
+			_gun.visible = true
+	)
+	_switch_tween.tween_property(self, "position", THROW_SWING_OFFSET, rise).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET, swing).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT, swing).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET + ITEM_AWAY, away).set_ease(Tween.EASE_IN)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT + ITEM_AWAY_TILT, away).set_ease(Tween.EASE_IN)
+	# Gone (used up). Back up from below: the gun, or the next one in hand.
+	_switch_tween.tween_callback(func() -> void:
+		position = LOWERED_OFFSET
+		rotation_degrees.x = LOWERED_TILT_DEGREES
+		if not equipped:
+			if back_to and _weapons.current_weapon() == back_to:
+				_show_weapon(back_to)
+		elif _gun:
+			_gun.visible = _weapons.heal_count(item) > 0
+	)
+	_switch_tween.tween_property(self, "position", Vector3.ZERO, recover_time).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time)
 
 
 func _hide_held_gun() -> void:

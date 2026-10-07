@@ -17,7 +17,6 @@ magazine_size = 1
 explosion_radius = 4.5
 explosion_knockback = 12.0
 throws_grenade = true
-hide_left_arm = true
 fuse_tick_sound = ExtResource("5_tick")
 bounce_sound = ExtResource("6_bounce")
 viewmodel_scene = ExtResource("2_model")

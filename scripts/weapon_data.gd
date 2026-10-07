@@ -174,6 +174,15 @@ enum ReloadStyle {
 ## Plays when it hits something, if it's moving fast enough.
 @export var bounce_sound: SoundEvent
 
+@export_group("Healing Item")
+## Pills or a bandage (WeaponController.Item: 0 = pills, 1 = bandage) instead
+## of a gun: it's a slot you can equip like the grenade (while you're
+## carrying any), shown in your hand with the same arms and hold pose, and
+## clicking uses one -- the grenade throw played in reverse. Its look in your
+## hand is the Presentation/First-person arms settings below, tunable with
+## the F2 viewmodel tool and saved with F3 like any weapon. -1 = not one.
+@export var heal_item: int = -1
+
 @export_group("Switching")
 ## Seconds to bring this weapon up after choosing it. You can't fire during
 ## it, and any cooldown left from the previous weapon carries over, so

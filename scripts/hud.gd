@@ -107,6 +107,8 @@ func _process(_delta: float) -> void:
 		player.weapons.get_ammo(),
 		" (reloading)" if reloading else "",
 	]
+	if weapon and weapon.heal_item >= 0:
+		ammo_label.text = "%s  x%d" % [weapon_name, player.weapons.heal_count(weapon.heal_item)]
 	# Grenades for Q, once you've found some.
 	if player.weapons.grenade_weapon() and not (weapon and weapon.throws_grenade):
 		ammo_label.text += "   [Q] Grenades: %d" % player.weapons.grenade_count()
