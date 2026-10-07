@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://6xidlka4un51"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://dsl7lbslxjrlo" path="res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/bandage_mp_1.glb" id="2_model"]
@@ -8,11 +8,13 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Bandage"
-heal_item = 1
 magazine_size = 1
+heal_item = 1
 draw_time = 0.3
 viewmodel_scene = ExtResource("2_model")
-viewmodel_position = Vector3(0.15, -0.155, -0.45)
+viewmodel_position = Vector3(-0.1270232, -0.20535542, -0.52372193)
+viewmodel_rotation_degrees = Vector3(62.529495, -30.875587, 0)
 placeholder_color = Color(0.9, 0.9, 0.9, 1)
 hold_animation = ExtResource("3_hold")
+arms_position = Vector3(-0.09564891, -1.0902417, 0.119768426)
 switch_sound = ExtResource("4_switch")

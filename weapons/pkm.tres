@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bjfayi7xo4rw8"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://dg37twuejxids" path="res://art/weapons/NEWPSXWEAPONS/PKM/PKM.glb" id="2_pkm"]
@@ -23,11 +23,12 @@ recoil_scale = 5.2
 recoil_jitter = 0.45
 draw_time = 0.9
 viewmodel_scene = ExtResource("2_pkm")
-viewmodel_position = Vector3(0.12, -0.21, -0.6)
+viewmodel_position = Vector3(0.08898916, -0.21165736, -0.533352)
 viewmodel_scale = 0.22
+muzzle_offset = Vector3(-0.11971631, 0.5804603, -1.9212339)
 placeholder_color = Color(0.35, 0.35, 0.3, 1)
 hold_animation = ExtResource("6_hold")
-arms_position = Vector3(0.00917909, -1.5276697, 0.03752516)
+arms_position = Vector3(0.011623724, -1.5276697, 0.03752516)
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")
 switch_sound = ExtResource("5_switch")
