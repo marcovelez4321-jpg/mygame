@@ -638,24 +638,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 1.75)
 mesh = SubResource("LWallShortMesh")
 surface_material_override/0 = SubResource("LWallMat")
 
-[node name="Enemy4" parent="." unique_id=1498163616 instance=ExtResource("5_psl7s")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21, 0, 12.4)
-
-[node name="EnemyRusher9" parent="." unique_id=388471197 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0, 12.9)
-
-[node name="EnemyGunner6" parent="." unique_id=1082098966 instance=ExtResource("12_gunner")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.5, 0, 10.4)
-
-[node name="Enemy5" parent="." unique_id=1521740728 instance=ExtResource("5_psl7s")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44.3, 0, 18.1)
-
-[node name="EnemyRusher10" parent="." unique_id=1295136698 instance=ExtResource("11_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 47.3, 0, 18.6)
-
-[node name="EnemyGunner7" parent="." unique_id=1983002656 instance=ExtResource("12_gunner")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45.8, 0, 16.1)
-
 [node name="Enemy6" parent="." unique_id=37759883 instance=ExtResource("5_psl7s")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 0, 39.9)
 
