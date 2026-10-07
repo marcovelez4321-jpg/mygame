@@ -29,7 +29,7 @@ const CEILING_REACH := 14.0
 const PROP_REACH := 3.5
 ## Jaws: a drip of drool this often while it's out; dirt shed off its body
 ## this often while it's in the air.
-const DROOL_INTERVAL := 0.3
+const DROOL_INTERVAL := 0.2
 const SHED_INTERVAL := 0.12
 
 ## How big this worm's effects are (1 = the boss).
@@ -257,7 +257,7 @@ func drool(jaws: Vector3, delta: float) -> void:
 	if _drool_left > 0.0:
 		return
 	_drool_left = DROOL_INTERVAL * randf_range(0.6, 1.4)
-	BloodFX.spawn_impact(get_tree().current_scene, jaws, Vector3.DOWN, SPIT_COLOR, 0.25 * size + 0.15)
+	BloodFX.spawn_impact(get_tree().current_scene, jaws, Vector3.DOWN, SPIT_COLOR, (0.25 * size + 0.15) * 2.0)
 
 
 ## A bite: gore and spit spraying out of its jaws along `forward`.

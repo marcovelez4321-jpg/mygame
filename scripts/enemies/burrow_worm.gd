@@ -33,10 +33,10 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export_group("Body")
 @export var segment_count: int = 20
 ## Distance between segment centres, meters.
-@export var segment_spacing: float = 0.75
+@export var segment_spacing: float = 0.8625
 ## Body thickness (radius, meters) at the head, tapering to tail_radius.
-@export var head_radius: float = 0.75
-@export var tail_radius: float = 0.3
+@export var head_radius: float = 0.8625
+@export var tail_radius: float = 0.345
 ## Tape worm slices fanned round each segment (3 = 60 degrees apart).
 @export var slices_per_segment: int = 3
 ## Each slice's length as a multiple of segment_spacing (above 1 they
@@ -78,7 +78,7 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 ## (WormLeap) -- the whole body pouring out after it; landing sends out a
 ## shockwave; it dives back in, swings round underground (dive_time) and
 ## goes again.
-@export var leap_height: float = 9.0
+@export var leap_height: float = 12.6
 ## How far from its landing spot it erupts.
 @export var leap_distance: float = 7.0
 ## In the air it keeps re-guessing and eases its sideways drift toward the
@@ -94,7 +94,7 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export var dive_time: float = 1.4
 ## Every so often a smaller skimming hop instead (a quick breach and back in).
 @export_range(0.0, 1.0, 0.05) var hop_chance: float = 0.25
-@export var hop_height: float = 3.5
+@export var hop_height: float = 4.9
 
 @export_group("Shockwave")
 ## Landing from a leap: everything within shockwave_radius -- players,

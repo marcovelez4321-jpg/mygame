@@ -567,3 +567,5 @@ them:
   - Deepmaw body arc: the spine bend now runs in the Deepmaw's own _process with process_priority 100 (after its AnimationPlayer), setting the bones directly -- the SkeletonModifier3D route (DeepmawBend, deleted) wasn't reliably bending it.
   - Deepmaws no longer defend barnacle clumps (`BarnacleCluster.defender_count` 0); they escort the worm boss only.
   - Untested at time of writing.
+
+- 2026-10-07: Worm tuning: boss 15% bigger (`segment_spacing` 0.75 -> 0.8625, `head_radius` 0.75 -> 0.8625, `tail_radius` 0.3 -> 0.345); leaps 40% higher (boss `leap_height` 9 -> 12.6, `hop_height` 3.5 -> 4.9; Deepmaw `leap_height` 4.5 -> 6.3 -- the aim works out the longer air time itself); the boss's drool twice as big and half again as often (strength x2, every ~0.2 s instead of ~0.3).

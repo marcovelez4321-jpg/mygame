@@ -77,7 +77,7 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 ## there in time go with it -- each with its own guess (sideways guesses
 ## spread guess_spread times wider than the boss's), so between them they
 ## cover where you might run.
-@export var leap_height: float = 4.5
+@export var leap_height: float = 6.3
 @export var leap_distance: float = 4.5
 @export var volley_gather: float = 1.2
 @export var guess_spread: float = 1.8
