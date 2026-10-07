@@ -571,3 +571,10 @@ them:
 - 2026-10-07: Worm tuning: boss 15% bigger (`segment_spacing` 0.75 -> 0.8625, `head_radius` 0.75 -> 0.8625, `tail_radius` 0.3 -> 0.345); leaps 40% higher (boss `leap_height` 9 -> 12.6, `hop_height` 3.5 -> 4.9; Deepmaw `leap_height` 4.5 -> 6.3 -- the aim works out the longer air time itself); the boss's drool twice as big and half again as often (strength x2, every ~0.2 s instead of ~0.3).
 
 - 2026-10-07: Worm boss brood 6 -> 30 spiders per big leap (`brood_count`): several burst from each segment as the swelling passes (spread from just behind the head to the tail). Population.MAX_SPIDERS is 40, so a second leap culls the oldest spiders to make room.
+
+- 2026-10-07: **Worms breach from further away; no cracks; spider cap 60; faster Deepmaw leaps.**
+  - The worms sometimes followed the player around underground: their eruption spot was re-worked out every tick a fixed distance from a moving guess, so they chased it and never arrived. Now they tunnel toward where they mean to land and breach from wherever they are once they're within `leap_distance` of it (boss 16 m, Deepmaw 11 m) -- or after `tunnel_timeout` (boss 4 s, Deepmaw 3 s), wherever they've got to. The spot is locked when the wind-up starts. The arc and the spitter-roach aim (WormLeap) are unchanged: longer leaps just cover more ground.
+  - The ground-crack effect is gone (worm_cracks.gdshader deleted, WormFX crack code removed). The boss's wind-up keeps its dirt bursts, shaking and rumble swell.
+  - Population.MAX_SPIDERS 40 -> 60.
+  - Deepmaws faster in the air: their own `air_gravity` 16 -> 28 (same 6.3 m peak, ~1.3x quicker leaps, faster across; the boss keeps 16).
+  - Untested at time of writing.

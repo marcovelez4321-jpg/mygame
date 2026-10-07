@@ -11,7 +11,7 @@ extends RefCounted
 
 const MAX_RATS := 60
 const MAX_ROACHES := 60
-const MAX_SPIDERS := 40
+const MAX_SPIDERS := 60
 
 
 ## Stamps when `creature` was born (Rat/FlyingRoach call this in _ready()).

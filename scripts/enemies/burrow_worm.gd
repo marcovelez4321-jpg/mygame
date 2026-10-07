@@ -70,17 +70,19 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export_range(0.0, 1.0, 0.05) var wander_breach_chance: float = 0.3
 
 @export_group("The Leap")
-## Its attack, over and over: it tunnels to a spot leap_distance away from
-## where it means to come down, sinks to dive_depth while the ground there
-## shakes and cracks and the rumble swells (windup_time -- your warning),
-## then erupts in a column of dirt with a roar and arcs leap_height high
-## down onto where it guesses you'll be -- the spitter roach's lead
-## (WormLeap) -- the whole body pouring out after it; landing sends out a
-## shockwave; it dives back in, swings round underground (dive_time) and
-## goes again.
+## Its attack, over and over: it tunnels toward where it means to come down
+## until it's within leap_distance of it (or has been tunnelling
+## tunnel_timeout seconds -- it never just follows you around underground),
+## stops there and sinks to dive_depth while the ground shakes and the
+## rumble swells (windup_time -- your warning), then erupts in a column of
+## dirt with a roar and arcs leap_height high down onto where it guesses
+## you'll be -- the spitter roach's lead (WormLeap) -- the whole body pouring
+## out after it; landing sends out a shockwave; it dives back in, swings
+## round underground (dive_time) and goes again.
 @export var leap_height: float = 12.6
-## How far from its landing spot it erupts.
-@export var leap_distance: float = 7.0
+## It breaches from as far as this from its landing spot.
+@export var leap_distance: float = 16.0
+@export var tunnel_timeout: float = 4.0
 ## In the air it keeps re-guessing and eases its sideways drift toward the
 ## new guess, at most this many m/s² -- a smooth correction, the arc stays
 ## an arc (0 = committed once it leaves the ground).
@@ -471,12 +473,13 @@ func _update_phase(head: Vector3, delta: float) -> void:
 	match _phase:
 		Phase.WANDER:
 			if hunting:
-				_phase = Phase.TUNNEL
-				_guess = WormLeap.roll_guess()
+				_start_tunnel()
 		Phase.TUNNEL:
 			_plan_leap()
-			var under := Vector3(_leap_from.x, head.y, _leap_from.z)
-			if head.distance_to(under) < 2.5 and head.y < _ground_y - 0.5:
+			# Close enough to leap from (or tunnelled long enough): stop here.
+			var gap := Vector2(_leap_to.x - head.x, _leap_to.z - head.z).length()
+			if (gap <= leap_distance or _phase_left <= 0.0) and head.y < _ground_y - 0.5:
+				_leap_from = Vector3(head.x, _ground_y, head.z)
 				_phase = Phase.WINDUP
 				_phase_left = windup_time
 		Phase.WINDUP:
@@ -497,13 +500,19 @@ func _update_phase(head: Vector3, delta: float) -> void:
 				_shockwave(head)
 		Phase.DIVE:
 			if _phase_left <= 0.0:
-				_phase = Phase.TUNNEL
-				_guess = WormLeap.roll_guess()
+				_start_tunnel()
 	_fx.rumble_boost(windup_rumble_boost * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)) if _phase == Phase.WINDUP else 0.0)
 
 
-## Where to come up: leap_distance short of where it'll come down (its
-## guess at where you'll be by then -- WormLeap), along the way it's coming.
+## A new attack: a fresh guess at your path, and the clock on tunnelling.
+func _start_tunnel() -> void:
+	_phase = Phase.TUNNEL
+	_phase_left = tunnel_timeout
+	_guess = WormLeap.roll_guess()
+
+
+## Where it means to come down: its guess at where you'll be by then
+## (WormLeap). Where it comes up is wherever it is when it's close enough.
 func _plan_leap() -> void:
 	if not is_instance_valid(target):
 		return
@@ -515,11 +524,6 @@ func _plan_leap() -> void:
 		until_out = 0.2
 	var flight := WormLeap.air_time(leap_height, air_gravity, 1.0)
 	_leap_to = WormLeap.landing(head, target, until_out + flight, _guess)
-	var approach := Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z)
-	if approach.length_squared() < 0.25:
-		approach = Vector3(_vel.x, 0.0, _vel.z)
-	approach = approach.normalized() if approach.length_squared() > 0.0001 else Vector3.FORWARD
-	_leap_from = Vector3(_leap_to.x, _ground_y, _leap_to.z) - approach * leap_distance
 
 
 ## Breaking the surface: up at sqrt(2 g h), across at whatever brings it
@@ -541,7 +545,6 @@ func _erupt(head: Vector3) -> void:
 	var surface := Vector3(head.x, _ground_y, head.z)
 	_shake_near(head, eruption_shake, shake_range)
 	WormFX.punch(get_tree(), head, 9.0, shake_range)
-	_fx.fade_cracks()
 	_fx.rumble_boost(0.0)
 	_fx.eruption(surface, _radii[0])
 	SoundPlayer.play_3d(roar_sound, surface, get_tree().current_scene)
@@ -698,8 +701,8 @@ func _shockwave(at: Vector3) -> void:
 			(body as PhysicalBone3D).apply_central_impulse(push * (body as PhysicalBone3D).mass)
 
 
-## Winding up under its prey: the ground shakes harder and harder and cracks
-## open where it's about to come out.
+## Winding up: the ground shakes harder and harder and kicks up dirt where
+## it's about to come out.
 func _telegraph(delta: float) -> void:
 	_trail_left -= delta
 	if _trail_left > 0.0:
@@ -709,17 +712,16 @@ func _telegraph(delta: float) -> void:
 	var spot := Vector3(_leap_from.x, _ground_y + 0.05, _leap_from.z)
 	var jitter := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * head_radius
 	BloodFX.spawn_impact(get_tree().current_scene, spot + jitter, Vector3.UP, dirt_color, 0.75 + t)
-	_fx.show_cracks(Vector3(_leap_from.x, _ground_y, _leap_from.z), 0.25 + 0.75 * t)
 	_shake_near(spot, rumble * (1.0 + t * 2.0), rumble_range)
 
 
-## Where the head is going while it has control: hunting, the tunnel under
-## its prey (or, winding up, straight down under the eruption spot; diving,
-## on down and round); with nobody about, wandering.
+## Where the head is going while it has control: hunting, toward where it
+## means to land (or, winding up, straight down under the eruption spot;
+## diving, on down and round); with nobody about, wandering.
 func _goal(head: Vector3, delta: float) -> Vector3:
 	match _phase:
 		Phase.TUNNEL:
-			return Vector3(_leap_from.x, _ground_y - lurk_depth, _leap_from.z)
+			return Vector3(_leap_to.x, _ground_y - lurk_depth, _leap_to.z)
 		Phase.WINDUP:
 			return Vector3(_leap_from.x, _ground_y - dive_depth, _leap_from.z)
 		Phase.DIVE:
