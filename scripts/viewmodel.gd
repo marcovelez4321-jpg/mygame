@@ -69,6 +69,8 @@ const THROW_SWING_TILT := -45.0
 const THROW_WINDUP_SHARE := 0.6
 const THROW_FOLLOW_TIME := 0.2
 const THROW_RAISE_TIME := 0.3
+## Frames a newly made arms model stays hidden (see _attach_arms()).
+const ARMS_REVEAL_FRAMES := 2
 
 ## How far in front of your eye the middle of a scope sits when aimed
 ## (WeaponData.aim_sight_node), in meters.
@@ -713,6 +715,19 @@ func _attach_arms(weapon: WeaponData) -> void:
 	for node in _arms.find_children("*", "GeometryInstance3D", true, false):
 		(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_apply_arms_transform(weapon)
+	# A fresh arms model is drawn whole (torso and all) until its
+	# HideBonesModifier has run once -- that was the torso flashing up at the
+	# bottom of the screen on every swap (throws, heals, switches). Kept
+	# hidden until the hiding has happened.
+	_arms.visible = false
+	_reveal_arms(_arms)
+
+
+func _reveal_arms(arms: Node3D) -> void:
+	for i in ARMS_REVEAL_FRAMES:
+		await get_tree().process_frame
+	if is_instance_valid(arms):
+		arms.visible = true
 
 
 ## The arms' facing and size in camera space: turned to face forward (Mixamo
