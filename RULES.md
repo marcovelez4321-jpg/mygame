@@ -450,3 +450,5 @@ them:
   - Font: the project now has a theme, scenes/ui/game_theme.tres (Project Settings > GUI > Theme > Custom). Open it and set Default Font (and Default Font Size) in the Inspector -- every HUD/menu label uses it; per-label size overrides still apply.
   - Fixed "get_meta: no 'meta' values with the key 'provoked_by'" (enemy.gd _protect_gang, rat.gd _remove): Godot treats a null default in get_meta() as no default, so a missing key errors. Convention: `get_meta(k) if has_meta(k) else null`.
   - Untested at time of writing.
+
+- 2026-10-07: First-person arms are always Character_18_Police's (`Viewmodel.arms_character`; empty = your own character's), whichever character your body is: every gun's hand placement was tuned on those arms, and other characters' arm lengths knocked the hands off the grips. Their size comes from their own head height (`PlayerModel.fit_scale_for()`, the same fit the body uses), not the chosen body's scale.

@@ -132,6 +132,13 @@ func _fit_to_player(skeleton: Skeleton3D) -> void:
 	_model.position = Vector3(0.0, 0.0, body_back_offset)
 
 
+## The scale that puts a character whose head (rest pose) sits `head_height`
+## above its feet at the player's eye height -- what _fit_to_player() uses,
+## for other copies (the first-person arms model).
+func fit_scale_for(head_height: float) -> float:
+	return (_head.position.y - head_bone_below_eyes) / head_height if head_height > 0.01 else model_scale
+
+
 ## The model's AnimationPlayer -- or a new one, since a character FBX with no
 ## animations of its own is imported without one. The Mixamo clips address
 ## the skeleton as %GeneralSkeleton (named by the bone map), so they find it

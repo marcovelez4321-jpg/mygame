@@ -81,6 +81,12 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 
 @export var weapons_path: NodePath
 
+## The character whose arms you see in first person, whoever you're playing
+## as -- every gun's hand placement is tuned to its arms, so switching your
+## character never knocks the hands off the grips. Empty = your own
+## character's arms.
+@export_file("*.fbx") var arms_character: String = "res://art/characters/Characters_psx/Models/Male/Character_18_Police.fbx"
+
 @export_group("Sway")
 ## The gun lags behind when you turn and swings back. Cosmetic only.
 @export var sway_enabled: bool = true
@@ -109,6 +115,8 @@ var _model_rest_transform: Transform3D
 ## Placed in camera space (WeaponData.arms_position) and converted into
 ## _model's space in _apply_arms_transform().
 var _arms: Node3D
+## The arms model's size (PlayerModel.fit_scale_for() of ITS head height).
+var _arms_fit_scale := 1.0
 var _player_model: PlayerModel
 var _tuning_arms: bool = false
 var _switch_tween: Tween
@@ -633,9 +641,12 @@ func _attach_arms(weapon: WeaponData) -> void:
 	if is_instance_valid(_arms):
 		_arms.queue_free()
 	_arms = null
-	if weapon.hold_animation == null or _player_model == null or _player_model.character_path.is_empty():
+	if weapon.hold_animation == null or _player_model == null:
 		return
-	var scene := load(_player_model.character_path) as PackedScene
+	var path := arms_character if not arms_character.is_empty() else _player_model.character_path
+	if path.is_empty():
+		return
+	var scene := load(path) as PackedScene
 	if scene == null:
 		return
 	_arms = scene.instantiate() as Node3D
@@ -661,6 +672,13 @@ func _attach_arms(weapon: WeaponData) -> void:
 			hidden.append("LeftUpperArm") # one hand only
 		hider.bone_names = hidden
 		skeleton.add_child(hider)
+		# Sized like the body would size this character, from its own head height.
+		var head := skeleton.find_bone("Head")
+		_arms_fit_scale = _player_model.model_scale
+		if head != -1:
+			var head_in_model := _arms.global_transform.affine_inverse() \
+					* (skeleton.global_transform * skeleton.get_bone_global_rest(head).origin)
+			_arms_fit_scale = _player_model.fit_scale_for(head_in_model.y)
 		if weapon.arms_position == Vector3.ZERO:
 			_auto_place_arms(weapon, skeleton)
 	for node in _arms.find_children("*", "GeometryInstance3D", true, false):
@@ -672,7 +690,7 @@ func _attach_arms(weapon: WeaponData) -> void:
 ## characters face +Z, the camera looks down -Z), the weapon's own tweak on
 ## top, scaled to match the body (PlayerModel.model_scale).
 func _arms_basis(weapon: WeaponData) -> Basis:
-	var size := (_player_model.model_scale if _player_model else 1.0) * weapon.arms_scale
+	var size := _arms_fit_scale * weapon.arms_scale
 	return Basis.from_euler(weapon.arms_rotation_degrees * (PI / 180.0)) \
 			* Basis(Vector3.UP, PI) * Basis.from_scale(Vector3.ONE * size)
 
