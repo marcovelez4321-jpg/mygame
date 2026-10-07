@@ -250,6 +250,10 @@ func count() -> int:
 ## Bender's feet), one after another over about spawn_spread seconds (or
 ## `spread`, if given). The more there are, the wider the patch of floor.
 func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float = -1.0, scale_bonus: float = 1.0, health_bonus: float = 1.0, damage_bonus: float = 1.0) -> void:
+	# Never more than the game's rat cap at once: at it, the oldest rats die to
+	# make room (Population).
+	amount = mini(amount, Population.MAX_RATS)
+	Population.make_room_for_rats(get_tree(), amount)
 	var world := get_tree().current_scene
 	var space := get_viewport().find_world_3d().direct_space_state
 	var reach := (0.6 + 0.12 * sqrt(float(amount))) * spawn_circle_scale

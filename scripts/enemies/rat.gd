@@ -150,6 +150,7 @@ var _eater: Node3D
 func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group(Factions.GROUPS[Factions.Side.RAT])
+	Population.mark_born(self)
 	lock_rotation = true # upright; the Visual turns to face where it runs
 	_roll_variety()
 	health.died.connect(_on_died)

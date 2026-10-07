@@ -35,9 +35,6 @@ extends StaticBody3D
 ## gets at the last (biggest) pulse (0.3 = 30% taller).
 @export var swell_time: float = 1.2
 @export var swell_amount: float = 0.3
-## Roaches already alive at which it holds off spitting (keeps a level full
-## of barnacles from flooding the game -- and the frame rate).
-@export var roach_cap: int = 50
 
 @export_group("Look")
 @export var blood_color: Color = Color(0.6, 0.03, 0.03)
@@ -125,13 +122,12 @@ func _spit() -> void:
 	tween.tween_property(_model, "scale", rest, 0.2).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 
-## Pops `count` roaches out of its mouth, fanned out around the way it faces --
-## fewer if the level is already at roach_cap.
+## Pops `count` roaches out of its mouth, fanned out around the way it faces
+## (at the game's roach cap the oldest roaches die to make room: Population).
 func _release(count: int) -> void:
 	var world := get_tree().current_scene
 	var up := global_basis.y.normalized()
-	var alive := get_tree().get_nodes_in_group(Factions.GROUPS[Factions.Side.ROACH]).size()
-	for i in mini(count, mini(maxi(roach_cap - alive, 0), RoachCarry.room_for_roaches(get_tree()))):
+	for i in count:
 		var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 0.45
 		var direction := (up + spread).normalized()
 		RoachCarry.hatch(world, _mouth.global_position + direction * 0.2, direction)

@@ -312,6 +312,7 @@ func get_state() -> State:
 func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group(Factions.GROUPS[Factions.Side.ROACH])
+	Population.mark_born(self)
 	gravity_scale = 0.0
 	lock_rotation = true # the model shows tumbling; the body stays upright
 	health.damaged.connect(_on_damaged)

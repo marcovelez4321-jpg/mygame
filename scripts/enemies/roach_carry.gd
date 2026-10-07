@@ -86,11 +86,6 @@ const BREEDS_PER_BODY := 3
 ## Chance a newborn roach is a spitter (else a normal one). roach.tscn itself
 ## is set to always be a spitter, so births roll their own.
 const BRED_SPITTER_CHANCE := 0.5
-## The most roaches alive at once, game-wide. Every birth -- breeding, a
-## barnacle, the Swarm King's cloud -- goes through room_for_roaches(), so
-## a long fight can't pile up hundreds of them and sink the frame rate.
-## (Roaches placed in the map by hand still spawn.)
-const MAX_ROACHES_ALIVE := 50
 const BLOOD := Color(0.55, 0.02, 0.02)
 
 ## GATHER: getting hold of it. LIFT: raising it as high as they can (eating
@@ -369,23 +364,12 @@ func bitten() -> void:
 ## the roll goes with the spawn in co-op.
 ## `direction` is which way it pops out (a barnacle on a wall spits sideways).
 static func hatch(world: Node, at: Vector3, direction: Vector3 = Vector3.UP) -> void:
-	if room_for_roaches(world.get_tree()) <= 0:
-		return
+	Population.make_room_for_roaches(world.get_tree(), 1) # at the cap, the oldest goes
 	var roach := ROACH_SCENE.instantiate() as FlyingRoach
 	roach.kind = FlyingRoach.Kind.SPITTER if randf() < BRED_SPITTER_CHANCE else FlyingRoach.Kind.NORMAL
 	world.add_child(roach)
 	roach.global_position = at
 	roach.burst_out.call_deferred(direction) # after its own setup: a springy pop out
-
-
-## How many more roaches can be born before MAX_ROACHES_ALIVE.
-## (Dead ones lying around don't count.)
-static func room_for_roaches(tree: SceneTree) -> int:
-	var alive := 0
-	for node in tree.get_nodes_in_group(Factions.GROUPS[Factions.Side.ROACH]):
-		if Factions.is_alive_target(node as Node3D):
-			alive += 1
-	return maxi(MAX_ROACHES_ALIVE - alive, 0)
 
 
 func _finish() -> void:

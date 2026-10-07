@@ -193,6 +193,7 @@ func _ready() -> void:
 	_home = global_position
 	_patrol_point = _home
 	swarm.bender = self
+	rat_cap = mini(rat_cap, Population.MAX_RATS) # never summoning past the game's rat cap
 	swarm.feed_limit = rat_cap # feeding refills the horde, never past his cap
 	_model = get_node_or_null("Model") as Node3D
 	if _model:
