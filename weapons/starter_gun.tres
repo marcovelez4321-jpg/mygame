@@ -1,11 +1,11 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bnjpiq8h0wxyh"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://kj7kkaqxq1lv"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://cbgd0ds051qau" path="res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/pistol_mp_1.glb" id="2_pistol"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_fire.tres" id="3_fire"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_switch.tres" id="5_switch"]
-[ext_resource type="Animation" path="res://art/animations/LowerPistol.res" id="6_hold"]
+[ext_resource type="Animation" uid="uid://down878swuxr5" path="res://art/animations/LowerPistol.res" id="6_hold"]
 
 [resource]
 script = ExtResource("1")
@@ -16,13 +16,14 @@ recoil_scale = 4.0
 recoil_jitter = 0.32
 aim_position = Vector3(-0.00096765015, -0.11331543, -0.3)
 viewmodel_scene = ExtResource("2_pistol")
-viewmodel_position = Vector3(0.115640216, -0.12794662, -0.5408055)
+viewmodel_position = Vector3(-0.115077525, -0.16068135, -0.5938545)
 viewmodel_rotation_degrees = Vector3(0, 90, 0)
-viewmodel_scale = 1.4
-muzzle_offset = Vector3(0.14, 0.073, 0)
+viewmodel_scale = 0.8992189015998853
+muzzle_offset = Vector3(0.4652223, 0.03254583, -0.003607973)
 muzzle_flash_time = 0.1
 placeholder_color = Color(0.85, 0.75, 0.3, 1)
 hold_animation = ExtResource("6_hold")
+arms_position = Vector3(-0.07557335, -1.0511012, 0.13420135)
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")
 switch_sound = ExtResource("5_switch")
