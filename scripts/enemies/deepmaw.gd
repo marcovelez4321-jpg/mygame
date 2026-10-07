@@ -5,7 +5,8 @@ extends Node3D
 ## barnacle clump from under the floor. It digs the way the BurrowWorm does
 ## -- passing through floors and walls, the level hiding whatever's inside
 ## them -- but it's one body, not segments: its own spine bones are bent
-## along the path its head has swum (DeepmawBend), so it arcs out of the
+## along the path its head has swum (bend_spine(), every frame after its
+## animation), so it arcs out of the
 ## ground, curves through the air and pours back in as one creature, with
 ## a swimming wiggle down its length.
 ##
@@ -43,8 +44,8 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 ## Its length head to tail, meters (the model is sized to it).
 @export var body_length: float = 5.0
 ## Hitbox spheres along the body, and their radius as a share of its length.
-@export var hitbox_count: int = 5
-@export var hitbox_radius: float = 0.07
+@export var hitbox_count: int = 7
+@export var hitbox_radius: float = 0.11
 ## The swimming wiggle down its length: how far (share of its length) and
 ## how fast (waves a second).
 @export var wiggle: float = 0.03
@@ -66,15 +67,27 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 @export var guard_range: float = 14.0
 
 @export_group("Leap")
-## Its attack, like the boss's: it tunnels to just short of its prey, sinks
-## briefly while the ground cracks there (windup_time), then bursts out under
-## them -- through them, if they're still there -- on an arc leap_height
-## high, nose first, landing land_beyond past them; dives back in, comes
-## round (dive_time) and goes again.
+## Its attack, like the boss's: it tunnels to a spot leap_distance away from
+## where it means to come down, sinks briefly while the ground cracks there
+## (windup_time), then bursts out nose first on a simple arc leap_height high
+## down onto its guess at where you'll be (the spitter roach's lead,
+## WormLeap); dives back in, comes round (dive_time) and goes again.
+## Deepmaws guarding the same thing leap as a horde: the first one in
+## position calls a volley volley_gather seconds out and the rest that get
+## there in time go with it -- each with its own guess (sideways guesses
+## spread guess_spread times wider than the boss's), so between them they
+## cover where you might run.
 @export var leap_height: float = 4.5
-@export var leap_lead: float = 0.6
-@export var aim_ahead: float = 0.3
-@export var land_beyond: float = 4.0
+@export var leap_distance: float = 4.5
+@export var volley_gather: float = 1.2
+@export var guess_spread: float = 1.8
+## In the air it eases its sideways drift toward its updated guess, at most
+## this many m/s² (0 = committed once out).
+@export var air_steer: float = 6.0
+## The re-aim eases in over this long after it's out, and its body turns to
+## a new heading at most turn_rate (higher = quicker) -- gradual, no snaps.
+@export var steer_ramp: float = 0.5
+@export var turn_rate: float = 5.0
 @export var dive_depth: float = 4.0
 @export var windup_time: float = 0.5
 @export var rise_speed: float = 16.0
@@ -111,6 +124,11 @@ var _state := State.LURK
 var _phase := Phase.TUNNEL
 var _phase_left := 0.0
 var _leap_from := Vector3.ZERO
+var _leap_to := Vector3.ZERO
+var _guess := Vector2.ONE
+var _air_left := 0.0
+## Horde volleys: what they guard (instance id) -> when its next leap goes.
+static var _volleys := {}
 ## The model's own forward/up at rest, and its head (root bone) in its own
 ## space: the whole model is turned to face where it's going every tick, so
 ## it always reads as nose-first even before the spine bends.
@@ -151,6 +169,7 @@ var _buried := false
 var _idle_ticks := 0
 var _idle_delta := 0.0
 var _fx: WormFX
+var _hitboxes: Array[CollisionShape3D] = []
 
 @onready var health: Health = $Health
 @onready var _body: AnimatableBody3D = $Body
@@ -158,6 +177,7 @@ var _fx: WormFX
 
 func _ready() -> void:
 	add_to_group("enemies")
+	process_priority = 100 # after its AnimationPlayer: see _process()
 	home = global_position
 	var floor_hit := _static_ray(home + Vector3.UP * 2.0, home + Vector3.DOWN * 50.0)
 	_ground_y = (floor_hit.position as Vector3).y if not floor_hit.is_empty() else home.y
@@ -255,18 +275,27 @@ func _build_model() -> void:
 	for node in _model.find_children("*", "MeshInstance3D", true, false):
 		var reach := body_length * 2.0 / _scale
 		(node as MeshInstance3D).custom_aabb = AABB(-Vector3.ONE * reach, Vector3.ONE * reach * 2.0)
-	var bend := DeepmawBend.new()
-	bend.worm = self
-	_skeleton.add_child(bend)
 
 
 func _build_hitboxes() -> void:
+	# Shots find a Health on what they hit: the hitbox body gets its own,
+	# passing everything it takes to the worm's (it never runs out itself).
+	var proxy := Health.new()
+	proxy.name = "Health"
+	proxy.max_health = 1000000.0
+	_body.add_child(proxy)
+	proxy.damaged.connect(func(amount: float, attacker_id: int) -> void:
+		proxy.current_health = proxy.max_health
+		if _state != State.DEAD:
+			health.take_damage(amount, attacker_id)
+			BloodFX.spawn_impact(get_tree().current_scene, proxy.last_hit_position if proxy.last_hit_position != Vector3.ZERO else global_position, Vector3.UP, blood_color, 1.0))
 	for i in hitbox_count:
 		var shape := CollisionShape3D.new()
 		var sphere := SphereShape3D.new()
 		sphere.radius = body_length * hitbox_radius * (1.0 - 0.4 * float(i) / maxf(hitbox_count - 1, 1))
 		shape.shape = sphere
 		_body.add_child(shape)
+		_hitboxes.append(shape)
 
 
 func _play(key: String, loop: bool) -> void:
@@ -279,7 +308,7 @@ func _play(key: String, loop: bool) -> void:
 
 ## The spine laid along the head's path: each bone turned (from its rest
 ## pose) to point at the next joint down the path, keeping its belly toward
-## the ground. Called by DeepmawBend after the animation has posed it.
+## the ground. Called every frame after its animation has posed it.
 func bend_spine(skeleton: Skeleton3D) -> void:
 	if _chain.is_empty() or _joints.size() < _chain.size() + 1 or _bend_every <= 0 or _buried:
 		return
@@ -325,12 +354,16 @@ static func _frame(direction: Vector3, up: Vector3) -> Basis:
 func _process(delta: float) -> void:
 	# Spine LOD: far away it bends less often; out of sight range, not at all.
 	_lod_timer -= delta
-	if _lod_timer > 0.0:
-		return
-	_lod_timer = 0.3
-	var camera := get_viewport().get_camera_3d()
-	var distance := camera.global_position.distance_to(global_position) if camera else 0.0
-	_bend_every = 1 if distance < bend_full_distance else (4 if distance < bend_cull_distance else 0)
+	if _lod_timer <= 0.0:
+		_lod_timer = 0.3
+		var camera := get_viewport().get_camera_3d()
+		var distance := camera.global_position.distance_to(global_position) if camera else 0.0
+		_bend_every = 1 if distance < bend_full_distance else (4 if distance < bend_cull_distance else 0)
+	# Bend the spine along its path, right after its animation has posed it
+	# (process_priority puts this after the AnimationPlayer): the jaws still
+	# animate, the body follows the arc like the boss's.
+	if _skeleton:
+		bend_spine(_skeleton)
 
 
 func _physics_process(delta: float) -> void:
@@ -360,7 +393,17 @@ func _physics_process(delta: float) -> void:
 	_update_phase(head, delta)
 	var hunting := _state == State.HUNT
 	if hunting and _phase == Phase.AIR:
-		_vel.y -= air_gravity * delta # the arc is set: no control up there
+		_vel.y -= air_gravity * delta
+		if air_steer > 0.0 and is_instance_valid(target):
+			# Smooth re-aim: the same guess brought up to date, the sideways
+			# drift eased toward it -- the arc stays an arc.
+			_air_left += delta
+			var ramp := clampf(_air_left / maxf(steer_ramp, 0.01), 0.0, 1.0)
+			ramp = ramp * ramp * (3.0 - 2.0 * ramp)
+			var want := WormLeap.steer_toward(head, _vel, target, _guess, _ground_y, air_gravity)
+			var flat := Vector3(_vel.x, 0.0, _vel.z).move_toward(want, air_steer * ramp * delta)
+			_vel.x = flat.x
+			_vel.z = flat.z
 	elif hunting and _phase == Phase.RISE:
 		_vel = _vel.move_toward((_leap_from - head).normalized() * rise_speed, rise_speed * 4.0 * delta)
 	elif _inside:
@@ -430,10 +473,9 @@ func _update_joints() -> void:
 		_model.visible = not buried
 	# Hitboxes down the body.
 	_body.global_transform = Transform3D(Basis.IDENTITY, head)
-	var shapes := _body.get_children()
-	for k in shapes.size():
-		var index := int(float(k) / maxf(shapes.size() - 1, 1) * (_joints.size() - 1))
-		(shapes[k] as CollisionShape3D).position = _joints[index] - head
+	for k in _hitboxes.size():
+		var index := int(float(k) / maxf(_hitboxes.size() - 1, 1) * (_joints.size() - 1))
+		_hitboxes[k].position = _joints[index] - head
 
 
 ## The point `distance` meters back along the head's path (straight on
@@ -457,7 +499,8 @@ func _place_model() -> void:
 	if _model == null:
 		return
 	if _vel.length_squared() > 0.25:
-		_facing = _facing.slerp(_vel.normalized(), 0.35).normalized()
+		var step := 1.0 - exp(-turn_rate * get_physics_process_delta_time())
+		_facing = _facing.slerp(_vel.normalized(), step).normalized()
 	var turn := _frame(_facing, Vector3.UP) * _rest_frame.inverse()
 	var rig := turn.scaled(Vector3.ONE * _scale)
 	_model.global_transform = Transform3D(rig, global_position - rig * _root_in_model)
@@ -476,7 +519,8 @@ func _update_phase(head: Vector3, delta: float) -> void:
 			var under := Vector3(_leap_from.x, head.y, _leap_from.z)
 			if head.distance_to(under) < 1.5 and head.y < _ground_y - 0.4:
 				_phase = Phase.WINDUP
-				_phase_left = windup_time
+				# Leap with the horde: join the volley being called, or call one.
+				_phase_left = maxf(windup_time, _join_volley() - _now())
 		Phase.WINDUP:
 			_plan_leap(head)
 			_fx.show_cracks(_leap_from, 0.3 + 0.7 * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)))
@@ -493,35 +537,51 @@ func _update_phase(head: Vector3, delta: float) -> void:
 		Phase.DIVE:
 			if _phase_left <= 0.0:
 				_phase = Phase.TUNNEL
+				_roll_guess()
 
 
-## Where to burst out: leap_lead short of where its prey will be.
+## This leap's own guess at your path: the roach's, sideways spread wider.
+func _roll_guess() -> void:
+	_guess = WormLeap.roll_guess()
+	_guess.y *= guess_spread
+
+
+## The horde's next volley (seconds, _now() clock) for what it guards: join
+## one being called if it hasn't gone yet, otherwise call one.
+func _join_volley() -> float:
+	var key := guard_node.get_instance_id() if is_instance_valid(guard_node) else get_instance_id()
+	var at: float = _volleys.get(key, -INF)
+	if at < _now() + 0.15:
+		at = _now() + volley_gather
+		_volleys[key] = at
+	return at
+
+
+static func _now() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+
+## Where to burst out: leap_distance short of where it'll come down (its
+## guess at where you'll be by then), along the way it's coming.
 func _plan_leap(head: Vector3) -> void:
-	var prey := _predicted_prey()
-	var approach := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
+	var until_out := _phase_left + 0.3 if _phase == Phase.WINDUP else (0.2 if _phase == Phase.RISE else windup_time + 0.4)
+	var flight := WormLeap.air_time(leap_height, air_gravity, 1.0)
+	_leap_to = WormLeap.landing(head, target, until_out + flight, _guess)
+	var approach := Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z)
 	approach = approach.normalized() if approach.length_squared() > 0.01 else Vector3(_vel.x, 0.0, _vel.z).normalized()
-	_leap_from = prey - approach * leap_lead
+	_leap_from = Vector3(_leap_to.x, _ground_y, _leap_to.z) - approach * leap_distance
 
 
-func _predicted_prey() -> Vector3:
-	var prey := target.global_position
-	var moving = target.get("velocity")
-	if moving is Vector3:
-		prey += Vector3((moving as Vector3).x, 0.0, (moving as Vector3).z) * aim_ahead
-	return Vector3(prey.x, _ground_y, prey.z)
-
-
-## Out of the ground on the arc through its prey: up at sqrt(2 g h), across
-## to land land_beyond past them.
+## Out of the ground: up at sqrt(2 g h), across at whatever brings it down
+## on its guess at where you'll be.
 func _erupt(head: Vector3) -> void:
 	_phase = Phase.AIR
 	var rise := sqrt(2.0 * air_gravity * maxf(leap_height, 0.5))
-	var time_to_top := rise / air_gravity
-	var prey := _predicted_prey()
-	var gap := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
-	var onward := gap.normalized() if gap.length_squared() > 0.01 else Vector3(_vel.x, 0.0, _vel.z).normalized()
-	var across := (gap + onward * land_beyond) / (time_to_top * 2.0)
+	var flight := WormLeap.air_time(leap_height, air_gravity, 1.0)
+	_leap_to = WormLeap.landing(head, target, flight, _guess)
+	var across := Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z) / flight
 	_vel = Vector3(across.x, rise, across.z)
+	_air_left = 0.0
 	_fx.fade_cracks(1.5)
 	WormFX.punch(get_tree(), head, 4.0, shake_range)
 
@@ -561,6 +621,8 @@ func _look_out() -> void:
 				target = player
 		if target:
 			_state = State.HUNT
+			_phase = Phase.TUNNEL
+			_roll_guess()
 
 
 func _try_bite() -> void:

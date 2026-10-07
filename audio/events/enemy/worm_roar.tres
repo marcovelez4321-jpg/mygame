@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SoundEvent" format=3]
+
+[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="Resource" path="res://audio/events/enemy_attack.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+clip_folder = "res://audio/sfx/enemy/rusher"
+clip_prefix = "attack"
+fallback = ExtResource("2")
+volume_db = 6.0
+pitch_scale = 0.45
+pitch_variance = 0.05
+unit_size = 30.0
+bus = "Enemies"

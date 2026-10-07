@@ -70,20 +70,24 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export_range(0.0, 1.0, 0.05) var wander_breach_chance: float = 0.3
 
 @export_group("The Leap")
-## Its attack, over and over: it tunnels to a spot under its prey, sinks to
-## dive_depth while the ground shakes and cracks where it'll come out
-## (windup_time -- your warning), then shoots up and erupts right under them
-## -- through them, if they haven't moved -- on a huge arc leap_height high
-## that comes down land_beyond past them, the whole body pouring out after
-## it; landing sends out a shockwave; it dives back in, swings round
-## underground (dive_time) and goes again.
+## Its attack, over and over: it tunnels to a spot leap_distance away from
+## where it means to come down, sinks to dive_depth while the ground there
+## shakes and cracks and the rumble swells (windup_time -- your warning),
+## then erupts in a column of dirt with a roar and arcs leap_height high
+## down onto where it guesses you'll be -- the spitter roach's lead
+## (WormLeap) -- the whole body pouring out after it; landing sends out a
+## shockwave; it dives back in, swings round underground (dive_time) and
+## goes again.
 @export var leap_height: float = 9.0
-## It erupts this far short of the prey along its approach (0 = dead under
-## them), aiming where they'll be aim_ahead seconds on, and lands
-## land_beyond past them.
-@export var leap_lead: float = 0.8
-@export var aim_ahead: float = 0.35
-@export var land_beyond: float = 6.0
+## How far from its landing spot it erupts.
+@export var leap_distance: float = 7.0
+## In the air it keeps re-guessing and eases its sideways drift toward the
+## new guess, at most this many m/s² -- a smooth correction, the arc stays
+## an arc (0 = committed once it leaves the ground).
+@export var air_steer: float = 5.0
+## The re-aim eases in over this long after it leaves the ground (so the
+## turn into the new heading is gradual, never a snap).
+@export var steer_ramp: float = 0.6
 @export var dive_depth: float = 7.0
 @export var windup_time: float = 1.1
 @export var rise_speed: float = 22.0
@@ -103,8 +107,9 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export var shockwave_damage: float = 10.0
 
 @export_group("Spider Brood")
-## At the top of a big leap it hangs in the air for a moment (apex_hang
-## seconds, gravity down to apex_gravity of normal), a swelling rolls down
+## At the top of a big leap it lingers in the air for a moment (apex_hang
+## seconds, gravity down to apex_gravity of normal; the arc carries on, just
+## stretched at the top), a swelling rolls down
 ## its body (brood_bulge fatter), and brood_count spiders burst out of it
 ## one after another as the swelling passes -- each from its own segment,
 ## flung out sideways and up at brood_speed in a spray of blood -- then it
@@ -154,6 +159,10 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export var breach_sound: SoundEvent
 @export var bite_sound: SoundEvent
 @export var death_sound: SoundEvent
+## Its roar as it erupts.
+@export var roar_sound: SoundEvent
+## The rumble swells by up to this many dB through the wind-up.
+@export var windup_rumble_boost: float = 10.0
 ## The low rumble from under the floor while it's down there (empty = the
 ## generated placeholder, audio/sfx/worm_rumble.wav). Louder up close.
 @export var rumble_stream: AudioStream
@@ -182,6 +191,10 @@ var _phase := Phase.WANDER
 var _phase_left := 0.0
 ## Where it'll erupt (on the floor) and the velocity it leaves the ground with.
 var _leap_from := Vector3.ZERO
+## Where it means to come down, and this leap's guess at your path (WormLeap).
+var _leap_to := Vector3.ZERO
+var _guess := Vector2.ONE
+var _air_left := 0.0 # seconds since it left the ground (re-aim ramp)
 var _leap_height := 0.0
 var _breach_fx_left := 0.0
 
@@ -401,9 +414,7 @@ func _physics_process(delta: float) -> void:
 		# while the brood bursts out of it.
 		var hanging := _brood_left > 0.0
 		_vel.y -= air_gravity * (apex_gravity if hanging else 1.0) * delta
-		if hanging:
-			_vel.x = lerpf(_vel.x, 0.0, 2.0 * delta)
-			_vel.z = lerpf(_vel.z, 0.0, 2.0 * delta)
+		_reaim(head, delta)
 		_update_brood(delta)
 	elif _phase == Phase.RISE:
 		_vel = _vel.move_toward((_leap_from - head).normalized() * rise_speed, rise_speed * 4.0 * delta)
@@ -461,6 +472,7 @@ func _update_phase(head: Vector3, delta: float) -> void:
 		Phase.WANDER:
 			if hunting:
 				_phase = Phase.TUNNEL
+				_guess = WormLeap.roll_guess()
 		Phase.TUNNEL:
 			_plan_leap()
 			var under := Vector3(_leap_from.x, head.y, _leap_from.z)
@@ -486,45 +498,53 @@ func _update_phase(head: Vector3, delta: float) -> void:
 		Phase.DIVE:
 			if _phase_left <= 0.0:
 				_phase = Phase.TUNNEL
+				_guess = WormLeap.roll_guess()
+	_fx.rumble_boost(windup_rumble_boost * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)) if _phase == Phase.WINDUP else 0.0)
 
 
-## Where to come up: leap_lead short of the prey along the way it's coming
-## (so it erupts in front of / under them and arcs over), and how high --
-## a skimming hop now and then.
+## Where to come up: leap_distance short of where it'll come down (its
+## guess at where you'll be by then -- WormLeap), along the way it's coming.
 func _plan_leap() -> void:
 	if not is_instance_valid(target):
 		return
-	var prey := _predicted_prey()
 	var head := _pos[0]
-	var approach := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
+	var until_out := windup_time + 0.4
+	if _phase == Phase.WINDUP:
+		until_out = _phase_left + 0.3
+	elif _phase == Phase.RISE:
+		until_out = 0.2
+	var flight := WormLeap.air_time(leap_height, air_gravity, 1.0)
+	_leap_to = WormLeap.landing(head, target, until_out + flight, _guess)
+	var approach := Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z)
 	if approach.length_squared() < 0.25:
 		approach = Vector3(_vel.x, 0.0, _vel.z)
 	approach = approach.normalized() if approach.length_squared() > 0.0001 else Vector3.FORWARD
-	_leap_from = Vector3(prey.x, _ground_y, prey.z) - approach * leap_lead
+	_leap_from = Vector3(_leap_to.x, _ground_y, _leap_to.z) - approach * leap_distance
 
 
-## Breaking the surface: it leaves the ground on exactly the arc that peaks
-## over its prey -- straight up at sqrt(2 g h), across at whatever gets it
-## over them by the top -- and the ground explodes.
+## Breaking the surface: up at sqrt(2 g h), across at whatever brings it
+## down on its guess at where you'll be when it lands -- and the ground
+## explodes: a column of dirt and rubble, a roar, the camera hit.
 func _erupt(head: Vector3) -> void:
 	_phase = Phase.AIR
 	var height := hop_height if randf() < hop_chance else leap_height
 	_brood_this_leap = height >= leap_height and randf() < brood_chance and brood_count > 0
 	_brood_left = -1.0
 	var rise := sqrt(2.0 * air_gravity * maxf(height, 0.5))
-	var time_to_top := rise / air_gravity
-	# Across: from here, through (or right by) them on the way up, to land
-	# land_beyond past them as it comes back down.
 	var across := Vector3.ZERO
 	if is_instance_valid(target):
-		var prey := _predicted_prey()
-		var gap := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
-		var onward := gap.normalized() if gap.length_squared() > 0.01 else Vector3(_vel.x, 0.0, _vel.z).normalized()
-		across = (gap + onward * land_beyond) / (time_to_top * 2.0)
+		var flight := WormLeap.air_time(height, air_gravity, 1.0)
+		_leap_to = WormLeap.landing(head, target, flight, _guess)
+		across = Vector3(_leap_to.x - head.x, 0.0, _leap_to.z - head.z) / flight
 	_vel = Vector3(across.x, rise, across.z)
+	_air_left = 0.0
+	var surface := Vector3(head.x, _ground_y, head.z)
 	_shake_near(head, eruption_shake, shake_range)
-	WormFX.punch(get_tree(), head, 8.0, shake_range)
+	WormFX.punch(get_tree(), head, 9.0, shake_range)
 	_fx.fade_cracks()
+	_fx.rumble_boost(0.0)
+	_fx.eruption(surface, _radii[0])
+	SoundPlayer.play_3d(roar_sound, surface, get_tree().current_scene)
 
 
 ## The extras: tremors (ceiling dust, props jittering) while it's under the
@@ -540,6 +560,20 @@ func _jaw_fx(delta: float) -> void:
 		_fx.drool(head + forward * _radii[0], delta)
 		if _phase == Phase.AIR:
 			_fx.shed(_pos, _ground_y, delta)
+
+
+## Smooth re-aim in the air (air_steer): the same guess at your path,
+## brought up to date, and the sideways drift eased toward it.
+func _reaim(head: Vector3, delta: float) -> void:
+	if air_steer <= 0.0 or not is_instance_valid(target):
+		return
+	_air_left += delta
+	var ramp := clampf(_air_left / maxf(steer_ramp, 0.01), 0.0, 1.0)
+	ramp = ramp * ramp * (3.0 - 2.0 * ramp)
+	var want := WormLeap.steer_toward(head, _vel, target, _guess, _ground_y, air_gravity)
+	var flat := Vector3(_vel.x, 0.0, _vel.z).move_toward(want, air_steer * ramp * delta)
+	_vel.x = flat.x
+	_vel.z = flat.z
 
 
 ## The brood burst: at the top of the arc (rising stops) it starts; the
@@ -609,15 +643,6 @@ func _burst_spider(index: int) -> void:
 		_brood_pack.position = Vector3(at.x, _ground_y, at.z) # the level's root sits at the origin
 		world.add_child(_brood_pack)
 	_brood_pack.spawn_spiders(1, at + out * (_radii[index] + 0.2), out * brood_speed)
-
-
-## Where its prey will be aim_ahead seconds from now (on the floor).
-func _predicted_prey() -> Vector3:
-	var prey := target.global_position
-	var moving = target.get("velocity")
-	if moving is Vector3:
-		prey += Vector3((moving as Vector3).x, 0.0, (moving as Vector3).z) * aim_ahead
-	return Vector3(prey.x, _ground_y, prey.z)
 
 
 ## Landing: a ring of dust tears outward and throws back everything near --

@@ -125,6 +125,27 @@ func silence() -> void:
 	fade_cracks(0.5)
 
 
+## The rumble swelling (dB on top of its normal volume) -- the wind-up.
+func rumble_boost(db: float) -> void:
+	if _rumble:
+		_rumble.volume_db = rumble_volume_db + db
+
+
+## Bursting out: a column of dirt blasting up out of the hole -- a big dust
+## cloud and rubble at once, then three bursts climbing the column -- for a
+## worm `radius` thick.
+func eruption(at: Vector3, radius: float) -> void:
+	burst(at, Vector3.UP)
+	burst(at + Vector3(randf_range(-0.5, 0.5), 0.0, randf_range(-0.5, 0.5)) * radius, Vector3.UP)
+	var world := get_tree().current_scene
+	for i in 3:
+		var height := (i + 1) * radius * 1.5
+		var delay := 0.06 * (i + 1)
+		get_tree().create_timer(delay).timeout.connect(func() -> void:
+			if is_instance_valid(world):
+				BloodFX.spawn_impact(world, at + Vector3.UP * height, Vector3.UP, DIRT_COLOR, 3.0 - i * 0.5))
+
+
 ## The ground cracking open at `at` (on the floor), `grow` 0..1.
 func show_cracks(at: Vector3, grow: float) -> void:
 	if _crack_tween:

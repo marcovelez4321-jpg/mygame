@@ -40,7 +40,7 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 ## Deepmaws lurking under the floor below the clump, coming up at anyone
 ## who gets near it (on a wall or ceiling clump: under the floor beneath it).
 @export var defender_scene: PackedScene = preload("res://scenes/enemy/deepmaw.tscn")
-@export var defender_count: int = 1
+@export var defender_count: int = 0 # off: Deepmaws guard the worm boss, not the barnacles
 
 const GROUP := "barnacle_clusters"
 

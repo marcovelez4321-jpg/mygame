@@ -7,6 +7,7 @@
 [ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="5_breach"]
 [ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="6_bite"]
 [ext_resource type="Resource" path="res://audio/events/enemy/roach_splat.tres" id="7_death"]
+[ext_resource type="Resource" path="res://audio/events/enemy/worm_roar.tres" id="9_roar"]
 
 [sub_resource type="StandardMaterial3D" id="WormSkin"]
 albedo_texture = ExtResource("3_skin")
@@ -25,6 +26,7 @@ maw_material = SubResource("WormMaw")
 breach_sound = ExtResource("5_breach")
 bite_sound = ExtResource("6_bite")
 death_sound = ExtResource("7_death")
+roar_sound = ExtResource("9_roar")
 
 [node name="Health" type="Node" parent="."]
 script = ExtResource("2_health")
