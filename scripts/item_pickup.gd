@@ -34,8 +34,8 @@ func _on_body_entered(body: Node3D) -> void:
 		return # full up: it stays for later
 	amount -= taken
 	SoundPlayer.play_3d(pickup_sound, global_position, get_tree().current_scene)
-	var what := "pills" if item == WeaponController.Item.PILLS else ("a bandage" if taken == 1 else "%d bandages" % taken)
-	MapIO.show_message(get_tree(), "You picked up %s" % what)
+	var what := "Pills" if item == WeaponController.Item.PILLS else ("Bandage" if taken == 1 else "Bandages")
+	MapIO.show_pickup(get_tree(), "+%d %s" % [taken, what])
 	if amount <= 0:
 		queue_free()
 

@@ -50,7 +50,7 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 	player.give_key(key_name())
 	SoundPlayer.play_3d(PICKUP_SOUND, global_position, get_tree().current_scene)
-	MapIO.show_message(get_tree(), "You got the %s key" % key_name())
+	MapIO.show_pickup(get_tree(), "Picked up the %s key" % key_name())
 	queue_free()
 
 

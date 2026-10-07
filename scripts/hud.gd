@@ -54,6 +54,8 @@ var _use_prompt_label: Label
 ## The rip-the-leech-off meter (_build_leech_meter()).
 var _leech_box: VBoxContainer
 var _leech_bar: ProgressBar
+## Pills and bandages carried, bottom centre.
+var _items_label: Label
 
 
 func _ready() -> void:
@@ -63,6 +65,7 @@ func _ready() -> void:
 	_use_prompt_label = _make_center_label(0.56, 20)
 	_use_prompt_label.visible = false
 	_build_leech_meter()
+	_items_label = _make_center_label(0.93, 18)
 	call_deferred("_find_player")
 
 
@@ -107,11 +110,13 @@ func _process(_delta: float) -> void:
 	# Grenades for Q, once you've found some.
 	if player.weapons.grenade_weapon() and not (weapon and weapon.throws_grenade):
 		ammo_label.text += "   [Q] Grenades: %d" % player.weapons.grenade_count()
-	# Healing items, once you're carrying some.
+	# Healing items, once you're carrying some: their own line, bottom centre.
+	var items: PackedStringArray = []
 	if player.weapons.pills > 0:
-		ammo_label.text += "   [H] Pills: %d" % player.weapons.pills
+		items.append("[H] Pills x%d" % player.weapons.pills)
 	if player.weapons.bandages > 0:
-		ammo_label.text += "   [B] Bandages: %d" % player.weapons.bandages
+		items.append("[B] Bandages x%d" % player.weapons.bandages)
+	_items_label.text = "     ".join(items)
 	health_label.text = "Health: %d" % ceili(_player_health.current_health)
 	# Aiming down the sights: the sights (or scope) are the crosshair now.
 	$Crosshair.visible = player.weapons.aim_amount() <= 0.0
@@ -276,14 +281,20 @@ func _on_player_died(_attacker_id: int, _is_critical: bool) -> void:
 ## Holds fully visible for a beat, then fades out.
 func _on_picked_up(weapon: WeaponData, ammo_type: WeaponData.AmmoType, ammo_amount: int) -> void:
 	if weapon != null:
-		pickup_label.text = "Picked up %s" % weapon.weapon_name
+		show_pickup("Picked up %s" % weapon.weapon_name)
 	else:
 		# WeaponData.AmmoType.keys() returns an untyped Array -- indexing it
 		# yields a Variant that := can't statically resolve, even though it's
 		# always a String at runtime (same class of bug as physics_grabber.gd's
 		# earlier "offset" crash).
 		var ammo_name: String = WeaponData.AmmoType.keys()[ammo_type].capitalize()
-		pickup_label.text = "+%d %s" % [ammo_amount, ammo_name]
+		show_pickup("+%d %s" % [ammo_amount, ammo_name])
+
+
+## The pickup notice, for anything added to your inventory (weapons and ammo
+## here; pills, bandages and keys through MapIO.show_pickup()).
+func show_pickup(text: String) -> void:
+	pickup_label.text = text
 
 	if _pickup_tween:
 		_pickup_tween.kill()

@@ -441,3 +441,12 @@ them:
 - 2026-10-07: PKM retuned against the Submachine Gun (7 dmg, 0.0667 s = 900 rpm, recoil_scale 4.5, jitter 0.4, spread 3.5): PKM 10 dmg (+43%), 0.055 s (~1090 rpm, faster), same recoil pattern shape at recoil_scale 5.2 (+~15%) and jitter 0.45 -- a little more kick -- spread 3.8. Rule 3 flag: it out-DPSes the SMG by ~75% (182 vs 105 per second); the 100-round belt and 3.2 s reload are what keep it honest.
 
 - 2026-10-07: PKM reload 3.2 -> 4.0 s.
+
+- 2026-10-07: **Lowered pistol pose, leeches flat, pickup notices, centred text, a game font, a meta error.**
+  - Pistol/grenade hold: "Lower Pistol.fbx" (Mixamo, the character sits -- harmless: the first-person arms freeze the first frame, hide the head and legs, and are placed by where the right hand lands) now imports with the Mixamo bone map and saves its animation to art/animations/LowerPistol.res; starter_gun.tres and grenade.tres use it and their arms_position was cleared so `Viewmodel._auto_place_arms()` puts the hand back on the grip (fine-tune with F2/F3). The gunner enemies keep PistolIdle.res (they play it full-body, so a sitting pose would sit them down).
+  - Leech: `_lay_flat()` measures the model and turns it so its thinnest side is up and its longest runs along Z, resting on the ground -- the kit FBX carries a baked Blender axis turn and came in on its side, so it orients itself whatever the import did. Latched: the mirror-flip squirm stops (it flapped across the screen), it lies flat over the middle of the view with a slight writhe, and `face_scale` 2.4 -> 1.4 leaves the edges of the screen visible.
+  - Pickup notices: everything added to the inventory now uses the HUD's bottom-centre pickup pop-up (`HUD.show_pickup()`, or `MapIO.show_pickup()` from anywhere): weapons, ammo, grenades, pills/bandages ("+1 Pills"), keys.
+  - Centred: pills/bandages counts moved off the top-left ammo line (they overflowed it) to their own bottom-centre line; Graphics menu headings centred.
+  - Font: the project now has a theme, scenes/ui/game_theme.tres (Project Settings > GUI > Theme > Custom). Open it and set Default Font (and Default Font Size) in the Inspector -- every HUD/menu label uses it; per-label size overrides still apply.
+  - Fixed "get_meta: no 'meta' values with the key 'provoked_by'" (enemy.gd _protect_gang, rat.gd _remove): Godot treats a null default in get_meta() as no default, so a missing key errors. Convention: `get_meta(k) if has_meta(k) else null`.
+  - Untested at time of writing.

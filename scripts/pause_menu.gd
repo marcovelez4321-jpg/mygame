@@ -308,6 +308,7 @@ func _add_toggle(vbox: VBoxContainer, text: String, on: bool, apply: Callable) -
 func _add_heading(vbox: VBoxContainer, text: String) -> void:
 	var heading := Label.new()
 	heading.text = text
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 20)
 	vbox.add_child(heading)
 

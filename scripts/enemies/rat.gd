@@ -406,7 +406,7 @@ func _remove() -> void:
 	_state = State.DEAD
 	_prey = null # anything in its jaws drops (it notices: is_holding() goes false)
 	if swarm:
-		var attacker = get_meta("provoked_by", null)
+		var attacker = get_meta("provoked_by") if has_meta("provoked_by") else null
 		if Factions.provoked_by(self, attacker):
 			swarm.threatened_by(attacker) # killing one threatens the pack
 		swarm.forget(self)

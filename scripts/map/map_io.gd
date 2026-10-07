@@ -57,6 +57,16 @@ static func find_broken_links(tree: SceneTree) -> PackedStringArray:
 
 
 ## A Quake-style centre-screen message, like "You need the gold key".
+## A pickup notice -- something added to your inventory -- the same pop-up as
+## a weapon or ammo pickup (bottom centre of the HUD).
+static func show_pickup(tree: SceneTree, text: String) -> void:
+	if text.is_empty() or tree == null:
+		return
+	var hud := tree.get_first_node_in_group("hud")
+	if hud and hud.has_method("show_pickup"):
+		hud.call("show_pickup", text)
+
+
 static func show_message(tree: SceneTree, text: String) -> void:
 	if text.is_empty() or tree == null:
 		return

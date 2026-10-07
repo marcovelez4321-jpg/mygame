@@ -550,7 +550,7 @@ func alert(target: Node3D) -> void:
 ## hence deferred) becomes the whole gang's problem -- they turn on it even
 ## mid-fight with something else (revenge priority), and the idle ones come.
 func _protect_gang() -> void:
-	var attacker = get_meta("provoked_by", null)
+	var attacker = get_meta("provoked_by") if has_meta("provoked_by") else null
 	if not Factions.provoked_by(self, attacker) or not attacker is Node3D:
 		return
 	for other in _tweakers_within(alert_radius):

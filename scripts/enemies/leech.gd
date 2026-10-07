@@ -39,10 +39,10 @@ enum State { CRAWL, LEAP, LATCHED, DEAD }
 ## and the meter drains this much a second -- so you have to click fast.
 @export var pull_per_click: float = 0.12
 @export var meter_drain: float = 0.45
-## On your face: this far in front of your camera, this many times its size
-## (big enough to cover most of the screen).
+## On your face: this far in front of your camera, this many times its size --
+## flat across the middle of your view, the edges of the screen still clear.
 @export var face_distance: float = 0.22
-@export var face_scale: float = 2.4
+@export var face_scale: float = 1.4
 
 @export_group("Look")
 ## Mirror-flips per second while crawling (faster when latched).
@@ -50,7 +50,8 @@ enum State { CRAWL, LEAP, LATCHED, DEAD }
 ## How much it swells on each pulse (0.15 = 15%).
 @export var pulse_amount: float = 0.15
 @export var model_scale: float = 1.0
-## Turns the model if its head points the wrong way (degrees).
+## Turns the model if its head points the wrong way (degrees). (Which way is
+## up it works out itself: see _lay_flat().)
 @export var model_yaw: float = 0.0
 ## Laid over every mesh of the model (the kit's texture).
 @export var skin_material: Material
@@ -90,10 +91,48 @@ func _ready() -> void:
 	if skin_material:
 		for mesh in _swell.find_children("*", "MeshInstance3D", true, false):
 			(mesh as MeshInstance3D).material_override = skin_material
+	_lay_flat()
 	_swell.scale = Vector3.ONE * model_scale
 	_swell.rotation_degrees.y = model_yaw
 	_start_squirm(squirm_rate)
 	_leap_cooldown_left = randf() * leap_cooldown
+
+
+## The kit's FBX comes with a Blender axis turn baked in, and it came in lying
+## on its side. Rather than trust any one import, this measures the model and
+## turns it so its thinnest side is up and its longest runs forward (Z) --
+## flat on its belly whatever the importer did -- resting on the ground at
+## the body's origin.
+func _lay_flat() -> void:
+	var model := _swell.get_node_or_null("Model") as Node3D
+	if model == null:
+		return
+	var bounds := AABB()
+	var has_bounds := false
+	var to_model := model.global_transform.affine_inverse()
+	for node in model.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		var box := to_model * mesh.global_transform * mesh.get_aabb()
+		bounds = box if not has_bounds else bounds.merge(box)
+		has_bounds = true
+	if not has_bounds:
+		return
+	var size := bounds.size
+	var thin := 0 if size.x <= size.y and size.x <= size.z else (1 if size.y <= size.z else 2)
+	var long := 0 if size.x >= size.y and size.x >= size.z else (1 if size.y >= size.z else 2)
+	if thin == long:
+		return # a cube: nothing to lay flat
+	var mid := 3 - thin - long
+	var columns := [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
+	columns[thin] = Vector3.UP
+	columns[long] = Vector3.BACK
+	columns[mid] = Vector3.RIGHT
+	var turn := Basis(columns[0], columns[1], columns[2])
+	if turn.determinant() < 0.0:
+		columns[mid] = Vector3.LEFT # keep it a rotation, not a mirror
+		turn = Basis(columns[0], columns[1], columns[2])
+	var center := turn * bounds.get_center()
+	model.transform = Transform3D(turn, Vector3(-center.x, -center.y + size[thin] * 0.5, -center.z))
 
 
 ## Writhing: the model mirror-flips across its width and back, smoothly
@@ -211,7 +250,11 @@ func _latch() -> void:
 	_meter = 0.0
 	_bite_left = 0.0
 	weapons.call("latch_leech", self)
-	_start_squirm(squirm_rate * 2.5)
+	# Flat on your face: no flipping (that flapped across the screen), just
+	# the slow swell and a little writhe (_cling_to_face()).
+	if _squirm:
+		_squirm.kill()
+	_flip.scale.x = 1.0
 
 
 func _think_latched(delta: float) -> void:
@@ -241,8 +284,9 @@ func _cling_to_face() -> void:
 		return
 	var view := camera.global_basis
 	global_position = camera.global_position - view.z * face_distance - view.y * 0.03
-	var away := -view.z # its back faces away, its belly at you
-	var along := view.y
+	var away := -view.z # its back faces away, its belly flat against you
+	var writhe := sin(Time.get_ticks_msec() * 0.006) * 0.08 # a slight twist, staying flat
+	var along := view.y.rotated(away, writhe)
 	_visual.global_basis = Basis(away.cross(along), away, along) * Basis.from_scale(Vector3.ONE * face_scale)
 
 
