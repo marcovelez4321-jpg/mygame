@@ -802,7 +802,7 @@ func _arms_only_mesh(mesh: Mesh, skin: Skin, skeleton: Skeleton3D, keep_bones: D
 		if kept.is_empty():
 			continue
 		arrays[Mesh.ARRAY_INDEX] = kept
-		var flags := mesh.surface_get_format(surface) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
+		var flags: int = int(mesh.surface_get_format(surface)) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
 		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
 		out.surface_set_material(out.get_surface_count() - 1, mesh.surface_get_material(surface))
 		kept_surfaces.append(surface)
