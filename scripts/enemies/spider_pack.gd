@@ -35,9 +35,9 @@ const SPIDER_SCENE := preload("res://scenes/enemy/spider.tscn")
 ## patrol pace (the same stop-start bursts and breathing spread too).
 @export_range(0.05, 1.0, 0.05) var roam_pace: float = 0.5
 ## How spread out the pack sits, and how much room each keeps.
-@export var pack_radius_min: float = 0.6
-@export var pack_radius_max: float = 2.4
-@export var separation_distance: float = 0.6
+@export var pack_radius_min: float = 1.0
+@export var pack_radius_max: float = 3.5
+@export var separation_distance: float = 1.2
 @export var separation_strength: float = 1.6
 ## Frees itself once every spider is dead (off for a nest's pack: more come).
 @export var free_when_empty: bool = true
@@ -70,8 +70,8 @@ const SPIDER_SCENE := preload("res://scenes/enemy/spider.tscn")
 @export var charge_range: float = 9.0
 @export_range(0.1, 1.0, 0.05) var creep_pace: float = 0.55
 ## The ring floor spiders close in on around their prey.
-@export var engulf_radius_min: float = 0.4
-@export var engulf_radius_max: float = 1.6
+@export var engulf_radius_min: float = 0.7
+@export var engulf_radius_max: float = 2.2
 @export var dart_speed: float = 1.4
 @export var churn_speed: float = 0.6
 

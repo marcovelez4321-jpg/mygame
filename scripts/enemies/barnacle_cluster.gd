@@ -34,6 +34,9 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 @export var fungus_color: Color = Color(0.26, 0.24, 0.12)
 @export var leech_scene: PackedScene = preload("res://scenes/enemy/leech.tscn")
 @export var leech_count: int = 3
+## Off for now: leeches are switched off game-wide until they're fixed. Turn
+## this on to bring back a clump's leech guards.
+@export var spawn_leeches: bool = false
 
 const GROUP := "barnacle_clusters"
 
@@ -73,7 +76,7 @@ func _grow() -> void:
 			barnacle.spider_pack = pack
 			add_child(barnacle)
 			barnacle.global_transform = Transform3D(_basis_on(hit.normal), hit.position)
-		for i in leech_count:
+		for i in (leech_count if spawn_leeches else 0):
 			var flat := Vector2.from_angle(randf() * TAU) * randf_range(radius, radius * 1.8)
 			var leech := leech_scene.instantiate() as Node3D
 			add_child(leech)

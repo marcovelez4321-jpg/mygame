@@ -12,7 +12,7 @@ roughness = 0.8
 texture_filter = 0
 
 [sub_resource type="SphereShape3D" id="SpiderShape"]
-radius = 0.2
+radius = 0.4
 
 [node name="Spider" type="AnimatableBody3D"]
 sync_to_physics = false

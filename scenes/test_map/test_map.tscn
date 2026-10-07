@@ -24,8 +24,6 @@
 [ext_resource type="PackedScene" path="res://scenes/pills_pickup.tscn" id="31_pills"]
 [ext_resource type="PackedScene" path="res://scenes/bandage_pickup.tscn" id="32_bandage"]
 [ext_resource type="PackedScene" path="res://scenes/pkm_pickup.tscn" id="33_pkm"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/zombie.tscn" id="34_zombie"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/zombie_rusher.tscn" id="35_zombie_rusher"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="36_spiders"]
 [ext_resource type="Script" path="res://scripts/enemies/barnacle_scatter.gd" id="37_scatter"]
 
@@ -838,12 +836,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.5, -40)
 
 [node name="PKMPickup" parent="." unique_id=1813813055 instance=ExtResource("33_pkm")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.6, 20)
-
-[node name="ZombieTest" parent="." unique_id=1938475521 instance=ExtResource("34_zombie")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 30)
-
-[node name="ZombieRusherTest" parent="." unique_id=1203948577 instance=ExtResource("35_zombie_rusher")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 30)
 
 [node name="TallEdgeWalls" type="Node3D" parent="." unique_id=795425564]
 

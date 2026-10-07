@@ -40,7 +40,7 @@ const WALL_DOT := 0.7
 
 @export_group("Size")
 ## Tip-to-tip leg span of a size-1 spider, meters.
-@export var leg_span: float = 0.8
+@export var leg_span: float = 1.6
 ## Every spider rolls its own size in this range: bigger is tougher (by
 ## size²) and a little slower.
 @export var size_min: float = 0.8
@@ -59,7 +59,7 @@ const WALL_DOT := 0.7
 @export var bite_damage: float = 6.0
 @export var bite_interval: float = 0.7
 ## How close (in meters, times its size) to the target's middle it bites from.
-@export var bite_reach: float = 0.9
+@export var bite_reach: float = 1.4
 
 @export_group("Leap")
 ## On the floor, it leaps at prey this far away (like a rat)...
@@ -97,6 +97,9 @@ const WALL_DOT := 0.7
 ## Feet reach this many seconds ahead of where the body's going.
 @export var step_lead: float = 0.08
 @export var ik_iterations: int = 3
+## Furthest a hip (the first leg segment) swings forward or back from rest,
+## radians.
+@export var hip_swing_limit: float = 1.0
 ## Past this far from the camera the legs solve every other frame, and past
 ## ik_far_distance not at all (they hold their pose).
 @export var ik_full_distance: float = 15.0
@@ -175,6 +178,8 @@ var _skeleton: Skeleton3D
 var _legs: Array[Leg] = []
 var _body_bone := -1
 var _body_rest := Transform3D.IDENTITY
+## The spider's "up" in the skeleton's own space: the axis its hips swing round.
+var _up_skeleton := Vector3.UP
 var _abdomen := -1
 var _abdomen_rest := Basis.IDENTITY
 var _fangs: Array[int] = []
@@ -716,6 +721,7 @@ func _orient_model(model: Node3D) -> void:
 	var side := left - right
 	var up := forward.cross(side).normalized()
 	forward = (forward - up * forward.dot(up)).normalized()
+	_up_skeleton = (to_model.basis.inverse() * up).normalized()
 	var axes := Basis(forward.cross(up), up, -forward) # the model's own right/up/back
 	var turn := axes.transposed() # ...turned onto ours
 	var span := 0.0
@@ -975,6 +981,20 @@ func _solve(leg: Leg, target: Vector3) -> void:
 	for joint in leg.rest_joints:
 		joints.append(_body_rest * joint)
 	var root := joints[0]
+	# The hip swings first: the whole leg turns round the body's up axis at
+	# its base until it points at the foot, so the first segment (the coxa)
+	# sweeps forward and back with every step the way a spider's does. Then
+	# FABRIK bends the rest. (Without this the coxa barely moved: FABRIK puts
+	# almost all the bend into the long outer segments.)
+	var rest_reach := joints[4] - root
+	var want_reach := target - root
+	rest_reach -= _up_skeleton * rest_reach.dot(_up_skeleton)
+	want_reach -= _up_skeleton * want_reach.dot(_up_skeleton)
+	if rest_reach.length_squared() > 0.000001 and want_reach.length_squared() > 0.000001:
+		var swing := clampf(rest_reach.signed_angle_to(want_reach, _up_skeleton), -hip_swing_limit, hip_swing_limit)
+		var hip := Basis(_up_skeleton, swing)
+		for i in range(1, 5):
+			joints[i] = root + hip * (joints[i] - root)
 	var total := 0.0
 	for length in leg.lengths:
 		total += length
