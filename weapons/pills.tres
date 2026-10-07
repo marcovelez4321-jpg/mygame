@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cj1d5pc5nsylg"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://bftu6dpu5q53h" path="res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Items & Weapons/pills_bottle_2.glb" id="2_model"]
@@ -8,11 +8,14 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Pills"
-heal_item = 0
 magazine_size = 1
+heal_item = 0
 draw_time = 0.3
 viewmodel_scene = ExtResource("2_model")
-viewmodel_position = Vector3(0.15, -0.155, -0.45)
+viewmodel_position = Vector3(-0.11921151, -0.17814137, -0.5145363)
+viewmodel_rotation_degrees = Vector3(-25.22266, -24.628641, 0)
 placeholder_color = Color(0.9, 0.9, 0.9, 1)
 hold_animation = ExtResource("3_hold")
+arms_position = Vector3(-0.08371919, -1.0849925, 0.11238939)
+arms_rotation_degrees = Vector3(0.8860352, 0, 0)
 switch_sound = ExtResource("4_switch")
