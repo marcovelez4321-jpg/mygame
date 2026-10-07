@@ -89,7 +89,7 @@ enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 @export var volley_gather: float = 1.2
 ## In a volley they breach one after another, this many seconds apart (the
 ## first at the volley time, the next breach_stagger later, and so on).
-@export var breach_stagger: float = 0.5
+@export var breach_stagger: float = 1.0
 @export var guess_spread: float = 1.8
 ## In the air it eases its sideways drift toward its updated guess, at most
 ## this many m/s² (0 = committed once out).
