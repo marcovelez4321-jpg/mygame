@@ -102,6 +102,21 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export var shockwave_lift: float = 6.0
 @export var shockwave_damage: float = 10.0
 
+@export_group("Spider Brood")
+## At the top of a big leap it hangs in the air for a moment (apex_hang
+## seconds, gravity down to apex_gravity of normal), a swelling rolls down
+## its body (brood_bulge fatter), and brood_count spiders burst out of it
+## one after another as the swelling passes -- each from its own segment,
+## flung out sideways and up at brood_speed in a spray of blood -- then it
+## falls and lands. They join one spider pack of its own (Population caps
+## them like any spider). Skimming hops don't do it; brood_chance per leap.
+@export var brood_count: int = 6
+@export_range(0.0, 1.0, 0.05) var brood_chance: float = 1.0
+@export var brood_speed: float = 7.0
+@export var brood_bulge: float = 0.7
+@export var apex_hang: float = 0.6
+@export_range(0.0, 1.0, 0.05) var apex_gravity: float = 0.15
+
 @export_group("Escorts")
 ## Deepmaws that swim along under it and come up at anyone near it
 ## (Deepmaw.guard_node = this worm). Host only, spawned with it.
@@ -153,6 +168,13 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 var target: Node3D
 var _fx: WormFX
 var _time := 0.0
+## The brood burst at the top of a leap: seconds of it left (below 0 = not
+## bursting), whether this leap gets one, and which segments still have a
+## spider in them.
+var _brood_left := -1.0
+var _brood_this_leap := false
+var _brood_segments: Array[int] = []
+var _brood_pack: SpiderPack
 
 ## The attack cycle (The Leap).
 enum Phase { WANDER, TUNNEL, WINDUP, RISE, AIR, DIVE }
@@ -375,7 +397,14 @@ func _physics_process(delta: float) -> void:
 	_inside = _in_ground(head)
 	_update_phase(head, delta)
 	if _phase == Phase.AIR:
-		_vel.y -= air_gravity * delta # no control up there: the arc is set
+		# No control up there: the arc is set -- except it hangs at the top
+		# while the brood bursts out of it.
+		var hanging := _brood_left > 0.0
+		_vel.y -= air_gravity * (apex_gravity if hanging else 1.0) * delta
+		if hanging:
+			_vel.x = lerpf(_vel.x, 0.0, 2.0 * delta)
+			_vel.z = lerpf(_vel.z, 0.0, 2.0 * delta)
+		_update_brood(delta)
 	elif _phase == Phase.RISE:
 		_vel = _vel.move_toward((_leap_from - head).normalized() * rise_speed, rise_speed * 4.0 * delta)
 	elif _inside:
@@ -416,7 +445,7 @@ func _place_segments() -> void:
 		_segments[i].global_transform = Transform3D(Basis.looking_at(forward.normalized(), up), _pos[i])
 		# Peristalsis: a bulge rolling down the body (fatter across, not longer).
 		var wave := sin(_time * bulge_speed * TAU - float(i) * TAU / maxf(bulge_spacing, 1.0))
-		var swell := 1.0 + bulge_amount * pow(maxf(wave, 0.0), 6.0)
+		var swell := 1.0 + bulge_amount * pow(maxf(wave, 0.0), 6.0) + _brood_swell(i)
 		_visuals[i].scale = Vector3(swell, swell, 1.0)
 
 
@@ -480,6 +509,8 @@ func _plan_leap() -> void:
 func _erupt(head: Vector3) -> void:
 	_phase = Phase.AIR
 	var height := hop_height if randf() < hop_chance else leap_height
+	_brood_this_leap = height >= leap_height and randf() < brood_chance and brood_count > 0
+	_brood_left = -1.0
 	var rise := sqrt(2.0 * air_gravity * maxf(height, 0.5))
 	var time_to_top := rise / air_gravity
 	# Across: from here, through (or right by) them on the way up, to land
@@ -509,6 +540,75 @@ func _jaw_fx(delta: float) -> void:
 		_fx.drool(head + forward * _radii[0], delta)
 		if _phase == Phase.AIR:
 			_fx.shed(_pos, _ground_y, delta)
+
+
+## The brood burst: at the top of the arc (rising stops) it starts; the
+## swelling rolls from just behind the head to the tail over apex_hang
+## seconds and each brood segment bursts as the swelling reaches it.
+func _update_brood(delta: float) -> void:
+	if not _brood_this_leap:
+		return
+	if _brood_left < 0.0:
+		if _vel.y > 0.0:
+			return # still rising
+		_brood_left = apex_hang
+		_brood_segments.clear()
+		var count := mini(brood_count, _segments.size() - 2)
+		for k in count:
+			_brood_segments.append(2 + int(float(k + 1) / (count + 1) * (_segments.size() - 3)))
+		_shake_near(_pos[0], breach_shake, shake_range)
+		return
+	_brood_left -= delta
+	var front := _brood_front()
+	while not _brood_segments.is_empty() and float(_brood_segments[0]) <= front:
+		_burst_spider(_brood_segments.pop_front())
+	if _brood_left <= 0.0:
+		for index in _brood_segments:
+			_burst_spider(index)
+		_brood_segments.clear()
+		_brood_this_leap = false
+		_brood_left = -1.0
+
+
+## Where along the body (segment index) the brood swelling is now.
+func _brood_front() -> float:
+	var t := 1.0 - clampf(_brood_left / maxf(apex_hang, 0.01), 0.0, 1.0)
+	var eased := t * t * (3.0 - 2.0 * t)
+	return lerpf(1.0, float(_segments.size()), eased)
+
+
+## How much fatter segment i is from the brood swelling rolling past.
+func _brood_swell(i: int) -> float:
+	if _brood_left <= 0.0:
+		return 0.0
+	var off := (float(i) - _brood_front()) / 1.5
+	return brood_bulge * exp(-off * off)
+
+
+## One spider tears out of segment `index`: flung out sideways (a random way
+## round the body) and up, in a burst of blood.
+func _burst_spider(index: int) -> void:
+	if index < 0 or index >= _pos.size():
+		return
+	var at := _pos[index]
+	var along := (_pos[index - 1] - at).normalized() if index > 0 else _vel.normalized()
+	var side := along.cross(Vector3.UP)
+	if side.length_squared() < 0.01:
+		side = Vector3.RIGHT
+	var out := side.normalized().rotated(along, randf_range(-PI, PI) * 0.6)
+	if out.y < 0.0:
+		out = -out
+	out = (out + Vector3.UP * 0.4).normalized()
+	var world := get_tree().current_scene
+	BloodFX.spawn_impact(world, at + out * _radii[index], out, blood_color, 2.0)
+	SoundPlayer.play_3d(breach_sound, at, world, 0.6)
+	if not is_instance_valid(_brood_pack):
+		_brood_pack = SpiderPack.new()
+		_brood_pack.start_count = 0
+		_brood_pack.free_when_empty = false # more come with every leap
+		_brood_pack.position = Vector3(at.x, _ground_y, at.z) # the level's root sits at the origin
+		world.add_child(_brood_pack)
+	_brood_pack.spawn_spiders(1, at + out * (_radii[index] + 0.2), out * brood_speed)
 
 
 ## Where its prey will be aim_ahead seconds from now (on the floor).
@@ -549,6 +649,8 @@ func _shockwave(at: Vector3) -> void:
 		var owner_node := body.get_parent()
 		if owner_node is Deepmaw and (owner_node as Deepmaw).guard_node == self:
 			continue # its own escort
+		if body is Spider and is_instance_valid(_brood_pack) and (body as Spider).pack == _brood_pack:
+			continue # its own brood
 		var away := body.global_position - center
 		away.y = 0.0
 		var distance := away.length()
