@@ -22,9 +22,9 @@ buses/default_bus_layout="uid://c7rqaqmls4uen"
 [autoload]
 
 GameSettings="*res://scripts/game_settings.gd"
+SewerLook="*res://scenes/sewer_look.tscn"
 PauseMenu="*res://scenes/ui/pause_menu.tscn"
 PS1Dither="*res://scenes/ui/ps1_dither.tscn"
-SewerLook="*res://scenes/sewer_look.tscn"
 
 [display]
 
@@ -72,4 +72,28 @@ sewer_grime={
 sewer_grime_noise={
 "type": "sampler2D",
 "value": ""
+}
+sewer_grime_color={
+"type": "color",
+"value": Color(0.3, 0.29, 0.17, 1)
+}
+sewer_wall_streaks={
+"type": "float",
+"value": 0.0
+}
+sewer_wall_coverage={
+"type": "float",
+"value": 0.0
+}
+sewer_floor_blotches={
+"type": "float",
+"value": 0.0
+}
+sewer_puddles={
+"type": "float",
+"value": 0.0
+}
+sewer_puddle_coverage={
+"type": "float",
+"value": 0.0
 }

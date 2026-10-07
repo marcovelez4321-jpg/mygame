@@ -26,6 +26,15 @@ render_mode diffuse_lambert, specular_schlick_ggx;
 global uniform float sewer_affine;
 global uniform float sewer_grime;
 global uniform sampler2D sewer_grime_noise : filter_linear_mipmap, repeat_enable;
+// The grime's look -- globals too, so the Graphics menu's sliders (SewerLook)
+// change every surface live. Coverage = how much of the surface it shows up
+// on (0 = none, 1 = most of it); the others how strong it is there.
+global uniform vec4 sewer_grime_color;
+global uniform float sewer_wall_streaks;
+global uniform float sewer_wall_coverage;
+global uniform float sewer_floor_blotches;
+global uniform float sewer_puddles;
+global uniform float sewer_puddle_coverage;
 
 uniform sampler2D albedo_texture : source_color, filter_nearest_mipmap, repeat_enable;
 uniform bool has_texture = false;
@@ -34,12 +43,6 @@ uniform vec3 uv1_scale = vec3(1.0);
 uniform vec3 uv1_offset = vec3(0.0);
 uniform float roughness : hint_range(0.0, 1.0) = 1.0;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
-
-// How strong the filth and the puddles get, and their colour.
-uniform vec3 grime_color : source_color = vec3(0.3, 0.29, 0.17);
-uniform float wall_streaks : hint_range(0.0, 1.0) = 0.75;
-uniform float floor_blotches : hint_range(0.0, 1.0) = 0.45;
-uniform float puddles : hint_range(0.0, 1.0) = 0.8;
 
 varying vec3 affine_uvw;
 varying vec3 world_pos;
@@ -65,13 +68,15 @@ void fragment() {
 		float wall = 1.0 - abs(n.y);
 		// Walls: noise stretched tall into streaks running down.
 		vec2 wall_uv = vec2((world_pos.x + world_pos.z) * 0.35, world_pos.y * 0.04);
-		float streak = smoothstep(0.42, 0.78, texture(sewer_grime_noise, wall_uv).r);
+		float wall_start = mix(0.8, 0.35, sewer_wall_coverage);
+		float streak = smoothstep(wall_start, wall_start + 0.25, texture(sewer_grime_noise, wall_uv).r);
 		// Floors: broad blotches, and the wettest of them puddles.
 		float spot = texture(sewer_grime_noise, world_pos.xz * 0.06).r;
 		float blotch = smoothstep(0.38, 0.75, spot);
-		float grime = mix(blotch * floor_blotches, streak * wall_streaks, wall) * sewer_grime;
-		albedo = mix(albedo, albedo * grime_color * 2.0, grime);
-		float wet = smoothstep(0.6, 0.72, spot) * up * puddles * sewer_grime;
+		float grime = mix(blotch * sewer_floor_blotches, streak * sewer_wall_streaks, wall) * sewer_grime;
+		albedo = mix(albedo, albedo * sewer_grime_color.rgb * 2.0, grime);
+		float puddle_start = mix(0.85, 0.45, sewer_puddle_coverage);
+		float wet = smoothstep(puddle_start, puddle_start + 0.12, spot) * up * sewer_puddles * sewer_grime;
 		albedo *= 1.0 - wet * 0.45;
 		rough = mix(rough, 0.06, wet);
 	}

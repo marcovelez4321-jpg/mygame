@@ -49,6 +49,9 @@ var _resolutions: Array[Vector2i] = []
 var player: CharacterBody3D
 var _audio_panel: Panel
 var _graphics_panel: Panel
+## SewerLook value key -> [HSlider, value Label] / ColorPickerButton.
+var _look_sliders: Dictionary = {}
+var _look_pickers: Dictionary = {}
 ## Character dropdown index -> FBX path (PlayerModel.available_characters()).
 var _characters: Array[String] = []
 ## Bus name -> [HSlider, value Label]
@@ -193,11 +196,13 @@ func _make_sub_panel(title_text: String) -> VBoxContainer:
 	return vbox
 
 
-## Pushes what's below to the bottom and adds the Back button.
-func _finish_sub_panel(vbox: VBoxContainer) -> void:
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
+## Pushes what's below to the bottom (unless something above already fills
+## the space) and adds the Back button.
+func _finish_sub_panel(vbox: VBoxContainer, push_down: bool = true) -> void:
+	if push_down:
+		var spacer := Control.new()
+		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		vbox.add_child(spacer)
 	var back := Button.new()
 	back.text = "Back"
 	back.custom_minimum_size = Vector2(120, 36)
@@ -240,16 +245,39 @@ func _build_audio_panel() -> void:
 ## (moved here from the main panel) and the sewer-look switches (SewerLook).
 ## Opened by a Graphics button added next to Audio.
 func _build_graphics_panel() -> void:
-	var vbox := _make_sub_panel("Graphics")
-	_graphics_panel = vbox.get_parent() as Panel
+	var outer := _make_sub_panel("Graphics")
+	_graphics_panel = outer.get_parent() as Panel
+	# More than fits: everything below the title scrolls.
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	outer.add_child(scroll)
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 8)
+	scroll.add_child(vbox)
 	for row in [resolution_option.get_parent(), window_mode_option.get_parent(),
 			vsync_check.get_parent(), outlines_option.get_parent()]:
 		(row as Node).reparent(vbox, false)
+	_add_heading(vbox, "Sewer Look")
 	_add_toggle(vbox, "Sickly Color Grade", GameSettings.color_grade, func(on: bool) -> void: GameSettings.color_grade = on)
 	_add_toggle(vbox, "Grime & Wet Floors", GameSettings.grime, func(on: bool) -> void: GameSettings.grime = on)
 	_add_toggle(vbox, "Ground Fog", GameSettings.ground_fog, func(on: bool) -> void: GameSettings.ground_fog = on)
 	_add_toggle(vbox, "PS1 Texture Warp", GameSettings.texture_warp, func(on: bool) -> void: GameSettings.texture_warp = on)
-	_finish_sub_panel(vbox)
+	_add_heading(vbox, "Look Values")
+	for entry in SewerLook.VALUES:
+		_add_look_slider(vbox, entry[0], entry[1], entry[2], entry[3], entry[4])
+	for entry in SewerLook.COLORS:
+		_add_look_picker(vbox, entry[0], entry[1])
+	var reset := Button.new()
+	reset.text = "Reset Look Values"
+	reset.custom_minimum_size = Vector2(0, 32)
+	reset.pressed.connect(func() -> void:
+		SewerLook.reset_values()
+		_sync_look_widgets()
+	)
+	vbox.add_child(reset)
+	_finish_sub_panel(outer, false)
 
 	var graphics_button := Button.new()
 	graphics_button.text = "Graphics"
@@ -277,7 +305,73 @@ func _add_toggle(vbox: VBoxContainer, text: String, on: bool, apply: Callable) -
 	vbox.add_child(row)
 
 
+func _add_heading(vbox: VBoxContainer, text: String) -> void:
+	var heading := Label.new()
+	heading.text = text
+	heading.add_theme_font_size_override("font_size", 20)
+	vbox.add_child(heading)
+
+
+## A slider for SewerLook value `key`: changes it live, with its number beside it.
+func _add_look_slider(vbox: VBoxContainer, key: String, text: String, low: float, high: float, step: float) -> void:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = text
+	label.custom_minimum_size = Vector2(170, 0)
+	var slider := HSlider.new()
+	slider.min_value = low
+	slider.max_value = high
+	slider.step = step
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var value_label := Label.new()
+	value_label.custom_minimum_size = Vector2(52, 0)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(label)
+	row.add_child(slider)
+	row.add_child(value_label)
+	vbox.add_child(row)
+	_look_sliders[key] = [slider, value_label]
+	slider.value_changed.connect(func(value: float) -> void:
+		SewerLook.set_value(key, value)
+		value_label.text = _look_number(value, step)
+	)
+
+
+## A colour picker for SewerLook colour `key`.
+func _add_look_picker(vbox: VBoxContainer, key: String, text: String) -> void:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = text
+	label.custom_minimum_size = Vector2(170, 0)
+	var picker := ColorPickerButton.new()
+	picker.edit_alpha = false
+	picker.custom_minimum_size = Vector2(80, 28)
+	picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	row.add_child(picker)
+	vbox.add_child(row)
+	_look_pickers[key] = picker
+	picker.color_changed.connect(func(color: Color) -> void: SewerLook.set_value(key, color))
+
+
+## The widgets show SewerLook's current values (on open, and after a reset).
+func _sync_look_widgets() -> void:
+	for key: String in _look_sliders:
+		var slider: HSlider = _look_sliders[key][0]
+		var value: float = SewerLook.get(key)
+		slider.set_value_no_signal(value)
+		(_look_sliders[key][1] as Label).text = _look_number(value, slider.step)
+	for key: String in _look_pickers:
+		(_look_pickers[key] as ColorPickerButton).color = SewerLook.get(key)
+
+
+func _look_number(value: float, step: float) -> String:
+	return "%.3f" % value if step < 0.01 else "%.2f" % value
+
+
 func _show_graphics_panel() -> void:
+	_sync_look_widgets()
 	menu_panel.visible = false
 	_graphics_panel.visible = true
 
