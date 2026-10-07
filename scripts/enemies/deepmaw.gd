@@ -12,13 +12,18 @@ extends Node3D
 ## Movement is the Terraria worm's (see BurrowWorm): in the ground, full
 ## steering with limited acceleration (wide arcs, overshoot); in the air,
 ## gravity. It lurks lurk_depth under its home, circling. A player within
-## guard_range of home is attacked: it tunnels under them (dirt trail,
-## rumble) and within breach_range lunges up through the floor at them
-## ("jump attack"), biting anyone its jaws reach ("BITE"). Leave its ground
-## (guard_range x 1.5 from home) and it goes back to lurking.
+## guard_range of home is attacked the boss's way (see Leap): it tunnels to
+## just short of them, the ground cracks, and it bursts out under them nose
+## first ("jump attack") on an arc through them and beyond, biting anyone its
+## jaws reach ("BITE"), dives back in and comes round again. The whole model
+## faces where it's going every tick, and its spine bends along the path on
+## top. Leave its ground (guard_range x 1.5 from home) and it goes back to
+## lurking.
 ## Rule 1 (co-op): the host moves it and deals the damage.
 
 enum State { LURK, HUNT, DEAD }
+## The attack cycle while hunting.
+enum Phase { TUNNEL, WINDUP, RISE, AIR, DIVE }
 
 @export var model_scene: PackedScene = preload("res://art/DEEPMAW- Retro psx  monster/DEEPMAW.fbx")
 ## The model's two materials ("cuerpo" = body, "dientes" = teeth) are
@@ -50,7 +55,6 @@ enum State { LURK, HUNT, DEAD }
 ## Inside the ground: how fast it can change velocity (lower = wider arcs).
 @export var acceleration: float = 16.0
 @export var air_gravity: float = 16.0
-@export var air_control: float = 2.0
 ## Lurking this far under the floor, circling home this far out.
 @export var lurk_depth: float = 2.5
 @export var lurk_radius: float = 4.0
@@ -60,8 +64,21 @@ enum State { LURK, HUNT, DEAD }
 @export_group("Guarding")
 ## Players within this of home get attacked; it gives up past 1.5x this.
 @export var guard_range: float = 14.0
-## Within this (flat) of its prey it comes up through the floor at them.
-@export var breach_range: float = 7.0
+
+@export_group("Leap")
+## Its attack, like the boss's: it tunnels to just short of its prey, sinks
+## briefly while the ground cracks there (windup_time), then bursts out under
+## them -- through them, if they're still there -- on an arc leap_height
+## high, nose first, landing land_beyond past them; dives back in, comes
+## round (dive_time) and goes again.
+@export var leap_height: float = 4.5
+@export var leap_lead: float = 0.6
+@export var aim_ahead: float = 0.3
+@export var land_beyond: float = 4.0
+@export var dive_depth: float = 4.0
+@export var windup_time: float = 0.5
+@export var rise_speed: float = 16.0
+@export var dive_time: float = 1.0
 
 @export_group("Attack")
 @export var bite_damage: float = 18.0
@@ -91,6 +108,15 @@ var home := Vector3.ZERO
 var target: Node3D
 
 var _state := State.LURK
+var _phase := Phase.TUNNEL
+var _phase_left := 0.0
+var _leap_from := Vector3.ZERO
+## The model's own forward/up at rest, and its head (root bone) in its own
+## space: the whole model is turned to face where it's going every tick, so
+## it always reads as nose-first even before the spine bends.
+var _rest_frame := Basis.IDENTITY
+var _root_in_model := Vector3.ZERO
+var _facing := Vector3.FORWARD
 var _vel := Vector3.ZERO
 var _ground_y := 0.0
 var _inside := true
@@ -151,6 +177,7 @@ func _ready() -> void:
 	_build_model()
 	_build_hitboxes()
 	_update_joints()
+	_place_model()
 	_ignore_players()
 
 
@@ -215,6 +242,12 @@ func _build_model() -> void:
 		_bone_length.append(length)
 		natural += length
 	_scale = body_length / maxf(natural, 0.0001)
+	# Its rest pose's nose-to-tail line and its head, in the model's own space
+	# (measured at the identity transform it was added with).
+	var to_model := _model.global_transform.affine_inverse() * _skeleton.global_transform
+	_root_in_model = to_model * _skeleton.get_bone_global_rest(_chain[0]).origin
+	var tail_in_model := to_model * _skeleton.get_bone_global_rest(_chain[_chain.size() - 1]).origin
+	_rest_frame = _frame(_root_in_model - tail_in_model, Vector3.UP)
 	_model.scale = Vector3.ONE * _scale
 	for i in _bone_length.size():
 		_bone_length[i] *= _scale
@@ -324,18 +357,21 @@ func _physics_process(delta: float) -> void:
 	var head := global_position
 	var was_inside := _inside
 	_inside = _in_ground(head)
-	var goal := _goal(head, delta)
-	var speed := max_speed if _state == State.HUNT else max_speed * lurk_speed
-	if _inside:
-		_vel = _vel.move_toward((goal - head).normalized() * speed, acceleration * delta)
+	_update_phase(head, delta)
+	var hunting := _state == State.HUNT
+	if hunting and _phase == Phase.AIR:
+		_vel.y -= air_gravity * delta # the arc is set: no control up there
+	elif hunting and _phase == Phase.RISE:
+		_vel = _vel.move_toward((_leap_from - head).normalized() * rise_speed, rise_speed * 4.0 * delta)
+	elif _inside:
+		var speed := max_speed if hunting else max_speed * lurk_speed
+		_vel = _vel.move_toward((_goal(head, delta) - head).normalized() * speed, acceleration * delta)
 	else:
 		_vel.y -= air_gravity * delta
-		var flat := Vector3(goal.x - head.x, 0.0, goal.z - head.z)
-		if flat.length_squared() > 0.01:
-			_vel += flat.normalized() * air_control * delta
 	if head.y < _ground_y - max_depth:
 		_vel.y = maxf(_vel.y, 2.0)
-	_vel = _vel.limit_length(max_speed * 1.6)
+	if not (hunting and _phase == Phase.AIR):
+		_vel = _vel.limit_length(maxf(max_speed, rise_speed) * 1.2)
 	var new_head := head + _vel * delta
 	if was_inside != _inside:
 		_breach_fx(head, new_head, _inside)
@@ -345,6 +381,7 @@ func _physics_process(delta: float) -> void:
 			_play("glide", true)
 	global_position = new_head
 	_update_joints()
+	_place_model()
 	_trail_fx(delta)
 	_try_bite()
 	_fx.follow(new_head, _vel, _ground_y, lurk_depth + 1.5, body_length * hitbox_radius, new_head.y < _ground_y and _state == State.HUNT)
@@ -408,13 +445,88 @@ func _point_back(distance: float, behind: Vector3) -> Vector3:
 	return _trail[_trail.size() - 1] + behind * left
 
 
+## Turned to face where it's going (nose first), its head on its head.
+func _place_model() -> void:
+	if _model == null:
+		return
+	if _vel.length_squared() > 0.25:
+		_facing = _facing.slerp(_vel.normalized(), 0.35).normalized()
+	var turn := _frame(_facing, Vector3.UP) * _rest_frame.inverse()
+	var rig := turn.scaled(Vector3.ONE * _scale)
+	_model.global_transform = Transform3D(rig, global_position - rig * _root_in_model)
+
+
+## The attack cycle (see Leap).
+func _update_phase(head: Vector3, delta: float) -> void:
+	_phase_left -= delta
+	if _state != State.HUNT or not is_instance_valid(target):
+		if _phase != Phase.AIR:
+			_phase = Phase.TUNNEL
+		return
+	match _phase:
+		Phase.TUNNEL:
+			_plan_leap(head)
+			var under := Vector3(_leap_from.x, head.y, _leap_from.z)
+			if head.distance_to(under) < 1.5 and head.y < _ground_y - 0.4:
+				_phase = Phase.WINDUP
+				_phase_left = windup_time
+		Phase.WINDUP:
+			_plan_leap(head)
+			_fx.show_cracks(_leap_from, 0.3 + 0.7 * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)))
+			if _phase_left <= 0.0:
+				_phase = Phase.RISE
+		Phase.RISE:
+			_plan_leap(head)
+			if not _inside or head.y > _ground_y + 0.8:
+				_erupt(head)
+		Phase.AIR:
+			if _inside and _vel.y < 0.0:
+				_phase = Phase.DIVE
+				_phase_left = dive_time
+		Phase.DIVE:
+			if _phase_left <= 0.0:
+				_phase = Phase.TUNNEL
+
+
+## Where to burst out: leap_lead short of where its prey will be.
+func _plan_leap(head: Vector3) -> void:
+	var prey := _predicted_prey()
+	var approach := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
+	approach = approach.normalized() if approach.length_squared() > 0.01 else Vector3(_vel.x, 0.0, _vel.z).normalized()
+	_leap_from = prey - approach * leap_lead
+
+
+func _predicted_prey() -> Vector3:
+	var prey := target.global_position
+	var moving = target.get("velocity")
+	if moving is Vector3:
+		prey += Vector3((moving as Vector3).x, 0.0, (moving as Vector3).z) * aim_ahead
+	return Vector3(prey.x, _ground_y, prey.z)
+
+
+## Out of the ground on the arc through its prey: up at sqrt(2 g h), across
+## to land land_beyond past them.
+func _erupt(head: Vector3) -> void:
+	_phase = Phase.AIR
+	var rise := sqrt(2.0 * air_gravity * maxf(leap_height, 0.5))
+	var time_to_top := rise / air_gravity
+	var prey := _predicted_prey()
+	var gap := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
+	var onward := gap.normalized() if gap.length_squared() > 0.01 else Vector3(_vel.x, 0.0, _vel.z).normalized()
+	var across := (gap + onward * land_beyond) / (time_to_top * 2.0)
+	_vel = Vector3(across.x, rise, across.z)
+	_fx.fade_cracks(1.5)
+
+
 func _goal(head: Vector3, delta: float) -> Vector3:
 	if _state == State.HUNT and is_instance_valid(target):
-		var prey := Factions.aim_point(target)
-		var flat := Vector2(prey.x - head.x, prey.z - head.z).length()
-		if flat > breach_range:
-			return Vector3(prey.x, _ground_y - lurk_depth, prey.z)
-		return prey
+		match _phase:
+			Phase.WINDUP:
+				return Vector3(_leap_from.x, _ground_y - dive_depth, _leap_from.z)
+			Phase.DIVE:
+				var on := Vector3(_vel.x, 0.0, _vel.z).normalized() * 4.0
+				return Vector3(head.x + on.x, _ground_y - lurk_depth - 0.5, head.z + on.z)
+		return Vector3(_leap_from.x, _ground_y - lurk_depth, _leap_from.z)
 	# Lurking: circling under home.
 	_lurk_angle += delta * max_speed * lurk_speed / maxf(lurk_radius, 0.5)
 	return Vector3(home.x, _ground_y - lurk_depth, home.z) + Vector3.FORWARD.rotated(Vector3.UP, _lurk_angle) * lurk_radius
@@ -551,6 +663,7 @@ func _sink(delta: float) -> void:
 		global_position += Vector3.DOWN * delta * 1.5
 		_trail = PackedVector3Array() # sinks straight down as one
 		_update_joints()
+	_place_model()
 	if _dead_left <= 0.0:
 		queue_free()
 

@@ -72,14 +72,18 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 @export_group("The Leap")
 ## Its attack, over and over: it tunnels to a spot under its prey, sinks to
 ## dive_depth while the ground shakes and cracks where it'll come out
-## (windup_time -- your warning), then shoots up and erupts from under them
-## on a huge arc that peaks leap_height above the floor right over them and
-## comes down leap_lead beyond -- the whole body pouring out after it -- and
-## dives back in, swings round underground (dive_time) and goes again.
+## (windup_time -- your warning), then shoots up and erupts right under them
+## -- through them, if they haven't moved -- on a huge arc leap_height high
+## that comes down land_beyond past them, the whole body pouring out after
+## it; landing sends out a shockwave; it dives back in, swings round
+## underground (dive_time) and goes again.
 @export var leap_height: float = 9.0
-## It erupts this far short of the prey (along its approach) and lands as far
-## past them: 0 = straight up through them.
-@export var leap_lead: float = 3.0
+## It erupts this far short of the prey along its approach (0 = dead under
+## them), aiming where they'll be aim_ahead seconds on, and lands
+## land_beyond past them.
+@export var leap_lead: float = 0.8
+@export var aim_ahead: float = 0.35
+@export var land_beyond: float = 6.0
 @export var dive_depth: float = 7.0
 @export var windup_time: float = 1.1
 @export var rise_speed: float = 22.0
@@ -87,6 +91,16 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 ## Every so often a smaller skimming hop instead (a quick breach and back in).
 @export_range(0.0, 1.0, 0.05) var hop_chance: float = 0.25
 @export var hop_height: float = 3.5
+
+@export_group("Shockwave")
+## Landing from a leap: everything within shockwave_radius -- players,
+## enemies, creatures, loose bodies -- except its own escorts is thrown back
+## (shockwave_force out, shockwave_lift up, less further out) and takes
+## shockwave_damage (less further out).
+@export var shockwave_radius: float = 9.0
+@export var shockwave_force: float = 14.0
+@export var shockwave_lift: float = 6.0
+@export var shockwave_damage: float = 10.0
 
 @export_group("Escorts")
 ## Deepmaws that swim along under it and come up at anyone near it
@@ -429,6 +443,7 @@ func _update_phase(head: Vector3, delta: float) -> void:
 			if _phase_left <= 0.0:
 				_phase = Phase.RISE
 		Phase.RISE:
+			_plan_leap() # keeps tracking them on the way up
 			if not _inside:
 				_erupt(head)
 			elif head.y > _ground_y + 1.0:
@@ -437,6 +452,7 @@ func _update_phase(head: Vector3, delta: float) -> void:
 			if _inside and _vel.y < 0.0:
 				_phase = Phase.DIVE
 				_phase_left = dive_time
+				_shockwave(head)
 		Phase.DIVE:
 			if _phase_left <= 0.0:
 				_phase = Phase.TUNNEL
@@ -448,7 +464,7 @@ func _update_phase(head: Vector3, delta: float) -> void:
 func _plan_leap() -> void:
 	if not is_instance_valid(target):
 		return
-	var prey := target.global_position
+	var prey := _predicted_prey()
 	var head := _pos[0]
 	var approach := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
 	if approach.length_squared() < 0.25:
@@ -465,12 +481,75 @@ func _erupt(head: Vector3) -> void:
 	var height := hop_height if randf() < hop_chance else leap_height
 	var rise := sqrt(2.0 * air_gravity * maxf(height, 0.5))
 	var time_to_top := rise / air_gravity
-	var over := Vector3.ZERO
+	# Across: from here, through (or right by) them on the way up, to land
+	# land_beyond past them as it comes back down.
+	var across := Vector3.ZERO
 	if is_instance_valid(target):
-		over = Vector3(target.global_position.x - head.x, 0.0, target.global_position.z - head.z) / time_to_top
-	_vel = Vector3(over.x, rise, over.z)
+		var prey := _predicted_prey()
+		var gap := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
+		var onward := gap.normalized() if gap.length_squared() > 0.01 else Vector3(_vel.x, 0.0, _vel.z).normalized()
+		across = (gap + onward * land_beyond) / (time_to_top * 2.0)
+	_vel = Vector3(across.x, rise, across.z)
 	_shake_near(head, eruption_shake, shake_range)
 	_fx.fade_cracks()
+
+
+## Where its prey will be aim_ahead seconds from now (on the floor).
+func _predicted_prey() -> Vector3:
+	var prey := target.global_position
+	var moving = target.get("velocity")
+	if moving is Vector3:
+		prey += Vector3((moving as Vector3).x, 0.0, (moving as Vector3).z) * aim_ahead
+	return Vector3(prey.x, _ground_y, prey.z)
+
+
+## Landing: a ring of dust tears outward and throws back everything near --
+## players, enemies, creatures, loose bodies -- except its own escorts.
+func _shockwave(at: Vector3) -> void:
+	var center := Vector3(at.x, _ground_y, at.z)
+	_fx.shockwave(center, shockwave_radius)
+	_shake_near(center, eruption_shake, shake_range)
+	SoundPlayer.play_3d(breach_sound, center, get_tree().current_scene)
+	if not multiplayer.is_server():
+		return
+	var sphere := SphereShape3D.new()
+	sphere.radius = shockwave_radius
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = sphere
+	query.transform = Transform3D(Basis.IDENTITY, center + Vector3.UP * 1.0)
+	query.collision_mask = 1
+	var exclude: Array[RID] = []
+	for segment in _segments:
+		exclude.append(segment.get_rid())
+	query.exclude = exclude
+	var seen := {}
+	for result in get_world_3d().direct_space_state.intersect_shape(query, 64):
+		var body := result.collider as Node3D
+		if body == null or seen.has(body) or (body is StaticBody3D and not body is AnimatableBody3D):
+			continue
+		seen[body] = true
+		var owner_node := body.get_parent()
+		if owner_node is Deepmaw and (owner_node as Deepmaw).guard_node == self:
+			continue # its own escort
+		var away := body.global_position - center
+		away.y = 0.0
+		var distance := away.length()
+		var falloff := clampf(1.0 - distance / shockwave_radius, 0.0, 1.0)
+		if falloff <= 0.0:
+			continue
+		var out := away / distance if distance > 0.01 else Vector3.FORWARD
+		var push := out * shockwave_force * falloff + Vector3.UP * shockwave_lift * falloff
+		var body_health := body.get_node_or_null("Health") as Health
+		if body_health and shockwave_damage > 0.0:
+			body_health.take_damage(shockwave_damage * falloff, Health.NO_ATTACKER)
+		if body.has_method("shove"):
+			body.call("shove", push)
+		elif body is RigidBody3D:
+			(body as RigidBody3D).apply_central_impulse(push * (body as RigidBody3D).mass)
+			if body.has_method("stun"):
+				body.call("stun")
+		elif body is PhysicalBone3D:
+			(body as PhysicalBone3D).apply_central_impulse(push * (body as PhysicalBone3D).mass)
 
 
 ## Winding up under its prey: the ground shakes harder and harder and cracks

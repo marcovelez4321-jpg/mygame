@@ -7,12 +7,12 @@
 [ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="5_breach"]
 [ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="6_bite"]
 [ext_resource type="Resource" path="res://audio/events/enemy/roach_splat.tres" id="7_death"]
-[ext_resource type="Shader" path="res://shaders/worm_flesh.gdshader" id="8_flesh"]
 
-[sub_resource type="ShaderMaterial" id="DeepmawBody"]
-shader = ExtResource("8_flesh")
-shader_parameter/albedo_texture = ExtResource("3_body")
-shader_parameter/tint = Color(0.78, 0.48, 0.37, 1)
+[sub_resource type="StandardMaterial3D" id="DeepmawBody"]
+albedo_color = Color(0.39, 0.24, 0.185, 1)
+albedo_texture = ExtResource("3_body")
+roughness = 0.6
+texture_filter = 0
 
 [sub_resource type="StandardMaterial3D" id="DeepmawTeeth"]
 albedo_texture = ExtResource("4_teeth")

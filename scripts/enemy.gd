@@ -356,6 +356,10 @@ func start_spawning() -> void:
 	_spawning_time_left = spawning_time
 
 
+## What's left of a shove() throw (horizontal m/s).
+var _shove := Vector3.ZERO
+
+
 func _physics_process(delta: float) -> void:
 	# Only the host thinks. Offline, multiplayer.is_server() is true.
 	if not multiplayer.is_server() or _state == State.DEAD:
@@ -400,9 +404,21 @@ func _physics_process(delta: float) -> void:
 		State.PAIN:
 			_think_pain(delta)
 
+	# Thrown (shove()): the throw overrules its own walking until it slows.
+	if _shove.length_squared() > 0.04:
+		velocity.x = _shove.x
+		velocity.z = _shove.z
+		_shove = _shove.move_toward(Vector3.ZERO, (18.0 if is_on_floor() else 5.0) * delta)
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	move_and_slide()
+
+
+## Thrown by something (a worm's landing shockwave): flies back along `push`
+## (m/s), sliding to a stop. The same call the player and spiders take.
+func shove(push: Vector3) -> void:
+	_shove = Vector3(push.x, 0.0, push.z)
+	velocity.y = maxf(velocity.y, push.y)
 
 
 func _think_idle(delta: float) -> void:

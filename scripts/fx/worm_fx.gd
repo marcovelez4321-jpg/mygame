@@ -35,6 +35,8 @@ static var _dust_process: ParticleProcessMaterial
 static var _dust_mesh: QuadMesh
 static var _rubble_process: ParticleProcessMaterial
 static var _rubble_mesh: BoxMesh
+static var _ring_mesh: TorusMesh
+static var _ring_material: StandardMaterial3D
 
 var _mound: MeshInstance3D
 var _cracks: MeshInstance3D
@@ -43,6 +45,8 @@ var _dust: Array[GPUParticles3D] = []
 var _next_dust := 0
 var _rubble: GPUParticles3D
 var _rumble: AudioStreamPlayer3D
+var _ring: MeshInstance3D
+var _ring_tween: Tween
 
 
 func _ready() -> void:
@@ -139,6 +143,28 @@ func burst(at: Vector3, normal: Vector3) -> void:
 	for emitter: GPUParticles3D in [dust, _rubble]:
 		emitter.global_transform = Transform3D(_up_basis(normal).scaled(Vector3.ONE * size), at)
 		emitter.restart()
+
+
+## A landing: a ring of dust tearing outward to `radius` and fading, with a
+## dust cloud and rubble.
+func shockwave(at: Vector3, radius: float) -> void:
+	if _ring == null:
+		_ring = MeshInstance3D.new()
+		_ring.mesh = _ring_mesh
+		_ring.material_override = _ring_material
+		_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_ring)
+	if _ring_tween:
+		_ring_tween.kill()
+	_ring.visible = true
+	_ring.global_position = at + Vector3.UP * 0.15
+	_ring.scale = Vector3(0.5, 1.0, 0.5)
+	_ring.transparency = 0.0
+	_ring_tween = create_tween()
+	_ring_tween.tween_property(_ring, "scale", Vector3(radius, 1.5, radius), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_ring_tween.parallel().tween_property(_ring, "transparency", 1.0, 0.45).set_ease(Tween.EASE_IN)
+	_ring_tween.tween_callback(func() -> void: _ring.visible = false)
+	burst(at, Vector3.UP)
 
 
 func _make_emitter(process: ParticleProcessMaterial, mesh: Mesh, amount: int, lifetime: float) -> GPUParticles3D:
@@ -243,3 +269,13 @@ static func _make_shared() -> void:
 	_rubble_process.angular_velocity_max = 360.0
 	_rubble_process.scale_min = 0.6
 	_rubble_process.scale_max = 1.8
+	# Shockwave ring: a thin, low torus of dust, scaled out and faded per use.
+	_ring_mesh = TorusMesh.new()
+	_ring_mesh.inner_radius = 0.82
+	_ring_mesh.outer_radius = 1.0
+	_ring_mesh.rings = 24
+	_ring_mesh.ring_segments = 4
+	_ring_material = StandardMaterial3D.new()
+	_ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ring_material.albedo_color = Color(DUST_COLOR, 0.7)
