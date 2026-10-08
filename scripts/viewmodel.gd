@@ -171,6 +171,8 @@ var _arms_meshes: Array = []
 var _arms_keep_left := -1
 ## The head/legs shrinker, used only when the mesh can't be cut.
 var _arms_hider: HideBonesModifier
+## F2 > U: holding the healing item up at your mouth, as when it's used.
+var _use_pose_shown := false
 ## Whether the shown weapon wants arms at all (it has a hold_animation).
 var _arms_wanted := false
 ## Arms-only cuts of the arms model's meshes, made once and shared:
@@ -544,7 +546,8 @@ func _update_held_grenade() -> void:
 func _keep_in_step() -> void:
 	if _switch_tween and _switch_tween.is_running():
 		return
-	_set_shoulder_pivot(false) # a throw cut off partway
+	if not (_tuning and _use_pose_shown):
+		_set_shoulder_pivot(false) # a throw cut off partway
 	var weapon := _weapons.current_weapon()
 	if weapon and weapon != _shown_weapon:
 		_show_weapon(weapon)
@@ -1136,6 +1139,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning = not _tuning
 		_tune_label.visible = _tuning
 		_preview_offset = Vector3.ZERO
+		_show_use_pose(null)
+	elif key.keycode == KEY_U and _tuning:
+		_use_pose_shown = not _use_pose_shown
+		if not _use_pose_shown:
+			_show_use_pose(null)
+		_update_label("")
 		_update_label("")
 	elif key.keycode == KEY_F3 and _tuning:
 		_save_weapon()
@@ -1259,7 +1268,25 @@ func _process(delta: float) -> void:
 	# I mode: show the viewmodel where it'll sit when aimed, so you can line
 	# up the sights.
 	_preview_offset = aim_position_for(weapon) - weapon.viewmodel_position if _tuning_aim else Vector3.ZERO
+	# U: a healing item held up at your mouth, as when it's used.
+	_show_use_pose(weapon if _use_pose_shown and weapon.heal_item >= 0 else null)
 	_update_label("")
+
+
+## Holds the viewmodel in the healing animation's top pose -- `weapon` (an
+## item) at your mouth, tipped back (_on_item_used()) -- or puts it back with
+## null. Only for the F2 tool.
+func _show_use_pose(weapon: WeaponData) -> void:
+	if weapon:
+		_set_pivot(weapon.viewmodel_position)
+		position = ITEM_MOUTH_POINT - weapon.viewmodel_position
+		rotation_degrees.x = ITEM_TIP_DEGREES
+	elif _pivot_on or position != Vector3.ZERO:
+		if _switch_tween and _switch_tween.is_running():
+			return
+		_set_pivot(null)
+		position = Vector3.ZERO
+		rotation_degrees.x = 0.0
 
 
 ## Creates (if needed) and repositions the green muzzle marker at the
@@ -1324,5 +1351,6 @@ func _update_label(message: String) -> void:
 	elif _tuning_aim:
 		target = "AIMED POSITION"
 		p = weapon.aim_position
-	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nM = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
-			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s, message]
+	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f%s\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nU = hold a healing item at your mouth (to check it there)\nM = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
+			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s,
+			"   (AT MOUTH)" if _use_pose_shown else "", message]
