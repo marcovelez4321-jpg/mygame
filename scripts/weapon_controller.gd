@@ -72,6 +72,10 @@ signal item_used(item: int, weapon: WeaponData, use_time: float, lower_time: flo
 signal items_changed
 
 enum Item { PILLS, BANDAGE }
+## Bandages are switched off for now (pills are the only healing): you can't
+## pick any up, bandage pickups don't appear in levels (ItemPickup), so B
+## does nothing. Set true to bring them all back.
+const BANDAGES_ENABLED := false
 
 ## Everything the host needs to judge one shot.
 class Shot:
@@ -347,6 +351,8 @@ func pickup_weapon(weapon: WeaponData, ammo_amount: int) -> void:
 ## Takes up to `amount` pills or bandages (ItemPickup), as many as there's
 ## room for; returns how many it took.
 func add_item(item: int, amount: int) -> int:
+	if item == Item.BANDAGE and not BANDAGES_ENABLED:
+		return 0
 	var room := (max_pills - pills) if item == Item.PILLS else (max_bandages - bandages)
 	var taken := clampi(amount, 0, room)
 	if taken <= 0:

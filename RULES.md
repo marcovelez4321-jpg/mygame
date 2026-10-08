@@ -614,3 +614,7 @@ them:
   - Character change rebuilds the arms and the gun models (`_free_arms()`).
 
 - 2026-10-08: **Pills and bandages use Left 4 Dead 2's pills animation (placeholder)** in place of the grenade throw (`Viewmodel._on_item_used()`). The hand brings the item up to just under your mouth (`ITEM_MOUTH_POINT` (0, -0.13, -0.24), camera space) while tipping it back. At the top it tips right back (`ITEM_TIP_DEGREES` 40) and shakes it out `ITEM_SHAKES` 2 times (`ITEM_SHAKE_DEGREES` 14, `ITEM_SHAKE_LIFT` 0.015 m). Then it drops out of view and the gun (or the next item) comes back. The heal lands as it starts down. The tips turn round the item itself: the shoulder pivot became a general `_set_pivot(point)` (`_set_shoulder_pivot()` still does throws). `pills_use_time` 0.25 -> 0.8 s and `bandage_use_time` 0.25 -> 1.0 s (WeaponController exports), so there's time to raise, tip and shake.
+
+- 2026-10-08: F2 tool: **U** holds an equipped healing item up at your mouth (the heal animation's top pose) so it can be lined up there.
+
+- 2026-10-08: **Bandages switched off for now; pills are the only healing.** `WeaponController.BANDAGES_ENABLED` (false): `add_item()` won't take bandages, and bandage ItemPickups remove themselves when the level loads, so you never carry any and B does nothing. Set it true to bring them back. HUD: the bottom-centre pills/bandages line is gone. The pill count is now on the top-left weapon line like the grenades (`[T] Pills: N`, while you carry any, unless the pills slot is in hand).

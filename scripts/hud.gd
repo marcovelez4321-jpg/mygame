@@ -54,8 +54,6 @@ var _use_prompt_label: Label
 ## The rip-the-leech-off meter (_build_leech_meter()).
 var _leech_box: VBoxContainer
 var _leech_bar: ProgressBar
-## Pills and bandages carried, bottom centre.
-var _items_label: Label
 
 
 func _ready() -> void:
@@ -65,7 +63,6 @@ func _ready() -> void:
 	_use_prompt_label = _make_center_label(0.56, 20)
 	_use_prompt_label.visible = false
 	_build_leech_meter()
-	_items_label = _make_center_label(0.93, 18)
 	call_deferred("_find_player")
 
 
@@ -112,13 +109,13 @@ func _process(_delta: float) -> void:
 	# Grenades for Q, once you've found some.
 	if player.weapons.grenade_weapon() and not (weapon and weapon.throws_grenade):
 		ammo_label.text += "   [Q] Grenades: %d" % player.weapons.grenade_count()
-	# Healing items, once you're carrying some: their own line, bottom centre.
-	var items: PackedStringArray = []
-	if player.weapons.pills > 0:
-		items.append("[T] Pills x%d" % player.weapons.pills)
-	if player.weapons.bandages > 0:
-		items.append("[B] Bandages x%d" % player.weapons.bandages)
-	_items_label.text = "     ".join(items)
+	# Pills for T, while you're carrying some (unless they're what's in hand:
+	# then the count's already there).
+	if player.weapons.pills > 0 and not (weapon and weapon.heal_item == WeaponController.Item.PILLS):
+		ammo_label.text += "   [T] Pills: %d" % player.weapons.pills
+	if WeaponController.BANDAGES_ENABLED and player.weapons.bandages > 0 \
+			and not (weapon and weapon.heal_item == WeaponController.Item.BANDAGE):
+		ammo_label.text += "   [B] Bandages: %d" % player.weapons.bandages
 	health_label.text = "Health: %d" % ceili(_player_health.current_health)
 	# Aiming down the sights: the sights (or scope) are the crosshair now.
 	$Crosshair.visible = player.weapons.aim_amount() <= 0.0

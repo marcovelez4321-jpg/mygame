@@ -20,6 +20,9 @@ extends RigidBody3D
 
 
 func _ready() -> void:
+	if item == WeaponController.Item.BANDAGE and not WeaponController.BANDAGES_ENABLED:
+		queue_free() # bandages are switched off for now
+		return
 	add_to_group(InteractHighlight.GROUP) # outlined when you look at it
 	_build()
 	_pickup_area.body_entered.connect(_on_body_entered)
