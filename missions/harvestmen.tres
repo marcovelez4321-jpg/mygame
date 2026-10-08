@@ -5,6 +5,6 @@
 [resource]
 script = ExtResource("1")
 title = "Stilts in the Dark"
-description = "Something tall's been creeping through the old yard on its tiptoes. Stay out of its red light, aim for the knees -- and don't let it get under you."
+description = "Something tall's been creeping through the old yard on its tiptoes. Two of them. Stay out of the red light, aim for the knees -- and don't let them get under you."
 scene = "res://scenes/harvestman_level.tscn"
 order = 4

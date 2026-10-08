@@ -642,6 +642,15 @@ material_override = SubResource("StandardMaterial3D_814bg")
 cast_shadow = 0
 mesh = SubResource("ArrayMesh_yn5ew")
 
+[node name="Barnacle2" type="Node3D" parent="Body/Core" unique_id=1898119791]
+transform = Transform3D(-5.1303854, 0.4108975, -3.5921754e-08, 0.4108975, 5.1303854, -4.485126e-07, 0, -4.4994883e-07, -5.1468143, -1.53387e-07, 1.5054364, 4.3245927e-07)
+
+[node name="barnacle" type="MeshInstance3D" parent="Body/Core/Barnacle2" unique_id=414930522]
+transform = Transform3D(1, 0, 0, 0, 1, -1.6292068e-07, 0, 1.6292068e-07, 1, 0, 0, 0)
+material_override = SubResource("StandardMaterial3D_814bg")
+cast_shadow = 0
+mesh = SubResource("ArrayMesh_yn5ew")
+
 [node name="Face" type="Node3D" parent="Body" unique_id=813362307]
 transform = Transform3D(1, 0, 0, 0, 0.8660254, 0.5, 0, -0.5, 0.8660254, 0, -1.35, -0.99)
 

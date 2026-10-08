@@ -1,13 +1,13 @@
-[gd_scene format=4]
+[gd_scene format=4 uid="uid://3py873vdp8pu"]
 
-[ext_resource type="Script" path="res://scripts/enemies/harvestman_core.gd" id="1_pledi"]
-[ext_resource type="Texture2D" path="res://art/props/PSX Creatures/Textures/barnacle.png" id="2_u2xkd"]
-[ext_resource type="Texture2D" path="res://art/Spider_1.png" id="3_fyl3k"]
-[ext_resource type="Script" path="res://scripts/enemies/jiggle_limb.gd" id="4_kefku"]
-[ext_resource type="Texture2D" path="res://art/characters/Characters_psx/Textures/Character_02.png" id="5_1y56f"]
-[ext_resource type="Texture2D" path="res://art/characters/Characters_psx/Textures/Character_Female_04.png" id="6_v1fow"]
-[ext_resource type="Texture2D" path="res://art/characters/Characters_psx/Textures/Character_Female_11.png" id="7_wt3pe"]
-[ext_resource type="Texture2D" path="res://NEWPSXMODELS/PSX Mega Pack/Models/Spider/Spider_0.png" id="8_s4qs3"]
+[ext_resource type="Script" uid="uid://d34evb3nxkid4" path="res://scripts/enemies/harvestman_core.gd" id="1_pledi"]
+[ext_resource type="Texture2D" uid="uid://dfm077mca87nt" path="res://art/props/PSX Creatures/Textures/barnacle.png" id="2_u2xkd"]
+[ext_resource type="Texture2D" uid="uid://6wqdj2gpo4kc" path="res://art/Spider_1.png" id="3_fyl3k"]
+[ext_resource type="Script" uid="uid://b87wfkai2egw4" path="res://scripts/enemies/jiggle_limb.gd" id="4_kefku"]
+[ext_resource type="Texture2D" uid="uid://cqr4sy5srx1ui" path="res://art/characters/Characters_psx/Textures/Character_02.png" id="5_1y56f"]
+[ext_resource type="Texture2D" uid="uid://bmg4qo4vouuf6" path="res://art/characters/Characters_psx/Textures/Character_Female_04.png" id="6_v1fow"]
+[ext_resource type="Texture2D" uid="uid://b44u5ikh3ki80" path="res://art/characters/Characters_psx/Textures/Character_Female_11.png" id="7_wt3pe"]
+[ext_resource type="Texture2D" uid="uid://cpokakhur4kh3" path="res://NEWPSXMODELS/PSX Mega Pack/Models/Spider/Spider_0.png" id="8_s4qs3"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ebnod"]
 albedo_color = Color(0.78, 0.82, 0.55, 1)
@@ -811,6 +811,15 @@ material_override = SubResource("StandardMaterial3D_ebnod")
 cast_shadow = 0
 mesh = SubResource("ArrayMesh_yn5ew")
 
+[node name="Barnacle2" type="Node3D" parent="Body/Core" unique_id=1898119791]
+transform = Transform3D(-5.1303854, 0.4108975, -3.5921754e-08, 0.4108975, 5.1303854, -4.485126e-07, 0, -4.4994883e-07, -5.1468143, -1.53387e-07, 1.5054364, 4.3245927e-07)
+
+[node name="barnacle" type="MeshInstance3D" parent="Body/Core/Barnacle2" unique_id=414930522]
+transform = Transform3D(1, 0, 0, 0, 1, -1.6292068e-07, 0, 1.6292068e-07, 1, 0, 0, 0)
+material_override = SubResource("StandardMaterial3D_ebnod")
+cast_shadow = 0
+mesh = SubResource("ArrayMesh_yn5ew")
+
 [node name="Face" type="Node3D" parent="Body" unique_id=1867631705]
 transform = Transform3D(1, 0, 0, 0, 0.8660254, 0.5, 0, -0.5, 0.8660254, 0, -1.35, -0.99)
 
@@ -839,9 +848,10 @@ spot_angle = 20.0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.36, -0.63)
 
 [node name="Limbs" type="Node3D" parent="Body" unique_id=948131932]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.255139, 0)
 
 [node name="Limb0" type="Node3D" parent="Body/Limbs" unique_id=692457458]
-transform = Transform3D(0.5711385, -0.11344702, -0.8129764, 0, 0.99040353, -0.13820612, 0.82085377, 0.07893484, 0.56565756, 0.7358887, 0.12510121, -0.512021)
+transform = Transform3D(0.5711385, -0.11344702, -0.8129764, 0, 0.99040353, -0.13820612, 0.82085377, 0.07893484, 0.56565756, 0.53957915, 2.1748567, -0.512021)
 script = ExtResource("4_kefku")
 side = "Right"
 is_leg = true
@@ -1648,7 +1658,7 @@ skeleton = NodePath("..")
 [node name="@PhysicalBoneSimulator3D@172" type="PhysicalBoneSimulator3D" parent="Body/Limbs/Limb2/Model/GeneralSkeleton" unique_id=1656065208]
 
 [node name="Limb3" type="Node3D" parent="Body/Limbs" unique_id=471726818]
-transform = Transform3D(-0.7727793, -0.008835778, 0.6346134, 0, 0.99990314, 0.013921738, -0.6346749, 0.010758431, -0.77270436, -0.54280466, -0.011907698, 0.66091824)
+transform = Transform3D(-0.7727793, -0.008835778, 0.6346134, 0, 0.99990314, 0.013921738, -0.6346749, 0.010758431, -0.77270436, -0.54280466, 1.2998968, 0.66091824)
 script = ExtResource("4_kefku")
 
 [node name="Model" type="Node3D" parent="Body/Limbs/Limb3" unique_id=1815065451]
