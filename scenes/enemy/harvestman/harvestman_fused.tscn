@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/harvestman.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/health.gd" id="2_health"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/models/harvestman_fused_model.tscn" id="3_model"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_horn.tres" id="4_horn"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_step.tres" id="5_step"]
+[ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="6_hurt"]
+[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="7_death"]
+
+[node name="HarvestmanFused" type="Node3D"]
+script = ExtResource("1_script")
+model_scene = ExtResource("3_model")
+horn_sound = ExtResource("4_horn")
+step_sound = ExtResource("5_step")
+hurt_sound = ExtResource("6_hurt")
+death_sound = ExtResource("7_death")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 1500.0
