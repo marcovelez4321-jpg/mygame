@@ -599,3 +599,8 @@ them:
 - 2026-10-07: Deepmaw escorts 20% slower in the air: `air_gravity` 28 -> 17.92 (28 x 0.8²: a leap of the same height takes 1.25x as long, and the sideways speed -- distance / air time -- drops 20% with it). Same peak height and aim.
 
 - 2026-10-07: Deepmaw escorts breach 1 s apart in a volley (`breach_stagger` 0.5 -> 1.0).
+
+- 2026-10-08: **"Torso flashing up" on heals/throws, found and fixed** (checked frame by frame with screenshots, including from a side camera). There were two causes. The torso itself was already cut away.
+  - A one-frame T-pose. Every swap builds a fresh arms model. Its first frame was drawn in the rest T-pose, before the hold animation landed, so the right sleeve stuck out across the bottom of the screen. New arms now stay hidden for `ARMS_REVEAL_FRAMES` (2) frames. The arms are made at the moment the gun is out of view, so nothing is missed.
+  - The sleeve swinging in. The throw tipped the whole view rig up to 40 degrees round your EYE, and the shoulder and sleeve (just beside and below the camera) swung forward into view. Throws and heals now turn round the arms model's right shoulder joint (`Viewmodel.throw_from_shoulder`, on). A new `_swing_pivot` node between the Viewmodel and `_sway_pivot` is shifted by B⁻¹·P − P (B = the Viewmodel's turn, P = the shoulder), so the same tweens turn round P. It's applied in NOTIFICATION_LOCAL_TRANSFORM_CHANGED, so it holds every frame of every tween. It's switched on/off only while there's no tilt or the arm is out of view. Switches, reloads and the pump rack still turn round the eye.
+  - Verified with captures, not yet in normal play.

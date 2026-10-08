@@ -70,6 +70,9 @@ const THROW_WINDUP_SHARE := 0.6
 const THROW_FOLLOW_TIME := 0.2
 const THROW_RAISE_TIME := 0.3
 
+## How many frames freshly built arms stay hidden while their pose lands.
+const ARMS_REVEAL_FRAMES := 2
+
 ## How far in front of your eye the middle of a scope sits when aimed
 ## (WeaponData.aim_sight_node), in meters.
 const AIM_EYE_DISTANCE := 0.25
@@ -91,6 +94,12 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 ## the shoulders, arms and hands (its torso would otherwise swing up into
 ## view as the gun tilts down). Off = the old way (head and legs shrunk away).
 @export var hide_torso: bool = true
+
+## Throws and heals swing the arm round its shoulder joint, not round your
+## eye. Round the eye, tipping the arm up for the wind-up carried the
+## shoulder and sleeve (which sit just beside and below the camera) forward
+## into the bottom of the screen. Off = the old swing round the eye.
+@export var throw_from_shoulder: bool = true
 
 @export_group("Sway")
 ## The gun lags behind when you turn and swings back. Cosmetic only.
@@ -143,6 +152,15 @@ var _muzzle_marker: MeshInstance3D
 ## Sits between the switching animation (on this node) and the gun, so sway
 ## never fights the lower/raise animation or the fire kick.
 var _sway_pivot: Node3D
+## Between this node and _sway_pivot: shifts the rig so this node's tilt
+## turns it round _shoulder_point instead of round the eye (see
+## _apply_shoulder_pivot()). Only while _pivot_on_shoulder.
+var _swing_pivot: Node3D
+## The arms model's right shoulder joint, in _swing_pivot's space.
+var _shoulder_point := Vector3.ZERO
+var _pivot_on_shoulder := false
+## Frames left before freshly built arms are shown (see _attach_arms()).
+var _arms_hidden_frames := 0
 var _sway_position: Vector2 = Vector2.ZERO
 var _sway_tilt: Vector2 = Vector2.ZERO # degrees: x = pitch, y = yaw
 var _previous_look: Vector2 = Vector2.ZERO # pitch, yaw in radians
@@ -173,8 +191,11 @@ func _ready() -> void:
 	_player_model = body.get_node_or_null("PlayerModel") as PlayerModel
 	if _player_model:
 		_player_model.character_changed.connect(_on_character_changed)
+	_swing_pivot = Node3D.new()
+	add_child(_swing_pivot)
 	_sway_pivot = Node3D.new()
-	add_child(_sway_pivot)
+	_swing_pivot.add_child(_sway_pivot)
+	set_notify_local_transform(true)
 	_weapons.weapon_switched.connect(_on_weapon_switched)
 	_weapons.shot_fired.connect(_on_shot_fired)
 	_weapons.reload_started.connect(_on_reload_started)
@@ -265,6 +286,7 @@ func _on_throw_started(release_delay: float) -> void:
 	var windup := release_delay * THROW_WINDUP_SHARE
 	var swing := release_delay - windup
 	_switch_tween = create_tween()
+	_switch_tween.tween_callback(_set_shoulder_pivot.bind(true))
 	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET, windup) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT, windup)
@@ -273,6 +295,7 @@ func _on_throw_started(release_delay: float) -> void:
 	_switch_tween.tween_callback(_release_held_grenade)
 	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, THROW_FOLLOW_TIME).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, THROW_FOLLOW_TIME)
+	_switch_tween.tween_callback(_set_shoulder_pivot.bind(false)) # out of view now
 
 
 ## Q: the gun drops out of view, the grenade hand comes up and throws (same
@@ -291,6 +314,7 @@ func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_del
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, lower_time)
 	# ...grenade hand in, straight up into the wind-up, and swing...
 	_switch_tween.tween_callback(_show_quick_grenade.bind(grenade))
+	_switch_tween.tween_callback(_set_shoulder_pivot.bind(true))
 	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET, windup) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT, windup)
@@ -301,6 +325,7 @@ func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_del
 	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, follow).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, follow)
 	# ...and the gun comes back up.
+	_switch_tween.tween_callback(_set_shoulder_pivot.bind(false))
 	_switch_tween.tween_callback(_show_weapon.bind(gun_weapon))
 	_switch_tween.tween_property(self, "position", Vector3.ZERO, recover_time - follow).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time - follow)
@@ -327,6 +352,7 @@ func _on_item_used(item: int, item_weapon: WeaponData, use_time: float, lower_ti
 		_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, lower_time)
 		_switch_tween.tween_callback(_show_quick_grenade.bind(item_weapon))
 	# ...wind up and swing (the grenade throw)...
+	_switch_tween.tween_callback(_set_shoulder_pivot.bind(true))
 	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET, windup) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT, windup)
@@ -337,6 +363,7 @@ func _on_item_used(item: int, item_weapon: WeaponData, use_time: float, lower_ti
 	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, follow).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, follow)
 	# ...and back up: the gun, or the next one in hand.
+	_switch_tween.tween_callback(_set_shoulder_pivot.bind(false))
 	_switch_tween.tween_callback(func() -> void:
 		if not equipped:
 			if back_to and _weapons.current_weapon() == back_to:
@@ -346,6 +373,55 @@ func _on_item_used(item: int, item_weapon: WeaponData, use_time: float, lower_ti
 	)
 	_switch_tween.tween_property(self, "position", Vector3.ZERO, recover_time - follow).set_ease(Tween.EASE_OUT)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time - follow)
+
+
+## Throws and heals turn the arm round its shoulder (throw_from_shoulder).
+## Switched on and off only where the switch can't be seen: at the start of
+## the wind-up (no tilt yet, or the arm is still down out of view) and once
+## it has followed through out of view.
+func _set_shoulder_pivot(on: bool) -> void:
+	on = on and throw_from_shoulder
+	if on == _pivot_on_shoulder:
+		return
+	_pivot_on_shoulder = on
+	if on:
+		_shoulder_point = _find_shoulder_point()
+	_apply_shoulder_pivot()
+
+
+## Where the arms model's right shoulder joint is (its upper arm bone), in
+## _swing_pivot's space. No arms: zero, i.e. round the eye like before.
+func _find_shoulder_point() -> Vector3:
+	if not is_instance_valid(_arms):
+		return Vector3.ZERO
+	var skeletons := _arms.find_children("*", "Skeleton3D", true, false)
+	if skeletons.is_empty():
+		return Vector3.ZERO
+	var skeleton := skeletons[0] as Skeleton3D
+	var bone := skeleton.find_bone("RightUpperArm")
+	if bone == -1:
+		bone = skeleton.find_bone("RightShoulder")
+	if bone == -1:
+		return Vector3.ZERO
+	return _swing_pivot.to_local(skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin)
+
+
+## This node turns round its own origin (the eye). Shifting what's under it
+## by B^-1 * P - P (B = its turn, P = the shoulder) makes the same turn
+## happen round P instead: P stays where it is and the hand swings round it.
+func _apply_shoulder_pivot() -> void:
+	if _swing_pivot == null:
+		return
+	if not _pivot_on_shoulder:
+		_swing_pivot.position = Vector3.ZERO
+		return
+	_swing_pivot.position = transform.basis.inverse() * _shoulder_point - _shoulder_point
+
+
+func _notification(what: int) -> void:
+	# Every tween step on this node's tilt/position, kept round the shoulder.
+	if what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED and _pivot_on_shoulder:
+		_apply_shoulder_pivot()
 
 
 func _hide_held_gun() -> void:
@@ -392,6 +468,7 @@ func _update_held_grenade() -> void:
 func _keep_in_step() -> void:
 	if _switch_tween and _switch_tween.is_running():
 		return
+	_set_shoulder_pivot(false) # a throw cut off partway
 	var weapon := _weapons.current_weapon()
 	if weapon and weapon != _shown_weapon:
 		_show_weapon(weapon)
@@ -668,6 +745,11 @@ func _attach_arms(weapon: WeaponData) -> void:
 	if scene == null:
 		return
 	_arms = scene.instantiate() as Node3D
+	# Hidden for its first frames: a fresh copy is drawn once in its rest
+	# T-pose before the hold pose lands -- an arm flashing out sideways
+	# across the bottom of the screen on every swap. _process shows it.
+	_arms.visible = false
+	_arms_hidden_frames = ARMS_REVEAL_FRAMES
 	_model.add_child(_arms)
 
 	# Hold the pose's first frame still, so the hands can't drift off the grip.
@@ -949,6 +1031,10 @@ func _update_sway(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if _arms_hidden_frames > 0:
+		_arms_hidden_frames -= 1
+		if _arms_hidden_frames == 0 and is_instance_valid(_arms):
+			_arms.visible = true
 	_update_held_grenade()
 	_keep_in_step()
 	if not _tuning or _model == null:
