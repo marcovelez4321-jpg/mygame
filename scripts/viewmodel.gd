@@ -70,6 +70,19 @@ const THROW_WINDUP_SHARE := 0.6
 const THROW_FOLLOW_TIME := 0.2
 const THROW_RAISE_TIME := 0.3
 
+## -- Healing (pills, bandage), Left 4 Dead 2's pills --
+## Where the item is brought to, camera space: centred, just under your mouth.
+const ITEM_MOUTH_POINT := Vector3(0.0, -0.13, -0.24)
+## Share of the use time spent bringing it up; the rest is tipping it out.
+const ITEM_RAISE_SHARE := 0.4
+## How far it's tipped back toward your mouth (degrees, round the item).
+const ITEM_TIP_DEGREES := 40.0
+## The little shakes at the top: how many, how much further they tip, and
+## how far up each one jerks it (meters).
+const ITEM_SHAKES := 2
+const ITEM_SHAKE_DEGREES := 14.0
+const ITEM_SHAKE_LIFT := 0.015
+
 ## How many frames freshly built arms stay hidden while their pose lands.
 const ARMS_REVEAL_FRAMES := 2
 
@@ -181,12 +194,13 @@ var _muzzle_marker: MeshInstance3D
 ## never fights the lower/raise animation or the fire kick.
 var _sway_pivot: Node3D
 ## Between this node and _sway_pivot: shifts the rig so this node's tilt
-## turns it round _shoulder_point instead of round the eye (see
-## _apply_shoulder_pivot()). Only while _pivot_on_shoulder.
+## turns it round _pivot_point instead of round the eye (see
+## _apply_pivot()). Only while _pivot_on.
 var _swing_pivot: Node3D
-## The arms model's right shoulder joint, in _swing_pivot's space.
-var _shoulder_point := Vector3.ZERO
-var _pivot_on_shoulder := false
+## What the tilt turns round while _pivot_on, in _swing_pivot's space: the
+## arms' right shoulder (throws) or the item in your hand (heals).
+var _pivot_point := Vector3.ZERO
+var _pivot_on := false
 ## Frames left before freshly built arms are shown (see _ensure_arms()).
 var _arms_hidden_frames := 0
 ## Between _sway_pivot and the arms: the fire kick, which moves the arms and
@@ -376,39 +390,51 @@ func _on_quick_throw_started(grenade: WeaponData, lower_time: float, release_del
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", 0.0, recover_time - follow)
 
 
-## Pills or a bandage used: exactly the grenade throw -- the same wind-up,
-## swing and follow-through as the grenade slot and Q -- with the item in
-## the hand instead of a grenade; it's used up as it leaves the hand (the
-## heal lands then: WeaponController times it to the swing). Used off a gun
-## (T / B), the gun drops first and comes back up after, like Q; used from
-## its own slot, the next one comes up into your hand like the next grenade
-## (or, with none left, WeaponController switches you back).
+## Pills or a bandage used -- Left 4 Dead 2's pills: the hand brings the item
+## up to just under your mouth (ITEM_MOUTH_POINT), tips it back and shakes
+## it out a couple of times, then drops away out of view. The tips turn round
+## the item itself (_set_pivot()), so it tips in place instead of swinging
+## round your eye. The heal lands as it starts down (WeaponController times
+## it to use_time). Used off a gun (T / B), the gun drops first and comes
+## back up after, like Q; used from its own slot, the next one comes up into
+## your hand (or, with none left, WeaponController switches you back).
 func _on_item_used(item: int, item_weapon: WeaponData, use_time: float, lower_time: float, recover_time: float, equipped: bool) -> void:
 	var back_to := _weapons.current_weapon()
 	if _switch_tween:
 		_switch_tween.kill()
-	var windup := use_time * THROW_WINDUP_SHARE
-	var swing := use_time - windup
+	var raise := use_time * ITEM_RAISE_SHARE
+	var step := (use_time - raise) / float(ITEM_SHAKES * 2)
 	var follow := recover_time * 0.4
+	# Moving the whole viewmodel by this takes the item from where it sits in
+	# your hand to your mouth.
+	var to_mouth := ITEM_MOUTH_POINT - item_weapon.viewmodel_position
+	var shake_up := to_mouth + Vector3(0.0, ITEM_SHAKE_LIFT, 0.0)
 	_switch_tween = create_tween()
 	if not equipped:
 		# Gun down, the item hand in...
 		_switch_tween.tween_property(self, "position", LOWERED_OFFSET, lower_time).set_ease(Tween.EASE_IN)
 		_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, lower_time)
 		_switch_tween.tween_callback(_show_quick_grenade.bind(item_weapon))
-	# ...wind up and swing (the grenade throw)...
-	_switch_tween.tween_callback(_set_shoulder_pivot.bind(true))
-	_switch_tween.tween_property(self, "position", THROW_WINDUP_OFFSET, windup) \
+	_switch_tween.tween_callback(_set_pivot.bind(item_weapon.viewmodel_position))
+	# ...up to your mouth, tipping back as it comes...
+	_switch_tween.tween_property(self, "position", to_mouth, raise) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_WINDUP_TILT, windup)
-	_switch_tween.tween_property(self, "position", THROW_SWING_OFFSET, swing).set_ease(Tween.EASE_IN)
-	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", THROW_SWING_TILT, swing)
-	# ...it's used up as it leaves the hand, follow through out of view...
-	_switch_tween.tween_callback(_hide_held_gun)
-	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, follow).set_ease(Tween.EASE_OUT)
+	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", ITEM_TIP_DEGREES * 0.5, raise) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	# ...tipped right back and shaken out...
+	for i in ITEM_SHAKES:
+		_switch_tween.tween_property(self, "rotation_degrees:x", ITEM_TIP_DEGREES + ITEM_SHAKE_DEGREES, step) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_switch_tween.parallel().tween_property(self, "position", shake_up, step).set_ease(Tween.EASE_OUT)
+		_switch_tween.tween_property(self, "rotation_degrees:x", ITEM_TIP_DEGREES, step) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		_switch_tween.parallel().tween_property(self, "position", to_mouth, step).set_ease(Tween.EASE_IN)
+	# ...done (the heal lands now): down out of view, used up...
+	_switch_tween.tween_property(self, "position", LOWERED_OFFSET, follow).set_ease(Tween.EASE_IN)
 	_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, follow)
+	_switch_tween.tween_callback(_hide_held_gun)
 	# ...and back up: the gun, or the next one in hand.
-	_switch_tween.tween_callback(_set_shoulder_pivot.bind(false))
+	_switch_tween.tween_callback(_set_pivot.bind(null))
 	_switch_tween.tween_callback(func() -> void:
 		if not equipped:
 			if back_to and _weapons.current_weapon() == back_to:
@@ -425,18 +451,23 @@ func _on_item_used(item: int, item_weapon: WeaponData, use_time: float, lower_ti
 ## the wind-up (no tilt yet, or the arm is still down out of view) and once
 ## it has followed through out of view.
 func _set_shoulder_pivot(on: bool) -> void:
-	on = on and throw_from_shoulder
-	if on == _pivot_on_shoulder:
-		return
-	_pivot_on_shoulder = on
-	if on:
-		_shoulder_point = _find_shoulder_point()
-	_apply_shoulder_pivot()
+	if on and throw_from_shoulder:
+		_set_pivot(_find_shoulder())
+	elif _pivot_on:
+		_set_pivot(null)
+
+
+## Makes this node's tilt turn the viewmodel round `point` (in
+## _swing_pivot's space), or round the eye again with null.
+func _set_pivot(point: Variant) -> void:
+	_pivot_on = point != null
+	_pivot_point = point if point != null else Vector3.ZERO
+	_apply_pivot()
 
 
 ## Where the arms model's right shoulder joint is (its upper arm bone), in
 ## _swing_pivot's space. No arms: zero, i.e. round the eye like before.
-func _find_shoulder_point() -> Vector3:
+func _find_shoulder() -> Vector3:
 	if not is_instance_valid(_arms):
 		return Vector3.ZERO
 	var skeletons := _arms.find_children("*", "Skeleton3D", true, false)
@@ -452,21 +483,21 @@ func _find_shoulder_point() -> Vector3:
 
 
 ## This node turns round its own origin (the eye). Shifting what's under it
-## by B^-1 * P - P (B = its turn, P = the shoulder) makes the same turn
-## happen round P instead: P stays where it is and the hand swings round it.
-func _apply_shoulder_pivot() -> void:
+## by B^-1 * P - P (B = its turn, P = _pivot_point) makes the same turn
+## happen round P instead: P stays where it is and the rest swings round it.
+func _apply_pivot() -> void:
 	if _swing_pivot == null:
 		return
-	if not _pivot_on_shoulder:
+	if not _pivot_on:
 		_swing_pivot.position = Vector3.ZERO
 		return
-	_swing_pivot.position = transform.basis.inverse() * _shoulder_point - _shoulder_point
+	_swing_pivot.position = transform.basis.inverse() * _pivot_point - _pivot_point
 
 
 func _notification(what: int) -> void:
-	# Every tween step on this node's tilt/position, kept round the shoulder.
-	if what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED and _pivot_on_shoulder:
-		_apply_shoulder_pivot()
+	# Every tween step on this node's tilt/position, kept round _pivot_point.
+	if what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED and _pivot_on:
+		_apply_pivot()
 
 
 func _hide_held_gun() -> void:
