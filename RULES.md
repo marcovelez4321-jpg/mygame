@@ -639,6 +639,13 @@ them:
   - Mission "Stilts in the Dark" (missions/harvestmen.tres, order 4) -> scenes/harvestman_level.tscn: the first map, Grandma hidden, creatures thinned to 15% (SpawnThinner), barnacle nests kept, one of each Harvestman.
   - First run: patrol, spot, skewer and slam all worked. Leg/limb attachment fixed after (rest-pose reset, surface placement) but not re-run.
 
+- 2026-10-08: **Harvestman: barnacle heads, a 10.5 m proboscis, longer spray.** (`barnacle_heads`, on)
+  - The core's barnacles (Core/Barnacle*) are its heads. The one hanging mouth-down is THE head: a Maw node is made at the end of its mouth, and the searchlight (reparented from the spider face, which is hidden) and the proboscis come out of it. Every barnacle turns round its own origin (its root, where it grows from the body) to point its mouth (+Y) where it looks: the head up to `head_turn_limit` 75 degrees, the others (no light, no tube) up to `crown_turn_limit` 50, eased (`head_turn_speed`). It sees from the maw. With no mouth-down barnacle it falls back to the spider face.
+  - Proboscis (new group): out of the maw along the mouth, `proboscis_length` 10.5 (was 3.5), sliding out at `proboscis_extend_speed` 6 m/s while it has a target (never past them) or is feeding (reaching for the body), and back in at `proboscis_retract_speed` 2 m/s when it hasn't. 16 tape-worm segments, sagging and writhing. The hose sprays from its tip.
+  - Hose: `hose_time` 1.8 -> 3.6 s with `hose_globs` 14 -> 28 (same density), and `hose_chance` 0.5 -> 0.7 so it's actually seen.
+  - Hunting, the light's cone narrows to `hunt_angle_scale` 0.5 of `light_angle` (pointing across at you, its patch stretched far too wide); the beam follows the cone.
+  - The editor had saved every Harvestman export as `null` in scenes/harvestman_level.tscn (it loaded harvestman.gd mid-edit, while it couldn't compile). Those 128 lines were removed. If it happens again: close/reopen the scene after the script is fixed, or delete the `= null` lines.
+
 - 2026-10-08: **Harvestman: leech-legs only for now, fits itself to any core, red searchlight with a visible beam.**
   - The mission spawns only the leech-leg Harvestman (the user's favourite). The barnacle/deepmaw/fused scenes stay for later.
   - New "Model" exports. `center_core`: on spawn, the body's parts shift so the core's measured middle (`HarvestmanBuilder.surface_points()`, now public) is the body's middle, and the sack hitbox is sized to it. `fit_legs_to_core`: each Leg node's hip goes back onto the core's surface at its own angle. So any core built in the editor works without hand-fitting. `show_limbs` / `show_knees` (both off): the dangling civilian arms and the leech legs' barnacle knees are left out (still in the model scenes).

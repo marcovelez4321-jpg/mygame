@@ -1,22 +1,22 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://jymiotf8rty8"]
 
 [ext_resource type="PackedScene" uid="uid://n2tgnc4ptc1o" path="res://scenes/test_map/test_map.tscn" id="1_map"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_barnacle.tscn" id="2_barnacle"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="5_leech"]
-[ext_resource type="Script" path="res://scripts/missions/spawn_thinner.gd" id="6_thinner"]
+[ext_resource type="Script" uid="uid://diko2xkhgbb1w" path="res://scripts/missions/spawn_thinner.gd" id="6_thinner"]
 
-[node name="TestMap" instance=ExtResource("1_map")]
+[node name="TestMap" unique_id=1178594651 instance=ExtResource("1_map")]
 
-[node name="Grandma" parent="."]
-visible = false
+[node name="Grandma" parent="." index="23" unique_id=656254352]
 process_mode = 4
+visible = false
 
-[node name="HarvestmanBarnacle" parent="." instance=ExtResource("2_barnacle")]
+[node name="HarvestmanBarnacle" parent="." index="85" unique_id=936967028 instance=ExtResource("2_barnacle")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -30)
 
-[node name="HarvestmanLeech" parent="." instance=ExtResource("5_leech")]
+[node name="HarvestmanLeech" parent="." index="86" unique_id=1659579711 instance=ExtResource("5_leech")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, 30)
 
-[node name="SpawnThinner" type="Node" parent="."]
+[node name="SpawnThinner" type="Node" parent="." index="87" unique_id=151682690]
 script = ExtResource("6_thinner")
 keep_share = 0.15

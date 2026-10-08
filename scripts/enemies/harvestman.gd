@@ -63,6 +63,8 @@ const GUSH_SOUND := preload("res://audio/events/artery_spurt.tres")
 ## between its three parts (hip-knee, knee-ankle, ankle-foot).
 const LEECH_SEGMENTS := 12
 const LEECH_SPLIT := [0.34, 0.38, 0.28]
+## Segments in the proboscis.
+const TUBE_SEGMENTS := 16
 ## The baked worm segment's length along Z (BurrowWorm: 0.8625 x 1.8).
 const SEGMENT_MESH_LENGTH := 1.55
 
@@ -80,6 +82,17 @@ const SEGMENT_MESH_LENGTH := 1.55
 ## Off = left out (still in the model scene, for later).
 @export var show_limbs: bool = false
 @export var show_knees: bool = false
+## The core's barnacles (Core/Barnacle*) are its heads: the one hanging
+## mouth-down is THE head -- the searchlight and the proboscis come out of
+## its maw (the spider face is hidden) -- and every barnacle twists round
+## from its root to point its mouth where it's looking: the head up to
+## head_turn_limit degrees off its rest, the others (no light, no proboscis)
+## up to crown_turn_limit.
+@export var barnacle_heads: bool = true
+@export var head_turn_limit: float = 75.0
+@export var crown_turn_limit: float = 50.0
+## How quickly the heads turn (higher = snappier).
+@export var head_turn_speed: float = 2.5
 
 @export_group("Searchlight")
 @export var light_color: Color = Color(1.0, 0.1, 0.06)
@@ -88,6 +101,17 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var light_angle: float = 22.0
 ## The beam you can see in the air, down to wherever it lands (0 = none).
 @export_range(0.0, 0.5, 0.01) var beam_strength: float = 0.09
+## Hunting, the light points across at you, so its patch lands far off and
+## stretches wide; the cone narrows to this share of light_angle then so the
+## patch spreads half as much.
+@export_range(0.1, 1.0, 0.05) var hunt_angle_scale: float = 0.5
+
+@export_group("Proboscis")
+## The feeding tube out of the head's maw: how far it reaches, and how fast it
+## slides out (it has a target, it's feeding) and back in (it hasn't).
+@export var proboscis_length: float = 10.5
+@export var proboscis_extend_speed: float = 6.0
+@export var proboscis_retract_speed: float = 2.0
 
 @export_group("Stance")
 ## Height of the middle of its sack above the floor, standing / crouched
@@ -141,8 +165,10 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var slam_exposed: float = 3.0
 @export var hose_range_min: float = 8.0
 @export var hose_range_max: float = 24.0
-@export var hose_time: float = 1.8
-@export var hose_globs: int = 14
+@export var hose_time: float = 3.6
+@export var hose_globs: int = 28
+## Chance it sprays when you're in hose range and it's ready to attack.
+@export_range(0.0, 1.0, 0.05) var hose_chance: float = 0.7
 @export var hose_damage: float = 6.0
 @export var hose_sweep: float = 3.5
 @export var hose_speed: float = 14.0
@@ -248,8 +274,21 @@ var _light: SpotLight3D
 var _legs: Array[HLeg] = []
 var _leech_mm: MultiMeshInstance3D
 var _tube_mm: MultiMeshInstance3D
-var _tube_end := Vector3.ZERO
-var _tube_on := false
+## How far the proboscis is out right now, and (feeding) what it's reaching for.
+var _tube_reach := 0.0
+var _tube_feeding := false
+var _tube_feed_point := Vector3.ZERO
+## The barnacle heads: each one's rest turn and how far it may turn, how it's
+## turned now, which is THE head, and its maw (where the light and the
+## proboscis come out: a point in the head's own space, and a node there).
+var _heads: Array[Node3D] = []
+var _head_rest: Array[Basis] = []
+var _head_limit := PackedFloat32Array()
+var _head_turn: Array[Quaternion] = []
+var _main_head: Node3D
+var _maw_local := Vector3.ZERO
+var _maw: Node3D
+var _light_angle_now := 22.0
 var _yaw := 0.0
 var _speed := 0.0
 var _height := 8.0
@@ -305,6 +344,7 @@ func _ready() -> void:
 			if knee:
 				knee.free()
 	_fit_to_core(legs)
+	_setup_heads()
 	_setup_light()
 	if legs:
 		for child in legs.get_children():
@@ -314,7 +354,7 @@ func _ready() -> void:
 					_legs.append(leg)
 	if _legs.any(func(leg: HLeg) -> bool: return leg.skeleton == null):
 		_leech_mm = _segments_mesh(LEECH_SEGMENTS * _legs.size())
-	_tube_mm = _segments_mesh(8)
+	_tube_mm = _segments_mesh(TUBE_SEGMENTS)
 	var sack := SphereShape3D.new()
 	sack.radius = sack_radius
 	_sack_body = _hitbox(sack, "sack", null)
@@ -381,6 +421,90 @@ func _fit_to_core(legs: Node) -> void:
 			leg.position = HarvestmanBuilder.surface_at(points, out, sack_radius) - out * 0.2
 
 
+## The core's barnacles become heads (barnacle_heads). The one hanging
+## mouth-down is THE head: a Maw node is made at the end of its mouth, and
+## the searchlight and the proboscis come out of there; the spider face is
+## hidden. Every barnacle turns round its own origin -- its root, where it
+## grows out of the body -- to point its mouth (its +Y) where it's looking
+## (_aim_heads()).
+func _setup_heads() -> void:
+	if not barnacle_heads or _core == null:
+		return
+	var lowest := 0.0
+	for child in _core.get_children():
+		var head := child as Node3D
+		if head == null or not head.name.begins_with("Barnacle"):
+			continue
+		_heads.append(head)
+		_head_rest.append(head.basis)
+		_head_turn.append(Quaternion.IDENTITY)
+		var mouth := head.basis.y.normalized()
+		if mouth.y < lowest:
+			lowest = mouth.y
+			_main_head = head
+	if _main_head == null or lowest > -0.5:
+		# No barnacle hangs mouth-down: keep the spider face as the head.
+		_heads.clear()
+		_head_rest.clear()
+		_head_turn.clear()
+		_main_head = null
+		return
+	for head in _heads:
+		_head_limit.append(head_turn_limit if head == _main_head else crown_turn_limit)
+	# The end of its mouth, in its own space: the far end of its mesh along +Y.
+	var reach := 0.0
+	var to_head := _main_head.global_transform.affine_inverse()
+	for node in _main_head.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		reach = maxf(reach, (to_head * mesh.global_transform * mesh.get_aabb()).end.y)
+	_maw_local = Vector3(0.0, reach * 0.85, 0.0)
+	_maw = Node3D.new()
+	_maw.name = "Maw"
+	_body.add_child(_maw)
+	_place_maw()
+	if _light:
+		_light.reparent(_maw, false)
+		_light.transform = Transform3D.IDENTITY
+	_mouth = _maw
+	if _face:
+		_face.visible = false
+
+
+## Points every barnacle's mouth toward `look` (world), each turning from
+## its root no further than its limit, smoothly; then the maw follows the
+## head's mouth.
+func _aim_heads(look: Vector3, delta: float) -> void:
+	if _heads.is_empty():
+		return
+	var to_core := _core.global_basis.inverse()
+	var want := (to_core * look).normalized()
+	for i in _heads.size():
+		var rest_mouth := _head_rest[i].y.normalized()
+		var axis := rest_mouth.cross(want)
+		var turn := Quaternion.IDENTITY
+		if axis.length_squared() > 0.000001:
+			turn = Quaternion(axis.normalized(), minf(rest_mouth.angle_to(want), deg_to_rad(_head_limit[i])))
+		_head_turn[i] = _head_turn[i].slerp(turn, 1.0 - exp(-head_turn_speed * delta))
+		_heads[i].basis = Basis(_head_turn[i]) * _head_rest[i]
+	_place_maw()
+
+
+## The maw: at the end of the head's mouth, looking out of it.
+func _place_maw() -> void:
+	if _maw == null or _main_head == null:
+		return
+	var out := _main_head.global_basis.y.normalized()
+	var up := Vector3.UP if absf(out.y) < 0.98 else Vector3.FORWARD
+	_maw.global_transform = Transform3D(Basis.looking_at(out, up), _main_head.global_transform * _maw_local)
+
+
+## Where it sees from: the head's maw (or the spider face).
+func _eyes_point() -> Vector3:
+	if _maw:
+		return _maw.global_position
+	return _face.global_position if _face else _body.global_position
+
+
 ## The searchlight: red, long, and a faint beam you can see in the air down
 ## to wherever it lands (_aim_beam()).
 func _setup_light() -> void:
@@ -390,6 +514,7 @@ func _setup_light() -> void:
 	_light.light_energy = light_energy
 	_light.spot_range = light_range
 	_light.spot_angle = light_angle
+	_light_angle_now = light_angle
 	_light.shadow_enabled = false
 	if beam_strength <= 0.0:
 		return
@@ -429,8 +554,10 @@ func _aim_beam(delta: float) -> void:
 		query.collision_mask = 1
 		var hit := _static_hit(get_world_3d().direct_space_state, query)
 		_beam_length = from.distance_to(hit.position) if not hit.is_empty() else light_range * 0.6
-	# The cone's axis is its Y: lay it along the light (-Z), tip at the eyes.
-	_beam.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5).scaled(Vector3(_beam_length, _beam_length, _beam_length)), Vector3(0.0, 0.0, -_beam_length * 0.5))
+	# The cone's axis is its Y: lay it along the light (-Z), tip at the eyes,
+	# as wide as the light's cone is now.
+	var width := _beam_length * tan(deg_to_rad(_light_angle_now)) / maxf(tan(deg_to_rad(light_angle)), 0.001)
+	_beam.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5).scaled(Vector3(width, width, _beam_length)), Vector3(0.0, 0.0, -_beam_length * 0.5))
 	_beam.visible = _state != State.DEAD
 
 func _make_leg(node: Node3D) -> HLeg:
@@ -584,7 +711,7 @@ func _pick_patrol_goal() -> void:
 
 ## Every quarter second: can it see (or feel) a player?
 func _look() -> void:
-	var eyes := _face.global_position if _face else _body.global_position
+	var eyes := _eyes_point()
 	var best: Node3D = null
 	var best_distance := INF
 	for node in get_tree().get_nodes_in_group("player"):
@@ -665,7 +792,7 @@ func _hunt(delta: float) -> void:
 		_start_attack(Attack.SLAM, null)
 	elif distance < skewer_range and leg:
 		_start_attack(Attack.SKEWER, leg)
-	elif distance > hose_range_min and distance < hose_range_max and randf() < 0.5:
+	elif distance > hose_range_min and distance < hose_range_max and randf() < hose_chance:
 		_start_attack(Attack.HOSE, null)
 
 
@@ -767,7 +894,6 @@ func _end_attack() -> void:
 		_attack_leg.planted = _attack_leg.foot
 	_attack_leg = null
 	_attack = Attack.NONE
-	_tube_on = false
 	_cooldown = attack_cooldown
 	if _state == State.ATTACK:
 		_set_state(State.COLLAPSED if _broken_legs() >= 2 else State.HUNT)
@@ -878,16 +1004,14 @@ func _slam_impact() -> void:
 	Explosion.launch_ragdolls(self, center + Vector3.UP, slam_radius, 12.0)
 
 
-## Hose: a tube out of its face sprays a sweep of filth across you -- the
-## spitter roach's spit (brown), each glob led like the roach leads -- and
-## every glob leaves a burning puddle where it lands.
+## Hose: the proboscis sprays a sweep of filth across you out of its tip --
+## the spitter roach's spit (brown), each glob led like the roach leads --
+## and every glob leaves a burning puddle where it lands.
 func _hose_step() -> void:
 	if not is_instance_valid(target) or _mouth == null:
 		_end_attack()
 		return
-	_tube_on = true
-	var mouth := _mouth.global_position
-	_tube_end = mouth + (Factions.aim_point(target) - mouth).normalized() * 3.5
+	var mouth := _tube_tip()
 	var due := mini(hose_globs, int(_attack_time / maxf(hose_time, 0.01) * hose_globs))
 	while _attack_fired < due:
 		var sweep := lerpf(-1.0, 1.0, float(_attack_fired) / maxf(hose_globs - 1, 1))
@@ -998,9 +1122,9 @@ func _feed_step(delta: float) -> void:
 	if _mouth == null:
 		_end_feed()
 		return
-	_tube_on = true
+	_tube_feeding = true
+	_tube_feed_point = body_at
 	var mouth := _mouth.global_position
-	_tube_end = body_at
 	var head := _feed_ragdoll.bone_named("Head")
 	if head == null:
 		head = _feed_ragdoll.bone_named("Hips")
@@ -1025,7 +1149,7 @@ func _end_feed() -> void:
 		_feed_corpse.remove_meta("dragged")
 	_feed_ragdoll = null
 	_feed_corpse = null
-	_tube_on = false
+	_tube_feeding = false
 	_height_target = stand_height
 
 
@@ -1179,7 +1303,7 @@ func _process(delta: float) -> void:
 	for leg in _legs:
 		_solve_leg(leg)
 	_draw_leech_legs()
-	_draw_tube()
+	_draw_tube(delta)
 	_place_hitboxes()
 	_update_sound(delta)
 
@@ -1232,18 +1356,30 @@ func _place_body(delta: float) -> void:
 func _update_eyes(delta: float) -> void:
 	var facing := Basis(Vector3.UP, _yaw)
 	var want: Vector3
-	if is_instance_valid(target) and (_state == State.HUNT or _state == State.ATTACK or _state == State.COLLAPSED):
-		var eyes := _face.global_position if _face else _body.global_position
-		want = (Factions.aim_point(target) - eyes).normalized()
+	var hunting := _is_hunting()
+	if hunting:
+		want = (Factions.aim_point(target) - _eyes_point()).normalized()
+	elif _tube_feeding:
+		want = (_tube_feed_point - _eyes_point()).normalized()
 	else:
 		var sweep := sin(_time * (0.9 if _state == State.LISTEN else 0.4)) * deg_to_rad(65.0)
 		want = facing * (Basis(Vector3.UP, sweep) * Basis(Vector3.RIGHT, deg_to_rad(-25.0)) * Vector3.FORWARD)
 	_eye_dir = _eye_dir.slerp(want, 1.0 - exp(-3.0 * delta)).normalized()
-	if _face and _eye_dir.length_squared() > 0.01:
-		_face.global_basis = Basis.looking_at(_eye_dir, Vector3.UP if absf(_eye_dir.y) < 0.98 else Vector3.FORWARD)
+	if _heads.is_empty():
+		if _face and _eye_dir.length_squared() > 0.01:
+			_face.global_basis = Basis.looking_at(_eye_dir, Vector3.UP if absf(_eye_dir.y) < 0.98 else Vector3.FORWARD)
+	else:
+		_aim_heads(_eye_dir, delta)
 	if _light:
 		_light.visible = _state != State.DEAD
+		var angle := light_angle * (hunt_angle_scale if hunting else 1.0)
+		_light_angle_now = lerpf(_light_angle_now, angle, 1.0 - exp(-3.0 * delta))
+		_light.spot_angle = _light_angle_now
 	_aim_beam(delta)
+
+
+func _is_hunting() -> bool:
+	return is_instance_valid(target) and (_state == State.HUNT or _state == State.ATTACK or _state == State.COLLAPSED)
 
 
 ## Feet: one leg steps at a time, round and round, each lifting high and
@@ -1400,19 +1536,46 @@ func _draw_leech_legs() -> void:
 		index += LEECH_SEGMENTS
 
 
-## The feeding tube / hose: a thin tape-worm tube from its mouth to the end,
-## sagging a little; tucked away when not in use.
-func _draw_tube() -> void:
+## The proboscis: a long tape-worm tube straight out of the head's maw. With
+## a target it slides out toward them (never through them), up to
+## proboscis_length; feeding, it reaches down to the body; otherwise it
+## slides slowly back into the maw. It sags and writhes as it goes.
+func _draw_tube(delta: float) -> void:
 	if _tube_mm == null or _mouth == null:
 		return
-	if not _tube_on:
+	var start := _mouth.global_position
+	var out := -_mouth.global_basis.z if _maw else (_eye_dir if _eye_dir.length_squared() > 0.01 else Vector3.DOWN)
+	var want := 0.0
+	if _state != State.DEAD:
+		if _tube_feeding:
+			want = start.distance_to(_tube_feed_point)
+			out = (_tube_feed_point - start).normalized()
+		elif _is_hunting():
+			want = minf(proboscis_length, start.distance_to(Factions.aim_point(target)) - 1.0)
+	var speed := proboscis_extend_speed if want > _tube_reach else proboscis_retract_speed
+	_tube_reach = move_toward(_tube_reach, maxf(want, 0.0), speed * delta)
+	if _tube_reach < 0.3:
 		if _tube_mm.visible:
 			_tube_mm.visible = false
 		return
 	_tube_mm.visible = true
-	var start := _mouth.global_position
-	var middle := start.lerp(_tube_end, 0.5) + Vector3.DOWN * 0.6
-	_lay_segments(_tube_mm.multimesh, 0, 8, PackedVector3Array([start, middle, _tube_end]), 0.16, 0.1)
+	var side := out.cross(Vector3.UP)
+	side = side.normalized() if side.length_squared() > 0.001 else Vector3.RIGHT
+	var points := PackedVector3Array()
+	for k in 5:
+		var f := k / 4.0
+		var sag := Vector3.DOWN * sin(f * PI) * _tube_reach * 0.08
+		var writhe := side * sin(_time * 3.0 + f * 5.0) * 0.25 * f + Vector3.UP * cos(_time * 2.3 + f * 4.0) * 0.15 * f
+		points.append(start + out * _tube_reach * f + sag + writhe)
+	_lay_segments(_tube_mm.multimesh, 0, TUBE_SEGMENTS, points, 0.2, 0.07)
+
+
+## Where the proboscis ends now (the hose sprays from here).
+func _tube_tip() -> Vector3:
+	if _mouth == null:
+		return _body.global_position
+	var out := -_mouth.global_basis.z if _maw else _eye_dir
+	return _mouth.global_position + out * maxf(_tube_reach, 0.5)
 
 
 ## `count` segments evenly along the path through `points`, from instance
