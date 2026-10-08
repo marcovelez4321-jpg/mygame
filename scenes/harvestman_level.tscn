@@ -1,9 +1,6 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" uid="uid://n2tgnc4ptc1o" path="res://scenes/test_map/test_map.tscn" id="1_map"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_barnacle.tscn" id="2_barnacle"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_deepmaw.tscn" id="3_deepmaw"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_fused.tscn" id="4_fused"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="5_leech"]
 [ext_resource type="Script" path="res://scripts/missions/spawn_thinner.gd" id="6_thinner"]
 
@@ -12,15 +9,6 @@
 [node name="Grandma" parent="."]
 visible = false
 process_mode = 4
-
-[node name="HarvestmanBarnacle" parent="." instance=ExtResource("2_barnacle")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -30)
-
-[node name="HarvestmanDeepmaw" parent="." instance=ExtResource("3_deepmaw")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, -30)
-
-[node name="HarvestmanFused" parent="." instance=ExtResource("4_fused")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, 30)
 
 [node name="HarvestmanLeech" parent="." instance=ExtResource("5_leech")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, 30)

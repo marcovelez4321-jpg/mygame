@@ -84,7 +84,7 @@ static func build(settings: Settings, parent: Node) -> Node3D:
 
 	# The core's real surface (whatever shape it came out), so the limbs and
 	# legs can start right on it.
-	var surface := _surface_points(core, body)
+	var surface := surface_points(core, body)
 
 	_face(body, core_radius)
 
@@ -107,7 +107,7 @@ static func build(settings: Settings, parent: Node) -> Node3D:
 		var down := rng.randf_range(-0.85, 0.15)
 		var out := Vector3(sin(around) * sqrt(1.0 - down * down), down, cos(around) * sqrt(1.0 - down * down)).normalized()
 		# On the surface, sunk in a little so it grows out of the flesh.
-		limb.position = _surface_at(surface, out, core_radius) - out * 0.15
+		limb.position = surface_at(surface, out, core_radius) - out * 0.15
 		limb.basis = Basis.looking_at(out, Vector3.UP if absf(out.y) < 0.95 else Vector3.FORWARD)
 		var is_leg := rng.randf() < 0.4
 		if limb.build(character, "Left" if rng.randf() < 0.5 else "Right", is_leg, 1.9 if is_leg else 1.5):
@@ -126,7 +126,7 @@ static func build(settings: Settings, parent: Node) -> Node3D:
 		# Hips on the surface round the top half of the sack (sunk in a
 		# little), so the legs rise out of it and arch over before coming down.
 		var hip_dir := Vector3(sin(angle), 0.45, -cos(angle)).normalized()
-		leg.position = _surface_at(surface, hip_dir, core_radius) - hip_dir * 0.2
+		leg.position = surface_at(surface, hip_dir, core_radius) - hip_dir * 0.2
 		if settings.leech_legs:
 			_barnacle(leg, 1.1, Color(0.6, 0.45, 0.45), false).name = "Knee"
 		else:
@@ -375,7 +375,7 @@ static func _spider_leg(leg: Node3D, angle: float, settings: Settings) -> void:
 
 ## Every vertex of the core's visible meshes, where it's actually drawn
 ## (skinned ones as their skeleton poses them), in `space`'s coordinates.
-static func _surface_points(core: Node3D, space: Node3D) -> PackedVector3Array:
+static func surface_points(core: Node3D, space: Node3D) -> PackedVector3Array:
 	var points := PackedVector3Array()
 	var to_space := space.global_transform.affine_inverse()
 	for mesh_instance in _meshes(core):
@@ -414,7 +414,7 @@ static func _surface_points(core: Node3D, space: Node3D) -> PackedVector3Array:
 
 ## Where the surface is going out from the middle along `dir`: the furthest
 ## of `points` within a narrow cone round it (or `fallback` meters out).
-static func _surface_at(points: PackedVector3Array, dir: Vector3, fallback: float) -> Vector3:
+static func surface_at(points: PackedVector3Array, dir: Vector3, fallback: float) -> Vector3:
 	var best := -1.0
 	var cone := cos(deg_to_rad(18.0))
 	for point in points:

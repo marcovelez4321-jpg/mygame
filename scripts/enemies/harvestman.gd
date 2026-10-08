@@ -68,6 +68,27 @@ const SEGMENT_MESH_LENGTH := 1.55
 
 @export var model_scene: PackedScene
 
+@export_group("Model")
+## On spawn, whatever the core looks like (edit it however you like in the
+## model scene): the whole body is shifted so the core's middle is the body's
+## middle (where it rides and gets hit), its hitbox sized to it...
+@export var center_core: bool = true
+## ...and every leg's hip put back on the core's surface, at the angle round
+## the body its Leg node has.
+@export var fit_legs_to_core: bool = true
+## The civilian limbs dangling off it, and the leech legs' barnacle knees.
+## Off = left out (still in the model scene, for later).
+@export var show_limbs: bool = false
+@export var show_knees: bool = false
+
+@export_group("Searchlight")
+@export var light_color: Color = Color(1.0, 0.1, 0.06)
+@export var light_energy: float = 9.0
+@export var light_range: float = 45.0
+@export var light_angle: float = 22.0
+## The beam you can see in the air, down to wherever it lands (0 = none).
+@export_range(0.0, 0.5, 0.01) var beam_strength: float = 0.09
+
 @export_group("Stance")
 ## Height of the middle of its sack above the floor, standing / crouched
 ## (to get under things, to feed).
@@ -246,6 +267,9 @@ var _time := 0.0
 var _drone: AudioStreamPlayer3D
 var _horror_left := 0.0
 var _sack_body: AnimatableBody3D
+var _beam: MeshInstance3D
+var _beam_left := 0.0
+var _beam_length := 10.0
 var _gush_cooldowns := {}
 var _bodies: Array[AnimatableBody3D] = []
 
@@ -271,6 +295,17 @@ func _ready() -> void:
 	_mouth = _body.get_node_or_null("Face/Mouth") as Node3D
 	_light = _body.get_node_or_null("Face/Searchlight") as SpotLight3D
 	var legs := _body.get_node_or_null("Legs")
+	if not show_limbs:
+		var limbs := _body.get_node_or_null("Limbs")
+		if limbs:
+			limbs.free()
+	if not show_knees and legs:
+		for leg_node in legs.get_children():
+			var knee := leg_node.get_node_or_null("Knee")
+			if knee:
+				knee.free()
+	_fit_to_core(legs)
+	_setup_light()
 	if legs:
 		for child in legs.get_children():
 			if child is Node3D:
@@ -314,6 +349,89 @@ func _ready() -> void:
 
 
 # ---- Building the live parts --------------------------------------------------
+
+## Whatever the core turned out like: the body's parts all shifted so the
+## core's middle is the body's middle (center_core; the sack's hitbox then
+## sits on it, sized to it), and each leg's hip moved onto the core's
+## surface at its own angle round the body (fit_legs_to_core).
+func _fit_to_core(legs: Node) -> void:
+	if _core == null or not (center_core or fit_legs_to_core):
+		return
+	var points := HarvestmanBuilder.surface_points(_core, _body)
+	if points.is_empty():
+		return
+	var box := AABB(points[0], Vector3.ZERO)
+	for point in points:
+		box = box.expand(point)
+	var middle := box.get_center()
+	if center_core:
+		for child in _body.get_children():
+			if child is Node3D:
+				(child as Node3D).position -= middle
+		for i in points.size():
+			points[i] -= middle
+		sack_radius = maxf(minf(box.size.x, box.size.z) * 0.5, 0.8)
+	if fit_legs_to_core and legs:
+		for node in legs.get_children():
+			var leg := node as Node3D
+			if leg == null:
+				continue
+			var angle := atan2(leg.position.x, -leg.position.z)
+			var out := Vector3(sin(angle), 0.45, -cos(angle)).normalized()
+			leg.position = HarvestmanBuilder.surface_at(points, out, sack_radius) - out * 0.2
+
+
+## The searchlight: red, long, and a faint beam you can see in the air down
+## to wherever it lands (_aim_beam()).
+func _setup_light() -> void:
+	if _light == null:
+		return
+	_light.light_color = light_color
+	_light.light_energy = light_energy
+	_light.spot_range = light_range
+	_light.spot_angle = light_angle
+	_light.shadow_enabled = false
+	if beam_strength <= 0.0:
+		return
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.05
+	cone.bottom_radius = tan(deg_to_rad(light_angle))
+	cone.height = 1.0
+	cone.radial_segments = 12
+	cone.rings = 1
+	cone.cap_top = false
+	cone.cap_bottom = false
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.no_depth_test = false
+	material.albedo_color = Color(light_color, beam_strength)
+	_beam = MeshInstance3D.new()
+	_beam.mesh = cone
+	_beam.material_override = material
+	_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_light.add_child(_beam)
+
+
+## The beam reaches from the eyes to where the light lands (one ray, a few
+## times a second).
+func _aim_beam(delta: float) -> void:
+	if _beam == null or _light == null:
+		return
+	_beam_left -= delta
+	if _beam_left <= 0.0:
+		_beam_left = 0.1
+		var from := _light.global_position
+		var to := from - _light.global_basis.z * light_range
+		var query := PhysicsRayQueryParameters3D.create(from, to)
+		query.collision_mask = 1
+		var hit := _static_hit(get_world_3d().direct_space_state, query)
+		_beam_length = from.distance_to(hit.position) if not hit.is_empty() else light_range * 0.6
+	# The cone's axis is its Y: lay it along the light (-Z), tip at the eyes.
+	_beam.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5).scaled(Vector3(_beam_length, _beam_length, _beam_length)), Vector3(0.0, 0.0, -_beam_length * 0.5))
+	_beam.visible = _state != State.DEAD
 
 func _make_leg(node: Node3D) -> HLeg:
 	var leg := HLeg.new()
@@ -1125,6 +1243,7 @@ func _update_eyes(delta: float) -> void:
 		_face.global_basis = Basis.looking_at(_eye_dir, Vector3.UP if absf(_eye_dir.y) < 0.98 else Vector3.FORWARD)
 	if _light:
 		_light.visible = _state != State.DEAD
+	_aim_beam(delta)
 
 
 ## Feet: one leg steps at a time, round and round, each lifting high and
