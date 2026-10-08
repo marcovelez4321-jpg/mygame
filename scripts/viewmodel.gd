@@ -1317,7 +1317,12 @@ func _save_weapon() -> void:
 	var weapon := _shown_weapon
 	if weapon == null or weapon.resource_path.is_empty():
 		return
+	# Keep the file's uid: other scenes may point at the weapon by it, and a
+	# plain save hands the file a new one.
+	var uid := ResourceLoader.get_resource_uid(weapon.resource_path)
 	var result := ResourceSaver.save(weapon, weapon.resource_path)
+	if result == OK and uid != ResourceUID.INVALID_ID:
+		ResourceSaver.set_uid(weapon.resource_path, uid)
 	_update_label("Saved to %s" % weapon.resource_path if result == OK else "SAVE FAILED (error %d)" % result)
 
 
