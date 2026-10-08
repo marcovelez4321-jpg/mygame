@@ -116,9 +116,17 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 
 @onready var _weapons: WeaponController = get_node(weapons_path)
 
+## The model in your hand: a pivot holding the gun/item model, a child of
+## the arms' right hand bone (_hand_attachment), placed so that with the arms
+## in their hold pose it sits exactly at the weapon's viewmodel_position /
+## rotation / scale (camera space). Half-Life 2's way: the gun is IN the hand,
+## so anything that moves the hand carries the gun with it.
 var _model: Node3D
 ## The gun's own model inside _model (without the arms).
 var _gun: Node3D
+## Every gun/item model made so far, kept (hidden) for the next time it's
+## shown, so a switch never loads or builds anything: WeaponData -> _model.
+var _gun_models := {}
 ## Thrown the grenade, waiting for the next one to come into the hand.
 var _waiting_for_grenade := false
 ## The weapon whose model is in your hand right now (it can differ from the
@@ -127,11 +135,31 @@ var _shown_weapon: WeaponData
 var _model_rest_position: Vector3
 var _model_rest_rotation: Vector3
 var _model_rest_transform: Transform3D
-## Your character's arms holding the gun -- a child of _model, so the kick,
-## sway, switch and reload animations all carry the hands with the gun.
-## Placed in camera space (WeaponData.arms_position) and converted into
-## _model's space in _apply_arms_transform().
+## Your character's arms: ONE copy, built the first time it's needed and kept
+## for good (like HL2's c_arms) -- a switch just plays the new weapon's hold
+## pose on it and moves it to the weapon's arms_position. A child of
+## _kick_pivot, so the kick, sway, switch and reload animations all carry the
+## hands and the gun together.
 var _arms: Node3D
+var _arms_skeleton: Skeleton3D
+var _arms_animator: AnimationPlayer
+## The hold poses played so far (one per hold_animation).
+var _arms_library: AnimationLibrary
+## The skeleton node's place inside _arms (fixed, measured once).
+var _skeleton_in_arms := Transform3D.IDENTITY
+var _hand_bone := -1
+## Follows the right hand bone; the gun models hang off it.
+var _hand_attachment: BoneAttachment3D
+## [MeshInstance3D, its original mesh, its original per-surface material
+## overrides] for each skinned mesh of the arms, so it can be cut again
+## (both arms / right arm only) from the original.
+var _arms_meshes: Array = []
+## Which cut is on: 1 = both arms, 0 = right arm only, -1 = none yet.
+var _arms_keep_left := -1
+## The head/legs shrinker, used only when the mesh can't be cut.
+var _arms_hider: HideBonesModifier
+## Whether the shown weapon wants arms at all (it has a hold_animation).
+var _arms_wanted := false
 ## Arms-only cuts of the arms model's meshes, made once and shared:
 ## "<mesh id>|<skin id>|<keep left>" -> [ArrayMesh, kept surface indices].
 static var _arms_only_meshes := {}
@@ -159,8 +187,23 @@ var _swing_pivot: Node3D
 ## The arms model's right shoulder joint, in _swing_pivot's space.
 var _shoulder_point := Vector3.ZERO
 var _pivot_on_shoulder := false
-## Frames left before freshly built arms are shown (see _attach_arms()).
+## Frames left before freshly built arms are shown (see _ensure_arms()).
 var _arms_hidden_frames := 0
+## Between _sway_pivot and the arms: the fire kick, which moves the arms and
+## the gun in them as one (see _apply_kick()).
+var _kick_pivot: Node3D
+## The kick right now: how far back (meters) and how far the muzzle's tipped
+## up (degrees). Tweened back to 0 after each shot.
+var _kick_back := 0.0:
+	set(value):
+		_kick_back = value
+		_apply_kick()
+var _kick_pitch := 0.0:
+	set(value):
+		_kick_pitch = value
+		_apply_kick()
+## F2 > I: shows the whole viewmodel where it goes when aimed.
+var _preview_offset := Vector3.ZERO
 var _sway_position: Vector2 = Vector2.ZERO
 var _sway_tilt: Vector2 = Vector2.ZERO # degrees: x = pitch, y = yaw
 var _previous_look: Vector2 = Vector2.ZERO # pitch, yaw in radians
@@ -195,6 +238,8 @@ func _ready() -> void:
 	add_child(_swing_pivot)
 	_sway_pivot = Node3D.new()
 	_swing_pivot.add_child(_sway_pivot)
+	_kick_pivot = Node3D.new()
+	_sway_pivot.add_child(_kick_pivot)
 	set_notify_local_transform(true)
 	_weapons.weapon_switched.connect(_on_weapon_switched)
 	_weapons.shot_fired.connect(_on_shot_fired)
@@ -618,14 +663,28 @@ func _on_shot_fired() -> void:
 
 	if _kick_tween:
 		_kick_tween.kill()
-	_model.position = _model_rest_position + Vector3(0.0, 0.0, kick_distance)
-	_model.rotation_degrees.x = _model_rest_rotation.x + kick_rotation
+	_kick_back = kick_distance
+	_kick_pitch = kick_rotation
 	_kick_tween = create_tween()
 	_kick_tween.set_parallel(true)
-	_kick_tween.tween_property(_model, "position", _model_rest_position, KICK_TIME)
-	_kick_tween.tween_property(_model, "rotation_degrees:x", _model_rest_rotation.x, KICK_ROTATION_TIME) \
-			.set_ease(Tween.EASE_OUT)
+	_kick_tween.tween_property(self, "_kick_back", 0.0, KICK_TIME)
+	_kick_tween.tween_property(self, "_kick_pitch", 0.0, KICK_ROTATION_TIME).set_ease(Tween.EASE_OUT)
 	_spawn_muzzle_flash()
+
+
+## The kick, as a move of the whole viewmodel (arms and gun together): the
+## same move that takes the gun from its rest pose to its rest pose pushed
+## back _kick_back and tipped up _kick_pitch round its own middle.
+func _apply_kick() -> void:
+	if _kick_pivot == null:
+		return
+	if _kick_back == 0.0 and _kick_pitch == 0.0:
+		_kick_pivot.transform = Transform3D.IDENTITY
+		return
+	var rest := Transform3D(Basis.from_euler(_model_rest_rotation * (PI / 180.0)), _model_rest_position)
+	var kicked := Transform3D(Basis.from_euler((_model_rest_rotation + Vector3(_kick_pitch, 0.0, 0.0)) * (PI / 180.0)),
+			_model_rest_position + Vector3(0.0, 0.0, _kick_back))
+	_kick_pivot.transform = kicked * rest.affine_inverse()
 
 
 ## Where the equipped gun's muzzle is in the world right now (its
@@ -677,34 +736,45 @@ func _spawn_muzzle_flash() -> void:
 	timer.timeout.connect(glow.queue_free)
 
 
+## Puts `weapon` in your hand. Nothing is loaded or built after the first
+## time: the arms are kept (_ensure_arms()), take the weapon's hold pose
+## (_pose_arms()), and the weapon's model is pulled out of _gun_models.
 func _show_weapon(weapon: WeaponData) -> void:
 	if _kick_tween:
 		_kick_tween.kill()
-	if _model:
-		_model.queue_free() # takes the old arms with it
-	_arms = null
+	_kick_back = 0.0
+	_kick_pitch = 0.0
+	if is_instance_valid(_model):
+		_model.visible = false
+	_shown_weapon = weapon
+	_pose_arms(weapon)
 
 	# _model is a pivot. The weapon's position, rotation and scale are applied to
 	# it, and the gun is shifted inside it so the GUN'S CENTRE sits on the pivot.
 	# Imported models often have their origin far from the actual mesh, which
 	# would make rotating or resizing swing the gun around wildly.
-	_model = Node3D.new()
-	_sway_pivot.add_child(_model)
-	var gun: Node3D
-	if weapon.viewmodel_scene:
-		gun = weapon.viewmodel_scene.instantiate() as Node3D
-	else:
-		gun = _make_placeholder(weapon)
-	_model.add_child(gun)
-	_gun = gun
-	_shown_weapon = weapon
+	var model: Node3D = null
+	if is_instance_valid(_gun_models.get(weapon)):
+		model = _gun_models[weapon]
+	if model == null:
+		model = Node3D.new()
+		_hand_anchor().add_child(model)
+		var gun: Node3D
+		if weapon.viewmodel_scene:
+			gun = weapon.viewmodel_scene.instantiate() as Node3D
+		else:
+			gun = _make_placeholder(weapon)
+		model.add_child(gun)
+		_center_on_pivot(gun)
+		_gun_models[weapon] = model
+	_model = model
+	_model.visible = true
+	_gun = _model.get_child(0) as Node3D
 	# A grenade slot with nothing in hand yet: empty hand until one's ready.
 	_waiting_for_grenade = weapon.throws_grenade and _weapons.get_magazine_ammo() <= 0
-	gun.visible = not _waiting_for_grenade
-	_center_on_pivot(gun)
+	_gun.visible = not _waiting_for_grenade
 	_apply_transform(weapon)
 	_sight_center = _find_sight_center(weapon)
-	_attach_arms(weapon)
 	# An empty launcher comes out empty.
 	if weapon.fires_projectile:
 		_show_loaded_projectile(_weapons.get_magazine_ammo() > 0)
@@ -712,93 +782,169 @@ func _show_weapon(weapon: WeaponData) -> void:
 		_update_muzzle_marker(weapon)
 
 
-## Puts the model where the weapon's data says it should be.
+## Puts the model where the weapon's data says it should be. The data is in
+## camera space (where the gun sits on screen); the model hangs off the hand
+## bone, so it's placed relative to where the hand is in the hold pose.
 func _apply_transform(weapon: WeaponData) -> void:
 	_model_rest_position = weapon.viewmodel_position
 	_model_rest_rotation = weapon.viewmodel_rotation_degrees
-	_model.position = _model_rest_position
-	_model.rotation_degrees = _model_rest_rotation
-	_model.scale = Vector3.ONE * weapon.viewmodel_scale
-	_model_rest_transform = _model.transform
+	_model_rest_transform = Transform3D(
+			Basis.from_euler(_model_rest_rotation * (PI / 180.0)) * Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale),
+			_model_rest_position)
 	_apply_arms_transform(weapon)
+	if is_instance_valid(_model):
+		_model.transform = _anchor_in_rig().affine_inverse() * _model_rest_transform
 
 
+## What the gun models hang off: the right hand bone, or (no arms) the rig.
+func _hand_anchor() -> Node3D:
+	return _hand_attachment if is_instance_valid(_hand_attachment) else _kick_pivot
+
+
+## Where _hand_anchor() is in _kick_pivot's space (= camera space at rest),
+## with the arms in their current pose.
+func _anchor_in_rig() -> Transform3D:
+	if not is_instance_valid(_hand_attachment):
+		return Transform3D.IDENTITY
+	return _arms.transform * _skeleton_in_arms * _arms_skeleton.get_bone_global_pose(_hand_bone)
+
+
+## A new character: the arms (and the models hanging off them) are rebuilt.
 func _on_character_changed() -> void:
-	var weapon := _weapons.current_weapon()
-	if weapon and _model:
-		_attach_arms(weapon)
+	_free_arms()
+	if _shown_weapon:
+		_show_weapon(_shown_weapon)
 
 
-## Your character's arms in the weapon's hold pose, holding the gun. A fresh
-## copy of the same character the body wears (PlayerModel), with its head and
-## legs hidden and no shadow -- the body already casts one.
-func _attach_arms(weapon: WeaponData) -> void:
+func _free_arms() -> void:
+	for model in _gun_models.values():
+		if is_instance_valid(model):
+			(model as Node3D).queue_free()
+	_gun_models.clear()
+	_model = null
+	_gun = null
 	if is_instance_valid(_arms):
 		_arms.queue_free()
 	_arms = null
-	if weapon.hold_animation == null or _player_model == null:
-		return
+	_arms_skeleton = null
+	_hand_attachment = null
+	_arms_hider = null
+	_arms_meshes.clear()
+	_arms_keep_left = -1
+
+
+## Your character's arms, built once: a copy of the same character the body
+## wears (PlayerModel), cut down to its arms, no shadow (the body already
+## casts one), with a BoneAttachment3D on the right hand for the gun to hang
+## off. False if there's no character to make them from.
+func _ensure_arms() -> bool:
+	if is_instance_valid(_arms):
+		return true
+	if _player_model == null:
+		return false
 	var path := arms_character if not arms_character.is_empty() else _player_model.character_path
 	if path.is_empty():
-		return
+		return false
 	var scene := load(path) as PackedScene
 	if scene == null:
-		return
+		return false
 	_arms = scene.instantiate() as Node3D
 	# Hidden for its first frames: a fresh copy is drawn once in its rest
 	# T-pose before the hold pose lands -- an arm flashing out sideways
-	# across the bottom of the screen on every swap. _process shows it.
+	# across the bottom of the screen. _process shows it.
 	_arms.visible = false
 	_arms_hidden_frames = ARMS_REVEAL_FRAMES
-	_model.add_child(_arms)
+	_kick_pivot.add_child(_arms)
 
-	# Hold the pose's first frame still, so the hands can't drift off the grip.
-	var animator := PlayerModel.animator_for(_arms)
-	var library := AnimationLibrary.new()
-	library.add_animation(&"hold", weapon.hold_animation)
-	animator.add_animation_library(&"fp", library)
-	animator.play(&"fp/hold")
-	animator.seek(0.0, true)
-	animator.pause()
+	_arms_animator = PlayerModel.animator_for(_arms)
+	_arms_library = AnimationLibrary.new()
+	_arms_animator.add_animation_library(&"fp", _arms_library)
 
 	var skeletons := _arms.find_children("*", "Skeleton3D", true, false)
-	var skeleton: Skeleton3D = null
 	if not skeletons.is_empty():
-		skeleton = skeletons[0] as Skeleton3D
-	if skeleton:
-		# Just the arms: the arms model's mesh is cut down to the triangles
-		# skinned to the shoulders and arms (_strip_to_arms()), so there's no
-		# torso, head or legs left to swing into view however the view rig
-		# tilts. (Your full body is a separate model: look down and your
-		# legs are still there.) If the model can't be cut, fall back to
-		# shrinking the head and legs away.
-		if not (hide_torso and _strip_to_arms(skeleton, not weapon.hide_left_arm)):
-			var hider := HideBonesModifier.new()
-			var hidden := PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
-			if weapon.hide_left_arm:
-				hidden.append("LeftUpperArm") # one hand only
-			hider.bone_names = hidden
-			skeleton.add_child(hider)
+		_arms_skeleton = skeletons[0] as Skeleton3D
+		_skeleton_in_arms = _arms.global_transform.affine_inverse() * _arms_skeleton.global_transform
 		# Sized like the body would size this character, from its own head height.
-		var head := skeleton.find_bone("Head")
+		var head := _arms_skeleton.find_bone("Head")
 		_arms_fit_scale = _player_model.model_scale
 		if head != -1:
-			var head_in_model := _arms.global_transform.affine_inverse() \
-					* (skeleton.global_transform * skeleton.get_bone_global_rest(head).origin)
+			var head_in_model := _skeleton_in_arms * _arms_skeleton.get_bone_global_rest(head).origin
 			_arms_fit_scale = _player_model.fit_scale_for(head_in_model.y)
-		if weapon.arms_position == Vector3.ZERO:
-			_auto_place_arms(weapon, skeleton)
+		_hand_bone = _arms_skeleton.find_bone("RightHand")
+		if _hand_bone != -1:
+			_hand_attachment = BoneAttachment3D.new()
+			_hand_attachment.bone_name = _arms_skeleton.get_bone_name(_hand_bone)
+			_arms_skeleton.add_child(_hand_attachment)
+		for node in _arms.find_children("*", "MeshInstance3D", true, false):
+			var mesh_instance := node as MeshInstance3D
+			var overrides: Array[Material] = []
+			if mesh_instance.mesh:
+				for surface in mesh_instance.mesh.get_surface_count():
+					overrides.append(mesh_instance.get_surface_override_material(surface))
+			_arms_meshes.append([mesh_instance, mesh_instance.mesh, overrides])
 	for node in _arms.find_children("*", "GeometryInstance3D", true, false):
 		(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Gun models made before there were arms hang off the rig: move them.
+	if is_instance_valid(_hand_attachment):
+		for model in _gun_models.values():
+			if is_instance_valid(model):
+				(model as Node3D).reparent(_hand_attachment, false)
+	return true
+
+
+## Gets the arms ready for `weapon`: its hold pose (the first frame of its
+## hold_animation, held still so the hands can't drift off the grip), both
+## arms or just the right, and its arms_position/rotation/scale. A weapon
+## with no hold_animation is held with no arms showing.
+func _pose_arms(weapon: WeaponData) -> void:
+	_arms_wanted = weapon.hold_animation != null and _ensure_arms()
+	if not is_instance_valid(_arms):
+		return
+	if _arms_hidden_frames == 0:
+		_arms.visible = _arms_wanted
+	if weapon.hold_animation:
+		var pose_name := StringName("hold_%d" % weapon.hold_animation.get_instance_id())
+		if not _arms_library.has_animation(pose_name):
+			_arms_library.add_animation(pose_name, weapon.hold_animation)
+		_arms_animator.play(StringName("fp/%s" % pose_name))
+		_arms_animator.seek(0.0, true)
+		_arms_animator.pause()
+	if _arms_skeleton:
+		_cut_arms(not weapon.hide_left_arm)
+		if weapon.arms_position == Vector3.ZERO:
+			_auto_place_arms(weapon, _arms_skeleton)
 	_apply_arms_transform(weapon)
 
 
-## Cuts every skinned mesh of the arms model down to the triangles whose
-## corners are all mostly (half their skin weight or more) on a shoulder, arm
-## or hand bone -- the right one, and the left too when `keep_left`. Anything
-## else in the model (unskinned bits: hats, gear) is hidden. The cut meshes
-## are made once per model and shared (_arms_only_meshes). False if the
-## model has no shoulder/arm bones to keep, or no skinned mesh to cut.
+## Just the arms showing: both, or only the right when not `keep_left`. Only
+## does anything when that changes. The mesh is cut (_strip_to_arms()) so
+## there's no torso, head or legs left to swing into view however the view
+## rig tilts (your full body is a separate model: look down and your legs
+## are still there). If it can't be cut, the head and legs are shrunk away.
+func _cut_arms(keep_left: bool) -> void:
+	var state := 1 if keep_left else 0
+	if state == _arms_keep_left:
+		return
+	_arms_keep_left = state
+	if hide_torso and _strip_to_arms(_arms_skeleton, keep_left):
+		return
+	if is_instance_valid(_arms_hider):
+		_arms_hider.queue_free()
+	_arms_hider = HideBonesModifier.new()
+	var hidden := PackedStringArray(["Head", "LeftUpperLeg", "RightUpperLeg"])
+	if not keep_left:
+		hidden.append("LeftUpperArm") # one hand only
+	_arms_hider.bone_names = hidden
+	_arms_skeleton.add_child(_arms_hider)
+
+
+## Cuts every skinned mesh of the arms model (from its original, kept in
+## _arms_meshes) down to the triangles whose corners are all mostly (half
+## their skin weight or more) on a shoulder, arm or hand bone -- the right
+## one, and the left too when `keep_left`. Anything else in the model
+## (unskinned bits: hats, gear) is hidden. The cut meshes are made once per
+## model and side and shared (_arms_only_meshes). False if the model has no
+## shoulder/arm bones to keep, or no skinned mesh to cut.
 func _strip_to_arms(skeleton: Skeleton3D, keep_left: bool) -> bool:
 	var keep_bones := {}
 	for side in (["Right", "Left"] if keep_left else ["Right"]):
@@ -810,25 +956,24 @@ func _strip_to_arms(skeleton: Skeleton3D, keep_left: bool) -> bool:
 	if keep_bones.is_empty():
 		return false
 	var cut_any := false
-	for node in _arms.find_children("*", "MeshInstance3D", true, false):
-		var mesh_instance := node as MeshInstance3D
-		if mesh_instance.mesh == null or mesh_instance.skin == null:
+	for entry in _arms_meshes:
+		var mesh_instance := entry[0] as MeshInstance3D
+		var original := entry[1] as Mesh
+		var original_overrides: Array[Material] = entry[2]
+		if original == null or mesh_instance.skin == null:
 			mesh_instance.visible = false
 			continue
-		var key := "%d|%d|%s" % [mesh_instance.mesh.get_instance_id(), mesh_instance.skin.get_instance_id(), keep_left]
+		var key := "%d|%d|%s" % [original.get_instance_id(), mesh_instance.skin.get_instance_id(), keep_left]
 		var cut: Array = _arms_only_meshes.get(key, [])
 		if cut.is_empty():
-			cut = _arms_only_mesh(mesh_instance.mesh, mesh_instance.skin, skeleton, keep_bones)
+			cut = _arms_only_mesh(original, mesh_instance.skin, skeleton, keep_bones)
 			_arms_only_meshes[key] = cut
 		var mesh: ArrayMesh = cut[0]
 		var kept_surfaces: PackedInt32Array = cut[1]
-		# The node's own per-surface materials follow their surfaces.
-		var overrides: Array[Material] = []
-		for surface in kept_surfaces:
-			overrides.append(mesh_instance.get_surface_override_material(surface))
 		mesh_instance.mesh = mesh
-		for i in overrides.size():
-			mesh_instance.set_surface_override_material(i, overrides[i])
+		# The node's own per-surface materials follow their surfaces.
+		for i in kept_surfaces.size():
+			mesh_instance.set_surface_override_material(i, original_overrides[kept_surfaces[i]])
 		cut_any = true
 	return cut_any
 
@@ -906,21 +1051,18 @@ func _auto_place_arms(weapon: WeaponData, skeleton: Skeleton3D) -> void:
 	var hand := skeleton.find_bone("RightHand")
 	if hand == -1:
 		return
-	# The posed hand, in the arms model's own space (it was just added at the
-	# identity transform, so this includes the FBX's internal scaling).
-	var hand_in_model := _arms.global_transform.affine_inverse() \
-			* (skeleton.global_transform * skeleton.get_bone_global_pose(hand).origin)
+	# The posed hand, in the arms model's own space (this includes the FBX's
+	# internal scaling).
+	var hand_in_model := _skeleton_in_arms * skeleton.get_bone_global_pose(hand).origin
 	weapon.arms_position = weapon.viewmodel_position - _arms_basis(weapon) * hand_in_model
 
 
-## Puts the arms where weapon.arms_position/rotation say in CAMERA space,
-## converted into _model's space (the arms are its child). Measured against
-## _model's REST transform, so the kick and sway then move gun and arms as one.
+## Puts the arms where weapon.arms_position/rotation say, in camera space
+## (the arms are a child of _kick_pivot, which is camera space at rest).
 func _apply_arms_transform(weapon: WeaponData) -> void:
 	if not is_instance_valid(_arms):
 		return
-	var desired := Transform3D(_arms_basis(weapon), weapon.arms_position)
-	_arms.transform = _model_rest_transform.affine_inverse() * desired
+	_arms.transform = Transform3D(_arms_basis(weapon), weapon.arms_position)
 
 
 ## Shifts gun so the centre of its visible meshes sits at its parent's origin.
@@ -962,6 +1104,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key.keycode == KEY_F2:
 		_tuning = not _tuning
 		_tune_label.visible = _tuning
+		_preview_offset = Vector3.ZERO
 		_update_label("")
 	elif key.keycode == KEY_F3 and _tuning:
 		_save_weapon()
@@ -969,9 +1112,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning_aim = not _tuning_aim
 		_tuning_arms = false
 		_tuning_muzzle = false
+		_preview_offset = Vector3.ZERO # back to the hip pose when leaving
 		var weapon := _shown_weapon
 		if weapon and _model:
-			_apply_transform(weapon) # back to the hip pose when leaving
 			_update_muzzle_marker(weapon)
 		_update_label("")
 	elif key.keycode == KEY_M and _tuning:
@@ -1002,7 +1145,7 @@ func _physics_process(delta: float) -> void:
 ## the turn speed comes out steady instead of spiking between frames.
 func _update_sway(delta: float) -> void:
 	if not sway_enabled or delta <= 0.0:
-		_sway_pivot.position = aim_offset
+		_sway_pivot.position = aim_offset + _preview_offset
 		_sway_pivot.rotation = Vector3.ZERO
 		return
 	var camera := get_parent() as Node3D
@@ -1026,7 +1169,7 @@ func _update_sway(delta: float) -> void:
 	_sway_tilt = _sway_tilt.lerp(target_tilt, blend)
 	# Aiming steadies the sway and carries the gun toward your eye.
 	var calm := 1.0 - aim_steady
-	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0) * calm + aim_offset
+	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0) * calm + aim_offset + _preview_offset
 	_sway_pivot.rotation_degrees = Vector3(_sway_tilt.x, _sway_tilt.y, 0.0) * calm
 
 
@@ -1034,7 +1177,7 @@ func _process(delta: float) -> void:
 	if _arms_hidden_frames > 0:
 		_arms_hidden_frames -= 1
 		if _arms_hidden_frames == 0 and is_instance_valid(_arms):
-			_arms.visible = true
+			_arms.visible = _arms_wanted
 	_update_held_grenade()
 	_keep_in_step()
 	if not _tuning or _model == null:
@@ -1059,13 +1202,21 @@ func _process(delta: float) -> void:
 	elif _tuning_aim:
 		weapon.aim_position += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 	elif _tuning_arms:
-		# H mode: the same keys move/rotate/resize the arms instead of the gun.
+		# H mode: the same keys move/rotate/resize the arms, and the gun stays
+		# in the hand and goes with them (its viewmodel_* numbers are worked
+		# out again from where the hand takes it).
+		var grip := _model.transform
 		if Input.is_key_pressed(KEY_SHIFT):
 			weapon.arms_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
 		else:
 			weapon.arms_position += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 			var grow_arms := float(Input.is_key_pressed(KEY_EQUAL)) - float(Input.is_key_pressed(KEY_MINUS))
 			weapon.arms_scale = maxf(weapon.arms_scale * (1.0 + grow_arms * TUNE_SCALE_SPEED * fine * delta), 0.0001)
+		_apply_arms_transform(weapon)
+		var carried := _anchor_in_rig() * grip
+		weapon.viewmodel_position = carried.origin
+		weapon.viewmodel_rotation_degrees = carried.basis.orthonormalized().get_euler() * (180.0 / PI)
+		weapon.viewmodel_scale = carried.basis.get_scale().x
 	elif Input.is_key_pressed(KEY_SHIFT):
 		weapon.viewmodel_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
 	else:
@@ -1074,9 +1225,9 @@ func _process(delta: float) -> void:
 		weapon.viewmodel_scale = maxf(weapon.viewmodel_scale * (1.0 + grow * TUNE_SCALE_SPEED * fine * delta), 0.0001)
 
 	_apply_transform(weapon)
-	if _tuning_aim:
-		# Show the gun where it'll sit when aimed, so you can line up the sights.
-		_model.position = aim_position_for(weapon)
+	# I mode: show the viewmodel where it'll sit when aimed, so you can line
+	# up the sights.
+	_preview_offset = aim_position_for(weapon) - weapon.viewmodel_position if _tuning_aim else Vector3.ZERO
 	_update_label("")
 
 
@@ -1142,5 +1293,5 @@ func _update_label(message: String) -> void:
 	elif _tuning_aim:
 		target = "AIMED POSITION"
 		p = weapon.aim_position
-	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nH = arms   M = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
+	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nM = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
 			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s, message]
