@@ -79,7 +79,7 @@ static func _apply_damage_and_push(world: Node3D, center: Vector3, settings: Set
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = sphere
 	query.transform = Transform3D(Basis.IDENTITY, center)
-	query.collision_mask = 1 # world, players, enemies, props (ragdolls: _launch_ragdolls)
+	query.collision_mask = 1 # world, players, enemies, props (ragdolls: launch_ragdolls)
 	var seen := {}
 	for result in space.intersect_shape(query, 128):
 		var body := result.collider as Node3D
@@ -103,7 +103,7 @@ static func _hurt(body: Node3D, settings: Settings, falloff: float, direction: V
 	if health == null or health.is_dead:
 		return
 	var damage := (settings.player_damage if body is PlayerMovement else settings.damage) * falloff
-	# No throw force here: a body this kills is launched by _launch_ragdolls,
+	# No throw force here: a body this kills is launched by launch_ragdolls,
 	# all of it at once.
 	health.take_damage(damage, settings.attacker_id, direction, center)
 	if body != settings.attacker_body:
@@ -170,7 +170,7 @@ static func play_effects(world: Node3D, center: Vector3, radius: float, knockbac
 	_add_flash(root, radius)
 	SoundPlayer.play_3d(BOOM_SOUND, center, scene)
 	_shake_local_player(world, center, radius)
-	_launch_ragdolls(root, center, radius, knockback)
+	launch_ragdolls(root, center, radius, knockback)
 	world.get_tree().create_timer(2.5).timeout.connect(root.queue_free)
 
 
@@ -179,7 +179,7 @@ static func play_effects(world: Node3D, center: Vector3, radius: float, knockbac
 ## a time barely moves a ragdoll -- the joints pull each bone straight back
 ## toward its neighbours.) Waits one physics step first, so bodies this blast
 ## just killed have switched to ragdoll and can be found.
-static func _launch_ragdolls(root: Node3D, center: Vector3, radius: float, knockback: float) -> void:
+static func launch_ragdolls(root: Node3D, center: Vector3, radius: float, knockback: float) -> void:
 	await root.get_tree().physics_frame
 	if not is_instance_valid(root):
 		return

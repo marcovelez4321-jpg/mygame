@@ -2,8 +2,13 @@ class_name WormFX
 extends Node3D
 
 ## The extra show for a burrowing worm (BurrowWorm, Deepmaw), kept cheap:
-##   - a mound of dirt ploughing along the floor above it while it tunnels
-##     near the surface (Tremors/Dune) -- one flattened sphere;
+##   - churned dirt (shaders/worm_dirt.gdshader) -- a lumpy mound heaving
+##     along the floor over it while it tunnels near the surface (or ploughs
+##     through it), with a bow wave of dirt at the front, and a furrow of
+##     loose ridges left behind it that settles flat and goes after
+##     FURROW_LIFE seconds (Tremors/Dune). The mound and the whole furrow are
+##     one MultiMesh: one draw call. Clods tumbling off the mound's sides and
+##     a low dust haze stream off it as it goes (two small emitters);
 ##   - slow, lingering dust clouds and a fling of rubble when it breaks the
 ##     surface (two dust emitters used in turn, one rubble emitter);
 ##   - a low rumble loop from its head while it's underground, louder the
@@ -15,7 +20,15 @@ extends Node3D
 
 const DUST_COLOR := Color(0.36, 0.3, 0.24, 0.55)
 const RUBBLE_COLOR := Color(0.17, 0.12, 0.08)
-const MOUND_COLOR := Color(0.2, 0.15, 0.1)
+const DIRT_SHADER := preload("res://shaders/worm_dirt.gdshader")
+## Loose, dark, freshly turned soil (one of the level dirt textures).
+const DIRT_TEXTURE := preload("res://trenchbroom/textures/Dirt_03-256x256.png")
+## The furrow: how many patches it can have down at once, how long each
+## lasts (it settles flat over the second half), and how far apart they're
+## laid as a share of the worm's thickness.
+const FURROW_COUNT := 40
+const FURROW_LIFE := 7.0
+const FURROW_SPACING := 1.2
 const RUMBLE_PATH := "res://audio/sfx/worm_rumble.wav"
 const SPIT_COLOR := Color(0.72, 0.68, 0.42)
 const BLOOD_COLOR := Color(0.55, 0.03, 0.03)
@@ -37,8 +50,11 @@ var rumble_stream: AudioStream
 var rumble_volume_db := 0.0
 var rumble_range := 30.0
 
-static var _mound_mesh: SphereMesh
-static var _mound_material: StandardMaterial3D
+static var _dirt_mesh: PlaneMesh
+static var _dirt_material: ShaderMaterial
+static var _clod_mesh: BoxMesh
+static var _clod_process: ParticleProcessMaterial
+static var _haze_process: ParticleProcessMaterial
 static var _dust_process: ParticleProcessMaterial
 static var _dust_mesh: QuadMesh
 static var _rubble_process: ParticleProcessMaterial
@@ -47,7 +63,20 @@ static var _fall_process: ParticleProcessMaterial
 static var _ring_mesh: TorusMesh
 static var _ring_material: StandardMaterial3D
 
-var _mound: MeshInstance3D
+## Instance 0 = the mound, 1..FURROW_COUNT = the furrow's patches.
+var _dirt: MultiMeshInstance3D
+## Each furrow patch: when it was laid (seconds, -1 = gone), where (its full
+## size), and how high its ridges started.
+var _furrow_born := PackedFloat32Array()
+var _furrow_place: Array[Transform3D] = []
+var _furrow_height := PackedFloat32Array()
+var _furrow_next := 0
+var _last_stamp := Vector3.ZERO
+var _stamped := false
+var _clods: GPUParticles3D
+var _haze: GPUParticles3D
+## Which way the mound faces (its travel; kept while it's standing still).
+var _facing := Basis.IDENTITY
 var _dust: Array[GPUParticles3D] = []
 var _next_dust := 0
 var _rubble: GPUParticles3D
@@ -64,12 +93,26 @@ func _ready() -> void:
 	top_level = true
 	global_transform = Transform3D.IDENTITY
 	_make_shared()
-	_mound = MeshInstance3D.new()
-	_mound.mesh = _mound_mesh
-	_mound.material_override = _mound_material
-	_mound.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_mound.visible = false
-	add_child(_mound)
+	_dirt = MultiMeshInstance3D.new()
+	_dirt.material_override = _dirt_material
+	_dirt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_custom_data = true
+	multimesh.mesh = _dirt_mesh
+	multimesh.instance_count = 1 + FURROW_COUNT
+	_dirt.multimesh = multimesh
+	# The patches are all over the place: never cull it by a stale box.
+	_dirt.custom_aabb = AABB(Vector3(-500, -500, -500), Vector3(1000, 1000, 1000))
+	add_child(_dirt)
+	for i in multimesh.instance_count:
+		multimesh.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
+	_furrow_born.resize(FURROW_COUNT)
+	_furrow_born.fill(-1.0)
+	_furrow_height.resize(FURROW_COUNT)
+	_furrow_place.resize(FURROW_COUNT)
+	_clods = _make_stream(_clod_process, _clod_mesh, 18, 0.7)
+	_haze = _make_stream(_haze_process, _dust_mesh, 6, 1.6)
 	_rumble = AudioStreamPlayer3D.new()
 	var stream := rumble_stream
 	if stream == null and ResourceLoader.exists(RUMBLE_PATH):
@@ -86,18 +129,38 @@ func _ready() -> void:
 	add_child(_rumble)
 
 
-## Every frame from the worm: the mound over its head while it's tunnelling
-## shallow enough (bigger the shallower), and the rumble while it's under.
+## Every frame from the worm: the dirt mound over its head while it's
+## tunnelling shallow enough (bigger the shallower) or ploughing through the
+## floor line (`underground` covers that too: the worm says so), with clods
+## and dust streaming off it; the furrow laid behind it and settling; and the
+## rumble while it's under.
 func follow(head: Vector3, velocity: Vector3, ground_y: float, max_depth: float, radius: float, underground: bool) -> void:
 	var depth := ground_y - head.y
-	var show_mound := underground and depth > 0.0 and depth < max_depth
-	_mound.visible = show_mound
-	if show_mound:
-		var near := 1.0 - depth / max_depth
-		var flat := Vector3(velocity.x, 0.0, velocity.z)
-		var facing := Basis.looking_at(flat.normalized(), Vector3.UP) if flat.length_squared() > 0.01 else _mound.global_basis.orthonormalized()
+	var active := underground and depth > -radius * 0.5 and depth < max_depth
+	var flat := Vector3(velocity.x, 0.0, velocity.z)
+	if flat.length_squared() > 0.01:
+		_facing = Basis.looking_at(flat.normalized(), Vector3.UP)
+	var floor_point := Vector3(head.x, ground_y, head.z)
+	var multimesh := _dirt.multimesh
+	if active:
+		var near := clampf(1.0 - depth / max_depth, 0.0, 1.0)
+		# Coming up through the floor line (ploughing) the worm itself shows:
+		# the mound sinks back around it instead of burying its head.
+		var emerge := clampf((depth + radius * 0.5) / radius, 0.0, 1.0)
 		var width := radius * 2.6 * (0.6 + 0.4 * near)
-		_mound.global_transform = Transform3D(facing * Basis.from_scale(Vector3(width, radius * 1.1 * near, width * 1.5)), Vector3(head.x, ground_y, head.z))
+		var mound := Transform3D(_facing * Basis.from_scale(Vector3(width, 1.0, width * 1.5)), floor_point)
+		multimesh.set_instance_transform(0, mound)
+		multimesh.set_instance_custom_data(0, Color(radius * 1.1 * near * emerge, 0.37, 1.0, 0.0))
+		var stream := Transform3D(_facing.scaled(Vector3.ONE * size), floor_point + Vector3.UP * 0.1)
+		_clods.global_transform = stream
+		_haze.global_transform = stream
+		_lay_furrow(floor_point, radius, near)
+	else:
+		multimesh.set_instance_transform(0, Transform3D(Basis.from_scale(Vector3.ZERO), floor_point))
+		_stamped = false
+	_clods.emitting = active
+	_haze.emitting = active
+	_settle_furrow()
 	if _rumble.stream:
 		_rumble.global_position = head
 		if underground and not _rumble.playing:
@@ -106,10 +169,56 @@ func follow(head: Vector3, velocity: Vector3, ground_y: float, max_depth: float,
 			_rumble.stop()
 
 
-## Dead (or gone): the rumble stops and the mound goes.
+## A furrow patch behind the mound every FURROW_SPACING of its thickness it
+## travels: two loose ridges either side of a dark trough, as wide as the
+## mound and overlapping the last, oldest patch reused (FURROW_COUNT).
+func _lay_furrow(floor_point: Vector3, radius: float, near: float) -> void:
+	var spacing := radius * FURROW_SPACING
+	if _stamped and floor_point.distance_to(_last_stamp) < spacing:
+		return
+	_stamped = true
+	_last_stamp = floor_point
+	var back := _facing.z.normalized() # +Z is behind (it faces -Z)
+	var width := radius * 2.8
+	var place := Transform3D(_facing * Basis.from_scale(Vector3(width, 1.0, spacing * 1.9)), floor_point + back * radius * 1.4)
+	var i := _furrow_next
+	_furrow_next = (_furrow_next + 1) % FURROW_COUNT
+	_furrow_born[i] = Time.get_ticks_msec() * 0.001
+	_furrow_place[i] = place
+	_furrow_height[i] = radius * 0.4 * (0.5 + 0.5 * near)
+	_dirt.multimesh.set_instance_custom_data(i + 1, Color(_furrow_height[i], randf() * 10.0, 0.0, 1.0))
+
+
+## Every patch settles: its ridges sink flat over the second half of
+## FURROW_LIFE and it narrows away at the very end.
+func _settle_furrow() -> void:
+	var now := Time.get_ticks_msec() * 0.001
+	var multimesh := _dirt.multimesh
+	for i in FURROW_COUNT:
+		var born := _furrow_born[i]
+		if born < 0.0:
+			continue
+		var t := (now - born) / FURROW_LIFE
+		if t >= 1.0:
+			_furrow_born[i] = -1.0
+			multimesh.set_instance_transform(i + 1, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
+			continue
+		var settle := 1.0 - smoothstep(0.5, 1.0, t)
+		var narrow := 1.0 - smoothstep(0.85, 1.0, t)
+		var place := _furrow_place[i]
+		multimesh.set_instance_transform(i + 1, Transform3D(place.basis * Basis.from_scale(Vector3(narrow, 1.0, 1.0)), place.origin))
+		var custom := multimesh.get_instance_custom_data(i + 1)
+		custom.r = _furrow_height[i] * settle
+		multimesh.set_instance_custom_data(i + 1, custom)
+
+
+## Dead (or gone): the rumble stops, the mound and its streams of clods and
+## dust go (the furrow settles as it would).
 func silence() -> void:
 	_rumble.stop()
-	_mound.visible = false
+	_dirt.multimesh.set_instance_transform(0, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
+	_clods.emitting = false
+	_haze.emitting = false
 
 
 ## The rumble swelling (dB on top of its normal volume) -- the wind-up.
@@ -214,13 +323,22 @@ static func punch(tree: SceneTree, at: Vector3, amount: float, within: float) ->
 			(player.get("camera") as CameraJuice).kick_fov(amount * (1.0 - distance / within))
 
 
-## Out of the ground: drool dripping from its jaws now and then.
+## Out of the ground: thick drool pouring off its lower lip (`jaws`, the
+## worm works out where that is) -- a heavy drip from somewhere along the lip
+## every DROOL_INTERVAL or so, and now and then a big glob that strings down
+## below it, so it reads from across the room.
 func drool(jaws: Vector3, delta: float) -> void:
 	_drool_left -= delta
 	if _drool_left > 0.0:
 		return
 	_drool_left = DROOL_INTERVAL * randf_range(0.6, 1.4)
-	BloodFX.spawn_impact(get_tree().current_scene, jaws, Vector3.DOWN, SPIT_COLOR, (0.25 * size + 0.15) * 2.0)
+	var world := get_tree().current_scene
+	var along_lip := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * 0.35 * size
+	BloodFX.spawn_impact(world, jaws + along_lip, Vector3.DOWN, SPIT_COLOR, (0.6 * size + 0.3) * 2.0)
+	if randf() < 0.35:
+		# A big glob stringing off, with a drip trailing under it.
+		BloodFX.spawn_impact(world, jaws + along_lip * 0.5, Vector3.DOWN, SPIT_COLOR, (0.9 * size + 0.4) * 2.0)
+		BloodFX.spawn_impact(world, jaws + along_lip * 0.5 + Vector3.DOWN * 0.5 * size, Vector3.DOWN, SPIT_COLOR, (0.5 * size + 0.2) * 2.0)
 
 
 ## A bite: gore and spit spraying out of its jaws along `forward`.
@@ -259,6 +377,16 @@ func _make_emitter(process: ParticleProcessMaterial, mesh: Mesh, amount: int, li
 	return emitter
 
 
+## An emitter that streams steadily while `emitting` (the mound's clods and
+## dust), particles left behind in the world.
+func _make_stream(process: ParticleProcessMaterial, mesh: Mesh, amount: int, lifetime: float) -> GPUParticles3D:
+	var emitter := _make_emitter(process, mesh, amount, lifetime)
+	emitter.one_shot = false
+	emitter.explosiveness = 0.0
+	emitter.randomness = 0.5
+	return emitter
+
+
 static func _up_basis(normal: Vector3) -> Basis:
 	var up := normal.normalized()
 	var side := up.cross(Vector3.FORWARD if absf(up.z) < 0.9 else Vector3.RIGHT).normalized()
@@ -267,16 +395,54 @@ static func _up_basis(normal: Vector3) -> Basis:
 
 ## The shared resources, made once for every worm.
 static func _make_shared() -> void:
-	if _mound_mesh != null:
+	if _dirt_mesh != null:
 		return
-	_mound_mesh = SphereMesh.new()
-	_mound_mesh.radius = 0.5
-	_mound_mesh.height = 1.0
-	_mound_mesh.radial_segments = 10 # PS1-chunky, and cheap
-	_mound_mesh.rings = 5
-	_mound_material = StandardMaterial3D.new()
-	_mound_material.albedo_color = MOUND_COLOR
-	_mound_material.roughness = 1.0
+	# Churned dirt: a 1 x 1 plane, finely enough cut for the shader to shape
+	# lumps into (16 x 16 squares; still PS1-chunky up close).
+	_dirt_mesh = PlaneMesh.new()
+	_dirt_mesh.size = Vector2.ONE
+	_dirt_mesh.subdivide_width = 15
+	_dirt_mesh.subdivide_depth = 15
+	_dirt_material = ShaderMaterial.new()
+	_dirt_material.shader = DIRT_SHADER
+	_dirt_material.set_shader_parameter("dirt_texture", DIRT_TEXTURE)
+	# Clods tumbling off the mound's sides: dirt-textured chunks thrown up
+	# and outward (radial), falling back into the floor.
+	var clod_material := StandardMaterial3D.new()
+	clod_material.albedo_texture = DIRT_TEXTURE
+	clod_material.albedo_color = Color(0.8, 0.75, 0.7)
+	clod_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	clod_material.roughness = 1.0
+	_clod_mesh = BoxMesh.new()
+	_clod_mesh.size = Vector3(0.14, 0.1, 0.12)
+	_clod_mesh.material = clod_material
+	_clod_process = ParticleProcessMaterial.new()
+	_clod_process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	_clod_process.emission_box_extents = Vector3(0.9, 0.05, 1.2)
+	_clod_process.direction = Vector3.UP
+	_clod_process.spread = 35.0
+	_clod_process.initial_velocity_min = 2.0
+	_clod_process.initial_velocity_max = 4.0
+	_clod_process.radial_velocity_min = 1.0
+	_clod_process.radial_velocity_max = 2.5
+	_clod_process.gravity = Vector3(0.0, -16.0, 0.0)
+	_clod_process.angular_velocity_min = -360.0
+	_clod_process.angular_velocity_max = 360.0
+	_clod_process.scale_min = 0.5
+	_clod_process.scale_max = 1.4
+	# A low haze of dust hanging over it.
+	_haze_process = ParticleProcessMaterial.new()
+	_haze_process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	_haze_process.emission_box_extents = Vector3(0.9, 0.1, 1.2)
+	_haze_process.direction = Vector3.UP
+	_haze_process.spread = 60.0
+	_haze_process.initial_velocity_min = 0.3
+	_haze_process.initial_velocity_max = 1.0
+	_haze_process.gravity = Vector3(0.0, 0.2, 0.0)
+	_haze_process.damping_min = 0.5
+	_haze_process.damping_max = 1.0
+	_haze_process.scale_min = 1.0
+	_haze_process.scale_max = 2.0
 	# Dust: soft round puffs that billow up slowly, swell and fade.
 	var puff := GradientTexture2D.new()
 	puff.fill = GradientTexture2D.FILL_RADIAL
@@ -321,6 +487,13 @@ static func _make_shared() -> void:
 	var fade_texture := GradientTexture1D.new()
 	fade_texture.gradient = fade
 	_dust_process.color_ramp = fade_texture
+	_haze_process.scale_curve = grow_texture
+	var haze_fade := Gradient.new()
+	haze_fade.set_color(0, Color(DUST_COLOR, 0.35))
+	haze_fade.set_color(1, Color(DUST_COLOR, 0.0))
+	var haze_fade_texture := GradientTexture1D.new()
+	haze_fade_texture.gradient = haze_fade
+	_haze_process.color_ramp = haze_fade_texture
 	# Rubble: chunks of floor flung up, tumbling, falling back (and into the
 	# floor, which hides them -- no collision needed).
 	var rubble_material := StandardMaterial3D.new()

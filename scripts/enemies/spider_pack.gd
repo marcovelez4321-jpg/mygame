@@ -193,9 +193,10 @@ func count() -> int:
 
 
 ## New spiders around `center` on the surface there (or, given `launch`, all
-## flying out from `center` along it, spread a little -- spat from a nest).
+## flying out from `center` along it, spread a little -- `launch_spread` of
+## wobble on the direction; 0 = exactly along it, for an aimed throw).
 ## At the game's spider cap the oldest die to make room (Population).
-func spawn_spiders(amount: int, center: Vector3, launch := Vector3.ZERO) -> Array[Spider]:
+func spawn_spiders(amount: int, center: Vector3, launch := Vector3.ZERO, launch_spread := 0.4) -> Array[Spider]:
 	var made: Array[Spider] = []
 	amount = mini(amount, Population.MAX_SPIDERS)
 	Population.make_room_for_spiders(get_tree(), amount)
@@ -209,7 +210,7 @@ func spawn_spiders(amount: int, center: Vector3, launch := Vector3.ZERO) -> Arra
 		world.add_child(spider)
 		if launch != Vector3.ZERO:
 			spider.global_position = center
-			var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 0.4
+			var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * launch_spread
 			spider.burst_out((launch.normalized() + spread).normalized() * launch.length())
 		else:
 			# Onto the surface the pack sits on (its up points out of it).

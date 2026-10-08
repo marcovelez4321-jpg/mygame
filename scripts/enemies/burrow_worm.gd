@@ -100,31 +100,91 @@ const BAKED_SEGMENT := "res://art/worm_boss/worm_segment_mesh.res"
 @export_range(0.0, 1.0, 0.05) var hop_chance: float = 0.25
 @export var hop_height: float = 4.9
 
+@export_group("The Plough")
+## Its other attack -- the first version's way of hunting you, as a move
+## of its own (Dune's sandworms, Tremors): it tunnels toward you, surfaces
+## within plough_start_range and ploughs at you half buried -- its middle on
+## the floor line, the body snaking along behind it -- weaving side to side,
+## tearing up a furrow (dirt thrown out both sides, dust and rubble, dark dirt
+## marks left behind) and throwing aside anything in its way, for plough_time
+## seconds. Then it dives and comes round for the next attack.
+## Chance an attack is this rather than a leap. It never does the same attack
+## three times running.
+@export_range(0.0, 1.0, 0.05) var plough_chance: float = 0.55
+@export var plough_start_range: float = 18.0
+@export var plough_time: float = 5.0
+@export var plough_speed: float = 11.0
+## How fast it can turn while ploughing (degrees a second): lower = wider
+## swings past you and round again.
+@export var plough_turn_degrees: float = 100.0
+## Where its middle rides, as a share of its thickness above (+) or below (-)
+## the floor: 0 = half in, half out.
+@export var plough_height: float = 0.0
+## The snake weave: degrees either side of its heading, and weaves a second.
+@export var plough_weave_degrees: float = 25.0
+@export var plough_weave_speed: float = 0.9
+## Anything in its way (not players -- its bite and body do that) is thrown
+## aside at plough_push m/s plus plough_lift up, and takes plough_damage, each
+## thing at most once a second.
+@export var plough_push: float = 9.0
+@export var plough_lift: float = 4.0
+@export var plough_damage: float = 25.0
+
 @export_group("Shockwave")
-## Landing from a leap: everything within shockwave_radius -- players,
-## enemies, creatures, loose bodies -- except its own escorts is thrown back
-## (shockwave_force out, shockwave_lift up, less further out) and takes
-## shockwave_damage (less further out).
+## Landing from a leap: a ring tears out to shockwave_radius. Players are
+## thrown back (shockwave_force out, shockwave_lift up, less further out) and
+## take shockwave_damage (less further out). Everything else in it dies and
+## is thrown as a ragdoll -- except its own Deepmaw escorts, and (while
+## shockwave_spares_brood) the spiders that just burst out of it.
 @export var shockwave_radius: float = 9.0
 @export var shockwave_force: float = 14.0
 @export var shockwave_lift: float = 6.0
-@export var shockwave_damage: float = 10.0
+@export var shockwave_damage: float = 20.0
+@export var shockwave_spares_brood: bool = true
 
 @export_group("Spider Brood")
-## At the top of a big leap it lingers in the air for a moment (apex_hang
-## seconds, gravity down to apex_gravity of normal; the arc carries on, just
-## stretched at the top), a swelling rolls down
-## its body (brood_bulge fatter), and brood_count spiders burst out of it
-## one after another as the swelling passes -- each from its own segment,
-## flung out sideways and up at brood_speed in a spray of blood -- then it
-## falls and lands. They join one spider pack of its own (Population caps
-## them like any spider). Skimming hops don't do it; brood_chance per leap.
+## A big leap (not a skimming hop) does one of two things: the Blood Puke
+## (puke_chance), or else (brood_chance) the spider brood -- just past the
+## top, once it's come back down brood_after_peak of the arc's height (0.2 =
+## at 80% of the way up, on the way down), a swelling rolls
+## down its body (brood_bulge fatter) over brood_time, and brood_count spiders
+## tear out of it one after another as it passes, each in a spray of blood
+## and flung at the player: the spitter roach's guess at where they'll be
+## (WormLeap), scattered up to brood_spread around it, arriving in about
+## brood_flight seconds. Bursting low and aimed, they land round you, not
+## somewhere off in the map. They join one spider pack of its own
+## (Population caps them like any spider).
 @export var brood_count: int = 30
 @export_range(0.0, 1.0, 0.05) var brood_chance: float = 1.0
+@export_range(0.0, 1.0, 0.05) var brood_after_peak: float = 0.2
+@export var brood_time: float = 0.35
+@export var brood_spread: float = 3.0
+@export var brood_flight: float = 1.3
+## With nobody to throw them at, they're flung straight up at this (m/s).
 @export var brood_speed: float = 7.0
 @export var brood_bulge: float = 0.7
-@export var apex_hang: float = 0.6
-@export_range(0.0, 1.0, 0.05) var apex_gravity: float = 0.15
+
+@export_group("Blood Puke")
+## The other big-leap move: at the top of the arc it stops dead for a moment,
+## a swelling rolls up its body to the head while it rears back and turns its
+## head onto the player (puke_turn_time), then it heaves forward and retches a
+## shotgun spray of blood at them -- puke_globs globs over puke_spray_time,
+## the spitter roach's spit made red, each aimed with the roach's own
+## prediction (its own guess at your path, WormLeap) and scattered up to
+## puke_spread around it -- then carries on down its arc. Chance per big leap.
+@export_range(0.0, 1.0, 0.05) var puke_chance: float = 0.5
+@export var puke_turn_time: float = 0.5
+@export var puke_spray_time: float = 0.3
+@export var puke_globs: int = 12
+@export var puke_damage: float = 8.0
+@export var puke_spread: float = 2.5
+## The globs' arc: horizontal speed (flight time kept between the limits)
+## and how hard they fall.
+@export var puke_speed: float = 14.0
+@export var puke_flight_min: float = 0.5
+@export var puke_flight_max: float = 1.4
+@export var puke_gravity: float = 12.0
+@export var puke_color: Color = Color(0.6, 0.02, 0.02)
 
 @export_group("Escorts")
 ## Deepmaws that swim along under it and come up at anyone near it
@@ -135,8 +195,8 @@ const BAKED_SEGMENT := "res://art/worm_boss/worm_segment_mesh.res"
 @export_group("Attack")
 ## The head's bite and any other segment's touch, and how often each can
 ## hurt the same player.
-@export var bite_damage: float = 20.0
-@export var contact_damage: float = 6.0
+@export var bite_damage: float = 80.0
+@export var contact_damage: float = 40.0
 @export var contact_interval: float = 0.7
 ## How hard a hit throws you (m/s), plus half that upward.
 @export var knockback: float = 9.0
@@ -181,24 +241,49 @@ const BAKED_SEGMENT := "res://art/worm_boss/worm_segment_mesh.res"
 var target: Node3D
 var _fx: WormFX
 var _time := 0.0
-## The brood burst at the top of a leap: seconds of it left (below 0 = not
+## The brood burst on the way down: seconds of it left (below 0 = not
 ## bursting), whether this leap gets one, and which segments still have a
 ## spider in them.
 var _brood_left := -1.0
 var _brood_this_leap := false
 var _brood_segments: Array[int] = []
 var _brood_pack: SpiderPack
+## The blood puke at the top of a leap: whether this leap gets one, seconds
+## into it (below 0 = not started), the arc's sideways speed to carry on
+## with after, and globs fired so far.
+var _puke_this_leap := false
+var _puke_time := -1.0
+var _puke_carry := Vector3.ZERO
+var _puke_fired := 0
+## Which way the head faces (kept while it's hanging still), how far it's
+## turned onto its prey (0-1), and how far it's lurched along its facing (m).
+var _head_dir := Vector3.FORWARD
+var _head_aim := 0.0
+var _head_lurch := 0.0
 
-## The attack cycle (The Leap).
-enum Phase { WANDER, TUNNEL, WINDUP, RISE, AIR, DIVE }
+## The attack cycle (The Leap, The Plough).
+enum Phase { WANDER, TUNNEL, WINDUP, RISE, AIR, DIVE, PLOUGH }
 var _phase := Phase.WANDER
 var _phase_left := 0.0
+## This attack is a plough (rolled when it starts tunnelling), and the last
+## few: which it was and how many in a row.
+var _plough_next := false
+var _last_was_plough := false
+var _attack_streak := 0
+## Ploughing: countdowns for the furrow effects and the shove, and what it's
+## hurt lately (body -> seconds before it can be hurt again).
+var _plough_fx_left := 0.0
+var _plough_cloud_left := 0.0
+var _plough_scar := 0
+var _plough_push_left := 0.0
+var _plough_hit := {}
 ## Where it'll erupt (on the floor) and the velocity it leaves the ground with.
 var _leap_from := Vector3.ZERO
 ## Where it means to come down, and this leap's guess at your path (WormLeap).
 var _leap_to := Vector3.ZERO
 var _guess := Vector2.ONE
 var _air_left := 0.0 # seconds since it left the ground (re-aim ramp)
+var _air_peak := 0.0 # highest its head's been this leap (the brood's timing)
 var _leap_height := 0.0
 var _breach_fx_left := 0.0
 
@@ -493,14 +578,16 @@ func _physics_process(delta: float) -> void:
 	_inside = _in_ground(head)
 	_update_phase(head, delta)
 	if _phase == Phase.AIR:
-		# No control up there: the arc is set -- except it hangs at the top
-		# while the brood bursts out of it.
-		var hanging := _brood_left > 0.0
-		_vel.y -= air_gravity * (apex_gravity if hanging else 1.0) * delta
-		_reaim(head, delta)
-		_update_brood(delta)
+		# No control up there: the arc is set -- except it stops dead at the
+		# top for the blood puke.
+		if not _update_puke(delta):
+			_vel.y -= air_gravity * delta
+			_reaim(head, delta)
+		_update_brood(head, delta)
 	elif _phase == Phase.RISE:
 		_vel = _vel.move_toward((_leap_from - head).normalized() * rise_speed, rise_speed * 4.0 * delta)
+	elif _phase == Phase.PLOUGH:
+		_plough_move(head, delta)
 	elif _inside:
 		# In the ground: full control, but only so much acceleration -- it
 		# overshoots and comes round in arcs.
@@ -512,7 +599,9 @@ func _physics_process(delta: float) -> void:
 	if _phase != Phase.AIR:
 		_vel = _vel.limit_length(maxf(max_speed, rise_speed) * 1.2)
 	var new_head := head + _vel * delta
-	if was_inside != _inside:
+	# (Ploughing, it rides the floor line in and out all the time: its furrow
+	# is its own effect.)
+	if was_inside != _inside and _phase != Phase.PLOUGH:
 		_on_crossed(head, new_head, _inside)
 	_pos[0] = new_head
 	# Follow the leader.
@@ -526,24 +615,44 @@ func _physics_process(delta: float) -> void:
 	_contact(delta)
 	_time += delta
 	_place_segments()
-	_fx.follow(_pos[0], _vel, _ground_y, lurk_depth + 2.0, _radii[0], _pos[0].y < _ground_y)
+	_fx.follow(_pos[0], _vel, _ground_y, lurk_depth + 2.0, _radii[0], _pos[0].y < _ground_y or _phase == Phase.PLOUGH)
 	_jaw_fx(delta)
+	if _phase == Phase.PLOUGH:
+		_plough_furrow(delta)
+		_plough_shove()
+	if _puke_time < 0.0:
+		_head_aim = move_toward(_head_aim, 0.0, delta * 2.0)
+		_head_lurch = move_toward(_head_lurch, 0.0, delta * 3.0)
 
 
 func _place_segments() -> void:
 	for i in _segments.size():
-		var forward := (_pos[i - 1] - _pos[i]) if i > 0 else _vel
+		var forward := (_pos[i - 1] - _pos[i]) if i > 0 else _head_forward()
 		if forward.length_squared() < 0.0001:
 			forward = Vector3.FORWARD
 		var up := Vector3.UP if absf(forward.normalized().y) < 0.98 else Vector3.BACK
-		_segments[i].global_transform = Transform3D(Basis.looking_at(forward.normalized(), up), _pos[i])
+		var at: Vector3 = _pos[i] + forward.normalized() * _head_lurch if i == 0 else _pos[i]
+		_segments[i].global_transform = Transform3D(Basis.looking_at(forward.normalized(), up), at)
 		# Peristalsis: a bulge rolling down the body (fatter across, not longer).
 		var wave := sin(_time * bulge_speed * TAU - float(i) * TAU / maxf(bulge_spacing, 1.0))
-		var swell := 1.0 + bulge_amount * pow(maxf(wave, 0.0), 6.0) + _brood_swell(i)
+		var swell := 1.0 + bulge_amount * pow(maxf(wave, 0.0), 6.0) + _brood_swell(i) + _puke_swell(i)
 		_visuals[i].scale = Vector3(swell, swell, 1.0) # the head's maw swells with it
 		var twist := Basis(Vector3.BACK, deg_to_rad(twist_per_segment) * i)
 		var girth := _radii[i] * swell
-		_body_mm.multimesh.set_instance_transform(i, Transform3D(_segments[i].global_basis * twist * Basis.from_scale(Vector3(girth, girth, 1.0)), _pos[i]))
+		_body_mm.multimesh.set_instance_transform(i, Transform3D(_segments[i].global_basis * twist * Basis.from_scale(Vector3(girth, girth, 1.0)), at))
+
+
+## Which way the head faces: along its travel (kept while it's hanging
+## still), turned _head_aim of the way onto its prey (the blood puke).
+func _head_forward() -> Vector3:
+	if _vel.length_squared() > 1.0:
+		_head_dir = _vel.normalized()
+	if _head_aim <= 0.0 or not is_instance_valid(target):
+		return _head_dir
+	var to_prey := Factions.aim_point(target) - _pos[0]
+	if to_prey.length_squared() < 0.01:
+		return _head_dir
+	return _head_dir.slerp(to_prey.normalized(), _head_aim)
 
 
 ## The attack cycle (see The Leap): hunting, it tunnels to the spot under
@@ -559,6 +668,13 @@ func _update_phase(head: Vector3, delta: float) -> void:
 			if hunting:
 				_start_tunnel()
 		Phase.TUNNEL:
+			if _plough_next:
+				# Close enough (or tunnelled long enough): up, and plough at them.
+				var prey := target.global_position
+				var near := Vector2(prey.x - head.x, prey.z - head.z).length()
+				if (near <= plough_start_range or _phase_left <= 0.0) and head.y < _ground_y - 0.5:
+					_start_plough(head)
+				return
 			_plan_leap()
 			# Close enough to leap from (or tunnelled long enough): stop here.
 			var gap := Vector2(_leap_to.x - head.x, _leap_to.z - head.z).length()
@@ -585,14 +701,33 @@ func _update_phase(head: Vector3, delta: float) -> void:
 		Phase.DIVE:
 			if _phase_left <= 0.0:
 				_start_tunnel()
+		Phase.PLOUGH:
+			if _phase_left <= 0.0:
+				# Done: back down, on and round for the next attack.
+				_phase = Phase.DIVE
+				_phase_left = dive_time
+				_fx.burst(Vector3(head.x, _ground_y, head.z), Vector3.UP)
 	_fx.rumble_boost(windup_rumble_boost * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)) if _phase == Phase.WINDUP else 0.0)
 
 
-## A new attack: a fresh guess at your path, and the clock on tunnelling.
+## A new attack -- a plough or a leap (_roll_plough()) -- a fresh guess at
+## your path, and the clock on tunnelling.
 func _start_tunnel() -> void:
 	_phase = Phase.TUNNEL
 	_phase_left = tunnel_timeout
 	_guess = WormLeap.roll_guess()
+	_plough_next = _roll_plough()
+
+
+## plough_chance of a plough, else a leap -- but never the same one three
+## times running, so the fight has a rhythm instead of a streak of dice.
+func _roll_plough() -> bool:
+	var plough := randf() < plough_chance
+	if _attack_streak >= 2 and plough == _last_was_plough:
+		plough = not plough
+	_attack_streak = _attack_streak + 1 if plough == _last_was_plough else 1
+	_last_was_plough = plough
+	return plough
 
 
 ## Where it means to come down: its guess at where you'll be by then
@@ -616,8 +751,13 @@ func _plan_leap() -> void:
 func _erupt(head: Vector3) -> void:
 	_phase = Phase.AIR
 	var height := hop_height if randf() < hop_chance else leap_height
-	_brood_this_leap = height >= leap_height and randf() < brood_chance and brood_count > 0
+	# A big leap: the blood puke at the top, or the spider brood on the way down.
+	var big := height >= leap_height
+	_puke_this_leap = big and is_instance_valid(target) and puke_globs > 0 and randf() < puke_chance
+	_brood_this_leap = big and not _puke_this_leap and randf() < brood_chance and brood_count > 0
 	_brood_left = -1.0
+	_puke_time = -1.0
+	_air_peak = head.y
 	var rise := sqrt(2.0 * air_gravity * maxf(height, 0.5))
 	var across := Vector3.ZERO
 	if is_instance_valid(target):
@@ -643,10 +783,21 @@ func _jaw_fx(delta: float) -> void:
 	if depth > 0.0 and depth < lurk_depth + 3.0:
 		_fx.tremor(Vector3(head.x, _ground_y, head.z), delta)
 	elif depth <= 0.0:
-		var forward := _vel.normalized() if _vel.length_squared() > 0.01 else Vector3.FORWARD
-		_fx.drool(head + forward * _radii[0], delta)
+		_fx.drool(_lower_lip(), delta)
 		if _phase == Phase.AIR:
 			_fx.shed(_pos, _ground_y, delta)
+
+
+## The front of its mouth, at the bottom of the rim: out past the barnacle
+## maw (which sits segment_spacing * 0.35 ahead of the head and is
+## maw_size of the head's width across) and down to its lower edge, so drool
+## dripping from here hangs outside the model where you can see it.
+func _lower_lip() -> Vector3:
+	var forward := _head_forward()
+	var down := (Vector3.DOWN - forward * Vector3.DOWN.dot(forward))
+	down = down.normalized() if down.length_squared() > 0.01 else Vector3.DOWN
+	var rim := _radii[0] * maw_size
+	return _pos[0] + forward * (segment_spacing * 0.35 + rim * 0.9 + _head_lurch) + down * rim * 0.8
 
 
 ## Smooth re-aim in the air (air_steer): the same guess at your path,
@@ -663,16 +814,19 @@ func _reaim(head: Vector3, delta: float) -> void:
 	_vel.z = flat.z
 
 
-## The brood burst: at the top of the arc (rising stops) it starts; the
-## swelling rolls from just behind the head to the tail over apex_hang
-## seconds and each brood segment bursts as the swelling reaches it.
-func _update_brood(delta: float) -> void:
+## The brood burst: just past the top of the arc, once the head has come
+## back down brood_after_peak of the arc's height, it starts; the swelling
+## rolls from just behind the head to the tail over brood_time and each brood
+## segment bursts as the swelling reaches it.
+func _update_brood(head: Vector3, delta: float) -> void:
 	if not _brood_this_leap:
 		return
+	_air_peak = maxf(_air_peak, head.y)
 	if _brood_left < 0.0:
-		if _vel.y > 0.0:
-			return # still rising
-		_brood_left = apex_hang
+		var peak := _air_peak - _ground_y
+		if _vel.y > 0.0 or head.y - _ground_y > peak * (1.0 - brood_after_peak):
+			return # still rising, or not far enough down yet
+		_brood_left = brood_time
 		_brood_segments.clear()
 		# Spread down the body from just behind the head; with more spiders
 		# than segments, several burst from each.
@@ -694,7 +848,7 @@ func _update_brood(delta: float) -> void:
 
 ## Where along the body (segment index) the brood swelling is now.
 func _brood_front() -> float:
-	var t := 1.0 - clampf(_brood_left / maxf(apex_hang, 0.01), 0.0, 1.0)
+	var t := 1.0 - clampf(_brood_left / maxf(brood_time, 0.01), 0.0, 1.0)
 	var eased := t * t * (3.0 - 2.0 * t)
 	return lerpf(1.0, float(_segments.size()), eased)
 
@@ -707,20 +861,109 @@ func _brood_swell(i: int) -> float:
 	return brood_bulge * exp(-off * off)
 
 
-## One spider tears out of segment `index`: flung out sideways (a random way
-## round the body) and up, in a burst of blood.
+## The blood puke at the top of the arc. Returns true while it's hanging
+## there (the caller then leaves its velocity alone):
+##   - wind-up (puke_turn_time): it brakes to a stop, turns its head onto
+##     the player and rears back, while a swelling rolls up its body to the
+##     head (_puke_swell) and blood drools from its jaws;
+##   - the heave (puke_spray_time): it lurches forward, jaws wide, and retches
+##     the globs out in a quick stream, juddering with each one;
+##   - then it carries on down its arc with the sideways speed it had.
+func _update_puke(delta: float) -> bool:
+	if not _puke_this_leap:
+		return false
+	if _puke_time < 0.0:
+		if _vel.y > 0.0:
+			return false # still rising
+		_puke_time = 0.0
+		_puke_fired = 0
+		_puke_carry = Vector3(_vel.x, 0.0, _vel.z)
+		SoundPlayer.play_3d(roar_sound, _pos[0], get_tree().current_scene, 0.7)
+	_puke_time += delta
+	var wind := clampf(_puke_time / maxf(puke_turn_time, 0.01), 0.0, 1.0)
+	var eased := wind * wind * (3.0 - 2.0 * wind)
+	_vel = _vel.move_toward(Vector3.ZERO, 40.0 * delta) # the stop
+	_head_aim = eased
+	var head := _pos[0]
+	var mouth := head + _head_forward() * (segment_spacing * 0.35 + _radii[0] * maw_size * 0.9 + _head_lurch)
+	if _puke_time < puke_turn_time:
+		_head_lurch = -0.5 * eased # rearing back
+		if randf() < delta * 12.0: # blood dribbling from its jaws
+			BloodFX.spawn_impact(get_tree().current_scene, mouth, Vector3.DOWN, puke_color, 0.8)
+		return true
+	# The heave: lurch forward, and retch the globs out over puke_spray_time.
+	var heave := clampf((_puke_time - puke_turn_time) / maxf(puke_spray_time, 0.01), 0.0, 1.0)
+	_head_lurch = lerpf(-0.5, 0.7, minf(heave * 3.0, 1.0)) + randf_range(-0.08, 0.08)
+	var due := mini(puke_globs, int(ceil(heave * puke_globs)))
+	if _puke_fired == 0:
+		_shake_near(head, breach_shake, shake_range)
+	while _puke_fired < due:
+		_puke_glob(mouth)
+		_puke_fired += 1
+	if heave < 1.0:
+		return true
+	# Done: on down the arc.
+	_puke_this_leap = false
+	_puke_time = -1.0
+	_vel = _puke_carry
+	_air_left = 0.0 # the re-aim eases back in
+	return false
+
+
+## One glob of the puke: the spitter roach's spit, red -- aimed with its
+## prediction (its own guess at your path, WormLeap, refined against its
+## flight time like FlyingRoach._spit_at()), scattered up to puke_spread
+## round that like a shotgun's spread.
+func _puke_glob(mouth: Vector3) -> void:
+	if not is_instance_valid(target):
+		return
+	var guess := WormLeap.roll_guess()
+	var landing := Factions.aim_point(target)
+	var flight := puke_flight_min
+	for _pass in 3:
+		var flat := Vector2(landing.x - mouth.x, landing.z - mouth.z).length()
+		flight = clampf(flat / maxf(puke_speed, 0.1), puke_flight_min, puke_flight_max)
+		landing = WormLeap.landing(mouth, target, flight, guess)
+	var scatter := Vector2.from_angle(randf() * TAU) * puke_spread * sqrt(randf())
+	landing += Vector3(scatter.x, randf_range(-0.3, 0.3), scatter.y)
+	var exclude: Array[RID] = []
+	for segment in _segments:
+		exclude.append(segment.get_rid())
+	var velocity := AcidSpit.lob_velocity(mouth, landing, flight, puke_gravity)
+	AcidSpit.launch(get_tree().current_scene, mouth, velocity, puke_gravity, puke_damage, puke_color, exclude)
+	BloodFX.spawn_impact(get_tree().current_scene, mouth, velocity.normalized(), puke_color, 1.5)
+
+
+## How much fatter segment i is from the puke's swelling rolling up the body
+## to the head through the wind-up (the head biggest as it heaves).
+func _puke_swell(i: int) -> float:
+	if _puke_time < 0.0:
+		return 0.0
+	var wind := clampf(_puke_time / maxf(puke_turn_time, 0.01), 0.0, 1.0)
+	var front := lerpf(float(_segments.size()), 0.0, wind * wind * (3.0 - 2.0 * wind))
+	var off := (float(i) - front) / 1.8
+	return brood_bulge * exp(-off * off)
+
+
+## One spider tears out of segment `index` in a burst of blood, thrown at
+## the player: the spitter roach's guess at where they'll be (WormLeap, a
+## fresh guess per spider) scattered up to brood_spread round it, on the arc
+## that gets it there in about brood_flight seconds. The pack it joins is
+## set on that player straight away -- it comes out hunting.
 func _burst_spider(index: int) -> void:
 	if index < 0 or index >= _pos.size():
 		return
 	var at := _pos[index]
-	var along := (_pos[index - 1] - at).normalized() if index > 0 else _vel.normalized()
-	var side := along.cross(Vector3.UP)
-	if side.length_squared() < 0.01:
-		side = Vector3.RIGHT
-	var out := side.normalized().rotated(along, randf_range(-PI, PI) * 0.6)
-	if out.y < 0.0:
-		out = -out
-	out = (out + Vector3.UP * 0.4).normalized()
+	var gravity := ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float
+	var throw := Vector3.UP * brood_speed
+	if is_instance_valid(target):
+		var flight := brood_flight * randf_range(0.8, 1.2)
+		var landing := WormLeap.landing(at, target, flight, WormLeap.roll_guess())
+		landing.y = target.global_position.y # onto the floor round them, not their chest
+		var scatter := Vector2.from_angle(randf() * TAU) * brood_spread * sqrt(randf())
+		landing += Vector3(scatter.x, 0.0, scatter.y)
+		throw = AcidSpit.lob_velocity(at, landing, flight, gravity)
+	var out := throw.normalized()
 	var world := get_tree().current_scene
 	BloodFX.spawn_impact(world, at + out * _radii[index], out, blood_color, 2.0)
 	SoundPlayer.play_3d(breach_sound, at, world, 0.6)
@@ -730,11 +973,17 @@ func _burst_spider(index: int) -> void:
 		_brood_pack.free_when_empty = false # more come with every leap
 		_brood_pack.position = Vector3(at.x, _ground_y, at.z) # the level's root sits at the origin
 		world.add_child(_brood_pack)
-	_brood_pack.spawn_spiders(1, at + out * (_radii[index] + 0.2), out * brood_speed)
+	if is_instance_valid(target):
+		_brood_pack.target = target
+		_brood_pack.order = SpiderPack.Order.HUNT
+	_brood_pack.spawn_spiders(1, at + out * (_radii[index] + 0.2), throw, 0.0)
 
 
-## Landing: a ring of dust tears outward and throws back everything near --
-## players, enemies, creatures, loose bodies -- except its own escorts.
+## Landing: a ring of dust tears outward. Players in it are thrown back and
+## hurt (shockwave_damage); everything else in it -- enemies, creatures --
+## dies, and every body in it, the fresh ones too, is thrown out as a
+## ragdoll (Explosion.launch_ragdolls(), the RPG's throw). Its own escorts
+## are spared, and its brood while shockwave_spares_brood.
 func _shockwave(at: Vector3) -> void:
 	var center := Vector3(at.x, _ground_y, at.z)
 	_fx.shockwave(center, shockwave_radius)
@@ -759,10 +1008,9 @@ func _shockwave(at: Vector3) -> void:
 		if body == null or seen.has(body) or (body is StaticBody3D and not body is AnimatableBody3D):
 			continue
 		seen[body] = true
-		var owner_node := body.get_parent()
-		if owner_node is Deepmaw and (owner_node as Deepmaw).guard_node == self:
+		if _is_escort(body):
 			continue # its own escort
-		if body is Spider and is_instance_valid(_brood_pack) and (body as Spider).pack == _brood_pack:
+		if shockwave_spares_brood and body is Spider and is_instance_valid(_brood_pack) and (body as Spider).pack == _brood_pack:
 			continue # its own brood
 		var away := body.global_position - center
 		away.y = 0.0
@@ -773,8 +1021,14 @@ func _shockwave(at: Vector3) -> void:
 		var out := away / distance if distance > 0.01 else Vector3.FORWARD
 		var push := out * shockwave_force * falloff + Vector3.UP * shockwave_lift * falloff
 		var body_health := body.get_node_or_null("Health") as Health
-		if body_health and shockwave_damage > 0.0:
-			body_health.take_damage(shockwave_damage * falloff, Health.NO_ATTACKER)
+		if body is PlayerMovement:
+			if body_health and shockwave_damage > 0.0:
+				body_health.take_damage(shockwave_damage * falloff, Health.NO_ATTACKER)
+		elif body_health and not body_health.is_dead:
+			# Dead, whatever it was: thrown as a ragdoll below.
+			body_health.take_damage(body_health.current_health + 1.0, Health.NO_ATTACKER, out, center)
+			if body_health.is_dead:
+				continue
 		if body.has_method("shove"):
 			body.call("shove", push)
 		elif body is RigidBody3D:
@@ -783,6 +1037,144 @@ func _shockwave(at: Vector3) -> void:
 				body.call("stun")
 		elif body is PhysicalBone3D:
 			(body as PhysicalBone3D).apply_central_impulse(push * (body as PhysicalBone3D).mass)
+	# Every body in the ring -- old corpses and the ones it just killed (they
+	# turn into ragdolls a physics step later) -- thrown out as one piece each.
+	Explosion.launch_ragdolls(self, center + Vector3.UP, shockwave_radius, shockwave_force)
+
+
+## Up out of the ground to plough (see The Plough): a burst of dirt and a
+## roar where it breaks the surface.
+func _start_plough(head: Vector3) -> void:
+	_phase = Phase.PLOUGH
+	_phase_left = plough_time
+	_plough_fx_left = 0.0
+	_plough_cloud_left = 0.0
+	_plough_push_left = 0.0
+	_plough_hit.clear()
+	var surface := Vector3(head.x, _ground_y, head.z)
+	_fx.eruption(surface, _radii[0])
+	_shake_near(surface, breach_shake, shake_range)
+	SoundPlayer.play_3d(roar_sound, surface, get_tree().current_scene)
+
+
+## Ploughing: its middle held on the floor line (plough_height), heading for
+## its prey at plough_speed but only turning plough_turn_degrees a second --
+## so it swings past and comes round in arcs -- weaving side to side.
+func _plough_move(head: Vector3, delta: float) -> void:
+	var flat := Vector3(_vel.x, 0.0, _vel.z)
+	var dir := flat.normalized() if flat.length_squared() > 0.01 else _head_dir
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length_squared() > 0.001 else Vector3.FORWARD
+	var heading := dir
+	if is_instance_valid(target):
+		var prey := target.global_position
+		var to_prey := Vector3(prey.x - head.x, 0.0, prey.z - head.z)
+		if to_prey.length_squared() > 0.25:
+			heading = to_prey.normalized()
+	heading = heading.rotated(Vector3.UP, deg_to_rad(plough_weave_degrees) * sin(_time * plough_weave_speed * TAU))
+	var turn := dir.signed_angle_to(heading, Vector3.UP)
+	var most := deg_to_rad(plough_turn_degrees) * delta
+	dir = dir.rotated(Vector3.UP, clampf(turn, -most, most))
+	var speed := move_toward(flat.length(), plough_speed, plough_speed * 2.0 * delta)
+	var ride := _ground_y + plough_height * _radii[0] + sin(_time * 3.0) * 0.12 * _radii[0]
+	_vel = Vector3(dir.x * speed, clampf((ride - head.y) * 6.0, -10.0, 10.0), dir.z * speed)
+
+
+## The furrow it tears up: dirt thrown out both sides of its head (a bow
+## wave), a dark dirt mark left behind every few, a cloud of dust and rubble
+## now and then, and the ground shaking near it.
+func _plough_furrow(delta: float) -> void:
+	var head := _pos[0]
+	var forward := Vector3(_vel.x, 0.0, _vel.z)
+	forward = forward.normalized() if forward.length_squared() > 0.01 else Vector3.FORWARD
+	var side := forward.cross(Vector3.UP).normalized()
+	var surface := Vector3(head.x, _ground_y + 0.05, head.z)
+	var world := get_tree().current_scene
+	_plough_fx_left -= delta
+	if _plough_fx_left <= 0.0:
+		_plough_fx_left = 0.18 # (BloodFX caps live bursts: leave room for the rest)
+		for s: float in [-1.0, 1.0]:
+			var out := (side * s + Vector3.UP * 1.2 + forward * 0.3).normalized()
+			BloodFX.spawn_impact(world, surface + side * s * _radii[0], out, dirt_color, 1.5)
+		_plough_scar += 1
+		if _plough_scar % 3 == 0:
+			BloodFX.spawn_splatter(world, surface - forward * _radii[0], Vector3.UP, _radii[0] * 2.4, dirt_color.darkened(0.3))
+		_shake_near(surface, rumble * 1.5, rumble_range)
+	_plough_cloud_left -= delta
+	if _plough_cloud_left <= 0.0:
+		_plough_cloud_left = 0.45
+		_fx.burst(surface, Vector3.UP)
+		SoundPlayer.play_3d(breach_sound, surface, world, 0.5)
+
+
+## Anything in its way is thrown aside (host): a sphere just ahead of its
+## head, every 0.1 s. Creatures and props are thrown out to the side and up
+## and take plough_damage (each at most once a second); a body lying there
+## is thrown as one piece. Players aren't -- its bite and body handle them --
+## nor are its own escorts.
+func _plough_shove() -> void:
+	if not multiplayer.is_server():
+		return
+	_plough_push_left -= get_physics_process_delta_time()
+	if _plough_push_left > 0.0:
+		return
+	_plough_push_left = 0.1
+	for body in _plough_hit.keys():
+		_plough_hit[body] = float(_plough_hit[body]) - 0.1
+		if _plough_hit[body] <= 0.0:
+			_plough_hit.erase(body)
+	var head := _pos[0]
+	var forward := Vector3(_vel.x, 0.0, _vel.z)
+	forward = forward.normalized() if forward.length_squared() > 0.01 else Vector3.FORWARD
+	var side := forward.cross(Vector3.UP).normalized()
+	var sphere := SphereShape3D.new()
+	sphere.radius = _radii[0] * 1.8
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = sphere
+	query.transform = Transform3D(Basis.IDENTITY, Vector3(head.x, _ground_y + 0.6, head.z) + forward * _radii[0] * 0.8)
+	query.collision_mask = 1 | EnemyRagdoll.RAGDOLL_LAYER
+	var exclude: Array[RID] = []
+	for segment in _segments:
+		exclude.append(segment.get_rid())
+	query.exclude = exclude
+	var thrown_bodies := {}
+	for result in get_world_3d().direct_space_state.intersect_shape(query, 32):
+		var body := result.collider as Node3D
+		if body == null or body is PlayerMovement or (body is StaticBody3D and not body is AnimatableBody3D):
+			continue
+		if _is_escort(body):
+			continue
+		var away := body.global_position - head
+		var side_sign := 1.0 if away.dot(side) >= 0.0 else -1.0
+		var push := (side * side_sign + forward * 0.6).normalized() * plough_push + Vector3.UP * plough_lift
+		if body is PhysicalBone3D:
+			var ragdoll := body.get_parent()
+			if thrown_bodies.has(ragdoll) or _plough_hit.has(ragdoll):
+				continue
+			thrown_bodies[ragdoll] = true
+			_plough_hit[ragdoll] = 1.0
+			for bone in ragdoll.get_children():
+				if bone is PhysicalBone3D:
+					(bone as PhysicalBone3D).apply_central_impulse(push * (bone as PhysicalBone3D).mass)
+			continue
+		if _plough_hit.has(body):
+			continue
+		_plough_hit[body] = 1.0
+		var body_health := body.get_node_or_null("Health") as Health
+		if body_health and not body_health.is_dead and plough_damage > 0.0:
+			body_health.take_damage(plough_damage, Health.NO_ATTACKER, push.normalized(), head)
+		if body.has_method("shove"):
+			body.call("shove", push)
+		elif body is RigidBody3D:
+			(body as RigidBody3D).apply_central_impulse(push * (body as RigidBody3D).mass)
+			if body.has_method("stun"):
+				body.call("stun")
+
+
+## One of its own Deepmaw escorts (their hitbox bodies hang off the Deepmaw).
+func _is_escort(body: Node) -> bool:
+	var owner_node := body.get_parent()
+	return owner_node is Deepmaw and (owner_node as Deepmaw).guard_node == self
 
 
 ## Winding up: the ground shakes harder and harder and kicks up dirt where
@@ -805,6 +1197,9 @@ func _telegraph(delta: float) -> void:
 func _goal(head: Vector3, delta: float) -> Vector3:
 	match _phase:
 		Phase.TUNNEL:
+			if _plough_next and is_instance_valid(target):
+				var prey := target.global_position
+				return Vector3(prey.x, _ground_y - lurk_depth, prey.z)
 			return Vector3(_leap_to.x, _ground_y - lurk_depth, _leap_to.z)
 		Phase.WINDUP:
 			return Vector3(_leap_from.x, _ground_y - dive_depth, _leap_from.z)
