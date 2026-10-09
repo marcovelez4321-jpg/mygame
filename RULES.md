@@ -720,3 +720,5 @@ them:
   - Headless check run (with the user's OK): no errors. Not yet seen in game.
 
 - 2026-10-09: **One-handed weapons start with the Pistol's arm placement.** `Viewmodel.one_handed_arms_template` (weapons/starter_gun.tres). A one-handed weapon not yet fitted to the new arms copies its arms_position/rotation/scale and right_arm_offset/rotation, then is seated in the hand by its own grip_point. Still tunable per weapon in F2 afterwards. Not run.
+
+- 2026-10-09: **One-handed guns copy the Pistol's held angle and grip spot too**, not just its arm placement. New `WeaponData.model_facing_degrees`: how a gun's model turns to face forward and upright (PSX_Guns models point along -X: (0, -90, 0), set on the Pistol; NEWPSXWEAPONS face -Z: zero). A one-handed gun not yet fitted takes the Pistol's rotation with the Pistol model's facing taken off and its own put on, so it aims the same way. Its grip_point goes exactly where the Pistol's grip is (same hand, same arm placement). Size stays its own. Uzi grip_point (0, -0.012, 0): the top of its handle. Applies to every future one-handed gun automatically. Not run.

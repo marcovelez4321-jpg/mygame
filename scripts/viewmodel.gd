@@ -1031,10 +1031,14 @@ func _ensure_new_arms() -> bool:
 
 
 ## A weapon shown on the new arms for the first time (not fitted to them
-## yet, WeaponData.arms_fitted): a one-handed one takes the arm placement of
-## one_handed_arms_template (the Pistol); anything else has the arms as the
-## rig was made (camera bone on your eye). Then the gun's seated in the hand
-## by its grip_point.
+## yet, WeaponData.arms_fitted).
+##   One-handed: copies one_handed_arms_template (the Pistol) -- the same arm
+##     placement, the gun at the same angle (turned by the two models'
+##     model_facing_degrees, so a model facing another way still points the
+##     same way) and its grip_point where the Pistol's grip is, in the hand.
+##     Its size stays its own.
+##   Anything else: the arms as the rig was made (camera bone on your eye),
+##     the gun seated in the hand by its grip_point.
 ## F2 tunes it from there (G for the grip); F3 saves it.
 func _fit_to_new_arms(weapon: WeaponData) -> void:
 	var template := one_handed_arms_template
@@ -1044,14 +1048,34 @@ func _fit_to_new_arms(weapon: WeaponData) -> void:
 		weapon.arms_scale = template.arms_scale
 		weapon.right_arm_offset = template.right_arm_offset
 		weapon.right_arm_rotation_degrees = template.right_arm_rotation_degrees
+		# The same held angle: the template's rotation with its model's own
+		# facing taken off, then this model's facing put on.
+		var held := Basis.from_euler(template.viewmodel_rotation_degrees * (PI / 180.0)) \
+				* _facing(template).inverse() * _facing(weapon)
+		weapon.viewmodel_rotation_degrees = held.get_euler() * (180.0 / PI)
+		# The grip where the template's grip is (in the same hand).
+		var template_grip := template.viewmodel_position + _gun_basis(template) * template.grip_point
+		weapon.viewmodel_position = template_grip - _gun_basis(weapon) * weapon.grip_point
+		_apply_arms_transform(weapon)
+		_apply_arm_offsets(weapon)
 	else:
 		weapon.arms_position = Vector3.ZERO
 		weapon.arms_rotation_degrees = Vector3.ZERO
 		weapon.arms_scale = 1.0
-	_apply_arms_transform(weapon)
-	_apply_arm_offsets(weapon)
-	_seat_in_hand(weapon)
+		_apply_arms_transform(weapon)
+		_apply_arm_offsets(weapon)
+		_seat_in_hand(weapon)
 	weapon.arms_fitted = true
+
+
+func _facing(weapon: WeaponData) -> Basis:
+	return Basis.from_euler(weapon.model_facing_degrees * (PI / 180.0))
+
+
+## The gun model's turn and size in camera space (cant included).
+func _gun_basis(weapon: WeaponData) -> Basis:
+	return _cant_basis(weapon) * Basis.from_euler(weapon.viewmodel_rotation_degrees * (PI / 180.0)) \
+			* Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale)
 
 
 ## Hands the weapon's per-arm nudges (camera space) to the new arms, turned
@@ -1073,9 +1097,7 @@ func _seat_in_hand(weapon: WeaponData) -> void:
 	if _fp_arms == null:
 		return
 	var socket := _arms.transform * _fp_arms.grip_socket_in_rig()
-	var gun_basis := _cant_basis(weapon) * Basis.from_euler(weapon.viewmodel_rotation_degrees * (PI / 180.0)) \
-			* Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale)
-	weapon.viewmodel_position = socket - gun_basis * weapon.grip_point
+	weapon.viewmodel_position = socket - _gun_basis(weapon) * weapon.grip_point
 
 
 ## Gets the arms ready for `weapon`: its hold pose (the first frame of its

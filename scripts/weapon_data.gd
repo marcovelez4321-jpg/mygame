@@ -201,6 +201,12 @@ enum ReloadStyle {
 ## of the closed right hand. Tune it in game: F2, then G (a blue marker
 ## shows it), F3 to save.
 @export var grip_point: Vector3 = Vector3.ZERO
+## How this gun's model has to be turned to face forward and upright (barrel
+## pointing -Z, top up), in degrees. Lets one gun's held angle be copied onto
+## another whose model faces a different way (one-handed guns copy the
+## Pistol's, see Viewmodel.one_handed_arms_template). PSX_Guns models point
+## along -X: (0, -90, 0). NEWPSXWEAPONS models already face -Z: zero.
+@export var model_facing_degrees: Vector3 = Vector3.ZERO
 ## Each first-person arm's own nudge for this weapon, in camera space: the
 ## whole arm moved (meters) and turned (degrees) round its shoulder. The gun
 ## stays where it is on screen. Left = the dual-wield / support arm only.

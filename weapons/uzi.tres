@@ -26,6 +26,7 @@ recoil_scale = 3.0
 recoil_jitter = 0.4
 draw_time = 0.4
 one_handed = true
+grip_point = Vector3(0, -0.012, 0)
 dual_version = ExtResource("6_dual")
 viewmodel_scene = ExtResource("2_uzi")
 viewmodel_position = Vector3(0.2, -0.2, -0.4)
