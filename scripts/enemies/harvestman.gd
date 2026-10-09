@@ -51,7 +51,7 @@ extends Node3D
 ## it is (its position/heading still need syncing, like every creature).
 
 enum State { PATROL, LISTEN, HUNT, SEARCH, ATTACK, FEED, COLLAPSED, DEAD }
-enum Attack { NONE, SKEWER, SLAM, HOSE, BROOD }
+enum Attack { NONE, SKEWER, SLAM, HOSE, BROOD, RUSH }
 
 const LEECH_SEGMENT_MESH := "res://art/worm_boss/worm_segment_mesh.res"
 const LEECH_TEXTURE := "res://art/props/PSX Creatures/Textures/tape_worm.png"
@@ -65,6 +65,10 @@ const LEECH_SEGMENTS := 12
 const LEECH_SPLIT := [0.34, 0.38, 0.28]
 ## Segments in the proboscis.
 const TUBE_SEGMENTS := 16
+## The slam's rise before it drops (a rush skips it).
+const SLAM_RISE := 0.6
+## The puff a footfall kicks up.
+const STEP_DUST := Color(0.22, 0.2, 0.16)
 ## The baked worm segment's length along Z (BurrowWorm: 0.8625 x 1.8).
 const SEGMENT_MESH_LENGTH := 1.55
 
@@ -142,6 +146,10 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var body_sway: float = 0.35
 ## Creatures under a landing foot take this.
 @export var squash_damage: float = 40.0
+## Each footfall shakes the camera this much right next to it, fading out
+## to nothing at step_shake_range (subtle: the slam's is 7).
+@export var step_shake: float = 1.2
+@export var step_shake_range: float = 22.0
 
 @export_group("Senses")
 @export var sight_range: float = 40.0
@@ -167,8 +175,10 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var hose_range_max: float = 24.0
 @export var hose_time: float = 3.6
 @export var hose_globs: int = 28
-## Chance it sprays when you're in hose range and it's ready to attack.
-@export_range(0.0, 1.0, 0.05) var hose_chance: float = 0.7
+## Chance it sprays when you're in hose range and it's ready to attack, and
+## the most sprays in a row before it has to do something else.
+@export_range(0.0, 1.0, 0.05) var hose_chance: float = 0.35
+@export var hose_max_in_a_row: int = 2
 @export var hose_damage: float = 6.0
 @export var hose_sweep: float = 3.5
 @export var hose_speed: float = 14.0
@@ -176,6 +186,23 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var puddle_time: float = 6.0
 @export var brood_cooldown: float = 22.0
 @export var brood_count: int = 3
+
+@export_group("Rush")
+## Too far off (the Antlion Guard's charge): it rears up with a horn blast
+## (rush_windup -- the tell), then sprints at you on its stilts at
+## rush_speed, legs scrambling, only able to turn rush_turn_speed radians a
+## second (sidestep it!), and slams as it reaches you -- or wherever it is
+## when it hits a wall or has run rush_max_time.
+## It rushes when you're past rush_min_range: rush_chance of the time while
+## you're still in hose range (else it sprays), always past it.
+@export var rush_min_range: float = 16.0
+@export_range(0.0, 1.0, 0.05) var rush_chance: float = 0.5
+@export var rush_speed: float = 9.0
+@export var rush_turn_speed: float = 0.6
+@export var rush_windup: float = 0.6
+@export var rush_max_time: float = 5.0
+## Its steps while rushing: quicker, lower, two legs at once.
+@export var rush_step_time: float = 0.32
 
 @export_group("Feeding")
 @export var feed_range: float = 22.0
@@ -231,6 +258,7 @@ class HLeg:
 	var stepping := false
 	var step_t := 0.0
 	var step_duration := 1.0
+	var lift := 2.0
 	var slip_left := 0.0
 	var slip_dir := Vector3.ZERO
 	## An attack driving the foot instead of the walk.
@@ -253,6 +281,13 @@ var _attack_fired := 0
 var _attack_guess := Vector2.ONE
 var _cooldown := 1.0
 var _brood_left := 8.0
+## Sprays in a row (any other attack resets it).
+var _hose_streak := 0
+## Rushing: legs scrambling (the gait speeds up), and how fast it's sliding
+## on into the slam it ends with.
+var _rushing := false
+var _rush_slide := 0.0
+var _rush_lean := 0.0
 var _exposed := 0.0
 var _goal := Vector3.ZERO
 var _home := Vector3.ZERO
@@ -344,6 +379,7 @@ func _ready() -> void:
 			if knee:
 				knee.free()
 	_fit_to_core(legs)
+	_double_sided_core()
 	_setup_heads()
 	_setup_light()
 	if legs:
@@ -419,6 +455,27 @@ func _fit_to_core(legs: Node) -> void:
 			var angle := atan2(leg.position.x, -leg.position.z)
 			var out := Vector3(sin(angle), 0.45, -cos(angle)).normalized()
 			leg.position = HarvestmanBuilder.surface_at(points, out, sack_radius) - out * 0.2
+
+
+## The core's meshes drawn from both sides. The barnacles are hollow cups:
+## once the heads twist round, you can see into them, and the inside of a
+## one-sided mesh isn't drawn at all (bits of the core seemed to vanish).
+func _double_sided_core() -> void:
+	if _core == null:
+		return
+	for node in _core.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.material_override is BaseMaterial3D:
+			var material := mesh_instance.material_override.duplicate() as BaseMaterial3D
+			material.cull_mode = BaseMaterial3D.CULL_DISABLED
+			mesh_instance.material_override = material
+		elif mesh_instance.mesh:
+			for surface in mesh_instance.mesh.get_surface_count():
+				var active := mesh_instance.get_active_material(surface) as BaseMaterial3D
+				if active:
+					var material := active.duplicate() as BaseMaterial3D
+					material.cull_mode = BaseMaterial3D.CULL_DISABLED
+					mesh_instance.set_surface_override_material(surface, material)
 
 
 ## The core's barnacles become heads (barnacle_heads). The one hanging
@@ -692,7 +749,8 @@ func _physics_process(delta: float) -> void:
 		State.HUNT, State.COLLAPSED:
 			_hunt(delta)
 		State.ATTACK:
-			_walk_to(global_position, 0.0, delta)
+			if _attack != Attack.RUSH:
+				_speed = move_toward(_speed, 0.0, delta * 3.0)
 			_attack_step(delta)
 		State.FEED:
 			_feed_step(delta)
@@ -792,7 +850,9 @@ func _hunt(delta: float) -> void:
 		_start_attack(Attack.SLAM, null)
 	elif distance < skewer_range and leg:
 		_start_attack(Attack.SKEWER, leg)
-	elif distance > hose_range_min and distance < hose_range_max and randf() < hose_chance:
+	elif distance > rush_min_range and (distance >= hose_range_max or randf() < rush_chance):
+		_start_attack(Attack.RUSH, null)
+	elif distance > hose_range_min and distance < hose_range_max and _hose_streak < hose_max_in_a_row and randf() < hose_chance:
 		_start_attack(Attack.HOSE, null)
 
 
@@ -877,6 +937,7 @@ func _ignore_players() -> void:
 # ---- Attacks (host) -----------------------------------------------------------
 
 func _start_attack(attack: Attack, leg: HLeg) -> void:
+	_hose_streak = _hose_streak + 1 if attack == Attack.HOSE else 0
 	_attack = attack
 	_attack_leg = leg
 	_attack_time = 0.0
@@ -894,6 +955,8 @@ func _end_attack() -> void:
 		_attack_leg.planted = _attack_leg.foot
 	_attack_leg = null
 	_attack = Attack.NONE
+	_rushing = false
+	_rush_slide = 0.0
 	_cooldown = attack_cooldown
 	if _state == State.ATTACK:
 		_set_state(State.COLLAPSED if _broken_legs() >= 2 else State.HUNT)
@@ -901,6 +964,11 @@ func _end_attack() -> void:
 
 func _attack_step(delta: float) -> void:
 	_attack_time += delta
+	if _rush_slide > 0.0:
+		# Sliding on into the slam after a rush.
+		if not _move_forward(_rush_slide, delta):
+			_rush_slide = 0.0
+		_rush_slide = move_toward(_rush_slide, 0.0, delta * rush_speed * 1.5)
 	match _attack:
 		Attack.SKEWER:
 			_skewer_step()
@@ -910,6 +978,8 @@ func _attack_step(delta: float) -> void:
 			_hose_step()
 		Attack.BROOD:
 			_brood_step()
+		Attack.RUSH:
+			_rush_step(delta)
 		_:
 			_end_attack()
 
@@ -959,10 +1029,54 @@ func _impale(at: Vector3) -> void:
 	Explosion.launch_ragdolls(self, at + Vector3.UP, 2.0, 6.0)
 
 
+## Rush (the Antlion Guard's charge): it rears up and blasts its horn (the
+## tell), then sprints at you leaning forward, legs scrambling, barely able
+## to turn -- and once it's on you (or it hits a wall, or has run out of
+## time) it goes straight into the slam, sliding on into it.
+func _rush_step(delta: float) -> void:
+	if not is_instance_valid(target):
+		_end_attack()
+		return
+	if _attack_time < rush_windup:
+		_height_target = stand_height + 1.5
+		_face_toward(target.global_position, delta)
+		if _attack_fired == 0:
+			_attack_fired = 1
+			SoundPlayer.play_3d(horn_sound, _body.global_position, get_tree().current_scene)
+		return
+	_rushing = true
+	_height_target = stand_height - 1.0
+	var to := target.global_position - global_position
+	_yaw = rotate_toward(_yaw, atan2(-to.x, -to.z), rush_turn_speed * delta)
+	_speed = move_toward(_speed, rush_speed, rush_speed * 2.0 * delta)
+	var blocked := not _move_forward(_speed, delta)
+	var arrived := _flat_distance(target.global_position) < slam_range + 1.0
+	if arrived or blocked or _attack_time > rush_windup + rush_max_time:
+		# Into the slam -- straight to the drop (the rush was its tell).
+		_rushing = false
+		_rush_slide = 0.0 if blocked else _speed * 0.6
+		_speed = 0.0
+		_attack = Attack.SLAM
+		_attack_time = SLAM_RISE
+		_attack_fired = 0
+
+
+## Moves it ahead at `speed` (m/s); false (and no move) if something tall
+## is right in front of it.
+func _move_forward(speed: float, delta: float) -> bool:
+	var forward := Vector3(-sin(_yaw), 0.0, -cos(_yaw))
+	var ahead := global_position + Vector3.UP * 3.0
+	if not _clear_line(ahead, ahead + forward * maxf(speed * 0.4, 2.0)):
+		return false
+	global_position += forward * speed * delta
+	_update_ground()
+	return true
+
+
 ## Slam: up (the tell), then the sack dropped onto the floor -- a shockwave
 ## -- and it stays down, exposed, before it climbs back up.
 func _slam_step() -> void:
-	var rise := 0.6
+	var rise := SLAM_RISE
 	var drop := 0.25
 	var down_height := sack_radius + 0.3
 	if _attack_time < rise:
@@ -990,6 +1104,8 @@ func _slam_impact() -> void:
 	WormFX.punch(get_tree(), center, 6.0, 25.0)
 	SoundPlayer.play_3d(death_sound, center, world)
 	for body in _bodies_near(center + Vector3.UP, slam_radius):
+		if not _clear_line(center + Vector3.UP * 1.5, body.global_position + Vector3.UP * 0.8):
+			continue # a wall in between takes it
 		var away := body.global_position - center
 		away.y = 0.0
 		var falloff := clampf(1.0 - away.length() / slam_radius, 0.2, 1.0)
@@ -1345,7 +1461,9 @@ func _place_body(delta: float) -> void:
 		_sack_lag_vel += (8.0 * (lag_target - _sack_lag) - 2.0 * _sack_lag_vel) * delta
 		_sack_lag += _sack_lag_vel * delta
 	_last_body = at
-	var tilt := Basis(Vector3.RIGHT, _sway.z * 0.06) * Basis(Vector3.BACK, -_sway.x * 0.06)
+	if delta > 0.0:
+		_rush_lean = lerpf(_rush_lean, -0.2 if _rushing else 0.0, 1.0 - exp(-4.0 * delta))
+	var tilt := Basis(Vector3.RIGHT, _sway.z * 0.06 + _rush_lean) * Basis(Vector3.BACK, -_sway.x * 0.06)
 	_body.global_transform = Transform3D(facing * tilt, at)
 	if _core:
 		_core.rotation = Vector3(_sack_lag.x, 0.0, _sack_lag.y)
@@ -1383,15 +1501,18 @@ func _is_hunting() -> bool:
 
 
 ## Feet: one leg steps at a time, round and round, each lifting high and
-## coming straight down soft; an attack drives its leg's foot; a broken leg
-## drags; dying, they splay.
+## coming straight down hard (rushing: quick, low steps, two legs at a
+## time, scrambling); an attack drives its leg's foot; a broken leg drags;
+## dying, they splay.
 func _update_legs(delta: float) -> void:
 	var ground := Transform3D(Basis(Vector3.UP, _yaw), global_position)
-	var lead := Vector3(-sin(_yaw), 0.0, -cos(_yaw)) * _speed * step_time
-	var any_stepping := false
+	var duration := rush_step_time if _rushing else step_time
+	var lead := Vector3(-sin(_yaw), 0.0, -cos(_yaw)) * _speed * duration * (1.6 if _rushing else 1.0)
+	var stepping_count := 0
 	for leg in _legs:
 		if leg.stepping:
-			any_stepping = true
+			stepping_count += 1
+	var any_stepping := stepping_count >= (2 if _rushing else 1)
 	for i in _legs.size():
 		var leg := _legs[i]
 		var home := ground * (Vector3(sin(leg.angle), 0.0, -cos(leg.angle)) * foot_radius)
@@ -1415,7 +1536,7 @@ func _update_legs(delta: float) -> void:
 				var t := leg.step_t
 				var across := smoothstep(0.0, 0.75, t)
 				var lift := sin(minf(t / 0.75, 1.0) * PI * 0.5) if t < 0.75 else 1.0 - smoothstep(0.75, 1.0, t)
-				leg.foot = leg.step_from.lerp(leg.step_to, across) + Vector3.UP * step_lift * lift
+				leg.foot = leg.step_from.lerp(leg.step_to, across) + Vector3.UP * leg.lift * lift
 			continue
 		if leg.slip_left > 0.0:
 			leg.slip_left -= delta
@@ -1425,20 +1546,26 @@ func _update_legs(delta: float) -> void:
 		if off > stride * 3.0:
 			leg.planted = _foot_spot(home + lead)
 			leg.foot = leg.planted
-		elif off > stride and not any_stepping and (i == _next_leg or off > stride * 1.8):
+		elif off > stride and not any_stepping and (i == _next_leg or _rushing or off > stride * 1.8):
 			leg.stepping = true
-			any_stepping = true
+			stepping_count += 1
+			any_stepping = stepping_count >= (2 if _rushing else 1)
 			leg.step_t = 0.0
-			leg.step_duration = step_time * randf_range(0.9, 1.15)
+			leg.step_duration = duration * randf_range(0.9, 1.15)
+			leg.lift = step_lift * (0.45 if _rushing else 1.0)
 			leg.step_from = leg.planted
 			leg.step_to = _foot_spot(home + lead)
 			_next_leg = (i + 1) % _legs.size()
 
 
-## A foot comes down: a quiet wet tap, anything small under it squashed,
-## and now and then it slips and the body lurches.
+## A foot comes down: a heavy thud, a puff of dust and grime, a subtle shake
+## of the camera for anyone near (step_shake, fading out to step_shake_range),
+## anything small under it squashed; now and then it slips and the body
+## lurches.
 func _landed(leg: HLeg) -> void:
-	SoundPlayer.play_3d(step_sound, leg.foot, get_tree().current_scene, 0.6)
+	SoundPlayer.play_3d(step_sound, leg.foot, get_tree().current_scene)
+	BloodFX.spawn_impact(get_tree().current_scene, leg.foot + Vector3.UP * 0.05, Vector3.UP, STEP_DUST, 1.2)
+	_shake_near(leg.foot, step_shake, step_shake_range)
 	if randf() < slip_chance:
 		leg.slip_left = 0.25
 		leg.slip_dir = Vector3(leg.foot.x - global_position.x, 0.0, leg.foot.z - global_position.z).normalized()

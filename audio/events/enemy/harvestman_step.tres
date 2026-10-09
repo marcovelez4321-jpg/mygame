@@ -5,9 +5,9 @@
 [resource]
 script = ExtResource("1")
 clip_folder = "res://audio/sfx/body"
-clip_prefix = "limb_slap"
-volume_db = -16.0
-pitch_scale = 1.6
-pitch_variance = 0.15
-unit_size = 4.0
+clip_prefix = "drop_heavy"
+volume_db = 4.0
+pitch_scale = 0.55
+pitch_variance = 0.08
+unit_size = 14.0
 bus = "Enemies"
