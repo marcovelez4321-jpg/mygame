@@ -320,6 +320,7 @@ static var _slice_fit: Array = []
 
 
 func _ready() -> void:
+	add_to_group(PlayerGrapple.BIG_GROUP) # the grapple zips you to it
 	_home = global_position
 	var floor_hit := _static_ray(global_position + Vector3.UP * 2.0, global_position + Vector3.DOWN * 50.0)
 	_ground_y = (floor_hit.position as Vector3).y if not floor_hit.is_empty() else global_position.y

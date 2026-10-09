@@ -95,6 +95,7 @@ func _ready() -> void:
 	_build_graphics_panel()
 	_populate_character_options()
 	character_option.item_selected.connect(_on_character_selected)
+	_add_tentacle_row()
 	# Same order as GameSettings.OutlineMode.
 	for label in ["When looking at it", "Always", "Off"]:
 		outlines_option.add_item(label)
@@ -109,6 +110,25 @@ func _ready() -> void:
 	test_map_button.pressed.connect(test_map_loader.pick)
 	test_map_loader.map_ready.connect(_open_test_map)
 	hub_button.pressed.connect(_go_to_hub)
+
+
+## "Tentacle style" (GameSettings.tentacle_style): a copy of the Outlines row
+## placed just under it. Called before the Outlines row gets its items.
+func _add_tentacle_row() -> void:
+	var outlines_row := outlines_option.get_parent()
+	var row := outlines_row.duplicate() as HBoxContainer
+	row.name = "TentacleRow"
+	(row.get_child(0) as Label).text = "Tentacle style"
+	var option := row.get_child(1) as OptionButton
+	outlines_row.get_parent().add_child(row)
+	outlines_row.get_parent().move_child(row, outlines_row.get_index() + 1)
+	# Same order as GameSettings.TentacleStyle.
+	for label in ["Black symbiote", "Flesh worm", "Spider horde"]:
+		option.add_item(label)
+	option.select(GameSettings.tentacle_style)
+	option.item_selected.connect(func(index: int) -> void:
+		GameSettings.tentacle_style = index as GameSettings.TentacleStyle
+	)
 
 
 func _unhandled_input(event: InputEvent) -> void:

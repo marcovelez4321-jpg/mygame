@@ -188,6 +188,10 @@ enum ReloadStyle {
 ## it, and any cooldown left from the previous weapon carries over, so
 ## switching can never be used to fire faster.
 @export var draw_time: float = 0.4
+## Held in the right hand alone, leaving the left free for the tentacle
+## grapple (PlayerGrapple, E). With anything else out, E switches to the last
+## one-handed gun you used first.
+@export var one_handed: bool = false
 
 @export_group("Presentation")
 ## Shown on the weapon wheel. If empty, only the name is shown.

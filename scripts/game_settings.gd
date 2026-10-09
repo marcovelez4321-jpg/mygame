@@ -15,6 +15,8 @@ const SETTINGS_PATH := "user://settings.cfg"
 enum WindowMode { WINDOWED, BORDERLESS_FULLSCREEN, EXCLUSIVE_FULLSCREEN }
 ## When pickups and usable things get an outline (InteractHighlight).
 enum OutlineMode { LOOKING, ALWAYS, OFF }
+## How your own grapple looks (GrappleTentacle). Others' always show as a line.
+enum TentacleStyle { SYMBIOTE, FLESH_WORM, SPIDER_HORDE }
 
 ## Every audio bus the pause menu's Audio panel shows a slider for, in order:
 ## Master, then one per audio/sfx folder (default_bus_layout.tres).
@@ -31,6 +33,7 @@ var mouse_sensitivity: float = 0.0
 ## Path of the character FBX the player wears (PlayerModel); "" = first one.
 var player_character: String = ""
 var outline_mode: OutlineMode = OutlineMode.LOOKING
+var tentacle_style: TentacleStyle = TentacleStyle.SYMBIOTE
 ## The sewer-city look (SewerLook), each its own switch in Graphics.
 var color_grade: bool = true
 var grime: bool = true
@@ -164,6 +167,7 @@ func save_settings() -> void:
 	if not player_character.is_empty():
 		config.set_value("player", "character", player_character)
 	config.set_value("display", "outline_mode", outline_mode)
+	config.set_value("player", "tentacle_style", tentacle_style)
 	config.set_value("graphics", "color_grade", color_grade)
 	config.set_value("graphics", "grime", grime)
 	config.set_value("graphics", "ground_fog", ground_fog)
@@ -188,6 +192,7 @@ func load_settings() -> void:
 	mouse_sensitivity = config.get_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	player_character = config.get_value("player", "character", player_character)
 	outline_mode = config.get_value("display", "outline_mode", outline_mode) as OutlineMode
+	tentacle_style = config.get_value("player", "tentacle_style", tentacle_style) as TentacleStyle
 	color_grade = config.get_value("graphics", "color_grade", color_grade)
 	grime = config.get_value("graphics", "grime", grime)
 	ground_fog = config.get_value("graphics", "ground_fog", ground_fog)

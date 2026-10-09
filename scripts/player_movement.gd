@@ -185,6 +185,7 @@ class PlayerInput:
 	var use_bandage: bool = false # B: wrap a bandage
 	var reload: bool = false
 	var grab: bool = false
+	var grapple: bool = false # E: coil the tentacle grapple, release to lash it (PlayerGrapple)
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
 
 ## Result of _find_mantle_ledge(): whether a valid ledge was found, and where
@@ -209,6 +210,7 @@ const USABLE_GROUP := "usable"
 @onready var camera: CameraJuice = $Head/Camera3D
 @onready var weapons: WeaponController = $WeaponController
 @onready var grabber: PhysicsGrabber = $PhysicsGrabber
+@onready var grapple: PlayerGrapple = $PlayerGrapple
 @onready var health: Health = $Health
 
 ## How far ahead we look when deciding whether a ledge is a walkable step.
@@ -343,6 +345,7 @@ func _physics_process(delta: float) -> void:
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	_is_dead = true
 	velocity = Vector3.ZERO
+	grapple.release()
 	get_tree().create_timer(respawn_delay).timeout.connect(_restart_level)
 
 
@@ -390,6 +393,8 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_B)
 	input.grab = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_F)
+	input.grapple = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_physical_key_pressed(KEY_E)
 
 	input.select_weapon = _pending_weapon_select
 	_pending_weapon_select = -1
@@ -465,9 +470,14 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	if fresh_dash and _dash_cooldown_left <= 0.0 and _spend_stamina():
 		_start_dash(wishdir)
 
+	# The tentacle grapple (E). Space used to let go of it isn't also a wall jump.
+	if grapple.tick(input.grapple, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id()):
+		fresh_jump = false
+
 	var was_airborne := not is_on_floor()
 
-	if is_on_floor():
+	# Being pulled counts as airborne: no ground friction slowing the pull.
+	if is_on_floor() and not grapple.is_pulling():
 		_wall_jumped_since_reset = false # touching ground resets the wall-jump limiter
 		_ground_move(wishdir, delta)
 		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
@@ -476,7 +486,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 			jumped.emit()
 		_try_step_up(delta)
 	else:
-		velocity.y -= gravity * delta
+		velocity.y -= gravity * grapple.gravity_scale() * delta
 		_air_move(wishdir, delta)
 
 		# Wall jump: airborne only (it's an air-movement tool, not a way to
@@ -501,6 +511,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		velocity.x = _dash_dir.x * dash_speed
 		velocity.z = _dash_dir.z * dash_speed
 
+	grapple.apply_pull(delta)
 	_apply_pending_shove()
 
 	# Captured right before move_and_slide() changes anything, so the stomp
@@ -847,6 +858,7 @@ func _find_mantle_ledge() -> MantleTarget:
 func _start_mantle(target: Vector3) -> void:
 	_mantle_time_left = mantle_duration
 	velocity = Vector3.ZERO
+	grapple.release() # pulling yourself up a ledge lets go of the tentacle
 	mantled.emit()
 
 	var tween := create_tween()

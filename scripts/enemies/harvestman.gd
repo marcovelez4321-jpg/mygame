@@ -360,6 +360,7 @@ var _bodies: Array[AnimatableBody3D] = []
 
 
 func _ready() -> void:
+	add_to_group(PlayerGrapple.BIG_GROUP) # the grapple zips you to it
 	_home = global_position
 	_goal = global_position
 	_yaw = rotation.y

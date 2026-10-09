@@ -247,6 +247,8 @@ var _leeches: Array = []
 ## The weapon held before this one -- where you go back to when you run out
 ## of grenades.
 var _previous: int = 0
+## The one-handed gun you had out last -- what E switches to (PlayerGrapple).
+var _last_one_handed: WeaponData
 
 @onready var _body: CollisionObject3D = get_parent() as CollisionObject3D
 
@@ -594,6 +596,28 @@ func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon:
 		resolve_shot(shot)
 
 
+## Busy with both hands: pills or a bandage going down, or a grenade mid-throw.
+func is_busy() -> bool:
+	return _item_using >= 0 or _throw_left >= 0.0 or has_leech()
+
+
+## E with a two-handed gun out (PlayerGrapple): switches to the one-handed
+## gun you used last (or the first one you own). False if you own none.
+func switch_to_one_handed() -> bool:
+	var pick := -1
+	if _last_one_handed and _owned.has(_last_one_handed):
+		pick = _owned.find(_last_one_handed)
+	else:
+		for i in _owned.size():
+			if _owned[i].one_handed:
+				pick = i
+				break
+	if pick < 0:
+		return false
+	_select(pick)
+	return true
+
+
 ## Switches to the weapon at inventory `index`.
 func _select(index: int) -> void:
 	if index == _current:
@@ -605,6 +629,8 @@ func _select(index: int) -> void:
 	_previous = _current
 	_current = index
 	var new_weapon := _owned[_current]
+	if new_weapon.one_handed:
+		_last_one_handed = new_weapon
 	# Can't fire until it's up, and any cooldown from the old weapon still
 	# counts, so switching never lets you fire faster.
 	_cooldown = maxf(_cooldown, new_weapon.draw_time)
