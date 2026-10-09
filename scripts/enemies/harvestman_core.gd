@@ -21,6 +21,10 @@ enum Kind { BARNACLE, DEEPMAW, FUSED }
 @export var writhe: float = 0.07
 @export var writhe_speed: float = 0.7
 
+## Extra swelling on top of the breathing (0 = none, 0.3 = 30% fatter):
+## the Harvestman pumps this up before its sack splits (the brood drop).
+var swell := 0.0
+
 var _time := 0.0
 var _base_scale := Vector3.ONE
 var _skeleton: Skeleton3D
@@ -53,8 +57,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	var swell := 1.0 + sin(_time * TAU * breath_speed) * breathing
-	scale = _base_scale * Vector3(swell, 1.0 + (swell - 1.0) * 0.5, swell)
+	var size := 1.0 + sin(_time * TAU * breath_speed) * breathing + swell
+	scale = _base_scale * Vector3(size, 1.0 + (size - 1.0) * 0.5, size)
 	if _skeleton == null:
 		return
 	for i in _chain.size():

@@ -185,7 +185,11 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var puddle_damage: float = 5.0
 @export var puddle_time: float = 6.0
 @export var brood_cooldown: float = 22.0
-@export var brood_count: int = 3
+@export var brood_count: int = 6
+## The build-up before the sack splits (s): it swells up to brood_swell
+## fatter, throbbing faster and faster, shuddering and dripping blood.
+@export var brood_windup: float = 1.2
+@export var brood_swell: float = 0.35
 
 @export_group("Rush")
 ## Too far off (the Antlion Guard's charge): it rears up with a horn blast
@@ -969,6 +973,8 @@ func _end_attack() -> void:
 		_attack_leg.planted = _attack_leg.foot
 	_attack_leg = null
 	_attack = Attack.NONE
+	if _core is HarvestmanCore:
+		(_core as HarvestmanCore).swell = 0.0
 	_rushing = false
 	_rush_slide = 0.0
 	_cooldown = attack_cooldown
@@ -991,7 +997,7 @@ func _attack_step(delta: float) -> void:
 		Attack.HOSE:
 			_hose_step()
 		Attack.BROOD:
-			_brood_step()
+			_brood_step(delta)
 		Attack.RUSH:
 			_rush_step(delta)
 		_:
@@ -1215,26 +1221,59 @@ func _hose_step() -> void:
 		_end_attack()
 
 
-## Brood drop: the sack swells, splits with a gush, and roaches pour out.
-func _brood_step() -> void:
-	if _attack_time < 0.6:
+## Brood drop: the sack swells up, throbbing faster and faster, the body
+## shuddering and blood dripping out of it (brood_windup) -- then it splits
+## all round its bottom in gushes of blood, blood rains onto the floor, the
+## ground shakes, and brood_count roaches are flung out every way, a spurt
+## still pouring from the split after.
+func _brood_step(delta: float) -> void:
+	var core := _core as HarvestmanCore
+	var bottom := _body.global_position + Vector3.DOWN * sack_radius
+	var world := get_tree().current_scene
+	if _attack_time < brood_windup:
+		var build := _attack_time / maxf(brood_windup, 0.01)
+		var throb := absf(sin(_attack_time * lerpf(6.0, 26.0, build))) * 0.08 * build
+		if core:
+			core.swell = brood_swell * build * build + throb
+		_sway_vel += Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)) * 6.0 * build * delta
+		if randf() < delta * (4.0 + 14.0 * build):
+			BloodFX.spawn_impact(world, bottom + Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)) * sack_radius * 0.6, Vector3.DOWN, BloodFX.BLOOD_COLOR, 0.8 + build)
 		return
 	if _attack_fired == 0:
 		_attack_fired = 1
 		_brood_left = brood_cooldown
-		var bottom := _body.global_position + Vector3.DOWN * sack_radius
-		var world := get_tree().current_scene
-		BloodFX.spawn_impact(world, bottom, Vector3.DOWN, BloodFX.BLOOD_COLOR, 4.0)
+		if core:
+			core.swell = 0.0
+		_sway_vel += Vector3(randf_range(-1, 1), 0.0, randf_range(-1, 1)) * 2.0
+		_height_vel += 3.0 # the split throws it up a little
+		# Gushes all round the split, and blood raining onto the floor below.
+		for i in 6:
+			var out := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 6.0 + randf() * 0.5)
+			BloodFX.spawn_impact(world, bottom + out * sack_radius * 0.5, (out + Vector3.DOWN * 1.2).normalized(), BloodFX.BLOOD_COLOR, 6.0)
+		BloodFX.spawn_impact(world, bottom, Vector3.DOWN, BloodFX.BLOOD_COLOR, 8.0)
+		for i in 5:
+			var spot := global_position + Vector3(randf_range(-1, 1), 0.02, randf_range(-1, 1)) * sack_radius * 1.8
+			BloodFX.spawn_splatter(world, spot, Vector3.UP, sack_radius * 1.6, BloodFX.BLOOD_COLOR)
+		_shake_near(bottom, 6.0, 30.0)
+		WormFX.punch(get_tree(), bottom, 4.0, 30.0)
 		SoundPlayer.play_3d(death_sound, bottom, world)
+		SoundPlayer.play_3d(hurt_sound, bottom, world)
+		SoundPlayer.play_3d(GUSH_SOUND, bottom, world)
+		# A spurt still pouring out of the split.
+		var wound := Node3D.new()
+		_body.add_child(wound)
+		wound.global_transform = Transform3D(Basis(Vector3.RIGHT, PI), bottom)
+		BloodFX.spawn_artery_spurt(wound, 2.0)
+		get_tree().create_timer(5.0).timeout.connect(wound.queue_free)
 		var roach_scene := load(ROACH_SCENE) as PackedScene
 		for i in brood_count:
 			var roach := roach_scene.instantiate() as Node3D
 			world.add_child(roach)
-			var out := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
-			roach.global_position = bottom + out * 0.5
+			var out := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / maxf(brood_count, 1) + randf_range(-0.4, 0.4))
+			roach.global_position = bottom + out * 0.6
 			if roach is RigidBody3D:
-				(roach as RigidBody3D).linear_velocity = out * 4.0 + Vector3.DOWN * 2.0
-	if _attack_time > 1.4:
+				(roach as RigidBody3D).linear_velocity = out * randf_range(6.0, 9.0) + Vector3.DOWN * randf_range(1.0, 3.0)
+	if _attack_time > brood_windup + 1.0:
 		_end_attack()
 
 
