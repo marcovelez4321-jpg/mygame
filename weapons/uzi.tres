@@ -1,11 +1,11 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cfbgfyf17tffn"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
-[ext_resource type="PackedScene" uid="uid://4fc08d84loqy" path="res://art/weapons/NEWPSXWEAPONS/Uzi/Uzi_fbx.fbx" id="2_uzi"]
+[ext_resource type="PackedScene" uid="uid://doj6tojorb7yi" path="res://art/weapons/PSX_Guns/FBX/UZI.fbx" id="2_uzi"]
 [ext_resource type="Resource" uid="uid://ddl7ovj3rpstk" path="res://audio/events/weapons/machine_gun_fire.tres" id="3_fire"]
 [ext_resource type="Resource" path="res://audio/events/weapons/machine_gun_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/machine_gun_switch.tres" id="5_switch"]
-[ext_resource type="Resource" path="res://weapons/dual_uzis.tres" id="6_dual"]
+[ext_resource type="Resource" uid="uid://10uds4exqyym" path="res://weapons/dual_uzis.tres" id="6_dual"]
 
 [resource]
 script = ExtResource("1")
@@ -26,12 +26,13 @@ recoil_scale = 3.0
 recoil_jitter = 0.4
 draw_time = 0.4
 one_handed = true
-grip_point = Vector3(0, -0.012, 0)
+grip_point = Vector3(0.058, -0.045, 0)
+model_facing_degrees = Vector3(0, -90, 0)
 dual_version = ExtResource("6_dual")
 viewmodel_scene = ExtResource("2_uzi")
-viewmodel_position = Vector3(0.2, -0.2, -0.4)
-viewmodel_scale = 0.3
-muzzle_offset = Vector3(0, 0.0425, -0.0205)
+viewmodel_rotation_degrees = Vector3(0, -90, 0)
+viewmodel_scale = 0.75
+muzzle_offset = Vector3(-0.233, 0.058, 0)
 placeholder_color = Color(0.25, 0.25, 0.28, 1)
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")

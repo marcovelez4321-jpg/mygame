@@ -722,3 +722,17 @@ them:
 - 2026-10-09: **One-handed weapons start with the Pistol's arm placement.** `Viewmodel.one_handed_arms_template` (weapons/starter_gun.tres). A one-handed weapon not yet fitted to the new arms copies its arms_position/rotation/scale and right_arm_offset/rotation, then is seated in the hand by its own grip_point. Still tunable per weapon in F2 afterwards. Not run.
 
 - 2026-10-09: **One-handed guns copy the Pistol's held angle and grip spot too**, not just its arm placement. New `WeaponData.model_facing_degrees`: how a gun's model turns to face forward and upright (PSX_Guns models point along -X: (0, -90, 0), set on the Pistol; NEWPSXWEAPONS face -Z: zero). A one-handed gun not yet fitted takes the Pistol's rotation with the Pistol model's facing taken off and its own put on, so it aims the same way. Its grip_point goes exactly where the Pistol's grip is (same hand, same arm placement). Size stays its own. Uzi grip_point (0, -0.012, 0): the top of its handle. Applies to every future one-handed gun automatically. Not run.
+
+- 2026-10-09: **Guns from the PSX_Guns kit: UZI model, Revolver, Pump Shotgun.**
+  - Uzi and Dual Uzis now use PSX_Guns/FBX/UZI.fbx (the one with "UZI" on it, not UZI_LowerRes). It points along -X like the Pistol: model_facing (0, -90, 0), scale 0.75, grip_point (0.058, -0.045, 0) on the handle, muzzle (-0.233, 0.058, 0), all measured from the mesh. The Uzi refits from the Pistol template. The Uzi pickup uses it too.
+  - **Revolver** (weapons/revolver.tres, one-handed): PSX_Guns/FBX/Revolver.fbx. It was exported at 1/100 and lying along +Y with its top along +Z: scale 100, model_facing (-90, 0, 0). 50 damage, 0.6 s, 6 rounds, 2.4 s reload, heavy kick, the sniper's fire sound until it has its own.
+  - **Pump Shotgun** (weapons/pump_shotgun.tres, two-handed): the new PSX_Guns/FBX/Shotgun.fbx (same 1/100 export, same fix), the Shotgun's stats copied, to compare looks.
+  - The new Shotgun.fbx replaced the old file of that name, so the old Shotgun now uses the kit's original model from GLB/Shotgun.glb.
+  - Revolver and Pump Shotgun are in the starting loadout for testing.
+
+- 2026-10-09: **Muzzle flash: a PS1 look, lit the modern way** (`scripts/fx/muzzle_flash.gd` MuzzleFlash).
+  - **Look:** a 16 x 16 hand-pixel star sprite (stepped, nearest-filtered, additive) facing you, plus two crossed flame petals along the barrel. Two stepped frames (full, then 65% at half brightness), a random spin and size each shot, and a colour drift toward white or deep orange (Doom/Quake/HL1 style).
+  - **Lighting:** a KEY light off to the side of the muzzle (`WeaponData.muzzle_light_offset`, default (-0.15, 0.05, 0.08): left, up, back toward you) rakes across the gun and arm from that angle. It's the cinematic side-light the user liked when the flash sat off to the left. A FILL light at the muzzle (wider, softer) lights the room. Both have a sharp attack and squared falloff, and cast no shadows.
+  - Mirrored for the left-hand gun. One flash per hand, made once and reused (no nodes made per shot). It follows the muzzle through kick and sway for its muzzle_flash_time (at least 0.06 s).
+  - F2 then L: the arrows move the key light, which stays lit so you see the lighting live. F3 saves.
+  - Headless check run (with the user's OK): no errors. Firing not yet seen in game.

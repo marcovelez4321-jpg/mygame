@@ -198,6 +198,10 @@ var _grapple: PlayerGrapple
 var _left_model: Node3D
 var _left_models := {}
 var _shot_from_left := false
+## The muzzle flashes, right hand and left (made on first shot, reused).
+var _flashes: Array[MuzzleFlash] = [null, null]
+## F2 then L: the arrows move the flash's key light (it stays lit).
+var _tuning_light: bool = false
 ## Flips across X: turns the right gun's place in its hand into the left's.
 const MIRROR_X := Transform3D(Basis(Vector3(-1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0), Vector3(0.0, 0.0, 1.0)), Vector3.ZERO)
 var _tuning_arms: bool = false
@@ -762,44 +766,31 @@ func muzzle_position() -> Vector3:
 	return _firing_model().global_transform * _firing_muzzle_offset(weapon)
 
 
-## A brief additive glow + a real light flash right at the equipped weapon's
-## OWN muzzle_offset (per-weapon, tunable in-game -- see muzzle_offset's own
-## comment in weapon_data.gd). Removes itself after the weapon's own
-## muzzle_flash_time.
+## The muzzle flash (MuzzleFlash: PS1 sprite, side key light + fill light)
+## at the firing gun's muzzle_offset, for its muzzle_flash_time. One flash
+## per hand, made once and reused.
 func _spawn_muzzle_flash() -> void:
 	var weapon := _weapons.current_weapon()
 	if weapon == null:
 		return
-	var offset := _firing_muzzle_offset(weapon)
-	var gun_model := _firing_model()
+	var left := _firing_model() == _left_model
+	_flash_for(left).flash(_firing_model(), _firing_muzzle_offset(weapon), _key_light_offset(weapon, left),
+			maxf(weapon.muzzle_flash_time, 0.06))
 
-	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.85, 0.5)
-	light.light_energy = 6.0
-	light.omni_range = 3.0
-	gun_model.add_child(light)
-	light.position = offset
 
-	var glow := MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.08, 0.08)
-	glow.mesh = quad
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat.albedo_color = Color(1.0, 0.9, 0.6, 1.0)
-	glow.material_override = mat
-	gun_model.add_child(glow)
-	glow.position = offset
+## The key light's place beside the muzzle (camera space), mirrored for the
+## left-hand gun so both light their own gun from the outside in.
+func _key_light_offset(weapon: WeaponData, left: bool) -> Vector3:
+	var offset := weapon.muzzle_light_offset
+	return Vector3(-offset.x, offset.y, offset.z) if left else offset
 
-	# Connected straight to the nodes' own queue_free, not a lambda: if the gun
-	# is swapped (or the level restarts) before this fires, freed nodes drop
-	# their connections automatically, while a lambda would still fire with
-	# freed captures ("Lambda capture at index 0 was freed").
-	var timer := get_tree().create_timer(weapon.muzzle_flash_time)
-	timer.timeout.connect(light.queue_free)
-	timer.timeout.connect(glow.queue_free)
+
+func _flash_for(left: bool) -> MuzzleFlash:
+	var index := 1 if left else 0
+	if not is_instance_valid(_flashes[index]):
+		_flashes[index] = MuzzleFlash.new()
+		add_child(_flashes[index])
+	return _flashes[index]
 
 
 ## Puts `weapon` in your hand. Nothing is loaded or built after the first
@@ -1331,6 +1322,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return
+	# Leaving the flash-light mode (another mode, or F2 off): its light goes out.
+	if _tuning_light and key.keycode in [KEY_F2, KEY_G, KEY_H, KEY_I, KEY_J, KEY_K, KEY_M]:
+		_tuning_light = false
+		_flash_for(false).stop()
 	if key.keycode == KEY_F2:
 		_tuning = not _tuning
 		_tune_label.visible = _tuning
@@ -1360,6 +1355,17 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		var weapon := _shown_weapon
 		if weapon:
 			_update_muzzle_marker(weapon)
+		_update_label("")
+	elif key.keycode == KEY_L and _tuning:
+		_tuning_light = not _tuning_light
+		_tuning_grip = false
+		_tuning_right_arm = false
+		_tuning_left_arm = false
+		_tuning_arms = false
+		_tuning_muzzle = false
+		_tuning_aim = false
+		if not _tuning_light:
+			_flash_for(false).stop()
 		_update_label("")
 	elif (key.keycode == KEY_J or key.keycode == KEY_K) and _tuning and _fp_arms:
 		var right := key.keycode == KEY_J
@@ -1459,6 +1465,9 @@ func _process(delta: float) -> void:
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 		_update_muzzle_marker(weapon)
+	elif _tuning_light:
+		weapon.muzzle_light_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
+		_flash_for(false).preview(_model, weapon.muzzle_offset, weapon.muzzle_light_offset)
 	elif _tuning_right_arm or _tuning_left_arm:
 		# One arm on its own; the gun keeps its place on screen
 		# (_apply_transform() below re-hangs it off the moved hand).
@@ -1636,6 +1645,9 @@ func _update_label(message: String) -> void:
 	elif _tuning_grip:
 		target = "GRIP (blue dot sits in the hand)"
 		p = weapon.grip_point
+	elif _tuning_light:
+		target = "FLASH KEY LIGHT (from the muzzle; stays lit)"
+		p = weapon.muzzle_light_offset
 	elif _tuning_right_arm:
 		target = "RIGHT ARM only (gun stays put)"
 		p = weapon.right_arm_offset
@@ -1647,6 +1659,6 @@ func _update_label(message: String) -> void:
 	elif _tuning_aim:
 		target = "AIMED POSITION"
 		p = weapon.aim_position
-	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f%s\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nU = hold a healing item at your mouth (to check it there)\nG = grip (gun stays in the hand)   J / K = right / left arm alone\nM = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
+	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f%s\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nU = hold a healing item at your mouth (to check it there)\nG = grip (gun stays in the hand)   J / K = right / left arm alone\nM = muzzle   L = flash light   I = aimed position   F3 = save   F2 = off\n%s" \
 			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s,
 			"   (AT MOUTH)" if _use_pose_shown else "", message]

@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://c5cnojtgl7uns"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
-[ext_resource type="PackedScene" uid="uid://tp0htaqch10f" path="res://art/weapons/PSX_Guns/FBX/Shotgun.fbx" id="2_yi04f"]
+[ext_resource type="PackedScene" uid="uid://civasxl857u5o" path="res://art/weapons/PSX_Guns/GLB/Shotgun.glb" id="2_yi04f"]
 [ext_resource type="Resource" path="res://audio/events/weapons/shotgun_fire.tres" id="3_fire"]
 [ext_resource type="Resource" path="res://audio/events/weapons/shotgun_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/shotgun_switch.tres" id="5_switch"]

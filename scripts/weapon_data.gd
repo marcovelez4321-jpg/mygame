@@ -247,6 +247,11 @@ enum ReloadStyle {
 ## one continuous glow; a slower-firing weapon can afford a longer, punchier
 ## flash since there's no next shot arriving to collide with it.
 @export var muzzle_flash_time: float = 0.05
+## Where the flash's key light sits, from the muzzle, in camera space (x =
+## right, y = up, z = toward you): off to one side, it rakes across the gun
+## and arm from that angle (MuzzleFlash). Mirrored for a left-hand gun.
+## Tune it in game: F2, then L (the light stays on while you move it).
+@export var muzzle_light_offset: Vector3 = Vector3(-0.15, 0.05, 0.08)
 ## Colour of the stand-in block used until a real model is assigned.
 @export var placeholder_color: Color = Color(0.7, 0.7, 0.7)
 
