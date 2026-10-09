@@ -107,6 +107,10 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 ## bare skin) instead of a character's arms. Their right hand holds every
 ## gun; the left is the tentacle arm (PlayerGrapple). Off = arms_character.
 @export var use_new_arms: bool = true
+## One-handed weapons not yet fitted to the new arms start with this
+## weapon's arm placement (both arms' position/turn/size and the right arm's
+## own nudge), then get seated in the hand by their grip_point.
+@export var one_handed_arms_template: WeaponData = preload("res://weapons/starter_gun.tres")
 
 ## Show only the arms of the first-person arms model: its mesh is cut down to
 ## the shoulders, arms and hands (its torso would otherwise swing up into
@@ -1027,13 +1031,23 @@ func _ensure_new_arms() -> bool:
 
 
 ## A weapon shown on the new arms for the first time (not fitted to them
-## yet, WeaponData.arms_fitted): the arms sit as the rig was made (camera
-## bone on your eye) and the gun's seated in the hand by its grip_point.
+## yet, WeaponData.arms_fitted): a one-handed one takes the arm placement of
+## one_handed_arms_template (the Pistol); anything else has the arms as the
+## rig was made (camera bone on your eye). Then the gun's seated in the hand
+## by its grip_point.
 ## F2 tunes it from there (G for the grip); F3 saves it.
 func _fit_to_new_arms(weapon: WeaponData) -> void:
-	weapon.arms_position = Vector3.ZERO
-	weapon.arms_rotation_degrees = Vector3.ZERO
-	weapon.arms_scale = 1.0
+	var template := one_handed_arms_template
+	if weapon.one_handed and template and template != weapon and template.arms_fitted:
+		weapon.arms_position = template.arms_position
+		weapon.arms_rotation_degrees = template.arms_rotation_degrees
+		weapon.arms_scale = template.arms_scale
+		weapon.right_arm_offset = template.right_arm_offset
+		weapon.right_arm_rotation_degrees = template.right_arm_rotation_degrees
+	else:
+		weapon.arms_position = Vector3.ZERO
+		weapon.arms_rotation_degrees = Vector3.ZERO
+		weapon.arms_scale = 1.0
 	_apply_arms_transform(weapon)
 	_apply_arm_offsets(weapon)
 	_seat_in_hand(weapon)

@@ -718,3 +718,5 @@ them:
   - **Uzi** (weapons/uzi.tres): one Uzi, upright, one-handed (grapple works with it). 9 damage, 0.1 s, 32 rounds, 2.5 degree spread, 1.3 s reload. `WeaponData.dual_version` points at Dual Uzis. Picking up a second Uzi pairs it (`WeaponController._pairs`). V (`PlayerInput.toggle_dual`, `WeaponController.tick_dual()`) then swaps the slot between one and two with a quick draw. Loaded rounds carry over and any that don't fit go back to reserve. E with two out puts one away instead of switching weapons.
   - Starting loadout: Pistol + Uzi. A second Uzi (scenes/uzi_pickup.tscn) lies just in front of the start in the Harvestman level.
   - Headless check run (with the user's OK): no errors. Not yet seen in game.
+
+- 2026-10-09: **One-handed weapons start with the Pistol's arm placement.** `Viewmodel.one_handed_arms_template` (weapons/starter_gun.tres). A one-handed weapon not yet fitted to the new arms copies its arms_position/rotation/scale and right_arm_offset/rotation, then is seated in the hand by its own grip_point. Still tunable per weapon in F2 afterwards. Not run.
