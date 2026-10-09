@@ -16,8 +16,22 @@ extends Node3D
 const RIGHT_ROOT := "shoulder.R"
 const LEFT_ROOT := "shoulder.L"
 
+## The right arm's pose (where the arm and wrist go) ...
 @export var hold_animation: StringName = &"finger_gun_idle"
+## ... and the fingers': a hand closed round a handle (the knife grip), so
+## the middle, ring and little fingers and the thumb wrap the gun's grip.
+@export var grip_animation: StringName = &"knife_idle"
+## The index finger, on the trigger: 0 = straight out (the finger-gun pose),
+## 1 = curled all the way round like the others.
+@export_range(0.0, 1.0, 0.05) var trigger_curl: float = 0.55
+## Keep the right wrist straight (the hand in line with the forearm, as in
+## the rig's rest pose) instead of the hold pose's bent wrist.
+@export var straight_wrist: bool = true
 @export var reach_animation: StringName = &"push_L"
+## Two-handed guns: the left hand comes up in this one pose (the rig's grab_L
+## at support_time of the way through: reaching forward under the gun).
+@export var support_animation: StringName = &"grab_L"
+@export_range(0.0, 1.0, 0.05) var support_time: float = 0.5
 ## How far below its pose the left arm hides (meters), and how fast it comes
 ## up / goes back down (per second, 0..1).
 @export var hide_drop: float = 0.55
@@ -47,6 +61,9 @@ var coil := 0.0
 var _camera_bone := -1
 var _cant := 0.0
 var _dual := false
+## A two-handed gun out: the left hand's up in the support pose.
+var _support := false
+var _support_pose := {}
 ## The left arm's pose while dual wielding (the right grip, mirrored).
 var _left_hold := {}
 ## Follows the left hand bone: the second gun hangs off it when dual wielding.
@@ -92,8 +109,13 @@ func _ready() -> void:
 
 	_rest = _sample(null, 0.0)
 	_hold = _sample(player.get_animation(hold_animation), 0.0)
+	_close_hand(_sample(player.get_animation(grip_animation), 0.0))
+	if straight_wrist:
+		_hold[hand_bone] = _rest[hand_bone]
 	var reach_anim := player.get_animation(reach_animation)
 	_reach = _sample(reach_anim, _furthest_reach(reach_anim))
+	var support_anim := player.get_animation(support_animation)
+	_support_pose = _sample(support_anim, support_anim.length * support_time)
 	_current = _rest.duplicate()
 	for bone in _right_bones:
 		_current[bone] = _hold[bone]
@@ -136,6 +158,18 @@ func set_dual(on: bool) -> void:
 	tick(0.0, false, 0.0, false, false)
 
 
+## Two-handed guns: the left hand comes up in the support pose (one pose for
+## every such gun, not fitted to each).
+func set_support(on: bool) -> void:
+	if on == _support:
+		return
+	_support = on
+	if not on:
+		raise = 0.0
+		reach = 0.0
+	tick(0.0, false, 0.0, false, false)
+
+
 ## Turns the right forearm over by `degrees` round its own length (90 = the
 ## hand rolled so a gun in it lies on its side, top to the left), for a
 ## canted grip (WeaponData.hold_cant_degrees). The wrist stays where it is.
@@ -159,6 +193,24 @@ func set_cant(degrees: float) -> void:
 	if _dual:
 		_left_hold = _mirrored_right()
 	_write()
+
+
+## Gives the hold pose the grip pose's fingers: every bone below the right
+## hand from `grip`, except the index finger, which goes trigger_curl of the
+## way from the hold pose's (straight) to the grip's (curled).
+func _close_hand(grip: Dictionary) -> void:
+	var fingers := PackedInt32Array()
+	for child in skeleton.get_bone_children(hand_bone):
+		_collect(child, fingers)
+	for bone in fingers:
+		if not skeleton.get_bone_name(bone).begins_with("f_index"):
+			_hold[bone] = grip[bone]
+			continue
+		var straight: Array = _hold[bone]
+		var curled: Array = grip[bone]
+		_hold[bone] = [(straight[0] as Vector3).lerp(curled[0], trigger_curl),
+				(straight[1] as Quaternion).slerp(curled[1], trigger_curl),
+				(straight[2] as Vector3).lerp(curled[2], trigger_curl)]
 
 
 ## The right arm's pose as it is now, mirrored onto the left arm (the rig is
@@ -199,21 +251,24 @@ func left_arm_points() -> Array[Vector3]:
 	return [elbow, wrist, palm, (finger - palm).normalized()]
 
 
-## The right palm's middle, in this node's space (for fitting a gun into it).
-func right_palm_in_rig() -> Vector3:
+## The middle of the closed right hand (between the palm and the curled
+## middle finger), in this node's space: where a gun's grip_point goes.
+func grip_socket_in_rig() -> Vector3:
 	var palm := bone_in_rig(skeleton.find_bone("palm.02.R")).origin
-	var finger := bone_in_rig(skeleton.find_bone("f_middle.01.R")).origin
-	return palm.lerp(finger, 0.5)
+	var knuckle := bone_in_rig(skeleton.find_bone("f_middle.02.R")).origin
+	var tip := bone_in_rig(skeleton.find_bone("f_middle.03.R")).origin
+	return (palm + knuckle + tip) / 3.0
 
 
 ## Called every frame by the Viewmodel with the grapple's state.
 func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_allowed: bool) -> void:
-	if _dual:
+	if _dual or _support:
 		raise = 1.0
 		reach = 0.0
 		coil = 0.0
+		var pose: Dictionary = _left_hold if _dual else _support_pose
 		for bone in _left_bones:
-			_current[bone] = _left_hold[bone]
+			_current[bone] = pose[bone]
 		_write()
 		return
 	var wanted := left_allowed and (coiling or rope_out)
@@ -264,7 +319,7 @@ func _write() -> void:
 
 func _local(bone: int) -> Transform3D:
 	var pose: Array = _current.get(bone, _rest[bone])
-	return Transform3D(Basis(pose[1] as Quaternion).scaled(pose[2]), pose[0])
+	return Transform3D(Basis(pose[1] as Quaternion) * Basis.from_scale(pose[2]), pose[0])
 
 
 func _collect(bone: int, into: PackedInt32Array) -> void:

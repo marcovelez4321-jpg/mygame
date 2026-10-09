@@ -201,6 +201,10 @@ var _switch_tween: Tween
 var _kick_tween: Tween
 var _tuning: bool = false
 var _tuning_muzzle: bool = false
+## F2 then G: the arrows move the gun's grip_point and the gun stays seated
+## in the hand by it (Shift turns it round the grip, +/- resizes it there).
+var _tuning_grip: bool = false
+var _grip_marker: MeshInstance3D
 var _tune_label: Label
 ## A small green marker at the weapon's current muzzle_offset, visible only
 ## while _tuning_muzzle is on -- live visual feedback without having to fire
@@ -1021,15 +1025,26 @@ func _ensure_new_arms() -> bool:
 
 ## A weapon shown on the new arms for the first time (not fitted to them
 ## yet, WeaponData.arms_fitted): the arms sit as the rig was made (camera
-## bone on your eye) and the gun's moved so its middle sits in the right
-## palm. F2 tunes it from there; F3 saves it.
+## bone on your eye) and the gun's seated in the hand by its grip_point.
+## F2 tunes it from there (G for the grip); F3 saves it.
 func _fit_to_new_arms(weapon: WeaponData) -> void:
 	weapon.arms_position = Vector3.ZERO
 	weapon.arms_rotation_degrees = Vector3.ZERO
 	weapon.arms_scale = 1.0
 	_apply_arms_transform(weapon)
-	weapon.viewmodel_position = _arms.transform * _fp_arms.right_palm_in_rig()
+	_seat_in_hand(weapon)
 	weapon.arms_fitted = true
+
+
+## Moves the gun (keeping its rotation and size) so its grip_point sits in
+## the middle of the closed right hand.
+func _seat_in_hand(weapon: WeaponData) -> void:
+	if _fp_arms == null:
+		return
+	var socket := _arms.transform * _fp_arms.grip_socket_in_rig()
+	var gun_basis := _cant_basis(weapon) * Basis.from_euler(weapon.viewmodel_rotation_degrees * (PI / 180.0)) \
+			* Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale)
+	weapon.viewmodel_position = socket - gun_basis * weapon.grip_point
 
 
 ## Gets the arms ready for `weapon`: its hold pose (the first frame of its
@@ -1043,6 +1058,10 @@ func _pose_arms(weapon: WeaponData) -> void:
 			_arms.visible = _arms_wanted
 		_fp_arms.set_cant(weapon.hold_cant_degrees)
 		_fp_arms.set_dual(weapon.dual_wield)
+		# Two-handed guns get the left hand up under them; one-handed guns,
+		# grenades and healing items leave it free (the grapple's arm).
+		_fp_arms.set_support(not weapon.one_handed and not weapon.dual_wield and not weapon.hide_left_arm \
+				and not weapon.throws_grenade and weapon.heal_item < 0)
 		if not weapon.arms_fitted:
 			_fit_to_new_arms(weapon)
 		_apply_arms_transform(weapon)
@@ -1287,8 +1306,17 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if weapon:
 			_update_muzzle_marker(weapon)
 		_update_label("")
+	elif key.keycode == KEY_G and _tuning and _fp_arms:
+		_tuning_grip = not _tuning_grip
+		_tuning_arms = false
+		_tuning_muzzle = false
+		_tuning_aim = false
+		if _shown_weapon:
+			_update_muzzle_marker(_shown_weapon)
+		_update_label("")
 	elif key.keycode == KEY_H and _tuning:
 		_tuning_arms = not _tuning_arms
+		_tuning_grip = false
 		_tuning_muzzle = false
 		_tuning_aim = false
 		var weapon := _shown_weapon
@@ -1361,6 +1389,18 @@ func _process(delta: float) -> void:
 
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
+		_update_muzzle_marker(weapon)
+	elif _tuning_grip:
+		# Moved in meters on screen, stored in the gun's own space.
+		if Input.is_key_pressed(KEY_SHIFT):
+			weapon.viewmodel_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
+		else:
+			var gun_basis := _cant_basis(weapon) * Basis.from_euler(weapon.viewmodel_rotation_degrees * (PI / 180.0)) \
+					* Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale)
+			weapon.grip_point -= gun_basis.inverse() * (Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta)
+			var grow_gun := float(Input.is_key_pressed(KEY_EQUAL)) - float(Input.is_key_pressed(KEY_MINUS))
+			weapon.viewmodel_scale = maxf(weapon.viewmodel_scale * (1.0 + grow_gun * TUNE_SCALE_SPEED * fine * delta), 0.0001)
+		_seat_in_hand(weapon)
 		_update_muzzle_marker(weapon)
 	elif _tuning_aim:
 		weapon.aim_position += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
@@ -1446,6 +1486,26 @@ func _update_muzzle_marker(weapon: WeaponData) -> void:
 		_model.add_child(_muzzle_marker)
 	_muzzle_marker.position = weapon.muzzle_offset
 	_muzzle_marker.visible = _tuning_muzzle
+	# The grip marker (blue): where the hand wraps, F2 > G.
+	if not is_instance_valid(_grip_marker):
+		_grip_marker = MeshInstance3D.new()
+		var ball := SphereMesh.new()
+		ball.radius = 0.012
+		ball.height = 0.024
+		_grip_marker.mesh = ball
+		var blue := StandardMaterial3D.new()
+		blue.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		blue.no_depth_test = true # seen through the closed hand
+		blue.albedo_color = Color(0.2, 0.5, 1.0)
+		_grip_marker.material_override = blue
+	if _grip_marker.get_parent() != _model:
+		if _grip_marker.get_parent():
+			_grip_marker.get_parent().remove_child(_grip_marker)
+		_model.add_child(_grip_marker)
+	_grip_marker.position = weapon.grip_point
+	_grip_marker.visible = _tuning_grip
+	# Fixed size on screen whatever the gun's scale.
+	_grip_marker.scale = Vector3.ONE / maxf(weapon.viewmodel_scale, 0.0001)
 
 
 func _save_weapon() -> void:
@@ -1488,9 +1548,12 @@ func _update_label(message: String) -> void:
 	elif _tuning_muzzle:
 		target = "MUZZLE"
 		p = weapon.muzzle_offset
+	elif _tuning_grip:
+		target = "GRIP (blue dot sits in the hand)"
+		p = weapon.grip_point
 	elif _tuning_aim:
 		target = "AIMED POSITION"
 		p = weapon.aim_position
-	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f%s\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nU = hold a healing item at your mouth (to check it there)\nM = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
+	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f%s\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nU = hold a healing item at your mouth (to check it there)\nG = grip (gun stays in the hand)   M = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
 			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s,
 			"   (AT MOUTH)" if _use_pose_shown else "", message]

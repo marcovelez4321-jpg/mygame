@@ -701,3 +701,12 @@ them:
   - `WeaponData.dual_wield`: a second copy in the left hand. The left arm takes the right arm's grip mirrored across the rig's X = 0 (`FirstPersonArms._mirrored_right()`, cant included, so the tops tip inward). The left gun sits in the left hand as the right sits in the right, mirrored (`Viewmodel.MIRROR_X`). The guns take turns: each shot's flash, and its tracer start, come from the other gun. The kick still moves both. Not one_handed, so E switches to the Pistol for the grapple.
   - **weapons/dual_uzis.tres** "Dual Uzis": the small Uzi from art/weapons/NEWPSXWEAPONS/Uzi (barrel along -Z, scaled x3). It's a bullet hose: 9 damage, 0.06 s between shots (about 16 a second across both), 64 rounds, 3 degree spread, 1.8 s reload, bullets, SMG sounds, cant 90. In the starting loadout (player.tscn) for testing; pickups later.
   - Headless check run (with the user's OK): no errors. Not yet seen in game.
+
+- 2026-10-09: **Natural gun grip, straight wrist, grip markers, two-handed support hand.**
+  - Right hand: the arm still comes from `finger_gun_idle`, but the fingers come from `knife_idle`, a hand closed round a handle (`FirstPersonArms.grip_animation`). The index finger sits `trigger_curl` (0.55) of the way from straight to curled, on the trigger. `straight_wrist` (on): the hand is in line with the forearm (the rig's rest pose for hand.R).
+  - Pistol held upright again (cant removed); only the Dual Uzis stay sideways.
+  - **Grip markers:** `WeaponData.grip_point`, in the gun's own space. The gun is seated so it sits in the middle of the closed right hand (`FirstPersonArms.grip_socket_in_rig()`: palm and middle finger). In F2, G = grip mode: the arrows move the grip point with a blue dot showing it through the hand, and the gun stays seated in the hand. Shift turns the gun and +/- resizes it while it stays seated. F3 saves. Pistol starts at (0.05, -0.03, 0).
+  - **Two-handed guns:** the left hand comes up in one generic support pose (`support_animation` grab_L at `support_time` 0.5). It's not fitted to each gun, so it doesn't touch the gun.
+  - Dual Uzis' scale 3 to 0.3 (it filled the screen).
+  - Fixed: FirstPersonArms' bone maths applied scale before rotation.
+  - Capture run (with the user's OK): pistol grip and wrist look right, coil arm unchanged. The Uzi screenshot was blocked by an enemy, so the Uzis are still unseen.

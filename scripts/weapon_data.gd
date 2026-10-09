@@ -196,6 +196,11 @@ enum ReloadStyle {
 ## gun is moved into the right palm when shown; F3 in the F2 tool saves the
 ## fit (and sets this).
 @export var arms_fitted: bool = false
+## Where on the gun the hand wraps (the middle of its handle), in the gun's
+## own space like muzzle_offset. The gun is seated so this sits in the middle
+## of the closed right hand. Tune it in game: F2, then G (a blue marker
+## shows it), F3 to save.
+@export var grip_point: Vector3 = Vector3.ZERO
 ## Two of it, one in each hand (the first-person arms only): the left one is
 ## the right one mirrored, grip, cant and all, and they take turns firing
 ## (each shot comes from the other gun). Not one_handed: no hand free.
