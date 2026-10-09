@@ -196,6 +196,14 @@ enum ReloadStyle {
 ## gun is moved into the right palm when shown; F3 in the F2 tool saves the
 ## fit (and sets this).
 @export var arms_fitted: bool = false
+## Two of it, one in each hand (the first-person arms only): the left one is
+## the right one mirrored, grip, cant and all, and they take turns firing
+## (each shot comes from the other gun). Not one_handed: no hand free.
+@export var dual_wield: bool = false
+## Held tipped over on its side, gangster-style: the gun rolls this many
+## degrees (90 = its top to the left) and the right forearm turns over with
+## it, so the hand stays wrapped over the top. 0 = held upright.
+@export_range(-180.0, 180.0, 1.0) var hold_cant_degrees: float = 0.0
 
 @export_group("Presentation")
 ## Shown on the weapon wheel. If empty, only the name is shown.

@@ -189,6 +189,13 @@ var _player_model: PlayerModel
 ## The new arms (use_new_arms), and the grapple their left arm works for.
 var _fp_arms: FirstPersonArms
 var _grapple: PlayerGrapple
+## Dual wielding (WeaponData.dual_wield): the second gun, in the left hand
+## (kept per weapon like _gun_models), and whether the last shot was its.
+var _left_model: Node3D
+var _left_models := {}
+var _shot_from_left := false
+## Flips across X: turns the right gun's place in its hand into the left's.
+const MIRROR_X := Transform3D(Basis(Vector3(-1.0, 0.0, 0.0), Vector3(0.0, 1.0, 0.0), Vector3(0.0, 0.0, 1.0)), Vector3.ZERO)
 var _tuning_arms: bool = false
 var _switch_tween: Tween
 var _kick_tween: Tween
@@ -700,6 +707,8 @@ func _on_shot_fired() -> void:
 	if _model == null:
 		return
 	var weapon := _weapons.current_weapon()
+	# Dual wielding: the guns take turns.
+	_shot_from_left = not _shot_from_left and is_instance_valid(_left_model)
 	var kick_distance := (weapon.recoil_kick_distance if weapon else 0.06) * RECOIL_VISUAL_SCALE
 	var kick_rotation := (weapon.recoil_kick_rotation_degrees if weapon else 4.0) * RECOIL_VISUAL_SCALE
 	# Small per-shot randomization so consecutive shots don't look identical.
@@ -739,7 +748,7 @@ func muzzle_position() -> Vector3:
 	var weapon := _weapons.current_weapon()
 	if _model == null or weapon == null:
 		return global_position
-	return _model.global_transform * weapon.muzzle_offset
+	return _firing_model().global_transform * _firing_muzzle_offset(weapon)
 
 
 ## A brief additive glow + a real light flash right at the equipped weapon's
@@ -750,13 +759,14 @@ func _spawn_muzzle_flash() -> void:
 	var weapon := _weapons.current_weapon()
 	if weapon == null:
 		return
-	var offset := weapon.muzzle_offset
+	var offset := _firing_muzzle_offset(weapon)
+	var gun_model := _firing_model()
 
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.85, 0.5)
 	light.light_energy = 6.0
 	light.omni_range = 3.0
-	_model.add_child(light)
+	gun_model.add_child(light)
 	light.position = offset
 
 	var glow := MeshInstance3D.new()
@@ -769,7 +779,7 @@ func _spawn_muzzle_flash() -> void:
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	mat.albedo_color = Color(1.0, 0.9, 0.6, 1.0)
 	glow.material_override = mat
-	_model.add_child(glow)
+	gun_model.add_child(glow)
 	glow.position = offset
 
 	# Connected straight to the nodes' own queue_free, not a lambda: if the gun
@@ -815,6 +825,7 @@ func _show_weapon(weapon: WeaponData) -> void:
 	_model = model
 	_model.visible = true
 	_gun = _model.get_child(0) as Node3D
+	_show_left_gun(weapon)
 	# A grenade slot with nothing in hand yet: empty hand until one's ready.
 	_waiting_for_grenade = weapon.throws_grenade and _weapons.get_magazine_ammo() <= 0
 	_gun.visible = not _waiting_for_grenade
@@ -834,11 +845,55 @@ func _apply_transform(weapon: WeaponData) -> void:
 	_model_rest_position = weapon.viewmodel_position
 	_model_rest_rotation = weapon.viewmodel_rotation_degrees
 	_model_rest_transform = Transform3D(
-			Basis.from_euler(_model_rest_rotation * (PI / 180.0)) * Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale),
+			_cant_basis(weapon) * Basis.from_euler(_model_rest_rotation * (PI / 180.0)) * Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale),
 			_model_rest_position)
 	_apply_arms_transform(weapon)
 	if is_instance_valid(_model):
 		_model.transform = _anchor_in_rig().affine_inverse() * _model_rest_transform
+	if is_instance_valid(_left_model):
+		# The arms are mirror images, so the left gun sits in the left hand
+		# exactly as the right one sits in the right, mirrored.
+		_left_model.transform = MIRROR_X * _model.transform * MIRROR_X
+
+
+## The second gun for a dual-wielded weapon, in the left hand (made once per
+## weapon, then kept); any other weapon puts it away.
+func _show_left_gun(weapon: WeaponData) -> void:
+	if is_instance_valid(_left_model):
+		_left_model.visible = false
+	_left_model = null
+	_shot_from_left = false
+	if not weapon.dual_wield or _fp_arms == null:
+		return
+	var model: Node3D = _left_models.get(weapon)
+	if not is_instance_valid(model):
+		model = Node3D.new()
+		_fp_arms.left_hand_attachment.add_child(model)
+		var gun := weapon.viewmodel_scene.instantiate() as Node3D if weapon.viewmodel_scene else _make_placeholder(weapon)
+		model.add_child(gun)
+		_center_on_pivot(gun)
+		_left_models[weapon] = model
+	_left_model = model
+	_left_model.visible = true
+
+
+## The gun the last shot came from (the left one every other shot when dual
+## wielding), and its muzzle_offset in that gun's own space.
+func _firing_model() -> Node3D:
+	return _left_model if _shot_from_left and is_instance_valid(_left_model) else _model
+
+
+func _firing_muzzle_offset(weapon: WeaponData) -> Vector3:
+	return MIRROR_X * weapon.muzzle_offset if _firing_model() == _left_model else weapon.muzzle_offset
+
+
+## The gun tipped on its side for a canted grip (WeaponData.hold_cant_degrees):
+## rolled round the view direction, on top of its own rotation. The new
+## arms' right forearm turns over to match (FirstPersonArms.set_cant()).
+func _cant_basis(weapon: WeaponData) -> Basis:
+	if not use_new_arms or is_zero_approx(weapon.hold_cant_degrees):
+		return Basis.IDENTITY
+	return Basis(Vector3.BACK, deg_to_rad(weapon.hold_cant_degrees))
 
 
 ## What the gun models hang off: the right hand bone, or (no arms) the rig.
@@ -868,6 +923,8 @@ func _free_arms() -> void:
 		if is_instance_valid(model):
 			(model as Node3D).queue_free()
 	_gun_models.clear()
+	_left_models.clear() # they hang off the arms, freed with them
+	_left_model = null
 	_model = null
 	_gun = null
 	if is_instance_valid(_arms):
@@ -984,6 +1041,8 @@ func _pose_arms(weapon: WeaponData) -> void:
 		_arms_wanted = _ensure_arms()
 		if _arms_hidden_frames == 0:
 			_arms.visible = _arms_wanted
+		_fp_arms.set_cant(weapon.hold_cant_degrees)
+		_fp_arms.set_dual(weapon.dual_wield)
 		if not weapon.arms_fitted:
 			_fit_to_new_arms(weapon)
 		_apply_arms_transform(weapon)
@@ -1319,7 +1378,9 @@ func _process(delta: float) -> void:
 		_apply_arms_transform(weapon)
 		var carried := _anchor_in_rig() * grip
 		weapon.viewmodel_position = carried.origin
-		weapon.viewmodel_rotation_degrees = carried.basis.orthonormalized().get_euler() * (180.0 / PI)
+		# The cant is added on top when shown, so it comes off what's stored.
+		var upright := _cant_basis(weapon).inverse() * carried.basis.orthonormalized()
+		weapon.viewmodel_rotation_degrees = upright.get_euler() * (180.0 / PI)
 		weapon.viewmodel_scale = carried.basis.get_scale().x
 	elif Input.is_key_pressed(KEY_SHIFT):
 		weapon.viewmodel_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta

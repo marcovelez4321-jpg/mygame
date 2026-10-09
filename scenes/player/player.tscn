@@ -30,6 +30,7 @@
 [ext_resource type="Script" path="res://scripts/aim_down_sights.gd" id="42_ads"]
 [ext_resource type="Script" path="res://scripts/interact_highlight.gd" id="43_hl"]
 [ext_resource type="Script" path="res://scripts/player_grapple.gd" id="44_grapple"]
+[ext_resource type="Resource" path="res://weapons/dual_uzis.tres" id="45_uzis"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -67,7 +68,7 @@ metadata/_custom_type_script = "uid://nnai8cso0red"
 
 [node name="WeaponController" type="Node" parent="." unique_id=1120857251]
 script = ExtResource("3_wc")
-starting_weapons = Array[ExtResource("5_0owmy")]([ExtResource("4_sg")])
+starting_weapons = Array[ExtResource("5_0owmy")]([ExtResource("4_sg"), ExtResource("45_uzis")])
 headshot_radius = 0.21
 artery_hit_radius = 0.15
 

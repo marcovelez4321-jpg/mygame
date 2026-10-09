@@ -45,6 +45,12 @@ var reach := 0.0
 var coil := 0.0
 
 var _camera_bone := -1
+var _cant := 0.0
+var _dual := false
+## The left arm's pose while dual wielding (the right grip, mirrored).
+var _left_hold := {}
+## Follows the left hand bone: the second gun hangs off it when dual wielding.
+var left_hand_attachment: BoneAttachment3D
 ## The skeleton node's place in this node's space (the model's own nodes).
 var _skeleton_in_self := Transform3D.IDENTITY
 var _right_bones := PackedInt32Array()
@@ -95,6 +101,9 @@ func _ready() -> void:
 	hand_attachment = BoneAttachment3D.new()
 	hand_attachment.bone_name = "hand.R"
 	skeleton.add_child(hand_attachment)
+	left_hand_attachment = BoneAttachment3D.new()
+	left_hand_attachment.bone_name = "hand.L"
+	skeleton.add_child(left_hand_attachment)
 	_write()
 
 
@@ -109,12 +118,74 @@ func camera_transform() -> Transform3D:
 ## A bone's place in this node's space with the pose on it now (worked out
 ## here, so it's never a frame stale).
 func bone_in_rig(bone: int) -> Transform3D:
+	return _skeleton_in_self * _bone_in_skeleton(bone)
+
+
+## Dual wielding (WeaponData.dual_wield): the left arm takes the right arm's
+## grip, mirrored, and holds a second gun (on left_hand_attachment) instead
+## of doing the grapple.
+func set_dual(on: bool) -> void:
+	if on == _dual:
+		return
+	_dual = on
+	if on:
+		_left_hold = _mirrored_right()
+	else:
+		raise = 0.0 # put away with the guns (mid-switch, out of view)
+		reach = 0.0
+	tick(0.0, false, 0.0, false, false)
+
+
+## Turns the right forearm over by `degrees` round its own length (90 = the
+## hand rolled so a gun in it lies on its side, top to the left), for a
+## canted grip (WeaponData.hold_cant_degrees). The wrist stays where it is.
+func set_cant(degrees: float) -> void:
+	if is_equal_approx(degrees, _cant):
+		return
+	_cant = degrees
+	for bone in _right_bones:
+		_current[bone] = _hold[bone]
+	if not is_zero_approx(degrees):
+		var forearm := skeleton.find_bone("forearm.R")
+		var elbow := _bone_in_skeleton(forearm)
+		var along := (_bone_in_skeleton(hand_bone).origin - elbow.origin).normalized()
+		# Seen from behind the hand, positive turns it anticlockwise (the
+		# arm points away from you, so that's negative round `along`).
+		var turned := Basis(Quaternion(along, -deg_to_rad(degrees))) * elbow.basis
+		var parent := skeleton.get_bone_parent(forearm)
+		var parent_basis := _bone_in_skeleton(parent).basis if parent != -1 else Basis.IDENTITY
+		var pose: Array = _current[forearm]
+		_current[forearm] = [pose[0], (parent_basis.inverse() * turned).get_rotation_quaternion(), pose[2]]
+	if _dual:
+		_left_hold = _mirrored_right()
+	_write()
+
+
+## The right arm's pose as it is now, mirrored onto the left arm (the rig is
+## symmetric across its X = 0): each left bone's place is its right twin's,
+## flipped across X, and its local pose is worked out from that.
+func _mirrored_right() -> Dictionary:
+	var mirror := Transform3D(Basis.from_scale(Vector3(-1.0, 1.0, 1.0)), Vector3.ZERO)
+	var places := {}
+	var result := {}
+	for bone in _left_bones: # parents before children
+		var twin := skeleton.find_bone(skeleton.get_bone_name(bone).replace(".L", ".R"))
+		var place := mirror * _bone_in_skeleton(twin) * mirror
+		places[bone] = place
+		var parent := skeleton.get_bone_parent(bone)
+		var parent_place: Transform3D = places[parent] if places.has(parent) else _bone_in_skeleton(parent)
+		var local := parent_place.affine_inverse() * place
+		result[bone] = [local.origin, local.basis.get_rotation_quaternion(), local.basis.get_scale()]
+	return result
+
+
+func _bone_in_skeleton(bone: int) -> Transform3D:
 	var result := _local(bone)
 	var parent := skeleton.get_bone_parent(bone)
 	while parent != -1:
 		result = _local(parent) * result
 		parent = skeleton.get_bone_parent(parent)
-	return _skeleton_in_self * result
+	return result
 
 
 ## Left arm points (global) for the coil: elbow, wrist, middle of the palm,
@@ -137,6 +208,14 @@ func right_palm_in_rig() -> Vector3:
 
 ## Called every frame by the Viewmodel with the grapple's state.
 func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_allowed: bool) -> void:
+	if _dual:
+		raise = 1.0
+		reach = 0.0
+		coil = 0.0
+		for bone in _left_bones:
+			_current[bone] = _left_hold[bone]
+		_write()
+		return
 	var wanted := left_allowed and (coiling or rope_out)
 	raise = move_toward(raise, 1.0 if wanted else 0.0, (raise_speed if wanted else lower_speed) * delta)
 	var reach_to := 0.0
