@@ -30,7 +30,7 @@
 [ext_resource type="Script" path="res://scripts/aim_down_sights.gd" id="42_ads"]
 [ext_resource type="Script" path="res://scripts/interact_highlight.gd" id="43_hl"]
 [ext_resource type="Script" path="res://scripts/player_grapple.gd" id="44_grapple"]
-[ext_resource type="Resource" path="res://weapons/dual_uzis.tres" id="45_uzis"]
+[ext_resource type="Resource" path="res://weapons/uzi.tres" id="45_uzis"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4

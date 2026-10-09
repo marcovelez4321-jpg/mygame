@@ -249,6 +249,11 @@ var _leeches: Array = []
 var _previous: int = 0
 ## The one-handed gun you had out last -- what E switches to (PlayerGrapple).
 var _last_one_handed: WeaponData
+## Weapons you've found a second of (WeaponData.dual_version): V can go dual.
+var _pairs := {}
+## A dual version in your hands -> the single one it swaps back to.
+var _single_of := {}
+var _toggle_dual_held_prev := false
 
 @onready var _body: CollisionObject3D = get_parent() as CollisionObject3D
 
@@ -334,7 +339,14 @@ func grenade_count() -> int:
 func pickup_weapon(weapon: WeaponData, ammo_amount: int) -> void:
 	if weapon == null:
 		return
-	var already_owned := _owned.has(weapon)
+	# The same weapon again, one that comes in pairs: now you have two (V).
+	var held_as_pair := weapon.dual_version != null and _owned.has(weapon.dual_version)
+	if weapon.dual_version and (_owned.has(weapon) or held_as_pair) and not _pairs.has(weapon):
+		_pairs[weapon] = true
+		add_ammo(weapon.ammo_type, ammo_amount, false)
+		picked_up.emit(weapon, weapon.ammo_type, ammo_amount)
+		return
+	var already_owned := _owned.has(weapon) or held_as_pair
 	if not already_owned:
 		_owned.append(weapon)
 		inventory_changed.emit()
@@ -604,6 +616,11 @@ func is_busy() -> bool:
 ## E with a two-handed gun out (PlayerGrapple): switches to the one-handed
 ## gun you used last (or the first one you own). False if you own none.
 func switch_to_one_handed() -> bool:
+	# Two of a gun out: put one away instead of switching weapons.
+	var current := current_weapon()
+	if current and _single_of.has(current):
+		_swap_slot(_single_of[current])
+		return true
 	var pick := -1
 	if _last_one_handed and _owned.has(_last_one_handed):
 		pick = _owned.find(_last_one_handed)
@@ -616,6 +633,44 @@ func switch_to_one_handed() -> bool:
 		return false
 	_select(pick)
 	return true
+
+
+## Called every physics tick next to tick(): V swaps the gun in hand between
+## one and two (WeaponData.dual_version), once you've found a second one.
+## Rule 1: from the input packet, like tick().
+func tick_dual(toggle: bool) -> void:
+	var pressed := toggle and not _toggle_dual_held_prev
+	_toggle_dual_held_prev = toggle
+	if not pressed or is_busy():
+		return
+	var current := current_weapon()
+	if current == null:
+		return
+	if _single_of.has(current):
+		_swap_slot(_single_of[current])
+	elif current.dual_version and _pairs.has(current):
+		_single_of[current.dual_version] = current
+		_swap_slot(current.dual_version)
+
+
+## Swaps the weapon in the current slot for `weapon` (one gun <-> two),
+## carrying the loaded rounds over (any that don't fit go back in reserve),
+## with a quick draw.
+func _swap_slot(weapon: WeaponData) -> void:
+	var old := current_weapon()
+	var loaded: int = _magazine.get(old, old.magazine_size)
+	var kept := mini(loaded, weapon.magazine_size)
+	_ammo[old.ammo_type] = _ammo.get(old.ammo_type, 0) + (loaded - kept)
+	_magazine[weapon] = kept
+	_owned[_current] = weapon
+	if weapon.one_handed:
+		_last_one_handed = weapon
+	_cooldown = maxf(_cooldown, weapon.draw_time)
+	_reload_blocked_left = maxf(_reload_blocked_left, weapon.draw_time)
+	_reload_time_left = 0.0
+	_aim = 0.0
+	inventory_changed.emit()
+	weapon_switched.emit(weapon, weapon.draw_time)
 
 
 ## Switches to the weapon at inventory `index`.

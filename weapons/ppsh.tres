@@ -22,7 +22,6 @@ recoil_scale = 0.75
 recoil_jitter = 0.05
 aim_position = Vector3(-0.005634394, -0.1168878, -0.3)
 draw_time = 0.5
-one_handed = true
 viewmodel_scene = ExtResource("2_ppsh")
 viewmodel_position = Vector3(0.07112444, -0.18982406, -0.44816217)
 viewmodel_scale = 0.163

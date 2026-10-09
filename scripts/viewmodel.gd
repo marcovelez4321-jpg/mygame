@@ -204,6 +204,9 @@ var _tuning_muzzle: bool = false
 ## F2 then G: the arrows move the gun's grip_point and the gun stays seated
 ## in the hand by it (Shift turns it round the grip, +/- resizes it there).
 var _tuning_grip: bool = false
+## F2 then J / K: the arrows move just the right / left arm (the gun stays put).
+var _tuning_right_arm: bool = false
+var _tuning_left_arm: bool = false
 var _grip_marker: MeshInstance3D
 var _tune_label: Label
 ## A small green marker at the weapon's current muzzle_offset, visible only
@@ -1032,8 +1035,22 @@ func _fit_to_new_arms(weapon: WeaponData) -> void:
 	weapon.arms_rotation_degrees = Vector3.ZERO
 	weapon.arms_scale = 1.0
 	_apply_arms_transform(weapon)
+	_apply_arm_offsets(weapon)
 	_seat_in_hand(weapon)
 	weapon.arms_fitted = true
+
+
+## Hands the weapon's per-arm nudges (camera space) to the new arms, turned
+## into the arms' own space.
+func _apply_arm_offsets(weapon: WeaponData) -> void:
+	if _fp_arms == null:
+		return
+	var to_rig := _arms.transform.basis.inverse()
+	var to_cam := _arms.transform.basis
+	var right_turn := Basis.from_euler(weapon.right_arm_rotation_degrees * (PI / 180.0))
+	var left_turn := Basis.from_euler(weapon.left_arm_rotation_degrees * (PI / 180.0))
+	_fp_arms.set_arm_offsets(to_rig * weapon.right_arm_offset, (to_rig * right_turn * to_cam).orthonormalized(),
+			to_rig * weapon.left_arm_offset, (to_rig * left_turn * to_cam).orthonormalized())
 
 
 ## Moves the gun (keeping its rotation and size) so its grip_point sits in
@@ -1064,7 +1081,9 @@ func _pose_arms(weapon: WeaponData) -> void:
 				and not weapon.throws_grenade and weapon.heal_item < 0)
 		if not weapon.arms_fitted:
 			_fit_to_new_arms(weapon)
-		_apply_arms_transform(weapon)
+		else:
+			_apply_arms_transform(weapon)
+			_apply_arm_offsets(weapon)
 		return
 	_arms_wanted = weapon.hold_animation != null and _ensure_arms()
 	if not is_instance_valid(_arms):
@@ -1306,8 +1325,20 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if weapon:
 			_update_muzzle_marker(weapon)
 		_update_label("")
+	elif (key.keycode == KEY_J or key.keycode == KEY_K) and _tuning and _fp_arms:
+		var right := key.keycode == KEY_J
+		var was_on := _tuning_right_arm if right else _tuning_left_arm
+		_tuning_right_arm = right and not was_on
+		_tuning_left_arm = not right and not was_on
+		_tuning_grip = false
+		_tuning_arms = false
+		_tuning_muzzle = false
+		_tuning_aim = false
+		_update_label("")
 	elif key.keycode == KEY_G and _tuning and _fp_arms:
 		_tuning_grip = not _tuning_grip
+		_tuning_right_arm = false
+		_tuning_left_arm = false
 		_tuning_arms = false
 		_tuning_muzzle = false
 		_tuning_aim = false
@@ -1317,6 +1348,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif key.keycode == KEY_H and _tuning:
 		_tuning_arms = not _tuning_arms
 		_tuning_grip = false
+		_tuning_right_arm = false
+		_tuning_left_arm = false
 		_tuning_muzzle = false
 		_tuning_aim = false
 		var weapon := _shown_weapon
@@ -1390,6 +1423,22 @@ func _process(delta: float) -> void:
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 		_update_muzzle_marker(weapon)
+	elif _tuning_right_arm or _tuning_left_arm:
+		# One arm on its own; the gun keeps its place on screen
+		# (_apply_transform() below re-hangs it off the moved hand).
+		if Input.is_key_pressed(KEY_SHIFT):
+			var turn := Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
+			if _tuning_right_arm:
+				weapon.right_arm_rotation_degrees += turn
+			else:
+				weapon.left_arm_rotation_degrees += turn
+		else:
+			var move := Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
+			if _tuning_right_arm:
+				weapon.right_arm_offset += move
+			else:
+				weapon.left_arm_offset += move
+		_apply_arm_offsets(weapon)
 	elif _tuning_grip:
 		# Moved in meters on screen, stored in the gun's own space.
 		if Input.is_key_pressed(KEY_SHIFT):
@@ -1551,9 +1600,17 @@ func _update_label(message: String) -> void:
 	elif _tuning_grip:
 		target = "GRIP (blue dot sits in the hand)"
 		p = weapon.grip_point
+	elif _tuning_right_arm:
+		target = "RIGHT ARM only (gun stays put)"
+		p = weapon.right_arm_offset
+		r = weapon.right_arm_rotation_degrees
+	elif _tuning_left_arm:
+		target = "LEFT ARM only (gun stays put)"
+		p = weapon.left_arm_offset
+		r = weapon.left_arm_rotation_degrees
 	elif _tuning_aim:
 		target = "AIMED POSITION"
 		p = weapon.aim_position
-	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f%s\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nU = hold a healing item at your mouth (to check it there)\nG = grip (gun stays in the hand)   M = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
+	_tune_label.text = "TUNING %s: %s\nposition  (%.3f, %.3f, %.3f)\nrotation  (%.1f, %.1f, %.1f)\nscale     %.4f%s\n\nArrows = move   PageUp/PageDown = forward/back\nShift + arrows / PageUp,Down = rotate\n+ / - = resize    Ctrl = 10x finer\nGUN moves the item in your hand.  H = arms (item goes with the hand)\nU = hold a healing item at your mouth (to check it there)\nG = grip (gun stays in the hand)   J / K = right / left arm alone\nM = muzzle   I = aimed position   F3 = save   F2 = off\n%s" \
 			% [target, weapon.weapon_name, p.x, p.y, p.z, r.x, r.y, r.z, s,
 			"   (AT MOUTH)" if _use_pose_shown else "", message]

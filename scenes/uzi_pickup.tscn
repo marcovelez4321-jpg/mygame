@@ -1,0 +1,28 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://bqx2ia1wehswm" path="res://scripts/weapon_pickup.gd" id="1"]
+[ext_resource type="Resource" path="res://weapons/uzi.tres" id="2"]
+[ext_resource type="PackedScene" uid="uid://4fc08d84loqy" path="res://art/weapons/NEWPSXWEAPONS/Uzi/Uzi_fbx.fbx" id="3"]
+
+[sub_resource type="SphereShape3D" id="PickupZoneShape"]
+radius = 0.6
+
+[sub_resource type="BoxShape3D" id="PhysicalShape"]
+size = Vector3(0.05, 0.25, 0.1)
+
+[node name="UziPickup" type="RigidBody3D"]
+script = ExtResource("1")
+weapon = ExtResource("2")
+ammo_amount = 32
+
+[node name="PickupArea" type="Area3D" parent="."]
+collision_layer = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PickupArea"]
+shape = SubResource("PickupZoneShape")
+
+[node name="Uzi" parent="." instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("PhysicalShape")

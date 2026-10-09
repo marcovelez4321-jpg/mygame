@@ -201,10 +201,22 @@ enum ReloadStyle {
 ## of the closed right hand. Tune it in game: F2, then G (a blue marker
 ## shows it), F3 to save.
 @export var grip_point: Vector3 = Vector3.ZERO
+## Each first-person arm's own nudge for this weapon, in camera space: the
+## whole arm moved (meters) and turned (degrees) round its shoulder. The gun
+## stays where it is on screen. Left = the dual-wield / support arm only.
+## F2 then J (right arm) or K (left arm), F3 to save.
+@export var right_arm_offset: Vector3 = Vector3.ZERO
+@export var right_arm_rotation_degrees: Vector3 = Vector3.ZERO
+@export var left_arm_offset: Vector3 = Vector3.ZERO
+@export var left_arm_rotation_degrees: Vector3 = Vector3.ZERO
 ## Two of it, one in each hand (the first-person arms only): the left one is
 ## the right one mirrored, grip, cant and all, and they take turns firing
 ## (each shot comes from the other gun). Not one_handed: no hand free.
 @export var dual_wield: bool = false
+## This weapon held two at once (a dual_wield weapon). Once you've found a
+## second one (picked this up again), V swaps between one and two, keeping
+## the rounds loaded; E with two out goes back to one (a hand free).
+@export var dual_version: WeaponData
 ## Held tipped over on its side, gangster-style: the gun rolls this many
 ## degrees (90 = its top to the left) and the right forearm turns over with
 ## it, so the hand stays wrapped over the top. 0 = held upright.

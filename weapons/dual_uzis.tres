@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://10uds4exqyym"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://4fc08d84loqy" path="res://art/weapons/NEWPSXWEAPONS/Uzi/Uzi_fbx.fbx" id="2_uzi"]

@@ -186,6 +186,7 @@ class PlayerInput:
 	var reload: bool = false
 	var grab: bool = false
 	var grapple: bool = false # E: coil the tentacle grapple, release to lash it (PlayerGrapple)
+	var toggle_dual: bool = false # V: one gun <-> two (WeaponController.tick_dual())
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
 
 ## Result of _find_mantle_ledge(): whether a valid ledge was found, and where
@@ -395,6 +396,8 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_F)
 	input.grapple = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_E)
+	input.toggle_dual = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_physical_key_pressed(KEY_V)
 
 	input.select_weapon = _pending_weapon_select
 	_pending_weapon_select = -1
@@ -541,6 +544,7 @@ func _finish_tick(input: PlayerInput, delta: float) -> void:
 	# multiplayer.get_unique_id() is 1 offline, which matches the host's id.
 	weapons.tick(input.fire, input.reload, input.aim, input.quick_throw, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
 	weapons.tick_items(input.use_pills, input.use_bandage, delta)
+	weapons.tick_dual(input.toggle_dual)
 	_update_view_recoil(delta)
 	_tick_use(input.grab)
 	grabber.tick(input.grab and not _use_took_press, delta, head.global_position, -head.global_transform.basis.z)

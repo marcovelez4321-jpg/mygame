@@ -710,3 +710,11 @@ them:
   - Dual Uzis' scale 3 to 0.3 (it filled the screen).
   - Fixed: FirstPersonArms' bone maths applied scale before rotation.
   - Capture run (with the user's OK): pistol grip and wrist look right, coil arm unchanged. The Uzi screenshot was blocked by an enemy, so the Uzis are still unseen.
+
+- 2026-10-09: **Whole-hand knife grip, per-arm tuning, PPSh two-handed, Uzi singles and pairs.**
+  - Right hand: the whole hand (palm, fingers, thumb) now comes from `knife_idle`, so the fingers line up and wrap together. `FirstPersonArms.grip_room` (0.15) opens it a little toward flat to fit a gun's thicker grip. trigger_curl is gone.
+  - **Per-arm tuning:** `WeaponData.right_arm_offset/_rotation_degrees` and `left_arm_offset/_rotation_degrees` (camera space) move and turn one whole arm round its shoulder (`FirstPersonArms.set_arm_offsets()`). The gun keeps its place on screen. The left one applies only while that arm holds a gun (dual, two-handed support), never to the grapple arm. F2 modes: J = right arm alone, K = left arm alone, gun mode = gun alone, H = both arms with the gun, G = grip.
+  - PPSh is two-handed now (one_handed off).
+  - **Uzi** (weapons/uzi.tres): one Uzi, upright, one-handed (grapple works with it). 9 damage, 0.1 s, 32 rounds, 2.5 degree spread, 1.3 s reload. `WeaponData.dual_version` points at Dual Uzis. Picking up a second Uzi pairs it (`WeaponController._pairs`). V (`PlayerInput.toggle_dual`, `WeaponController.tick_dual()`) then swaps the slot between one and two with a quick draw. Loaded rounds carry over and any that don't fit go back to reserve. E with two out puts one away instead of switching weapons.
+  - Starting loadout: Pistol + Uzi. A second Uzi (scenes/uzi_pickup.tscn) lies just in front of the start in the Harvestman level.
+  - Headless check run (with the user's OK): no errors. Not yet seen in game.

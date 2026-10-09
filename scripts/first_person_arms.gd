@@ -4,8 +4,12 @@ extends Node3D
 ## The first-person arms (Arms/arms_rig.glb: bare arms, no gloves), HL2's
 ## c_arms way: one rig whose "camera" bone sits on your eye, so the arms are
 ## always framed the same and every gun is fitted to the same hands.
-##   Right arm: holds the gun, in the rig's finger_gun_idle pose (index finger
-##     along the frame, the rest wrapped round the grip), held still.
+##   Right arm: holds the gun. The arm from the rig's finger_gun_idle (reached
+##     out in front), the wrist straight, and the whole hand from knife_idle
+##     (closed round a handle, fingers together, thumb round the side),
+##     opened a little (grip_room) so a gun's thicker grip fits.
+##   Each arm can be nudged from its shoulder per weapon (set_arm_offsets(),
+##     WeaponData.right_arm_* / left_arm_*, tuned with F2 > J / K).
 ##   Left arm: the tentacle arm (PlayerGrapple). Out of view until you press
 ##     E; then it rises from below and reaches out like it's pushing something
 ##     (the rig's push_L at full reach) while the symbiote coils up it, and it
@@ -18,12 +22,12 @@ const LEFT_ROOT := "shoulder.L"
 
 ## The right arm's pose (where the arm and wrist go) ...
 @export var hold_animation: StringName = &"finger_gun_idle"
-## ... and the fingers': a hand closed round a handle (the knife grip), so
-## the middle, ring and little fingers and the thumb wrap the gun's grip.
+## ... and the hand's: closed round a handle (the knife grip), every finger
+## and the thumb wrapped round it together.
 @export var grip_animation: StringName = &"knife_idle"
-## The index finger, on the trigger: 0 = straight out (the finger-gun pose),
-## 1 = curled all the way round like the others.
-@export_range(0.0, 1.0, 0.05) var trigger_curl: float = 0.55
+## How far the closed hand is opened back toward flat (0 = the knife grip as
+## is, 1 = flat open): room for a gun's grip, thicker than a knife handle.
+@export_range(0.0, 1.0, 0.05) var grip_room: float = 0.15
 ## Keep the right wrist straight (the hand in line with the forearm, as in
 ## the rig's rest pose) instead of the hold pose's bent wrist.
 @export var straight_wrist: bool = true
@@ -60,6 +64,11 @@ var coil := 0.0
 
 var _camera_bone := -1
 var _cant := 0.0
+## Each arm's nudge for the weapon in hand (set_arm_offsets()).
+var _right_move := Vector3.ZERO
+var _right_turn := Basis.IDENTITY
+var _left_move := Vector3.ZERO
+var _left_turn := Basis.IDENTITY
 var _dual := false
 ## A two-handed gun out: the left hand's up in the support pose.
 var _support := false
@@ -177,40 +186,69 @@ func set_cant(degrees: float) -> void:
 	if is_equal_approx(degrees, _cant):
 		return
 	_cant = degrees
+	_pose_right()
+
+
+## Each arm's nudge for the weapon in hand (WeaponData.right_arm_* /
+## left_arm_*): moved by `*_move` and turned by `*_turn` round its shoulder,
+## both in this node's space. The left one only applies while that arm holds
+## a gun (dual wielding, two-handed support), never to the grapple arm.
+func set_arm_offsets(right_move: Vector3, right_turn: Basis, left_move: Vector3, left_turn: Basis) -> void:
+	_right_move = right_move
+	_right_turn = right_turn
+	_left_move = left_move
+	_left_turn = left_turn
+	_pose_right()
+	tick(0.0, false, 0.0, false, false)
+
+
+## The right arm from scratch: the hold pose, the cant, then its nudge.
+func _pose_right() -> void:
 	for bone in _right_bones:
 		_current[bone] = _hold[bone]
-	if not is_zero_approx(degrees):
+	if not is_zero_approx(_cant):
 		var forearm := skeleton.find_bone("forearm.R")
 		var elbow := _bone_in_skeleton(forearm)
 		var along := (_bone_in_skeleton(hand_bone).origin - elbow.origin).normalized()
 		# Seen from behind the hand, positive turns it anticlockwise (the
 		# arm points away from you, so that's negative round `along`).
-		var turned := Basis(Quaternion(along, -deg_to_rad(degrees))) * elbow.basis
+		var turned := Basis(Quaternion(along, -deg_to_rad(_cant))) * elbow.basis
 		var parent := skeleton.get_bone_parent(forearm)
 		var parent_basis := _bone_in_skeleton(parent).basis if parent != -1 else Basis.IDENTITY
 		var pose: Array = _current[forearm]
 		_current[forearm] = [pose[0], (parent_basis.inverse() * turned).get_rotation_quaternion(), pose[2]]
+	_nudge(skeleton.find_bone(RIGHT_ROOT), _right_move, _right_turn)
 	if _dual:
 		_left_hold = _mirrored_right()
 	_write()
 
 
-## Gives the hold pose the grip pose's fingers: every bone below the right
-## hand from `grip`, except the index finger, which goes trigger_curl of the
-## way from the hold pose's (straight) to the grip's (curled).
+## Moves a whole arm (from its shoulder bone `root`) by `move` and turns it
+## by `turn` round that shoulder, both in this node's space.
+func _nudge(root: int, move: Vector3, turn: Basis) -> void:
+	if move == Vector3.ZERO and turn == Basis.IDENTITY:
+		return
+	var to_skeleton := _skeleton_in_self.basis.orthonormalized().inverse()
+	var place := _bone_in_skeleton(root)
+	place = Transform3D((to_skeleton * turn * to_skeleton.inverse()) * place.basis, place.origin + to_skeleton * move)
+	var parent := skeleton.get_bone_parent(root)
+	var parent_place := _bone_in_skeleton(parent) if parent != -1 else Transform3D.IDENTITY
+	var local := parent_place.affine_inverse() * place
+	_current[root] = [local.origin, local.basis.get_rotation_quaternion(), local.basis.get_scale()]
+
+
+## Gives the hold pose the grip pose's whole hand (every bone below the right
+## hand: palm, fingers, thumb), opened grip_room of the way back to flat.
 func _close_hand(grip: Dictionary) -> void:
 	var fingers := PackedInt32Array()
 	for child in skeleton.get_bone_children(hand_bone):
 		_collect(child, fingers)
 	for bone in fingers:
-		if not skeleton.get_bone_name(bone).begins_with("f_index"):
-			_hold[bone] = grip[bone]
-			continue
-		var straight: Array = _hold[bone]
-		var curled: Array = grip[bone]
-		_hold[bone] = [(straight[0] as Vector3).lerp(curled[0], trigger_curl),
-				(straight[1] as Quaternion).slerp(curled[1], trigger_curl),
-				(straight[2] as Vector3).lerp(curled[2], trigger_curl)]
+		var closed: Array = grip[bone]
+		var flat: Array = _rest[bone]
+		_hold[bone] = [(closed[0] as Vector3).lerp(flat[0], grip_room),
+				(closed[1] as Quaternion).slerp(flat[1], grip_room),
+				(closed[2] as Vector3).lerp(flat[2], grip_room)]
 
 
 ## The right arm's pose as it is now, mirrored onto the left arm (the rig is
@@ -269,6 +307,7 @@ func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_
 		var pose: Dictionary = _left_hold if _dual else _support_pose
 		for bone in _left_bones:
 			_current[bone] = pose[bone]
+		_nudge(_left_root, _left_move, _left_turn)
 		_write()
 		return
 	var wanted := left_allowed and (coiling or rope_out)
