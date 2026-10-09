@@ -50,7 +50,7 @@ extends Node3D
 ## body motion, limbs and effects are looks every peer works out from where
 ## it is (its position/heading still need syncing, like every creature).
 
-enum State { PATROL, LISTEN, HUNT, SEARCH, ATTACK, FEED, COLLAPSED, DEAD }
+enum State { PATROL, LISTEN, HUNT, SEARCH, ATTACK, FEED, COLLAPSED, DEAD, STUNNED }
 enum Attack { NONE, SKEWER, SLAM, HOSE, BROOD, RUSH }
 
 const LEECH_SEGMENT_MESH := "res://art/worm_boss/worm_segment_mesh.res"
@@ -203,6 +203,13 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var rush_max_time: float = 5.0
 ## Its steps while rushing: quicker, lower, two legs at once.
 @export var rush_step_time: float = 0.32
+## Rushing into a wall: it bounces back off it (crash_recoil m/s), slumps,
+## its feet skid out, and it's stunned for stun_time seconds -- sagging
+## stun_sag lower, swaying, its light flickering, not moving or attacking,
+## its sack open to exposed_multiplier damage like after a slam.
+@export var stun_time: float = 7.0
+@export var crash_recoil: float = 5.0
+@export var stun_sag: float = 2.0
 
 @export_group("Feeding")
 @export var feed_range: float = 22.0
@@ -748,6 +755,11 @@ func _physics_process(delta: float) -> void:
 				_set_state(State.PATROL)
 		State.HUNT, State.COLLAPSED:
 			_hunt(delta)
+		State.STUNNED:
+			_speed = 0.0
+			_height_target = stand_height - stun_sag
+			if _state_time > stun_time:
+				_recover()
 		State.ATTACK:
 			if _attack != Attack.RUSH:
 				_speed = move_toward(_speed, 0.0, delta * 3.0)
@@ -803,6 +815,8 @@ func _look() -> void:
 
 
 func _spotted() -> void:
+	if _state == State.STUNNED:
+		return # it knows you're there; it'll come for you once it shakes this off
 	if _state == State.FEED:
 		_end_feed()
 	if _state != State.COLLAPSED:
@@ -1049,24 +1063,73 @@ func _rush_step(delta: float) -> void:
 	var to := target.global_position - global_position
 	_yaw = rotate_toward(_yaw, atan2(-to.x, -to.z), rush_turn_speed * delta)
 	_speed = move_toward(_speed, rush_speed, rush_speed * 2.0 * delta)
-	var blocked := not _move_forward(_speed, delta)
+	# Only stopped by a wall once its body actually meets it.
+	if not _move_forward(_speed, delta, sack_radius + 0.6):
+		_crash()
+		return
 	var arrived := _flat_distance(target.global_position) < slam_range + 1.0
-	if arrived or blocked or _attack_time > rush_windup + rush_max_time:
+	if arrived or _attack_time > rush_windup + rush_max_time:
 		# Into the slam -- straight to the drop (the rush was its tell).
 		_rushing = false
-		_rush_slide = 0.0 if blocked else _speed * 0.6
+		_rush_slide = _speed * 0.6
 		_speed = 0.0
 		_attack = Attack.SLAM
 		_attack_time = SLAM_RISE
 		_attack_fired = 0
 
 
-## Moves it ahead at `speed` (m/s); false (and no move) if something tall
-## is right in front of it.
-func _move_forward(speed: float, delta: float) -> bool:
+## Ran into a wall at full tilt: it bounces back off it, slumps, its feet
+## skid out, dust and grime burst off the wall, the ground shakes -- and
+## it's stunned (STUNNED, stun_time), its sack open to a beating.
+func _crash() -> void:
+	var forward := Vector3(-sin(_yaw), 0.0, -cos(_yaw))
+	var impact := _body.global_position + forward * sack_radius
+	var world := get_tree().current_scene
+	_rushing = false
+	_rush_slide = 0.0
+	_speed = 0.0
+	_attack = Attack.NONE
+	_cooldown = attack_cooldown
+	_set_state(State.STUNNED)
+	_exposed = stun_time
+	# The jolt: thrown back off the wall, dropped, twisted a little.
+	_sway_vel -= forward * crash_recoil
+	_height_vel -= 4.0
+	_yaw += randf_range(-0.25, 0.25)
+	for leg in _legs:
+		if not leg.broken and not leg.stepping:
+			leg.slip_left = 0.35
+			leg.slip_dir = Vector3(leg.foot.x - global_position.x, 0.0, leg.foot.z - global_position.z).normalized()
+	for i in 4:
+		var spray := (-forward + Vector3(randf_range(-0.6, 0.6), randf_range(-0.2, 0.6), randf_range(-0.6, 0.6))).normalized()
+		BloodFX.spawn_impact(world, impact + Vector3.UP * randf_range(-1.0, 1.5), spray, STEP_DUST, 2.5)
+	BloodFX.spawn_impact(world, impact, -forward, BloodFX.BLOOD_COLOR, 2.0)
+	_shake_near(impact, 6.0, 28.0)
+	WormFX.punch(get_tree(), impact, 5.0, 28.0)
+	SoundPlayer.play_3d(death_sound, impact, world)
+	SoundPlayer.play_3d(step_sound, impact, world)
+	SoundPlayer.play_3d(hurt_sound, _body.global_position, world)
+
+
+## Shaking off a stun: back after whoever it was after, or looking for them.
+func _recover() -> void:
+	_height_target = stand_height
+	if is_instance_valid(target) and Factions.is_alive_target(target):
+		_set_state(State.HUNT)
+		SoundPlayer.play_3d(horn_sound, _body.global_position, get_tree().current_scene)
+	else:
+		target = null
+		_set_state(State.SEARCH)
+
+
+## Moves it ahead at `speed` (m/s); false (and no move) if something tall is
+## within `reach` in front of it (by default, a little further than it'll
+## go in the next moment -- walking, it turns off well before a wall).
+func _move_forward(speed: float, delta: float, reach: float = -1.0) -> bool:
 	var forward := Vector3(-sin(_yaw), 0.0, -cos(_yaw))
 	var ahead := global_position + Vector3.UP * 3.0
-	if not _clear_line(ahead, ahead + forward * maxf(speed * 0.4, 2.0)):
+	var probe := reach if reach > 0.0 else maxf(speed * 0.4, 2.0)
+	if not _clear_line(ahead, ahead + forward * (probe + speed * delta)):
 		return false
 	global_position += forward * speed * delta
 	_update_ground()
@@ -1448,6 +1511,9 @@ func _place_body(delta: float) -> void:
 		_height += _height_vel * delta
 	var facing := Basis(Vector3.UP, _yaw)
 	var noise := Vector3(sin(_time * 0.7) * 0.5 + sin(_time * 1.9) * 0.2, 0.0, cos(_time * 0.6) * 0.5) * body_sway
+	if _state == State.STUNNED:
+		# Dazed: a slow, drunken wobble round where it stands.
+		noise += Vector3(sin(_time * 1.3), 0.0, cos(_time * 1.1)) * 1.1
 	var want := facing * (lean * -0.8) + noise
 	if delta > 0.0:
 		_sway_vel += (4.0 * (want - _sway) - 2.5 * _sway_vel) * delta
@@ -1479,6 +1545,10 @@ func _update_eyes(delta: float) -> void:
 		want = (Factions.aim_point(target) - _eyes_point()).normalized()
 	elif _tube_feeding:
 		want = (_tube_feed_point - _eyes_point()).normalized()
+	elif _state == State.STUNNED:
+		# Dazed: heads hanging, lolling round.
+		var loll := Basis(Vector3.UP, sin(_time * 1.4) * 0.8) * Basis(Vector3.RIGHT, deg_to_rad(-70.0) + sin(_time * 2.1) * 0.2)
+		want = facing * (loll * Vector3.FORWARD)
 	else:
 		var sweep := sin(_time * (0.9 if _state == State.LISTEN else 0.4)) * deg_to_rad(65.0)
 		want = facing * (Basis(Vector3.UP, sweep) * Basis(Vector3.RIGHT, deg_to_rad(-25.0)) * Vector3.FORWARD)
@@ -1490,6 +1560,8 @@ func _update_eyes(delta: float) -> void:
 		_aim_heads(_eye_dir, delta)
 	if _light:
 		_light.visible = _state != State.DEAD
+		# Stunned, the light stutters like a failing bulb.
+		_light.light_energy = light_energy * (randf_range(0.05, 0.8) if _state == State.STUNNED and randf() < 0.4 else 1.0)
 		var angle := light_angle * (hunt_angle_scale if hunting else 1.0)
 		_light_angle_now = lerpf(_light_angle_now, angle, 1.0 - exp(-3.0 * delta))
 		_light.spot_angle = _light_angle_now
