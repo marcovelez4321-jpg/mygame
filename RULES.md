@@ -683,3 +683,15 @@ them:
   - Co-op: `PlayerInput.grapple` (E) is part of the input packet. tick()/apply_pull() run inside the simulation step, so the host runs them, and the kick damage too. Drawing is per peer.
   - No sounds yet (planned: wet slither while coiling, whip crack, rubber stretch while pulled, heartbeat at full coil, shared by all three looks). No HUD for the charges yet (`charges` / `recharge_fraction` / `coil` are public for it).
   - Untested at time of writing (not run).
+
+- 2026-10-09: **New first-person arms, the symbiote coil, and the PS1 shader on the arms, the grapple and every enemy.**
+  - `scripts/first_person_arms.gd` (FirstPersonArms) replaces the police-character arms (`Viewmodel.use_new_arms`, on). It uses `Arms/arms_rig.glb` with the bare-skin texture, not the gloves. HL2 c_arms style: the rig's `camera` bone sits on your eye.
+    - **Right hand:** holds every weapon in the rig's `finger_gun_idle` pose. A weapon not yet fitted (`WeaponData.arms_fitted` false) gets its old arms_position/rotation/scale reset and its middle moved into the right palm when shown. F2 tunes it from there, and F3 saves the fit.
+    - **Left hand:** the tentacle arm, out of view until E. With a one-handed gun out, holding E brings it up from below (`hide_drop`, `raise_speed`). It slowly reaches out toward the rig's `push_L` pose at its furthest point, up to `coil_reach` (0.65) by full charge. On release it shoves out the rest of the way (`push_speed`). It stays out while the tentacle is out, then drops.
+    - Poses are read straight from the rig's animations (Animation API, no AnimationPlayer running) and written to the bones each frame. Bone positions are worked out from those poses, so they're never a frame stale.
+  - **Symbiote coil** (GrappleTentacle). While you hold E it slides down from the elbow and winds round the forearm toward the wrist (`coil_turns` 3.5, `coil_radius` 0.05), slowly crawling round it. A full hold winds `coil_before_release` (80%), and letting go snaps on the rest (`release_coil_speed`). So it peaks right as it lashes, out of the palm. It unwinds after the grapple lets go. The symbiote is now the focus; the other two looks stay in the menu for now.
+  - **Grapple 40% weaker:** `pull_speed` 26 to 15.6 m/s, `pull_accel` 70 to 42. A full-speed kick is now 62.
+  - **PS1 shader** (`scripts/ps1_look.gd` PS1Look). `material()` makes an opaque, optionally two-sided copy of shaders/ps1.gdshader (screen-space vertex snap, per-vertex lighting, nearest texture). The arms and the symbiote use it; the symbiote keeps its 6 sides and gets a tiny 8 x 16 glossy-black texture.
+    - Every enemy goes through it as it spawns: `watch_enemies()`, hooked from the GameSettings autoload, matched by class name. Standard materials are swapped for PS1 ones with the same texture and colour, cached so copies still share one. Left alone: see-through, glowing, unshaded and vertex-coloured materials, and custom shaders. Hit flashes are overlays, so they still work.
+    - It's cheaper than the standard material: lighting per vertex, not per pixel.
+  - Headless check run (with the user's OK): no script errors. Not yet seen in game.

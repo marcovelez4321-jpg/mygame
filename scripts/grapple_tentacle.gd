@@ -13,8 +13,10 @@ extends Node3D
 ## It writhes while it flies out and pulls taut once it's stuck. Purely
 ## cosmetic and local (Rule 1). Built fresh every frame: one rope, a few
 ## hundred vertices, an ImmediateMesh (and a MultiMesh for the spiders).
-## Until the new arms are in, it starts at PlayerGrapple.view_origin, the
-## bottom-left of the screen where the left hand will be.
+## With the first-person arms (FirstPersonArms) it coils round the left
+## forearm while you hold E and lashes out of that palm; without them it
+## starts at PlayerGrapple.view_origin, the bottom-left of the screen. The
+## symbiote and the coil go through the PS1 shader.
 
 const SPIDER_MODEL := "res://NEWPSXMODELS/PSX Mega Pack/Models/Spider/Spider.fbx"
 const WORM_TEXTURE := "res://art/props/PSX Creatures/Textures/tape_worm.png"
@@ -40,6 +42,13 @@ const SIDES := 6
 @export var tendrils: int = 5
 @export var tendril_length: float = 0.7
 @export var symbiote_color: Color = Color(0.015, 0.015, 0.02)
+## The coil round your forearm: how far out from the arm's middle it wraps,
+## how many turns from elbow to wrist, how thick it is (x symbiote_radius),
+## and how fast it slowly crawls round the arm.
+@export var coil_radius: float = 0.05
+@export var coil_turns: float = 3.5
+@export var coil_thickness: float = 0.7
+@export var coil_crawl_speed: float = 0.6
 
 @export_group("Flesh Worm")
 @export var worm_radius: float = 0.06
@@ -72,8 +81,9 @@ var _points := PackedVector3Array()
 var _tube: MeshInstance3D
 var _immediate: ImmediateMesh
 var _horde: MultiMeshInstance3D
-var _symbiote_material: StandardMaterial3D
+var _symbiote_material: ShaderMaterial
 var _worm_material: StandardMaterial3D
+var _coil_points := PackedVector3Array()
 
 
 func _ready() -> void:
@@ -85,13 +95,9 @@ func _ready() -> void:
 	_tube.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_tube)
 
-	_symbiote_material = StandardMaterial3D.new()
-	_symbiote_material.albedo_color = symbiote_color
-	_symbiote_material.metallic = 0.3
-	_symbiote_material.roughness = 0.1
-	_symbiote_material.rim_enabled = true
-	_symbiote_material.rim = 0.35
-	_symbiote_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# PS1 look: through the PS1 shader (vertex snap, per-vertex lighting) with
+	# a tiny nearest-filtered texture.
+	_symbiote_material = PS1Look.material(_symbiote_texture(), Color.WHITE, true)
 
 	_worm_material = StandardMaterial3D.new()
 	_worm_material.albedo_texture = load(WORM_TEXTURE) as Texture2D
@@ -101,35 +107,94 @@ func _ready() -> void:
 
 
 ## Called every frame by PlayerGrapple. `stuck` = it has hold of something
-## (pulled taut); `normal` = the grabbed surface's facing.
-func show_rope(showing: bool, start: Vector3, tip: Vector3, normal: Vector3, stuck: bool, _missing: bool, delta: float) -> void:
+## (pulled taut); `normal` = the grabbed surface's facing. `arm` = the left
+## arm's [elbow, wrist, palm, finger direction] (empty while it's down) and
+## `coil` how much of it is wrapped round the forearm (0..1).
+func show_rope(showing: bool, start: Vector3, tip: Vector3, normal: Vector3, stuck: bool, arm: Array[Vector3], coil: float, delta: float) -> void:
 	_time += delta
 	_immediate.clear_surfaces()
 	if _horde:
 		_horde.visible = false
 	var length := start.distance_to(tip)
-	if not showing or length < 0.05:
+	var rope := showing and length >= 0.05
+	if not rope:
 		_was_showing = false
+	else:
+		if not _was_showing:
+			_wobble = writhe # each new lash starts out writhing
+		_was_showing = true
+		_wobble = move_toward(_wobble, writhe_taut if stuck else writhe, settle_speed * delta * writhe)
+		_build_curve(start, tip, length)
+	var coiled := arm.size() == 4 and coil > 0.01
+	if coiled:
+		_build_coil(arm, coil)
+	if not rope and not coiled:
 		return
-	if not _was_showing:
-		_wobble = writhe # each new lash starts out writhing
-	_was_showing = true
-	_wobble = move_toward(_wobble, writhe_taut if stuck else writhe, settle_speed * delta * writhe)
-	_build_curve(start, tip, length)
 
 	match GameSettings.tentacle_style:
 		GameSettings.TentacleStyle.SYMBIOTE:
 			_immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _symbiote_material)
-			_tube_along(_points, _symbiote_radius.bind(length), 0.0)
-			if stuck:
-				_draw_tendrils(tip, normal, start)
+			if coiled:
+				_tube_along(_coil_points, _coil_radius_at, 0.0)
+			if rope:
+				_tube_along(_points, _symbiote_radius.bind(length), length * 2.0)
+				if stuck:
+					_draw_tendrils(tip, normal, start)
 			_immediate.surface_end()
 		GameSettings.TentacleStyle.FLESH_WORM:
 			_immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _worm_material)
-			_tube_along(_points, _worm_radius.bind(length), length * worm_texture_per_meter)
+			if coiled:
+				_tube_along(_coil_points, _coil_radius_at, 0.0)
+			if rope:
+				_tube_along(_points, _worm_radius.bind(length), length * worm_texture_per_meter)
 			_immediate.surface_end()
 		GameSettings.TentacleStyle.SPIDER_HORDE:
-			_draw_horde(length)
+			if rope:
+				_draw_horde(length)
+
+
+## The coil: slides down out of the elbow and winds round the forearm toward
+## the wrist (as far as `coil` says), slowly crawling round it; fully wound,
+## it runs on into the palm, where the lash comes out.
+func _build_coil(arm: Array[Vector3], coil: float) -> void:
+	var elbow := arm[0]
+	var wrist := arm[1]
+	var palm := arm[2]
+	var axis := wrist - elbow
+	var side := axis.cross(Vector3.UP)
+	if side.length_squared() < 0.0001:
+		side = axis.cross(Vector3.RIGHT)
+	side = side.normalized()
+	var up := side.cross(axis.normalized())
+	var steps := maxi(int(28.0 * coil), 3)
+	_coil_points.resize(0)
+	for i in steps + 1:
+		var u := coil * i / steps
+		var angle := u * coil_turns * TAU + _time * coil_crawl_speed
+		var around := (side * cos(angle) + up * sin(angle)) * coil_radius
+		_coil_points.append(elbow + axis * u + around)
+	if coil > 0.95:
+		_coil_points.append(wrist.lerp(palm, 0.5))
+		_coil_points.append(palm + arm[3] * 0.06)
+
+
+func _coil_radius_at(s: float) -> float:
+	return symbiote_radius * coil_thickness * lerpf(1.0, 0.7, s)
+
+
+## A tiny 8 x 16 texture (nearest-filtered by the PS1 shader): wet black with
+## a lighter sheen streak down one side and a few glints, so the vertex-lit
+## tube still reads as glossy.
+func _symbiote_texture() -> Texture2D:
+	var image := Image.create(8, 16, false, Image.FORMAT_RGB8)
+	var shade := symbiote_color
+	for y in 16:
+		for x in 8:
+			var sheen := 0.09 if x == 2 else (0.04 if x == 1 or x == 3 else 0.0)
+			var glint := 0.12 if (x * 7 + y * 3) % 11 == 0 else 0.0
+			var value := shade.r + sheen + glint
+			image.set_pixel(x, y, Color(value, value, value * 1.15))
+	return ImageTexture.create_from_image(image)
 
 
 ## The rope's centre line, start to tip, writhing side to side (most in the

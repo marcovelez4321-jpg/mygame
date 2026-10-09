@@ -103,6 +103,11 @@ const TUNE_SCALE_SPEED := 0.6    # fraction of current size per second
 ## character's arms.
 @export_file("*.fbx") var arms_character: String = "res://art/characters/Characters_psx/Models/Male/Character_18_Police.fbx"
 
+## Use the dedicated first-person arms (FirstPersonArms: Arms/arms_rig.glb,
+## bare skin) instead of a character's arms. Their right hand holds every
+## gun; the left is the tentacle arm (PlayerGrapple). Off = arms_character.
+@export var use_new_arms: bool = true
+
 ## Show only the arms of the first-person arms model: its mesh is cut down to
 ## the shoulders, arms and hands (its torso would otherwise swing up into
 ## view as the gun tilts down). Off = the old way (head and legs shrunk away).
@@ -181,6 +186,9 @@ static var _arms_only_meshes := {}
 ## The arms model's size (PlayerModel.fit_scale_for() of ITS head height).
 var _arms_fit_scale := 1.0
 var _player_model: PlayerModel
+## The new arms (use_new_arms), and the grapple their left arm works for.
+var _fp_arms: FirstPersonArms
+var _grapple: PlayerGrapple
 var _tuning_arms: bool = false
 var _switch_tween: Tween
 var _kick_tween: Tween
@@ -248,7 +256,8 @@ func _ready() -> void:
 		set_process_unhandled_key_input(false)
 		return
 	_player_model = body.get_node_or_null("PlayerModel") as PlayerModel
-	if _player_model:
+	_grapple = body.get_node_or_null("PlayerGrapple") as PlayerGrapple
+	if _player_model and not use_new_arms:
 		_player_model.character_changed.connect(_on_character_changed)
 	_swing_pivot = Node3D.new()
 	add_child(_swing_pivot)
@@ -479,6 +488,8 @@ func _find_shoulder() -> Vector3:
 	var bone := skeleton.find_bone("RightUpperArm")
 	if bone == -1:
 		bone = skeleton.find_bone("RightShoulder")
+	if bone == -1:
+		bone = skeleton.find_bone("upper_arm.R") # the new arms
 	if bone == -1:
 		return Vector3.ZERO
 	return _swing_pivot.to_local(skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin)
@@ -840,6 +851,8 @@ func _hand_anchor() -> Node3D:
 func _anchor_in_rig() -> Transform3D:
 	if not is_instance_valid(_hand_attachment):
 		return Transform3D.IDENTITY
+	if _fp_arms:
+		return _arms.transform * _fp_arms.bone_in_rig(_hand_bone)
 	return _arms.transform * _skeleton_in_arms * _arms_skeleton.get_bone_global_pose(_hand_bone)
 
 
@@ -860,6 +873,7 @@ func _free_arms() -> void:
 	if is_instance_valid(_arms):
 		_arms.queue_free()
 	_arms = null
+	_fp_arms = null
 	_arms_skeleton = null
 	_hand_attachment = null
 	_arms_hider = null
@@ -874,6 +888,8 @@ func _free_arms() -> void:
 func _ensure_arms() -> bool:
 	if is_instance_valid(_arms):
 		return true
+	if use_new_arms:
+		return _ensure_new_arms()
 	if _player_model == null:
 		return false
 	var path := arms_character if not arms_character.is_empty() else _player_model.character_path
@@ -926,11 +942,52 @@ func _ensure_arms() -> bool:
 	return true
 
 
+## The new arms (FirstPersonArms), built once. Their right hand bone is what
+## the gun models hang off, like the character arms' RightHand.
+func _ensure_new_arms() -> bool:
+	_fp_arms = FirstPersonArms.new()
+	_arms = _fp_arms
+	_arms.visible = false
+	_arms_hidden_frames = ARMS_REVEAL_FRAMES
+	_kick_pivot.add_child(_arms)
+	_arms_skeleton = _fp_arms.skeleton
+	_hand_bone = _fp_arms.hand_bone
+	_hand_attachment = _fp_arms.hand_attachment
+	_arms_fit_scale = 1.0
+	if _grapple:
+		_grapple.arms = _fp_arms
+	for model in _gun_models.values():
+		if is_instance_valid(model):
+			(model as Node3D).reparent(_hand_attachment, false)
+	return true
+
+
+## A weapon shown on the new arms for the first time (not fitted to them
+## yet, WeaponData.arms_fitted): the arms sit as the rig was made (camera
+## bone on your eye) and the gun's moved so its middle sits in the right
+## palm. F2 tunes it from there; F3 saves it.
+func _fit_to_new_arms(weapon: WeaponData) -> void:
+	weapon.arms_position = Vector3.ZERO
+	weapon.arms_rotation_degrees = Vector3.ZERO
+	weapon.arms_scale = 1.0
+	_apply_arms_transform(weapon)
+	weapon.viewmodel_position = _arms.transform * _fp_arms.right_palm_in_rig()
+	weapon.arms_fitted = true
+
+
 ## Gets the arms ready for `weapon`: its hold pose (the first frame of its
 ## hold_animation, held still so the hands can't drift off the grip), both
 ## arms or just the right, and its arms_position/rotation/scale. A weapon
 ## with no hold_animation is held with no arms showing.
 func _pose_arms(weapon: WeaponData) -> void:
+	if use_new_arms:
+		_arms_wanted = _ensure_arms()
+		if _arms_hidden_frames == 0:
+			_arms.visible = _arms_wanted
+		if not weapon.arms_fitted:
+			_fit_to_new_arms(weapon)
+		_apply_arms_transform(weapon)
+		return
 	_arms_wanted = weapon.hold_animation != null and _ensure_arms()
 	if not is_instance_valid(_arms):
 		return
@@ -1096,6 +1153,12 @@ func _auto_place_arms(weapon: WeaponData, skeleton: Skeleton3D) -> void:
 func _apply_arms_transform(weapon: WeaponData) -> void:
 	if not is_instance_valid(_arms):
 		return
+	if _fp_arms:
+		# The new arms: as made (camera bone on the eye), then the weapon's tweak.
+		var tweak := Basis.from_euler(weapon.arms_rotation_degrees * (PI / 180.0)) \
+				* Basis.from_scale(Vector3.ONE * weapon.arms_scale)
+		_arms.transform = Transform3D(tweak, weapon.arms_position) * _fp_arms.camera_transform()
+		return
 	_arms.transform = Transform3D(_arms_basis(weapon), weapon.arms_position)
 
 
@@ -1220,6 +1283,7 @@ func _process(delta: float) -> void:
 			_arms.visible = _arms_wanted
 	_update_held_grenade()
 	_keep_in_step()
+	_tick_left_arm(delta)
 	if not _tuning or _model == null:
 		return
 	if _switch_tween and _switch_tween.is_running():
@@ -1271,6 +1335,16 @@ func _process(delta: float) -> void:
 	# U: a healing item held up at your mouth, as when it's used.
 	_show_use_pose(weapon if _use_pose_shown and weapon.heal_item >= 0 else null)
 	_update_label("")
+
+
+## The new arms' left arm follows the grapple: up and reaching while you
+## hold E, out while the tentacle's out, down again after. Only with a
+## one-handed weapon in hand (a two-handed one needs that hand).
+func _tick_left_arm(delta: float) -> void:
+	if _fp_arms == null or _grapple == null:
+		return
+	var free_hand := _shown_weapon != null and _shown_weapon.one_handed and _arms.visible
+	_fp_arms.tick(delta, _grapple.is_coiling(), _grapple.coil, _grapple.is_out(), free_hand)
 
 
 ## Holds the viewmodel in the healing animation's top pose -- `weapon` (an

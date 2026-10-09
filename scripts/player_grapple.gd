@@ -57,12 +57,12 @@ enum Rope { NONE, LASH, PULL, RIDE, MISS }
 
 @export_group("Pull")
 ## Pull speed at full power, m/s.
-@export var pull_speed: float = 26.0
+@export var pull_speed: float = 15.6
 ## Pull speed at min_power, as a fraction of pull_speed. Set it to min_power
 ## (0.2) to scale the speed exactly like the range.
 @export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
 ## How hard it pulls you up to that speed, m/s per second.
-@export var pull_accel: float = 70.0
+@export var pull_accel: float = 42.0
 ## Gravity while pulled (0 = none, 1 = full).
 @export_range(0.0, 1.0, 0.05) var pull_gravity_scale: float = 0.0
 ## Upward speed added when you let go with Space.
@@ -74,7 +74,7 @@ enum Rope { NONE, LASH, PULL, RIDE, MISS }
 @export_group("Big Enemies")
 ## How close (to the grabbed spot) counts as arriving: kick or latch on.
 @export var kick_reach: float = 2.2
-## Kick damage per m/s you were going when you hit (26 m/s x 4 = 104).
+## Kick damage per m/s you were going when you hit (15.6 m/s x 4 = 62).
 @export var kick_damage_per_speed: float = 4.0
 ## How hard you bounce back off after a kick, and up.
 @export var kick_bounce: float = 9.0
@@ -122,6 +122,9 @@ var _attacker_id := 0
 
 var _line: MeshInstance3D
 var _tentacle: GrappleTentacle
+## Your first-person arms (set by the Viewmodel): the tentacle coils round
+## the left forearm and lashes out of that palm.
+var arms: FirstPersonArms
 
 
 func _ready() -> void:
@@ -187,6 +190,16 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 
 	coil = clampf(_hold / charge_time, 0.0, 1.0) if _coiling else 0.0
 	return false
+
+
+## Holding E, winding it up.
+func is_coiling() -> bool:
+	return _coiling
+
+
+## The tentacle is out (flying, stuck, or snapping back from a miss).
+func is_out() -> bool:
+	return _rope != Rope.NONE
 
 
 ## True while the rope is holding you (gravity and ground movement change).
@@ -367,7 +380,12 @@ func _process(delta: float) -> void:
 		_ensure_tentacle()
 		var normal := (_anchor.global_basis * _normal_local).normalized() if is_instance_valid(_anchor) else Vector3.UP
 		var stuck := _rope == Rope.PULL or _rope == Rope.RIDE
-		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, _rope == Rope.MISS, delta)
+		var arm_points: Array[Vector3] = []
+		var arm_coil := 0.0
+		if is_instance_valid(arms) and arms.raise > 0.01:
+			arm_points = arms.left_arm_points()
+			arm_coil = arms.coil
+		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, arm_points, arm_coil, delta)
 		if _line:
 			_line.visible = false
 	else:
@@ -384,6 +402,9 @@ func _process(delta: float) -> void:
 
 
 func _start_point() -> Vector3:
+	if is_instance_valid(arms) and arms.raise > 0.01:
+		var points := arms.left_arm_points()
+		return points[2] + points[3] * 0.06 # out of the palm
 	if _player.is_multiplayer_authority() and _player.camera.current:
 		return _player.camera.global_transform * view_origin
 	return _player.global_transform * body_origin

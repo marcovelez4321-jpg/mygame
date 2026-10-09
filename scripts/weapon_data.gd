@@ -192,6 +192,10 @@ enum ReloadStyle {
 ## grapple (PlayerGrapple, E). With anything else out, E switches to the last
 ## one-handed gun you used first.
 @export var one_handed: bool = false
+## Fitted to the first-person arms (FirstPersonArms) yet. Until it is, the
+## gun is moved into the right palm when shown; F3 in the F2 tool saves the
+## fit (and sets this).
+@export var arms_fitted: bool = false
 
 @export_group("Presentation")
 ## Shown on the weapon wheel. If empty, only the name is shown.

@@ -46,6 +46,7 @@ var look_values: Dictionary = {}
 func _ready() -> void:
 	load_settings()
 	apply_all()
+	PS1Look.watch_enemies(get_tree()) # every enemy through the PS1 shader
 
 
 func get_bus_volume(bus: String) -> float:
