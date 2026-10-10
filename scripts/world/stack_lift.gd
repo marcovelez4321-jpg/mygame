@@ -17,9 +17,15 @@ extends AnimatableBody3D
 @export var size: Vector3 = Vector3(18.0, 2.0, 18.0)
 ## Hangs under a cable (a cable car) rather than running up a wall.
 @export var hanging: bool = false
+## Waits at its stop until called (LiftButton at each stop) or sent on (the
+## panel on its deck), instead of going back and forth by itself.
+@export var on_call: bool = false
 
 var _target := 1
 var _step := 1
+## The stop it's at (or last left), and whether it's been called somewhere.
+var _at := 0
+var _called := false
 var _wait := 0.0
 var _speed := 0.0
 
@@ -50,6 +56,30 @@ func _ready() -> void:
 	lamp.omni_range = 60.0
 	lamp.position = Vector3(0.0, 6.0, 0.0)
 	add_child(lamp)
+	if on_call:
+		# The panel on its deck: sends it on to the next stop.
+		var panel := LiftButton.new()
+		panel.position = Vector3(size.x * 0.5 - 1.5, size.y * 0.5, -size.z * 0.5 + 1.5)
+		add_child(panel)
+
+
+## Calls it to stop `index` (a LiftButton there).
+func call_to(index: int) -> void:
+	if index < 0 or index >= stops.size() or (index == _at and not _called):
+		return
+	_target = index
+	_called = true
+	_wait = 0.4
+
+
+## Sends it on: up to the next stop, or back down from the top.
+func go_next() -> void:
+	call_to(_at + 1 if _at + 1 < stops.size() else _at - 1)
+
+
+## On its way somewhere (buttons wait till it's there).
+func is_travelling() -> bool:
+	return _called
 
 
 func _piece(at: Vector3, piece_size: Vector3, material: Material) -> void:
@@ -65,6 +95,8 @@ func _piece(at: Vector3, piece_size: Vector3, material: Material) -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server() or stops.size() < 2:
 		return
+	if on_call and not _called:
+		return # waiting to be called
 	if _wait > 0.0:
 		_wait -= delta
 		return
@@ -76,6 +108,10 @@ func _physics_process(delta: float) -> void:
 	position = position.move_toward(goal, _speed * delta)
 	if position.is_equal_approx(goal):
 		_speed = 0.0
+		_at = _target
+		if on_call:
+			_called = false
+			return
 		_wait = pause
 		if _target + _step < 0 or _target + _step >= stops.size():
 			_step = -_step # back the way it came

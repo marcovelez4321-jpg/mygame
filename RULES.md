@@ -1150,3 +1150,15 @@ them:
     - Base wall pieces are solid (carvable); too thin to be occluders.
   - **Totals:** 67 lit window entrances (46 rooms + 21 base windows), all on the painted grid; 110 lamps (distance-faded at 400 m); 35 entrance eye clusters.
   - **WormDirector:** a megastructure Lair is the worm's home. A player arriving within 350 m of it (`arrival_range`, across the ground) calls it up at once: the build-up, then the eruption, whatever the cooldown (the user's ask). Once per arrival: again only after everyone's left that range and come back. Megastructure lairs no longer use the hunger route.
+
+- 2026-10-10: **Halls take up much more of the Stack; lift call buttons.**
+  - **Halls (the user's favourite):** 15, much taller (the main tower's 900–1400, 3300–3700, 4650–4960 and a new 1900–2400; towers 1–4 each get a new one too). Halls over 250 m tall get three mezzanine levels (0.25, 0.5, 0.75), each up its switchbacks.
+  - **Everything that joins a hall moved to its floor:**
+    - lift stops 40 / 900 / 4650;
+    - hollow bridges at 900, with towers 1 and 3's mid halls sharing the main tower's floor;
+    - the broken bridge and the cable car both at 3306 (deck = floor + 6). Before, the cable car's doorways came out 40–60 m up the hall wall with no way up. Its line is set so it never crosses the bridge's.
+  - **Window rooms come with the halls:** 86. Only half get a lamp inside (all keep the glow and beam): 99 lamps.
+  - **Lift buttons (the user's ask):** LiftButton (`scripts/world/lift_button.gd`), a usable like the map's buttons (F).
+    - A call button on each lift stop's dock; a panel on the deck sends it to the next stop (back down from the top).
+    - The lift waits until called (`StackLift.on_call`), its buttons lit amber when it's ready and red while it travels.
+    - The cable car still runs by itself.

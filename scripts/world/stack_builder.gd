@@ -50,12 +50,17 @@ const TOWERS := [ # x, z, footprint (m), height (m)
 ]
 ## Every tower's halls: [bottom, top] heights. The main tower's base (0-400)
 ## is its own thing (the apartment floors), not in this list.
+## The user likes the halls best: they take up much of every tower. The
+## first two of each are the ones things join onto (the main tower's: mid,
+## high, crown; towers 1 and 3's mid halls share its floor, 900 m, for the
+## hollow bridges; tower 1's high hall shares its floor, 3300 m, for the
+## broken bridge and the cable car).
 const HALLS := [
-	[[1100.0, 1300.0], [3450.0, 3620.0], [4760.0, 4950.0]],
-	[[1100.0, 1260.0], [3440.0, 3570.0]],
-	[[1120.0, 1260.0], [2560.0, 2700.0]],
-	[[1100.0, 1250.0], [1780.0, 1900.0]],
-	[[300.0, 420.0], [1180.0, 1320.0]],
+	[[900.0, 1400.0], [3300.0, 3700.0], [4650.0, 4960.0], [1900.0, 2400.0]],
+	[[900.0, 1350.0], [3300.0, 3560.0], [1950.0, 2400.0]],
+	[[950.0, 1400.0], [2350.0, 2720.0], [1650.0, 2000.0]],
+	[[900.0, 1350.0], [1650.0, 1930.0], [300.0, 600.0]],
+	[[200.0, 560.0], [950.0, 1340.0]],
 ]
 const FLOOR := 40.0 # the base's storeys
 const SLAB := 4.0
@@ -71,7 +76,7 @@ const WATER_LEVEL := -290.0
 const ENTRANCE_UNDERSIDE := 28.0 # within the grapple's 35 m from the ground
 const RAMP_SLOPE := 28.0 # degrees: every ramp you walk up
 ## The lift's stops: the base (its -Z storey-1 dock), the mid hall, the crown.
-const LIFT_STOPS := [40.0, 1100.0, 4760.0]
+const LIFT_STOPS := [40.0, 900.0, 4650.0]
 
 ## Every box: {c: centre, s: size, b: Basis, part: &"shell" or &"interior",
 ## solid: a tower block (carved, an occluder), tower: index or -1,
@@ -97,6 +102,8 @@ var terrain_holes: Array[AABB] = []
 var lift_stops := PackedVector3Array()
 var cable_stops := PackedVector3Array()
 var lift_face := 0.0
+## Where each lift stop's call button stands (local).
+var lift_buttons := PackedVector3Array()
 ## Spots near every entrance (floor level): eyeball clusters gather there.
 var entrance_spots := PackedVector3Array()
 ## Spots on floors and mezzanines inside where a barnacle nest may grow.
@@ -485,7 +492,8 @@ func _window_rooms() -> void:
 			if random.randf() < 0.5:
 				entrance_spots.append(Vector3(room.get_center().x, room.position.y, room.get_center().z))
 			openings.append(at)
-			lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
+			if random.randf() < 0.5:
+				lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
 
 
 ## Windows cut into the main tower's base walls, two a side each storey,
@@ -547,8 +555,8 @@ func _span(a: Vector3, b: Vector3, cross: Vector3, width: float, y: float, tall:
 ## Hollow skybridges joining halls in different towers at the same height:
 ## the main tower's mid hall to tower 1's and tower 3's.
 func _hollow_bridges() -> void:
-	_hollow_bridge(0, 1, 1110.0, 3)
-	_hollow_bridge(0, 3, 1110.0, 0)
+	_hollow_bridge(0, 1, 900.0, 3)
+	_hollow_bridge(0, 3, 900.0, 0)
 
 
 ## A walk-through bridge from tower a's hall to tower b's at floor height y,
@@ -597,10 +605,12 @@ func _lift() -> void:
 			# From the wall (its storey-1 opening has no sill) out to the lift.
 			var wall := -TOWERS[0][2] * 0.5
 			_add(Vector3(0.0, stop - 1.5, (wall + lift_face) * 0.5), Vector3(24.0, 3.0, wall - lift_face), &"shell", "Docks", &"metal")
+			lift_buttons.append(Vector3(-9.0, stop, wall - 3.0))
 			entrance_spots.append(Vector3(0.0, stop, wall - 8.0))
 			continue
 		var mouth := _passage_out(0, _hall_box(0, stop), 0, stop, 0.0, 24.0, 22.0, 2.0)
 		_add(Vector3(0.0, stop - 1.5, (lift_face + mouth.z) * 0.5 + 4.0), Vector3(24.0, 3.0, mouth.z - lift_face - 4.0), &"shell", "Docks", &"metal")
+		lift_buttons.append(Vector3(-9.0, stop, mouth.z - 3.0))
 		entrance_spots.append(Vector3(0.0, stop, mouth.z - 8.0))
 		if stop < 2000.0:
 			# The mid dock's door: a slab 30 m tall, hanging half open.
@@ -728,8 +738,8 @@ func _high_crossings() -> void:
 	var t1_y: float = HALLS[1][1][0]
 	# The broken bridge, low in both halls -- at one height in both.
 	var deck := maxf(t0_y, t1_y) + 6.0
-	var a := _passage_out(1, _hall_box(1, deck), 2, deck, -10.0, 18.0, 16.0, 2.0)
-	var b := _passage_out(0, _hall_box(0, deck), 3, deck, 20.0, 18.0, 16.0, 2.0)
+	var a := _passage_out(1, _hall_box(1, deck), 2, deck, -15.0, 18.0, 16.0, 2.0)
+	var b := _passage_out(0, _hall_box(0, deck), 3, deck, -25.0, 18.0, 16.0, 2.0)
 	entrance_spots.append(a + Vector3(-6.0, 0.0, 0.0))
 	entrance_spots.append(b + Vector3(6.0, 0.0, 0.0))
 	var gap := 30.0
@@ -741,13 +751,12 @@ func _high_crossings() -> void:
 		var from: Vector3 = end[0]
 		var to: Vector3 = end[1]
 		_add((from + to) * 0.5 + Vector3.UP * -3.0, Vector3(16.0, 6.0, from.distance_to(to)), &"shell", "Bridges", &"concrete", basis)
-	# The cable car, higher up in both halls.
-	var c := _passage_out(1, _hall_box(1, t1_y + 60.0), 2, t1_y + 60.0, 30.0, 22.0, 18.0, 2.0)
-	var d := _passage_out(0, _hall_box(0, t0_y + 40.0), 3, t0_y + 40.0, -30.0, 22.0, 18.0, 2.0)
-	var out_a := Vector3(-14.0, 0.0, 0.0)
-	var out_b := Vector3(14.0, 0.0, 0.0)
-	cable_stops.append(c + out_a + Vector3.UP * (t1_y + 60.0 - c.y))
-	cable_stops.append(d + out_b + Vector3.UP * (t0_y + 40.0 - d.y))
+	# The cable car: at the same floor, alongside the bridge but clear of it
+	# (its line never crosses the bridge's).
+	var c := _passage_out(1, _hall_box(1, deck), 2, deck, 15.0, 22.0, 18.0, 2.0)
+	var d := _passage_out(0, _hall_box(0, deck), 3, deck, 35.0, 22.0, 18.0, 2.0)
+	cable_stops.append(c + Vector3(-14.0, 0.0, 0.0))
+	cable_stops.append(d + Vector3(14.0, 0.0, 0.0))
 	for stop in cable_stops:
 		_add(stop + Vector3.UP * -1.5, Vector3(26.0, 3.0, 26.0), &"shell", "Docks", &"metal")
 		entrance_spots.append(stop)
@@ -774,7 +783,8 @@ func _hall_features(hall: Dictionary) -> void:
 	var main: bool = hall.tower == 0
 	var shaft := Rect2(-UPPER_SHAFT * 0.5 - 6.0, -UPPER_SHAFT * 0.5 - 6.0, UPPER_SHAFT + 12.0, UPPER_SHAFT + 12.0)
 	# Mezzanines, against a wall each, and switchback ramps up to them.
-	for level: float in [0.4, 0.7]:
+	var levels: Array = [0.4, 0.7] if tall < 250.0 else [0.25, 0.5, 0.75]
+	for level: float in levels:
 		if tall < 80.0 and level > 0.5:
 			continue
 		var side := random.randi() % 4
@@ -1382,7 +1392,15 @@ func _rides(root: Node, parent: Node) -> void:
 	var lift := StackLift.new()
 	lift.name = "Lift"
 	lift.stops = lift_stops
+	lift.on_call = true
 	_own(root, lift, parent)
+	for i in lift_buttons.size():
+		var button := LiftButton.new()
+		button.name = "LiftCall_%d" % i
+		button.lift_path = NodePath("../Lift")
+		button.stop = i
+		button.position = lift_buttons[i]
+		_own(root, button, parent)
 	_cable(root, parent, "LiftCable", Vector3(0.0, 0.0, lift_face), Vector3(0.0, LIFT_STOPS[LIFT_STOPS.size() - 1] + 80.0, lift_face))
 	if cable_stops.size() == 2:
 		var car := StackLift.new()
