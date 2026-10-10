@@ -1090,3 +1090,5 @@ them:
     - `reef_air` and `sewer_air` are written into the scene by the bake tool, so every value is there to open and tune: colour, start, end, curve, haze, ambient, sun.
     - Changes apply live: it re-applies twice a second, and right away when they change.
   - **Fix:** `barnacle_cluster.gd` `_throb` did `get_meta(&"throb", null)`, which errors when the meta is missing (a null default counts as none). It's now `has_meta` first. That was the only other one in the scripts.
+
+- 2026-10-10: **Fix: CoilingWorm "target vector can't be zero".** At the spiral's ends the point 1 m ahead was clamped onto the point itself. Each segment now faces across itself (1 m back to 1 m ahead), and a zero direction is skipped.

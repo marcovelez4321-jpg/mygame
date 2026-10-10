@@ -68,10 +68,16 @@ func _process(delta: float) -> void:
 ## Each segment on the spiral, facing along it, the head leading.
 func _lay() -> void:
 	for i in segments:
-		var at := _point(_along + (segments - i) * spacing)
-		var ahead := _point(_along + (segments - i) * spacing + 1.0)
+		var distance := _along + (segments - i) * spacing
+		var at := _point(distance)
+		# Facing along the spiral: across the segment, a metre back to a metre
+		# ahead (at the very end of the spiral "ahead" is clamped onto the
+		# point itself, and a zero direction can't be faced).
+		var along := _point(distance + 1.0) - _point(distance - 1.0)
+		if along.length_squared() < 0.000001:
+			continue
 		var taper := lerpf(0.6, 1.0, sin(float(i) / segments * PI)) # thinner at both ends
-		var basis := Basis.looking_at((ahead - at).normalized(), Vector3.UP)
+		var basis := Basis.looking_at(along.normalized(), Vector3.UP)
 		basis = basis * Basis(Vector3.BACK, i * 0.3) * Basis.from_scale(Vector3(thickness * taper, thickness * taper, spacing * 1.3 / SEGMENT_LENGTH))
 		multimesh.set_instance_transform(i, Transform3D(basis, at))
 
