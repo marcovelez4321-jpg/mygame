@@ -1140,3 +1140,13 @@ them:
   - **Fewer boxes:** 60% fewer apartment blocks on each base floor (keep chance 0.32 instead of 0.8). Hall columns are unchanged (the user's call).
   - **Barnacles on the floors, cheaply:** a 45% chance on each base storey and each mezzanine, 60% on each hall floor (21 spots, `Megastructure.floor_nests`). Each nest is grown only while a player is within 90 m and freed once everyone's 140 m away. The fixed nests are now 10, all on the outside walls.
   - **The depths' fog (a bug):** the valley haze thickens with depth below its height, made for the land's low ground. At ~260 m underground it became a solid wall. BiomeAtmosphere turns it off while the camera is below `underground_y` (-15 m); the rest of the fog stays.
+
+- 2026-10-10: **More window entrances, no big holes, the worm comes when you arrive at the Stack.**
+  - **Window rooms:** 3–6 a hall (was 2–4), 50% more (the user's ask), on all five towers.
+  - **The main tower's base:**
+    - Its walls are solid now. The two 34 m gaps on every storey of every side are gone; the user didn't like non-window cutouts.
+    - Kept: the bridge's way in (+X, storey 1, at z 30), the lift dock's (-Z, storey 1), and the torn wall (+Z, storeys 1–2).
+    - Windows cut into them instead (`_base_windows`): two a side per storey, each exactly one painted window, straight onto that floor. A third are lit: a lamp just inside, the glow and the beam.
+    - Base wall pieces are solid (carvable); too thin to be occluders.
+  - **Totals:** 67 lit window entrances (46 rooms + 21 base windows), all on the painted grid; 110 lamps (distance-faded at 400 m); 35 entrance eye clusters.
+  - **WormDirector:** a megastructure Lair is the worm's home. A player arriving within 350 m of it (`arrival_range`, across the ground) calls it up at once: the build-up, then the eruption, whatever the cooldown (the user's ask). Once per arrival: again only after everyone's left that range and come back. Megastructure lairs no longer use the hunger route.

@@ -117,6 +117,7 @@ func _init() -> void:
 		for range_ in HALLS[t]:
 			_hall(t, range_[0], range_[1])
 	_window_rooms()
+	_base_windows()
 	_hollow_bridges()
 	# Entrances.
 	_lift()
@@ -309,41 +310,42 @@ func _base() -> void:
 	terrain_holes.append(AABB(Vector3(-SHAFT * 0.5 - WALL, -20.0, -SHAFT * 0.5 - WALL), Vector3(SHAFT + WALL * 2.0, 40.0, SHAFT + WALL * 2.0)))
 
 
-## One storey of a base wall (side 0..3: -Z, +Z, -X, +X) with two great
-## openings: 8 m sills, except where you walk in -- the bridge (+X, storey
-## 1), the lift dock (-Z, storey 1) -- and on +Z, storeys 1-2, the wall the
-## falling block tore open (no wall there at all).
+## One storey of a base wall (side 0..3: -Z, +Z, -X, +X): solid (windows are
+## cut into it later, _base_windows), except where you walk in -- the
+## bridge's end (+X, storey 1, round z 30), the lift's dock (-Z, storey 1,
+## round x 0) -- and on +Z, storeys 1-2, the wall the falling block tore
+## open (no wall there at all, but its ends).
 func _base_wall(side: int, y0: float, half: float, storey: int) -> void:
-	var torn := side == 1 and (storey == 1 or storey == 2)
 	var length := half * 2.0
-	var sill := 8.0
-	var lintel := 12.0
 	var gap := 34.0
-	if (side == 3 or side == 0) and storey == 1:
-		sill = 0.0
-	var pillar := (length - gap * 2.0) / 3.0
-	var cursor := -half
-	for piece in 5:
-		var width := pillar if piece % 2 == 0 else gap
-		var middle := cursor + width * 0.5
-		cursor += width
-		if torn and absf(middle) < half * 0.6:
-			continue # ripped out
-		if piece % 2 == 0:
-			_wall_piece(side, half, middle, width, y0, FLOOR)
-		else:
-			if sill > 0.0:
-				_wall_piece(side, half, middle, width, y0, sill)
-			_wall_piece(side, half, middle, width, y0 + FLOOR - lintel, lintel)
-			openings.append(_on_wall(side, half, middle, y0 + sill + (FLOOR - lintel - sill) * 0.5))
-	if torn:
+	var opening := INF # where along the wall a way in is (INF: none)
+	if side == 3 and storey == 1:
+		opening = 30.0
+	elif side == 0 and storey == 1:
+		opening = 0.0
+	elif side == 1 and (storey == 1 or storey == 2):
+		# Torn open: only the wall's ends are left.
+		var ends := length * 0.2
+		_wall_piece(side, half, -half + ends * 0.5, ends, y0, FLOOR)
+		_wall_piece(side, half, half - ends * 0.5, ends, y0, FLOOR)
 		openings.append(_on_wall(side, half, 0.0, y0 + FLOOR * 0.5))
-
+		return
+	if is_inf(opening):
+		_wall_piece(side, half, 0.0, length, y0, FLOOR)
+		return
+	# The way in: open floor to lintel, wall either side of it.
+	var lintel := 12.0
+	var left := (opening - gap * 0.5) + half
+	var right := half - (opening + gap * 0.5)
+	_wall_piece(side, half, -half + left * 0.5, left, y0, FLOOR)
+	_wall_piece(side, half, half - right * 0.5, right, y0, FLOOR)
+	_wall_piece(side, half, opening, gap, y0 + FLOOR - lintel, lintel)
+	openings.append(_on_wall(side, half, opening, y0 + (FLOOR - lintel) * 0.5))
 
 func _wall_piece(side: int, half: float, along: float, width: float, y0: float, tall: float) -> void:
 	var centre := _on_wall(side, half - WALL * 0.5, along, y0 + tall * 0.5)
 	var size := Vector3(width, tall, WALL) if side < 2 else Vector3(WALL, tall, width)
-	_add(centre, size, &"shell", "Tower_0", &"concrete", Basis.IDENTITY, false, 0)
+	_add(centre, size, &"shell", "Tower_0", &"concrete", Basis.IDENTITY, true, 0)
 
 
 ## A point on wall `side` of the main tower, `along` it, at height y.
@@ -446,7 +448,7 @@ func _window_rooms() -> void:
 	for hall in halls:
 		var t: int = hall.tower
 		var room_box: AABB = hall.box
-		for n in random.randi_range(2, 4):
+		for n in random.randi_range(3, 6): # (50% more than the first 2-4)
 			var side := random.randi() % 4
 			var tall := 14.0
 			var y := random.randf_range(room_box.position.y + 2.0, room_box.end.y - tall - 4.0)
@@ -484,6 +486,38 @@ func _window_rooms() -> void:
 				entrance_spots.append(Vector3(room.get_center().x, room.position.y, room.get_center().z))
 			openings.append(at)
 			lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
+
+
+## Windows cut into the main tower's base walls, two a side each storey,
+## each exactly a painted window, opening straight onto that floor -- a third
+## of them lit (a lamp just inside, the glow and the beam).
+func _base_windows() -> void:
+	var half: float = TOWERS[0][2] * 0.5
+	var floors := int(INTERIOR_TOP / FLOOR)
+	for f in floors:
+		var y0 := f * FLOOR
+		for side in 4:
+			var out := _outward(side)
+			var cross := Vector3(out.z, 0.0, out.x).abs()
+			var across := _face_across(side)
+			for k in 2:
+				var along := random.randf_range(-half * 0.8, half * 0.8)
+				var sill := _snap_sill(y0 + random.randf_range(4.0, FLOOR - 12.0))
+				var centre := out * half + cross * along
+				var world_along := centre.dot(across)
+				centre += cross * (_snap_to_window(world_along) - world_along) * across.dot(cross)
+				centre.y = sill
+				var window := Vector2(WINDOW_WIDTH, WINDOW_TOP - WINDOW_BOTTOM)
+				# Not into a way in (or the torn wall): those are open already.
+				if (side == 3 or side == 0) and f == 1 or side == 1 and (f == 1 or f == 2):
+					continue
+				_carve(_span(centre + out * 1.0, centre - out * (WALL + 1.0), cross, window.x, sill, window.y))
+				var at := centre + Vector3.UP * window.y * 0.5
+				openings.append(at)
+				if random.randf() < 0.33:
+					var inside := AABB(centre - out * (WALL + 10.0) + Vector3(-6.0, 0.0, -6.0), Vector3(12.0, 12.0, 12.0))
+					window_rooms.append({at = at, normal = out, size = window, room = inside})
+					lamps.append([centre - out * (WALL + 8.0) + Vector3.UP * 6.0, Color(1.0, 0.68, 0.32), 4.0, 26.0])
 
 
 ## The direction "across" a face on `side` runs in for the texture (its u

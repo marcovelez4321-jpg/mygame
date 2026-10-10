@@ -18,6 +18,10 @@ extends Node
 ##   leave_grace seconds, or it's been up max_time: it dives and is gone. Or
 ##   it dies. Either way that lair then rests (lair_rest), so the next one
 ##   comes from somewhere else.
+##   THE STACK (a walk-up Megastructure's Lair) is its home, and it doesn't
+##   wait to get hungry there: arrive within arrival_range of one and it
+##   comes (the build-up, then up), whatever the cooldown. Once per arrival:
+##   it only comes again after everyone's left that range and come back.
 ## Rule 1 (co-op): the host runs all of it; the worm is a normal spawn.
 
 @export var worm_scene: PackedScene = preload("res://scenes/enemy/burrow_worm.tscn")
@@ -39,6 +43,9 @@ extends Node
 @export var max_time: float = 120.0
 ## Seconds a lair rests after its worm's been up.
 @export var lair_rest: float = 3600.0
+## A megastructure lair (its home) calls it up as soon as a player comes
+## within this of it (metres, across the ground).
+@export var arrival_range: float = 350.0
 ## The chunk streamer and the ground (empty = found next to this node).
 @export var chunks: WorldChunks
 @export var terrain: Node3D
@@ -63,6 +70,9 @@ var _worm: BurrowWorm
 var _rumble: AudioStreamPlayer3D
 var _tick := 0.0
 var _hooked := {}
+## Megastructure lairs players are at now (lair -> true): an arrival is a
+## player coming in range of one that isn't in this.
+var _at_home := {}
 
 
 func _ready() -> void:
@@ -109,6 +119,10 @@ func _process(delta: float) -> void:
 		State.WAITING:
 			_hook_shots()
 			_cooldown -= 1.0
+			var home := _arrived_home()
+			if home:
+				_start(Vector2i(2000000, home.get_instance_id() % 100000), home)
+				return
 			var lair := _lair_near_players()
 			if lair.is_empty():
 				_hunger = maxf(_hunger - 0.5 / hunger_time, 0.0)
@@ -124,6 +138,29 @@ func _process(delta: float) -> void:
 				_end()
 
 
+## A megastructure lair a player has just come within arrival_range of
+## (one nobody was at a moment ago), or null. Keeps note of who's at which.
+func _arrived_home() -> CollisionShape3D:
+	var arrived: CollisionShape3D = null
+	for node in get_tree().get_nodes_in_group(Megastructure.LAIR_GROUP):
+		var lair := node as CollisionShape3D
+		if lair == null:
+			continue
+		var centre := lair.global_position
+		var near := false
+		for player in get_tree().get_nodes_in_group("player"):
+			var at := (player as Node3D).global_position
+			if Vector2(at.x - centre.x, at.z - centre.z).length() < arrival_range:
+				near = true
+		if near and not _at_home.has(lair) and arrived == null:
+			arrived = lair
+		if near:
+			_at_home[lair] = true
+		else:
+			_at_home.erase(lair)
+	return arrived
+
+
 ## The lair nearest any player, within lair_reach, that isn't resting:
 ## {chunk, shape}, or empty.
 func _lair_near_players() -> Dictionary:
@@ -133,10 +170,7 @@ func _lair_near_players() -> Dictionary:
 	# Chunks' megastructures, and the walk-up megastructures (Megastructure's
 	# Lair: it lives there -- the key just has to be its own).
 	var lairs := _lairs.duplicate()
-	var index := 0
-	for node in get_tree().get_nodes_in_group(Megastructure.LAIR_GROUP):
-		lairs[Vector2i(1000000 + index, 0)] = node
-		index += 1
+	# (Megastructure lairs come by arrival instead: _arrived_home.)
 	for chunk: Vector2i in lairs:
 		var shape: CollisionShape3D = lairs[chunk]
 		if not is_instance_valid(shape) or int(_resting.get(chunk, 0)) > now:
