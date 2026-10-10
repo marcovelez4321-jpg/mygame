@@ -32,6 +32,12 @@ const MAW := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
 ## Where the baked body segment is kept (see _segment_mesh()).
 const BAKED_SEGMENT := "res://art/worm_boss/worm_segment_mesh.res"
 
+## How big it is: its body (thickness and length) and every distance it
+## moves and strikes by (depths, leaps, plough, shockwave, rumble) are this
+## many times the numbers set below. Its speeds stay as set, so it moves
+## heavier. Its Deepmaw escorts keep their own size.
+@export var size: float = 2.0
+
 @export_group("Body")
 @export var segment_count: int = 20
 ## Distance between segment centres, meters.
@@ -96,6 +102,9 @@ const BAKED_SEGMENT := "res://art/worm_boss/worm_segment_mesh.res"
 @export var windup_time: float = 1.1
 @export var rise_speed: float = 22.0
 @export var dive_time: float = 1.4
+## Pouring back in after a landing it keeps the speed it hit the ground at
+## until its tail's in, curving round at most this many radians a second.
+@export var swallow_turn: float = 2.0
 ## Every so often a smaller skimming hop instead (a quick breach and back in).
 @export_range(0.0, 1.0, 0.05) var hop_chance: float = 0.25
 @export var hop_height: float = 4.9
@@ -286,6 +295,11 @@ var _air_left := 0.0 # seconds since it left the ground (re-aim ramp)
 var _air_peak := 0.0 # highest its head's been this leap (the brood's timing)
 var _leap_height := 0.0
 var _breach_fx_left := 0.0
+## Landing from a leap: the speed it hit the ground at, kept until its tail's
+## in too (_swallow_left counts down as a safety), so the whole body pours
+## in at one speed rather than the tail braking with the head.
+var _swallow_speed := 0.0
+var _swallow_left := 0.0
 
 var _segments: Array[AnimatableBody3D] = []
 var _visuals: Array[Node3D] = []
@@ -321,12 +335,13 @@ static var _slice_fit: Array = []
 
 func _ready() -> void:
 	add_to_group(PlayerGrapple.BIG_GROUP) # the grapple zips you to it
+	_apply_size()
 	_home = global_position
 	var floor_hit := _static_ray(global_position + Vector3.UP * 2.0, global_position + Vector3.DOWN * 50.0)
 	_ground_y = (floor_hit.position as Vector3).y if not floor_hit.is_empty() else global_position.y
 	health.died.connect(_on_died)
 	_fx = WormFX.new()
-	_fx.size = 1.0
+	_fx.size = size
 	_fx.rumble_stream = rumble_stream
 	_fx.rumble_volume_db = rumble_volume_db
 	add_child(_fx)
@@ -346,6 +361,28 @@ func _ready() -> void:
 	_ignore_players()
 	if multiplayer.is_server():
 		_spawn_escorts.call_deferred()
+
+
+## Every distance it works by, times its size (see `size`). Once, on spawn.
+func _apply_size() -> void:
+	if is_equal_approx(size, 1.0):
+		return
+	segment_spacing *= size
+	head_radius *= size
+	tail_radius *= size
+	lurk_depth *= size
+	max_depth *= size
+	dive_depth *= size
+	wander_radius *= size
+	leap_height *= size
+	leap_distance *= size
+	hop_height *= size
+	plough_start_range *= size
+	shockwave_radius *= size
+	brood_spread *= size
+	puke_spread *= size
+	rumble_range *= size
+	shake_range *= size
 
 
 func _spawn_escorts() -> void:
@@ -590,6 +627,12 @@ func _physics_process(delta: float) -> void:
 		_vel = _vel.move_toward((_leap_from - head).normalized() * rise_speed, rise_speed * 4.0 * delta)
 	elif _phase == Phase.PLOUGH:
 		_plough_move(head, delta)
+	elif _swallowing(delta):
+		# Pouring in after a landing: on at the speed it hit the ground, only
+		# curving round (never braking) until the tail's under too.
+		var want := (_goal(head, delta) - head).normalized()
+		var heading := _vel.normalized() if _vel.length_squared() > 0.01 else want
+		_vel = heading.slerp(want, clampf(swallow_turn * delta, 0.0, 1.0)).normalized() * _swallow_speed
 	elif _inside:
 		# In the ground: full control, but only so much acceleration -- it
 		# overshoots and comes round in arcs.
@@ -598,7 +641,7 @@ func _physics_process(delta: float) -> void:
 		_vel.y -= air_gravity * delta # breached while wandering: falls back in
 	if head.y < _ground_y - max_depth:
 		_vel.y = maxf(_vel.y, 2.0)
-	if _phase != Phase.AIR:
+	if _phase != Phase.AIR and _swallow_left <= 0.0:
 		_vel = _vel.limit_length(maxf(max_speed, rise_speed) * 1.2)
 	var new_head := head + _vel * delta
 	# (Ploughing, it rides the floor line in and out all the time: its furrow
@@ -700,6 +743,8 @@ func _update_phase(head: Vector3, delta: float) -> void:
 				_phase = Phase.DIVE
 				_phase_left = dive_time
 				_shockwave(head)
+				_swallow_speed = _vel.length()
+				_swallow_left = 4.0
 		Phase.DIVE:
 			if _phase_left <= 0.0:
 				_start_tunnel()
@@ -1191,6 +1236,20 @@ func _telegraph(delta: float) -> void:
 	var jitter := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * head_radius
 	BloodFX.spawn_impact(get_tree().current_scene, spot + jitter, Vector3.UP, dirt_color, 0.75 + t)
 	_shake_near(spot, rumble * (1.0 + t * 2.0), rumble_range)
+
+
+## Still pouring into the ground after a landing? Until the tail's under the
+## floor line (or the safety time's up).
+func _swallowing(delta: float) -> bool:
+	if _swallow_left <= 0.0:
+		return false
+	_swallow_left -= delta
+	var tail := _pos.size() - 1
+	if _pos[tail].y < _ground_y - _radii[tail]:
+		_swallow_left = 0.0
+		_phase_left = maxf(_phase_left, dive_time * 0.5) # a moment more of diving before the next attack
+		return false
+	return true
 
 
 ## Where the head is going while it has control: hunting, toward where it

@@ -15,7 +15,14 @@ const NAV_DIR := "res://worlds/test_world/navigation"
 const TERRAIN_SHADER := "res://shaders/alien_terrain.gdshader"
 const ENVIRONMENT_PATH := "res://worlds/test_world/environment.tres"
 const CHUNKS_DIR := "res://worlds/test_world/chunks"
-const CHUNK_SIZE := 128.0
+const BIOMES_PATH := "res://worlds/test_world/biomes.res"
+## Biomes (BiomeMap): how much of the land is reef (the rest is sewer/hive),
+## how wide the blend between them is (metres), and the bare circle round
+## the yard that's always sewer.
+const REEF_SHARE := 0.25
+const BIOME_BORDER := 150.0
+const YARD_SEWER_RADIUS := 120.0
+const CHUNK_SIZE := 160.0 # 25% up on the first 128
 ## Heightmap pixels across by default (x 4 m: 1024 = 4 km).
 const DEFAULT_SIZE := 1024
 ## Test chunks with a megastructure stand-in (a tall monolith) in the middle:
@@ -54,6 +61,13 @@ func _initialize() -> void:
 ## into the ground) in the middle of the chunk. Chunk-local coordinates.
 func _make_test_chunks(data: Object) -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CHUNKS_DIR))
+	# Clear the last bake's chunks first: with a different chunk size (or fewer
+	# test chunks) old files would load as stray chunks in the wrong places.
+	var old := DirAccess.open(CHUNKS_DIR)
+	if old:
+		for file in old.get_files():
+			if file.begins_with("chunk_") and file.ends_with(".tscn"):
+				old.remove(file)
 	var material := StandardMaterial3D.new()
 	material.albedo_color = Color(0.22, 0.2, 0.28)
 	material.roughness = 1.0
@@ -110,6 +124,16 @@ func _pick_test_chunks(world_metres: float) -> void:
 		_test_chunks[chunk] = Vector2(random.randf_range(10.0, 30.0), random.randf_range(40.0, 120.0))
 
 
+## How far from the yard (the middle) the nearest reef is, roughly (metres).
+func _nearest_reef(biomes: BiomeMap, half: float) -> float:
+	var nearest := INF
+	for x in range(-int(half), int(half), 32):
+		for z in range(-int(half), int(half), 32):
+			if biomes.reef(x, z) > 0.5:
+				nearest = minf(nearest, Vector2(x, z).length())
+	return nearest
+
+
 func _chunk_path(chunk: Vector2i) -> String:
 	return CHUNKS_DIR.path_join("chunk_%d_%d.tscn" % [chunk.x, chunk.y])
 
@@ -163,6 +187,12 @@ func _bake() -> void:
 	navigation.tiles_dir = NAV_DIR
 	var heights: Vector2 = data.call("get_height_range")
 	var half := shape.size * shape.vertex_spacing * 0.5
+	# Which biome is where: sewer almost everywhere, reef pockets.
+	var biomes := BiomeMap.generate(Rect2(-half, -half, half * 2.0, half * 2.0), shape.seed + 5, 8.0, 700.0,
+			REEF_SHARE, BIOME_BORDER, Vector3(0.0, 0.0, YARD_SEWER_RADIUS))
+	ResourceSaver.save(biomes, BIOMES_PATH, ResourceSaver.FLAG_COMPRESS)
+	biomes = load(BIOMES_PATH) as BiomeMap
+	print("biomes: ", BIOMES_PATH, ", nearest reef to the yard ", _nearest_reef(biomes, half), " m")
 	# Test chunks (megastructure stand-ins), made first so the navmesh takes
 	# them in: every chunk scene, placed at its chunk, while baking.
 	_make_test_chunks(data)
@@ -203,12 +233,14 @@ func _bake() -> void:
 	# The ground shader, re-applied after Terrain3D's setup (see TerrainLook).
 	var look := TerrainLook.new()
 	look.name = "TerrainLook"
+	look.biomes = biomes
 	root.add_child(look)
 	look.owner = root
 	# The flora: grown into each chunk as it streams in.
 	var growth := GrowthScatter.new()
 	growth.name = "GrowthScatter"
 	growth.high_ground = maxf(heights.y, 1.0)
+	growth.biomes = biomes
 	root.add_child(growth)
 	growth.owner = root
 	# Barnacle nests: a chance of one on the land or a building in each chunk.
@@ -216,6 +248,12 @@ func _bake() -> void:
 	barnacles.name = "ChunkBarnacles"
 	root.add_child(barnacles)
 	barnacles.owner = root
+	# Eyeball clusters in the sewer land, watching.
+	var eyes := EyeScatter.new()
+	eyes.name = "EyeScatter"
+	eyes.biomes = biomes
+	root.add_child(eyes)
+	eyes.owner = root
 
 
 	# Test enemies on the slopes round the yard: walking, pathing, feet.
@@ -239,6 +277,13 @@ func _bake() -> void:
 	world_environment.set_meta(&"own_look", true)
 	root.add_child(world_environment)
 	world_environment.owner = root
+	# The air by biome: the saved environment is the reef's; the sewer's fog
+	# takes over outside the reef, crossfading at the borders.
+	var air := BiomeAtmosphere.new()
+	air.name = "BiomeAtmosphere"
+	air.biomes = biomes
+	root.add_child(air)
+	air.owner = root
 
 	# Light (skyboxes later).
 	var sun := DirectionalLight3D.new()

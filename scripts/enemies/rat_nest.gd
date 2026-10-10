@@ -17,12 +17,21 @@ extends Node3D
 @export var bodyguard_health: float = 4.0
 @export var bodyguard_damage: float = 2.0
 
+## A pack with no Bender comes this many times bigger than its counts above
+## (rats and bodyguards alike): with no leader to rally them, they make up
+## for it in numbers.
+const LEADERLESS_SCALE := 2
+
 @onready var swarm: RatSwarm = $RatSwarm
 
 
 func _ready() -> void:
 	swarm.home = global_position
+	var rats := rat_count * LEADERLESS_SCALE
+	var guards := bodyguard_count * LEADERLESS_SCALE
+	# Room to breed back up to its full size, at least.
+	swarm.feed_limit = maxi(swarm.feed_limit, rats + guards)
 	if multiplayer.is_server():
-		swarm.spawn_rats.call_deferred(rat_count, global_position)
-		swarm.spawn_rats.call_deferred(bodyguard_count, global_position, -1.0, -1.0,
+		swarm.spawn_rats.call_deferred(rats, global_position)
+		swarm.spawn_rats.call_deferred(guards, global_position, -1.0, -1.0,
 				bodyguard_scale, bodyguard_health, bodyguard_damage)

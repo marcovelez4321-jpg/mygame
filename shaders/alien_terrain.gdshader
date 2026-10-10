@@ -1,9 +1,13 @@
 // The alien land's ground (docs/WORLD.md): Terrain3D's minimum shader (its
-// height, LOD morph and hole handling, unchanged) with our look on top --
-// purple and blue in gradients, through a PS1 lens.
-//   Colour: by HEIGHT (indigo valleys -> violet -> periwinkle/lavender
-//   ridges), by SLOPE (steep faces darker and bluer, like wet rock), and by
-//   WORLD NOISE (big slow blotches of teal moss and magenta rust).
+// height, LOD morph and hole handling, unchanged) with our look on top, in
+// two biomes through a PS1 lens:
+//   REEF: purple and blue -- indigo valleys -> violet -> periwinkle/lavender
+//   ridges, steep faces darker and bluer, blotches of teal moss and magenta rust.
+//   SEWER (most of the land): the insects' filth -- black sludge valleys ->
+//   olive mud -> grimy tan -> nicotine-yellow ridges, steep faces wet black
+//   grime, blotches of toxic slime green and rust.
+//   Which one: biome_map (BiomeMap, white = reef), sampled smooth, so the
+//   two blend across the border. No map = sewer everywhere.
 //   PS1: screen-space vertex snapping (the wobble), faceted flat-shaded
 //   triangles, colour worked out in blocks (a low-res "texture" with no
 //   texture) and cut to 15-bit colour (32 shades a channel, like the PS1).
@@ -39,6 +43,11 @@ uniform int _region_map[1024];
 uniform highp sampler2DArray _height_maps : repeat_disable;
 uniform highp sampler2DArray _control_maps : repeat_disable;
 
+// --- Biomes (TerrainLook sets these from the world's BiomeMap) ---
+uniform sampler2D biome_map : hint_default_black, filter_linear, repeat_disable;
+// The world area the map covers: x, z, width, depth (metres).
+uniform vec4 biome_area = vec4(-2048.0, -2048.0, 4096.0, 4096.0);
+
 // --- Our look ---
 group_uniforms height_gradient;
 // Heights (metres) the gradient runs between, and its four colours.
@@ -65,6 +74,18 @@ uniform float rust_amount : hint_range(0.0, 1.0) = 0.25;
 // Fine speckle so close ground isn't flat colour, and its strength.
 uniform float speckle_size = 2.0;
 uniform float speckle_amount : hint_range(0.0, 0.5) = 0.12;
+group_uniforms sewer;
+// The sewer biome's own gradient, slope and blotch colours (the same
+// heights, slope range and blotch sizes as the reef's).
+uniform vec3 sewer_valley_color : source_color = vec3(0.06, 0.06, 0.035); // black sludge
+uniform vec3 sewer_low_color : source_color = vec3(0.19, 0.18, 0.085);   // olive mud
+uniform vec3 sewer_high_color : source_color = vec3(0.32, 0.28, 0.16);   // grimy tan
+uniform vec3 sewer_ridge_color : source_color = vec3(0.46, 0.40, 0.24);  // nicotine yellow
+uniform vec3 sewer_slope_color : source_color = vec3(0.05, 0.05, 0.03);  // wet black grime
+uniform vec3 slime_color : source_color = vec3(0.22, 0.34, 0.05);        // toxic green slime
+uniform vec3 sewer_rust_color : source_color = vec3(0.34, 0.15, 0.06);
+uniform float slime_amount : hint_range(0.0, 1.0) = 0.3;
+uniform float sewer_rust_amount : hint_range(0.0, 1.0) = 0.3;
 group_uniforms ps1;
 // Screen-space vertex snap (lower = more wobble, as shaders/ps1.gdshader).
 uniform float snap_resolution : hint_range(16.0, 320.0) = 160.0;
@@ -240,17 +261,27 @@ void fragment() {
 	// --- Colour, worked out per block (the PS1 "texel") ---
 	vec2 cell = (floor(v_vertex.xz / texel_size) + 0.5) * texel_size;
 	float height = clamp((v_vertex.y - low_height) / max(high_height - low_height, 0.001), 0.0, 1.0);
-	vec3 color = mix(valley_color, low_color, smoothstep(0.0, 0.35, height));
-	color = mix(color, high_color, smoothstep(0.35, 0.75, height));
-	color = mix(color, ridge_color, smoothstep(0.75, 1.0, height));
-	// Steep faces darker and bluer (w_normal.y: 1 = flat, 0 = vertical).
-	float steep = 1.0 - w_normal.y;
-	color = mix(color, slope_color, smoothstep(slope_start, slope_end, steep));
-	// Moss and rust blotches.
+	// Steep faces (w_normal.y: 1 = flat, 0 = vertical), blotch noise: shared.
+	float steep = smoothstep(slope_start, slope_end, 1.0 - w_normal.y);
 	float moss = blotch_noise(cell / blotch_size);
 	float rust = blotch_noise(cell / (blotch_size * 1.3) + 41.0);
-	color = mix(color, moss_color, smoothstep(1.0 - moss_amount, 1.0 - moss_amount + 0.12, moss) * 0.85);
-	color = mix(color, rust_color, smoothstep(1.0 - rust_amount, 1.0 - rust_amount + 0.12, rust) * 0.8);
+	// Reef: height gradient, darker bluer slopes, moss and rust.
+	vec3 reef = mix(valley_color, low_color, smoothstep(0.0, 0.35, height));
+	reef = mix(reef, high_color, smoothstep(0.35, 0.75, height));
+	reef = mix(reef, ridge_color, smoothstep(0.75, 1.0, height));
+	reef = mix(reef, slope_color, steep);
+	reef = mix(reef, moss_color, smoothstep(1.0 - moss_amount, 1.0 - moss_amount + 0.12, moss) * 0.85);
+	reef = mix(reef, rust_color, smoothstep(1.0 - rust_amount, 1.0 - rust_amount + 0.12, rust) * 0.8);
+	// Sewer: the same, in filth.
+	vec3 sewer = mix(sewer_valley_color, sewer_low_color, smoothstep(0.0, 0.35, height));
+	sewer = mix(sewer, sewer_high_color, smoothstep(0.35, 0.75, height));
+	sewer = mix(sewer, sewer_ridge_color, smoothstep(0.75, 1.0, height));
+	sewer = mix(sewer, sewer_slope_color, steep);
+	sewer = mix(sewer, slime_color, smoothstep(1.0 - slime_amount, 1.0 - slime_amount + 0.12, moss) * 0.85);
+	sewer = mix(sewer, sewer_rust_color, smoothstep(1.0 - sewer_rust_amount, 1.0 - sewer_rust_amount + 0.12, rust) * 0.8);
+	// Which biome here (sampled per block too, so the border's blocky like the rest).
+	float reefness = texture(biome_map, (cell - biome_area.xy) / biome_area.zw).r;
+	vec3 color = mix(sewer, reef, reefness);
 	// Fine speckle.
 	color *= 1.0 + (value_noise(cell / speckle_size) - 0.5) * 2.0 * speckle_amount;
 	// 15-bit colour.

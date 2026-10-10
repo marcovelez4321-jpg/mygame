@@ -4,12 +4,14 @@ extends Node
 ## Barnacle nests (BarnacleCluster) in the open world: each chunk WorldChunks
 ## streams in has a random chance of one, grown on the land there or up the
 ## side of one of its buildings (the chunk's megastructures). The nest is
-## put in the chunk, so it goes when the chunk goes. The open world's
-## version of a level's BarnacleScatter.
+## put in the chunk, so it goes when the chunk goes. Both biomes get them,
+## the reef and the sewer alike. The open world's version of a level's
+## BarnacleScatter.
 ## Rule 1 (co-op): the host rolls and places them.
 
 @export var cluster_scene: PackedScene = preload("res://scenes/enemy/barnacle_cluster.tscn")
-## Chance a chunk (128 x 128 m) gets a nest as it loads.
+## Chance a 128 x 128 m piece of land gets a nest (scaled up for bigger
+## chunks: a chunk's chance goes up with its area).
 @export_range(0.0, 1.0, 0.05) var nest_chance: float = 0.25
 ## Chance the nest goes up a building, when the chunk has any (else on the land).
 @export_range(0.0, 1.0, 0.05) var building_chance: float = 0.4
@@ -38,7 +40,8 @@ func _ready() -> void:
 
 
 func _on_chunk_loaded(chunk: Vector2i, root: Node3D) -> void:
-	if not multiplayer.is_server() or randf() >= nest_chance:
+	var chance := 1.0 - pow(1.0 - nest_chance, pow(chunks.chunk_size / 128.0, 2.0))
+	if not multiplayer.is_server() or randf() >= chance:
 		return
 	# A physics frame first: the chunk's buildings only stop rays once their
 	# collision's in the physics world.

@@ -23,7 +23,7 @@ signal chunk_unloading(chunk: Vector2i, root: Node3D)
 
 ## Where the chunk scenes are, and the chunks' size (metres).
 @export_dir var chunks_dir: String = ""
-@export var chunk_size: float = 128.0
+@export var chunk_size: float = 160.0
 ## Chunks loaded round each player, in chunks each way (2 = 5 x 5).
 @export var load_radius: int = 2
 ## Most finished chunks added to the world per frame.

@@ -12,6 +12,9 @@ extends Node
 @export var shader: Shader = preload("res://shaders/alien_terrain.gdshader")
 ## The ground (empty = the Terrain3D next to this node).
 @export var terrain: Node3D
+## Which biome is where (empty = sewer everywhere): the shader blends the
+## reef and sewer colours by it.
+@export var biomes: BiomeMap
 
 
 func _ready() -> void:
@@ -31,4 +34,7 @@ func _ready() -> void:
 	material.call("enable_shader_override", true)
 	material.set("show_checkered", false)
 	terrain.set("show_checkered", false)
+	if biomes:
+		material.call("set_shader_param", &"biome_map", biomes.texture())
+		material.call("set_shader_param", &"biome_area", biomes.area_vector())
 	material.call("update")

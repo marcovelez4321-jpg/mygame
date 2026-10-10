@@ -20,6 +20,11 @@ extends Node
 ##   Each kind keeps to its ground: slope and height (kelp in the valleys,
 ##   sponges up on the ridges, grass on the flats) -- and off the yard and
 ##   out of the megastructures.
+##   And to its biome (BiomeMap): reef kinds in the reef, sewer kinds in the
+##   sewer/hive land, both thinning out across the border so they mix there.
+##   Some climb (GrowthSpecies.wall_patches): patches up the sides of the
+##   chunk's buildings too.
+##   Every one rolls its own size, like the creature hordes.
 ## Drawing: one MultiMesh per kind and shape variant per chunk (a draw call
 ## each, however many plants), faded out past each kind's view distance.
 
@@ -31,6 +36,8 @@ extends Node
 ## kinds' height preferences.
 @export var low_ground: float = 0.0
 @export var high_ground: float = 55.0
+## Which biome is where (empty = the sewer everywhere).
+@export var biomes: BiomeMap
 ## Keep this circle bare (Grandma's yard).
 @export var clear_centre: Vector3 = Vector3.ZERO
 @export var clear_radius: float = 70.0
@@ -47,6 +54,8 @@ extends Node
 
 const GROWTH_SHADER := preload("res://shaders/alien_growth.gdshader")
 
+## How thick the flora is overall: every kind's groups and loners times this.
+@export var density: float = 1.2
 ## Kinds grown per frame (each is one kind's plants for one chunk).
 @export var kinds_per_frame: int = 3
 
@@ -78,6 +87,8 @@ func _ready() -> void:
 		material.shader = GROWTH_SHADER
 		material.set_shader_parameter("glow_color", species[index].glow_color)
 		material.set_shader_parameter("sway_amount", species[index].sway_amount)
+		material.set_shader_parameter("breathe_amount", species[index].breathe)
+		material.set_shader_parameter("breathe_speed", species[index].breathe_speed)
 		material.set_shader_parameter("night", night)
 		_materials[species[index]] = material
 	chunks.chunk_loaded.connect(_on_chunk_loaded)
@@ -115,11 +126,12 @@ func _process(_delta: float) -> void:
 		var root: Node3D = job[1] if is_instance_valid(job[1]) else null
 		if root == null or not root.is_inside_tree():
 			continue # the chunk's already gone again
-		_grow(species[job[2]], job[2], job[0], root, _blocked_areas(root))
+		_grow(species[job[2]], job[2], job[0], root, _blocked_areas(root), _buildings(root))
 
 
 ## Places one kind's groups and loners in `chunk` and draws them.
-func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, root: Node3D, blocked: Array[Rect2]) -> void:
+func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, root: Node3D, blocked: Array[Rect2],
+		buildings: Array[CollisionShape3D]) -> void:
 	var random := RandomNumberGenerator.new()
 	random.seed = hash(Vector4i(seed, index, chunk.x, chunk.y))
 	var size := chunks.chunk_size
@@ -131,9 +143,11 @@ func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, root: Node3D, block
 	var placed: Array[Transform3D] = []
 	var customs: Array[Color] = []
 	var colors: Array[Color] = []
-	var groups := _poisson(random, kind.groups_per_chunk * abundance)
+	var groups := _poisson(random, kind.groups_per_chunk * abundance * _area_scale())
 	for g in groups:
 		var centre := origin + Vector2(random.randf(), random.randf()) * size
+		if _at_home(kind, centre.x, centre.y) < 0.05:
+			continue # a group of it right out in the other biome: none
 		# Long-tailed group size: mostly small, sometimes big, rarely a horde.
 		var count := clampi(int(kind.min_group * pow(1.0 - random.randf() * 0.999, -1.0 / maxf(kind.group_tail, 0.1))),
 				kind.min_group, kind.max_group)
@@ -144,12 +158,14 @@ func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, root: Node3D, block
 			var t := pow(random.randf(), kind.crowding * 0.5) # crowded toward the middle
 			var angle := random.randf() * TAU
 			var offset := Vector2(cos(angle), sin(angle) * stretch).rotated(turn) * radius * t
-			var big := lerpf(kind.max_scale, kind.min_scale, t) # big in the middle, small at the edge
-			_try_place(kind, random, centre + offset, big, origin, blocked, placed, customs, colors)
-	var loners := _poisson(random, kind.loners_per_chunk * maxf(abundance, 0.15))
+			_try_place(kind, random, centre + offset, random.randf_range(kind.min_scale, kind.max_scale),
+					origin, blocked, placed, customs, colors)
+	var loners := _poisson(random, kind.loners_per_chunk * maxf(abundance, 0.15) * _area_scale())
 	for l in loners:
 		var spot := origin + Vector2(random.randf(), random.randf()) * size
 		_try_place(kind, random, spot, random.randf_range(kind.min_scale, kind.max_scale), origin, blocked, placed, customs, colors)
+	if kind.wall_patches > 0.0:
+		_climb(kind, random, root, buildings, placed, customs, colors)
 	if placed.is_empty():
 		return
 	_draw(kind, root, random, placed, customs, colors)
@@ -160,6 +176,9 @@ func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, root: Node3D, block
 func _try_place(kind: GrowthSpecies, random: RandomNumberGenerator, spot: Vector2, base_scale: float, origin: Vector2,
 		blocked: Array[Rect2], placed: Array[Transform3D], customs: Array[Color], colors: Array[Color]) -> void:
 	if spot.distance_to(Vector2(clear_centre.x, clear_centre.z)) < clear_radius:
+		return
+	# Thinning out across a biome border (gone a little before the far side).
+	if random.randf() >= smoothstep(0.1, 0.6, _at_home(kind, spot.x, spot.y)):
 		return
 	for area in blocked:
 		if area.has_point(spot):
@@ -177,7 +196,7 @@ func _try_place(kind: GrowthSpecies, random: RandomNumberGenerator, spot: Vector
 	var level := inverse_lerp(low_ground, high_ground, height)
 	if level < kind.min_height or level > kind.max_height:
 		return
-	var scale := base_scale * random.randf_range(0.8, 1.2)
+	var scale := base_scale
 	if random.randf() < kind.elder_chance:
 		scale *= kind.elder_scale
 	var up := Vector3.UP.lerp(normal, kind.follow_ground).normalized()
@@ -185,10 +204,56 @@ func _try_place(kind: GrowthSpecies, random: RandomNumberGenerator, spot: Vector
 	var lean := Basis(Quaternion(Vector3.UP, up)) if not up.is_equal_approx(Vector3.UP) else Basis.IDENTITY
 	var where := Vector3(spot.x - origin.x, height - kind.sink * scale, spot.y - origin.y)
 	placed.append(Transform3D(lean * facing * Basis.from_scale(Vector3.ONE * scale), where))
+	_add_looks(kind, random, customs, colors)
+
+
+## Its sway phase and glow (custom data) and its tint: each one a little
+## different.
+func _add_looks(kind: GrowthSpecies, random: RandomNumberGenerator, customs: Array[Color], colors: Array[Color]) -> void:
 	customs.append(Color(random.randf(), random.randf(), 0.0, 0.0)) # sway phase, glow amount
 	var shade := 1.0 + random.randf_range(-kind.tint_variation, kind.tint_variation)
 	var hue := random.randf_range(-kind.tint_variation, kind.tint_variation) * 0.3
 	colors.append(Color(clampf(shade + hue, 0.0, 2.0), clampf(shade, 0.0, 2.0), clampf(shade - hue, 0.0, 2.0), 1.0))
+
+
+## How at home a kind is here, by biome: 1 = its own biome, 0 = the other.
+func _at_home(kind: GrowthSpecies, x: float, z: float) -> float:
+	if kind.biome == GrowthSpecies.Biome.ANYWHERE:
+		return 1.0
+	var reef := biomes.reef(x, z) if biomes else 0.0
+	return reef if kind.biome == GrowthSpecies.Biome.REEF else 1.0 - reef
+
+
+## Patches of a climbing kind up the sides of the chunk's buildings: about
+## wall_patches per 1000 m² of wall, lying flat on it, from the ground up.
+func _climb(kind: GrowthSpecies, random: RandomNumberGenerator, root: Node3D, buildings: Array[CollisionShape3D],
+		placed: Array[Transform3D], customs: Array[Color], colors: Array[Color]) -> void:
+	var to_chunk := root.global_transform.affine_inverse()
+	for shape in buildings:
+		var half := (shape.shape as BoxShape3D).size * 0.5
+		var centre := shape.global_position
+		var ground: float = _data.call("get_height", centre)
+		if is_nan(ground):
+			continue
+		var top := (shape.global_transform * Vector3(0.0, half.y, 0.0)).y
+		if top - ground < 1.0 or _at_home(kind, centre.x, centre.z) < 0.05:
+			continue
+		for side in 4:
+			var normal := [Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD][side] as Vector3
+			var width := half.z * 2.0 if normal.x != 0.0 else half.x * 2.0
+			var patches := _poisson(random, kind.wall_patches * width * (top - ground) / 1000.0)
+			for n in patches:
+				var across := random.randf_range(-0.9, 0.9)
+				var local := Vector3(half.x * normal.x if normal.x != 0.0 else across * half.x, 0.0,
+						half.z * normal.z if normal.z != 0.0 else across * half.z)
+				var point := shape.global_transform * local
+				# Thickest near the ground, thinning out up the wall.
+				point.y = ground + (top - ground) * pow(random.randf(), 1.6)
+				var out := (shape.global_basis * normal).normalized()
+				var lie := Basis(Quaternion(Vector3.UP, out)) * Basis(Vector3.UP, random.randf() * TAU)
+				var scale := random.randf_range(kind.min_scale, kind.max_scale)
+				placed.append(to_chunk * Transform3D(lie * Basis.from_scale(Vector3.ONE * scale), point - out * kind.sink * scale))
+				_add_looks(kind, random, customs, colors)
 
 
 ## Splits the placed plants over the kind's shape variants, one MultiMesh
@@ -227,6 +292,15 @@ func _draw(kind: GrowthSpecies, root: Node3D, random: RandomNumberGenerator,
 		root.add_child(instance)
 
 
+## The chunk's buildings: every box collision shape in it.
+func _buildings(root: Node3D) -> Array[CollisionShape3D]:
+	var found: Array[CollisionShape3D] = []
+	for node in root.find_children("*", "CollisionShape3D", true, false):
+		if (node as CollisionShape3D).shape is BoxShape3D:
+			found.append(node)
+	return found
+
+
 ## The ground the chunk's own content stands on (its megastructures): their
 ## collision boxes' footprints in world x/z, with a little room round them.
 func _blocked_areas(root: Node3D) -> Array[Rect2]:
@@ -239,6 +313,12 @@ func _blocked_areas(root: Node3D) -> Array[Rect2]:
 		var bounds := shape.global_transform * AABB(-box.size * 0.5, box.size)
 		areas.append(Rect2(bounds.position.x - 2.0, bounds.position.z - 2.0, bounds.size.x + 4.0, bounds.size.z + 4.0))
 	return areas
+
+
+## How many 128 x 128 m pieces of land a chunk is (the kinds' counts are
+## per 128 m, whatever size the chunks are), times the overall density.
+func _area_scale() -> float:
+	return pow(chunks.chunk_size / 128.0, 2.0) * density
 
 
 ## A whole number of events, averaging `mean` (Poisson; Knuth's method).

@@ -21,6 +21,19 @@ enum Kind {
 	PUFFBALL,    ## spore balls on short stalks
 	SPIRE,       ## tall twisted spikes (the stinging coral, later)
 	BLADDER,     ## clusters of swollen glowing pods
+	# The sewer/hive biome's: the land the insects overran.
+	HAIR_MOLD,      ## fuzzy grey-green mould tufts carpeting the ground
+	EGG_SACS,       ## heaps of glistening insect eggs in a slick of mucus
+	HIVE_MOUND,     ## lumpy clay chimneys the bugs built, glowing down the throat
+	FUNGUS_SHELF,   ## pale slimy shelf caps stacked up a rotten stalk
+	PUS_BOILS,      ## fleshy swellings crowned with yellow heads
+	CHITIN_RIBS,    ## a dead giant bug's husk, ribs arching out of the ground
+	COCOON,         ## silk cocoons on web stalks, threads strung between
+	SLIME_CAPS,     ## toxic mushrooms dripping and glowing sickly green
+	FLESH_TENDRILS, ## meaty tendrils worming up out of the ground
+	LARVAE_PILE,    ## heaps of pale fat grubs
+	# Both biomes, and up the buildings.
+	BLACK_VINES,    ## black tentacle vines snaking out of the surface and over each other, breathing
 }
 
 ## Built meshes: "kind:variant" -> ArrayMesh.
@@ -36,6 +49,10 @@ static func get_mesh(kind: Kind, variant: int) -> ArrayMesh:
 	random.seed = hash(Vector2i(kind, variant)) # the same every time, on every machine
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	if kind == Kind.BLACK_VINES:
+		# For breathing: each vertex's outward direction from its vine's
+		# middle (see _vine_vertex).
+		st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_HALF)
 	match kind:
 		Kind.STAGHORN: _staghorn(st, random)
 		Kind.KELP: _kelp(st, random)
@@ -47,6 +64,17 @@ static func get_mesh(kind: Kind, variant: int) -> ArrayMesh:
 		Kind.PUFFBALL: _puffball(st, random)
 		Kind.SPIRE: _spire(st, random)
 		Kind.BLADDER: _bladder(st, random)
+		Kind.HAIR_MOLD: _hair_mold(st, random)
+		Kind.EGG_SACS: _egg_sacs(st, random)
+		Kind.HIVE_MOUND: _hive_mound(st, random)
+		Kind.FUNGUS_SHELF: _fungus_shelf(st, random)
+		Kind.PUS_BOILS: _pus_boils(st, random)
+		Kind.CHITIN_RIBS: _chitin_ribs(st, random)
+		Kind.COCOON: _cocoon(st, random)
+		Kind.SLIME_CAPS: _slime_caps(st, random)
+		Kind.FLESH_TENDRILS: _flesh_tendrils(st, random)
+		Kind.LARVAE_PILE: _larvae_pile(st, random)
+		Kind.BLACK_VINES: _black_vines(st, random)
 	st.generate_normals()
 	var mesh := st.commit()
 	_cache[key] = mesh
@@ -262,6 +290,273 @@ static func _bladder(st: SurfaceTool, random: RandomNumberGenerator) -> void:
 		_blob(st, at, size, color, 0.15, 0.7)
 
 
+# --- The sewer/hive land's ---
+
+## Fuzzy mould: a dense tuft of short grey-green hairs, the tips a little
+## slimy-bright. The sewer's grass.
+static func _hair_mold(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var hairs := random.randi_range(14, 22)
+	var root := Color(0.10, 0.10, 0.06)
+	var tip := Color(0.45, 0.50, 0.22) if random.randf() < 0.6 else Color(0.55, 0.52, 0.38)
+	_blades(st, random, hairs, root, tip, Vector2(0.05, 0.6), Vector2(0.15, 0.45), Vector2(0.02, 0.04), 0.25, 0.3)
+
+
+## Insect eggs heaped in a slick of mucus: glistening pale yellow, the odd
+## one dark (something moving inside), faintly glowing.
+static func _egg_sacs(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var eggs := random.randi_range(6, 14)
+	var shell := Color(0.85, 0.80, 0.45) if random.randf() < 0.6 else Color(0.78, 0.84, 0.58)
+	var slime := Color(0.28, 0.30, 0.12)
+	_tube(st, Vector3.ZERO, Vector3.UP * 0.06, 0.6, 0.5, 6, slime, slime, 0.0, 0.0, 0.0, 0.0)
+	for i in eggs:
+		var radius := random.randf_range(0.08, 0.16)
+		var angle := random.randf() * TAU
+		var out := sqrt(random.randf()) * 0.45
+		var at := Vector3(cos(angle) * out, radius * 1.2 + (0.45 - out) * 0.35 * random.randf(), sin(angle) * out)
+		var color := shell if random.randf() > 0.15 else shell.darkened(0.55)
+		_blob(st, at, radius, color, 0.02, 0.35, Vector3(1.0, 1.5, 1.0), false)
+
+
+## A hive mound: a lumpy clay chimney the bugs built, vents up its sides
+## and a dim glow down its throat.
+static func _hive_mound(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var height := random.randf_range(1.2, 3.0)
+	var clay := Color(0.28, 0.22, 0.13)
+	var crust := Color(0.42, 0.35, 0.20)
+	var lean := Vector2(random.randf_range(-0.2, 0.2), random.randf_range(-0.2, 0.2)) * height * 0.3
+	var steps := 5
+	var previous := Vector3.ZERO
+	for s in range(1, steps + 1):
+		var t := float(s) / steps
+		var t_prev := float(s - 1) / steps
+		var p := Vector3(lean.x * t + random.randf_range(-0.06, 0.06), t * height, lean.y * t + random.randf_range(-0.06, 0.06))
+		_tube(st, previous, p, lerpf(0.75, 0.18, pow(t_prev, 0.8)), lerpf(0.75, 0.18, pow(t, 0.8)), 6,
+				clay.lerp(crust, t_prev), clay.lerp(crust, t), 0.0, 0.0, 0.0, 0.0, s == steps)
+		previous = p
+	# Its throat, glowing a way down.
+	_tube(st, previous - Vector3.UP * 0.3, previous, 0.14, 0.17, 6, Color(0.55, 0.50, 0.15), Color(0.6, 0.55, 0.2),
+			0.0, 0.0, 0.6, 0.9, true)
+	for i in random.randi_range(2, 4):
+		var t := random.randf_range(0.2, 0.7)
+		var angle := random.randf() * TAU
+		var out := Vector3(cos(angle), 0.0, sin(angle))
+		var base := Vector3(lean.x * t, t * height, lean.y * t) + out * lerpf(0.75, 0.18, pow(t, 0.8)) * 0.85
+		_tube(st, base, base + (out + Vector3.UP * 0.3).normalized() * 0.25, 0.12, 0.09, 5, clay, crust,
+				0.0, 0.0, 0.0, 0.4, true)
+
+
+## Shelf fungus: pale, slimy caps stacked up a rotten stalk.
+static func _fungus_shelf(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var height := random.randf_range(0.6, 1.6)
+	var stalk := Color(0.24, 0.19, 0.11)
+	var cap := Color(0.70, 0.62, 0.40) if random.randf() < 0.5 else Color(0.55, 0.58, 0.35)
+	_tube(st, Vector3.ZERO, Vector3.UP * height, 0.12, 0.08, 5, stalk, stalk.lightened(0.2), 0.0, 0.05, 0.0, 0.0)
+	var caps := random.randi_range(3, 6)
+	for i in caps:
+		var t := lerpf(0.25, 1.0, float(i) / maxf(caps - 1, 1))
+		var angle := random.randf() * TAU
+		var out := Vector3(cos(angle), 0.0, sin(angle))
+		var width := lerpf(0.55, 0.25, t) * random.randf_range(0.8, 1.2)
+		var at := Vector3.UP * height * t + out * width * 0.5
+		_tube(st, at - Vector3.UP * 0.05, at + Vector3.UP * 0.04, width, width * 0.7, 7,
+				cap.darkened(0.4), cap, 0.02, 0.05, 0.0, 0.15)
+
+
+## Pus boils: a fleshy swelling of the ground crowned with swollen yellow
+## heads fit to burst.
+static func _pus_boils(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var flesh := Color(0.45, 0.25, 0.22)
+	var pus := Color(0.85, 0.78, 0.35)
+	_blob(st, Vector3.UP * 0.05, random.randf_range(0.45, 0.7), flesh, 0.0, 0.0, Vector3(1.0, 0.4, 1.0))
+	for i in random.randi_range(3, 7):
+		var angle := random.randf() * TAU
+		var out := random.randf_range(0.0, 0.4)
+		var radius := random.randf_range(0.07, 0.16)
+		var at := Vector3(cos(angle) * out, 0.22 - out * 0.3 + radius * 0.5, sin(angle) * out)
+		_blob(st, at, radius, flesh.lerp(pus, 0.4), 0.02, 0.0, Vector3.ONE, false)
+		_blob(st, at + Vector3.UP * radius * 0.8, radius * 0.5, pus, 0.02, 0.45, Vector3.ONE, false)
+
+
+## A dead giant bug's husk: curved chitin ribs arching out of the ground
+## either side of its spine, bone-pale with dark tips.
+static func _chitin_ribs(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var length := random.randf_range(1.5, 3.5)
+	var shell := Color(0.62, 0.55, 0.38)
+	var dark := Color(0.18, 0.13, 0.08)
+	var ribs := random.randi_range(3, 6)
+	_tube(st, Vector3(0.0, 0.05, -length * 0.5), Vector3(0.0, 0.12, length * 0.5), 0.12, 0.08, 5,
+			shell.darkened(0.3), shell, 0.0, 0.0, 0.0, 0.0)
+	for i in ribs:
+		var z := lerpf(-length * 0.4, length * 0.4, float(i) / maxf(ribs - 1, 1))
+		var size := random.randf_range(0.7, 1.3) * (1.0 - absf(z) / length * 0.6)
+		for side in [-1.0, 1.0]:
+			var previous := Vector3(0.0, 0.1, z)
+			for s in range(1, 4):
+				var t := s / 3.0
+				var t_prev := (s - 1) / 3.0
+				var p := Vector3(side * sin(t * 2.2) * size, 0.1 + sin(t * PI * 0.9) * size * 1.1, z + t * 0.15)
+				_tube(st, previous, p, lerpf(0.08, 0.02, t_prev), lerpf(0.08, 0.02, t), 4,
+						shell.lerp(dark, t_prev * 0.6), shell.lerp(dark, t * 0.8), 0.0, 0.0, 0.0, 0.0)
+				previous = p
+
+
+## Silk cocoons: grey-white husks stood up on stalks of web, something dark
+## showing through some, threads strung between them.
+static func _cocoon(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var silk := Color(0.70, 0.68, 0.60)
+	var tops: Array[Vector3] = []
+	for i in random.randi_range(1, 3):
+		var at := Vector3(random.randf_range(-0.5, 0.5), 0.0, random.randf_range(-0.5, 0.5))
+		var stalk := random.randf_range(0.1, 0.6)
+		var size := random.randf_range(0.25, 0.45)
+		_tube(st, at, at + Vector3.UP * stalk, 0.05, 0.03, 3, silk.darkened(0.3), silk, 0.0, 0.2, 0.0, 0.0)
+		var centre := at + Vector3.UP * (stalk + size * 1.6)
+		var color := silk if random.randf() < 0.7 else silk.lerp(Color(0.35, 0.2, 0.15), 0.4)
+		_blob(st, centre, size, color, 0.25, 0.0, Vector3(0.8, 1.7, 0.8))
+		tops.append(centre + Vector3.UP * size * 1.2)
+	for i in tops.size() - 1:
+		_tube(st, tops[i], tops[i + 1], 0.01, 0.01, 3, silk, silk, 0.3, 0.3, 0.0, 0.0)
+
+
+## Toxic mushrooms: thin stalks under drooping caps that drip and glow
+## sickly green.
+static func _slime_caps(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var stalk := Color(0.55, 0.52, 0.38)
+	var cap := Color(0.35, 0.60, 0.12) if random.randf() < 0.6 else Color(0.62, 0.55, 0.12)
+	for i in random.randi_range(3, 8):
+		var at := Vector3(random.randf_range(-0.35, 0.35), 0.0, random.randf_range(-0.35, 0.35))
+		var height := random.randf_range(0.15, 0.6)
+		var radius := random.randf_range(0.08, 0.2)
+		var top := at + Vector3(random.randf_range(-0.06, 0.06), height, random.randf_range(-0.06, 0.06))
+		_tube(st, at, top, 0.03, 0.025, 4, stalk.darkened(0.3), stalk, 0.0, 0.3, 0.0, 0.0)
+		# The cap: a drooping cone, its brim below the top.
+		_tube(st, top - Vector3.UP * radius * 0.5, top + Vector3.UP * radius * 0.3, radius, radius * 0.25, 6,
+				cap.darkened(0.3), cap, 0.3, 0.3, 0.4, 0.9)
+		if random.randf() < 0.5: # a drip off the brim
+			_blob(st, top - Vector3.UP * radius * 0.9 + Vector3(radius * 0.8, 0.0, 0.0), 0.025, cap, 0.3, 1.0,
+					Vector3(1.0, 2.0, 1.0), false)
+
+
+## Meaty tendrils worming up out of the ground, glistening, swaying.
+static func _flesh_tendrils(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var meat := Color(0.50, 0.22, 0.22)
+	var tip := Color(0.75, 0.50, 0.42)
+	for i in random.randi_range(3, 7):
+		var at := Vector3(random.randf_range(-0.3, 0.3), 0.0, random.randf_range(-0.3, 0.3))
+		var height := random.randf_range(0.6, 1.6)
+		var phase := random.randf() * TAU
+		var previous := at
+		var steps := 5
+		for s in range(1, steps + 1):
+			var t := float(s) / steps
+			var t_prev := float(s - 1) / steps
+			var p := at + Vector3(sin(t * 4.0 + phase) * 0.2 * t, t * height, cos(t * 3.5 + phase) * 0.2 * t)
+			_tube(st, previous, p, lerpf(0.1, 0.02, t_prev), lerpf(0.1, 0.02, t), 4,
+					meat.lerp(tip, t_prev), meat.lerp(tip, t), t_prev * t_prev, t * t, 0.0, 0.0)
+			previous = p
+
+
+## A heap of pale grubs: fat segmented bodies piled together, a dark head
+## on each.
+static func _larvae_pile(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var pale := Color(0.85, 0.80, 0.62)
+	var head := Color(0.25, 0.15, 0.08)
+	for i in random.randi_range(5, 10):
+		var angle := random.randf() * TAU
+		var out := sqrt(random.randf()) * 0.5
+		var at := Vector3(cos(angle) * out, 0.08 + (0.5 - out) * 0.4 * random.randf(), sin(angle) * out)
+		var heading := random.randf() * TAU
+		var direction := Vector3(cos(heading), random.randf_range(-0.2, 0.3), sin(heading)).normalized()
+		var size := random.randf_range(0.06, 0.1)
+		for s in 4:
+			_blob(st, at + direction * s * size * 1.4, size * (1.0 - s * 0.12), pale.darkened(0.1 * s), 0.05, 0.05,
+					Vector3.ONE, false)
+		_blob(st, at - direction * size * 1.3, size * 0.6, head, 0.05, 0.0, Vector3.ONE, false)
+
+
+# --- Both biomes ---
+
+## Black tentacle vines (like the player's black coiling tentacle): a few
+## thin black tubes snaking out of the surface, over and under each other,
+## diving back in and coming up again, their ends curling up into coils.
+## Built lying on the surface (its up = out of the ground or wall), so a
+## patch lies over whatever it grows on. They breathe (alien_growth.gdshader).
+static func _black_vines(st: SurfaceTool, random: RandomNumberGenerator) -> void:
+	var black := Color(0.03, 0.02, 0.04)
+	var sheen := Color(0.13, 0.09, 0.15)
+	var vines := random.randi_range(3, 6)
+	for v in vines:
+		var heading := random.randf() * TAU
+		var at := Vector3(random.randf_range(-0.6, 0.6), 0.0, random.randf_range(-0.6, 0.6))
+		var steps := random.randi_range(6, 11)
+		var thick := random.randf_range(0.035, 0.07)
+		var phase := random.randf() * TAU
+		var waves := random.randf_range(1.2, 2.4)
+		# Each vine rides a little higher than the last: over the ones before.
+		var ride := 0.02 + v * 0.03
+		var points := PackedVector3Array()
+		for s in steps:
+			var t := float(s) / (steps - 1)
+			heading += random.randf_range(-0.6, 0.6) # snaking
+			# Up out of the surface and back into it along its length.
+			var y := sin(t * PI * waves + phase) * 0.14 + ride
+			points.append(Vector3(at.x, y, at.z))
+			at += Vector3(cos(heading), 0.0, sin(heading)) * 0.28
+		# The end curls up off the surface into a coil, like the tentacle's tip.
+		var coil_at := Vector3(at.x, maxf(points[points.size() - 1].y, 0.05), at.z)
+		var turns := random.randf_range(1.0, 1.8)
+		var coil_radius := random.randf_range(0.08, 0.14)
+		for c in range(1, 6):
+			var t := float(c) / 5.0
+			var angle := heading + t * turns * TAU
+			points.append(coil_at + Vector3(cos(angle), 0.0, sin(angle)) * coil_radius * (1.0 - t * 0.6)
+					+ Vector3.UP * t * 0.35)
+		# Begin under the surface: it's growing out of it.
+		points[0] = Vector3(points[0].x, -0.12, points[0].z)
+		var along := 0.0
+		for i in points.size() - 1:
+			var t_a := float(i) / (points.size() - 1)
+			var t_b := float(i + 1) / (points.size() - 1)
+			var length := points[i].distance_to(points[i + 1])
+			var coiling_a := t_a > float(steps - 1) / (points.size() - 1)
+			var coiling_b := t_b > float(steps - 1) / (points.size() - 1)
+			_vine_tube(st, points[i], points[i + 1], lerpf(thick, thick * 0.3, t_a), lerpf(thick, thick * 0.3, t_b),
+					black.lerp(sheen, 0.5 + 0.5 * sin(along * 9.0)), black.lerp(sheen, 0.5 + 0.5 * sin((along + length) * 9.0)),
+					0.6 if coiling_a else 0.08, 0.6 if coiling_b else 0.08)
+			along += length
+
+
+## A vine's tube from `a` to `b` (4 sides, PS1-chunky), each vertex
+## carrying what breathing needs (_vine_vertex).
+static func _vine_tube(st: SurfaceTool, a: Vector3, b: Vector3, radius_a: float, radius_b: float,
+		color_a: Color, color_b: Color, sway_a: float, sway_b: float) -> void:
+	var axis := b - a
+	if axis.length_squared() < 0.000001:
+		return
+	axis = axis.normalized()
+	var side := axis.cross(Vector3.UP if absf(axis.y) < 0.95 else Vector3.RIGHT).normalized()
+	var up := side.cross(axis)
+	for i in 4:
+		var d0 := side * cos(TAU * i / 4.0) + up * sin(TAU * i / 4.0)
+		var d1 := side * cos(TAU * (i + 1) / 4.0) + up * sin(TAU * (i + 1) / 4.0)
+		for corner in [[a, d0, radius_a, color_a, sway_a], [a, d1, radius_a, color_a, sway_a], [b, d1, radius_b, color_b, sway_b],
+				[a, d0, radius_a, color_a, sway_a], [b, d1, radius_b, color_b, sway_b], [b, d0, radius_b, color_b, sway_b]]:
+			_vine_vertex(st, corner[0] + corner[1] * corner[2], corner[1], corner[2], corner[3], corner[4])
+
+
+## One vine vertex: its colour and sway (as every growth's), plus its
+## outward direction (CUSTOM0) and the vine's thickness there (UV.x), which
+## the shader swells it along when it breathes.
+static func _vine_vertex(st: SurfaceTool, at: Vector3, out: Vector3, radius: float, color: Color, sway: float) -> void:
+	var c := color
+	c.a = sway
+	st.set_color(c)
+	st.set_uv(Vector2(radius, 0.0))
+	st.set_uv2(Vector2.ZERO)
+	st.set_custom(0, Color(out.x, out.y, out.z, 0.0))
+	st.add_vertex(at)
+
+
 # --- Shape pieces ---
 
 ## A tapered prism from `a` to `b`: `sides` faces (few: PS1-chunky), with a
@@ -292,23 +587,30 @@ static func _tube(st: SurfaceTool, a: Vector3, b: Vector3, radius_a: float, radi
 
 
 ## A low-poly ball (an octahedron, split once): bulbs, pods, spore balls.
-static func _blob(st: SurfaceTool, centre: Vector3, radius: float, color: Color, sway: float, glow: float) -> void:
+## `stretch` squashes or stretches it (eggs, cocoons); `fine` = false keeps
+## it a plain octahedron (8 faces, for small things there are lots of).
+static func _blob(st: SurfaceTool, centre: Vector3, radius: float, color: Color, sway: float, glow: float,
+		stretch: Vector3 = Vector3.ONE, fine: bool = true) -> void:
 	var points := [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]
 	var faces := [[0, 3, 4], [0, 4, 2], [0, 2, 5], [0, 5, 3], [1, 4, 3], [1, 2, 4], [1, 5, 2], [1, 3, 5]]
 	var dark := color.darkened(0.35)
+	var size := stretch * radius
 	for face in faces:
 		var a: Vector3 = points[face[0]]
 		var b: Vector3 = points[face[1]]
 		var c: Vector3 = points[face[2]]
-		var ab := (a + b).normalized()
-		var bc := (b + c).normalized()
-		var ca := (c + a).normalized()
-		for tri in [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]:
+		var tris := [[a, b, c]]
+		if fine:
+			var ab := (a + b).normalized()
+			var bc := (b + c).normalized()
+			var ca := (c + a).normalized()
+			tris = [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]
+		for tri in tris:
 			var p: Array = tri
 			var colors := []
 			for v in p:
 				colors.append(dark.lerp(color, (v as Vector3).y * 0.5 + 0.5))
-			_triangle(st, centre + (p[0] as Vector3) * radius, centre + (p[1] as Vector3) * radius, centre + (p[2] as Vector3) * radius,
+			_triangle(st, centre + (p[0] as Vector3) * size, centre + (p[1] as Vector3) * size, centre + (p[2] as Vector3) * size,
 					colors[0], colors[1], colors[2], sway, sway, sway, glow, glow, glow)
 
 

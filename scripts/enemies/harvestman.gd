@@ -67,6 +67,8 @@ const LEECH_SPLIT := [0.34, 0.38, 0.28]
 const TUBE_SEGMENTS := 16
 ## How far the proboscis keeps its middle off anything solid (its thickest).
 const TUBE_RADIUS := 0.25
+## Every living Harvestman (how a new one counts the company it already has).
+const GROUP := "harvestmen"
 ## The slam's rise before it drops (a rush skips it).
 const SLAM_RISE := 0.6
 ## The puff a footfall kicks up.
@@ -77,6 +79,11 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var model_scene: PackedScene
 
 @export_group("Model")
+## How big it is: its body and every distance it walks, reaches and hits by
+## (stance, legs, strides, attack ranges, hitboxes, its light) are this many
+## times the numbers set below. Its speeds stay as set: a bigger one takes
+## longer strides at the same pace -- slower steps, more weight.
+@export var size: float = 2.0
 ## On spawn, whatever the core looks like (edit it however you like in the
 ## model scene): the whole body is shifted so the core's middle is the body's
 ## middle (where it rides and gets hit), its hitbox sized to it...
@@ -229,6 +236,14 @@ const SEGMENT_MESH_LENGTH := 1.55
 @export var feed_time: float = 4.0
 @export var feed_pull: float = 30.0
 
+@export_group("Group")
+## Harvestmen never walk alone: one placed in a level brings company, so
+## there are group_min..group_max of them (counting any already standing
+## within group_spread * 2), the same kind, round it about group_spread apart.
+@export var group_min: int = 2
+@export var group_max: int = 3
+@export var group_spread: float = 22.0
+
 @export_group("Damage")
 @export var sack_multiplier: float = 2.0
 @export var exposed_multiplier: float = 3.0
@@ -365,10 +380,16 @@ var _beam_left := 0.0
 var _beam_length := 10.0
 var _gush_cooldowns := {}
 var _bodies: Array[AnimatableBody3D] = []
+## Brought along by another Harvestman (see group_min): brings none itself.
+var is_companion := false
 
 
 func _ready() -> void:
 	add_to_group(PlayerGrapple.BIG_GROUP) # the grapple zips you to it
+	add_to_group(GROUP)
+	_apply_size()
+	if multiplayer.is_server() and not is_companion:
+		_bring_company.call_deferred() # once the level round it exists
 	_home = global_position
 	_goal = global_position
 	_yaw = rotation.y
@@ -384,6 +405,8 @@ func _ready() -> void:
 	if _body == null:
 		push_warning("Harvestman: no model (model_scene with a Body node).")
 		return
+	# Scaled before anything's measured off it (the core, the legs' bones).
+	_body.scale = Vector3.ONE * size
 	_core = _body.get_node_or_null("Core") as Node3D
 	_face = _body.get_node_or_null("Face") as Node3D
 	_mouth = _body.get_node_or_null("Face/Mouth") as Node3D
@@ -416,11 +439,11 @@ func _ready() -> void:
 	_sack_body = _hitbox(sack, "sack", null)
 	for leg in _legs:
 		var knee := SphereShape3D.new()
-		knee.radius = 0.7
+		knee.radius = 0.7 * size
 		leg.knee_body = _hitbox(knee, "knee", leg)
 		for i in leg.lengths.size():
 			var capsule := CapsuleShape3D.new()
-			capsule.radius = 0.3
+			capsule.radius = 0.3 * size
 			capsule.height = maxf(leg.lengths[i], 0.7)
 			leg.shafts.append(_hitbox(capsule, "leg", leg))
 		leg.knee_hp = knee_health
@@ -466,7 +489,7 @@ func _fit_to_core(legs: Node) -> void:
 				(child as Node3D).position -= middle
 		for i in points.size():
 			points[i] -= middle
-		sack_radius = maxf(minf(box.size.x, box.size.z) * 0.5, 0.8)
+		sack_radius = maxf(minf(box.size.x, box.size.z) * 0.5, 0.8) * size # the box is in the body's own (unscaled) space
 	if fit_legs_to_core and legs:
 		for node in legs.get_children():
 			var leg := node as Node3D
@@ -593,6 +616,8 @@ func _setup_light() -> void:
 	_light.spot_angle = light_angle
 	_light_angle_now = light_angle
 	_light.shadow_enabled = false
+	# The light (and its beam) works in metres: undo the body's size on it.
+	_light.scale = Vector3.ONE / size
 	if beam_strength <= 0.0:
 		return
 	var cone := CylinderMesh.new()
@@ -951,6 +976,79 @@ func _update_ground() -> void:
 
 
 ## The ground's height under `point` (a ray from body height down), or NAN.
+## Brings the rest of its group (group_min..group_max in all, counting any
+## already standing near): more of its own kind round it, each on the
+## walkable ground nearest its spot.
+func _bring_company() -> void:
+	var parent := get_parent() as Node3D
+	if scene_file_path.is_empty() or parent == null:
+		return
+	var near := 0
+	for other in get_tree().get_nodes_in_group(GROUP):
+		if other != self and (other as Node3D).global_position.distance_to(global_position) < group_spread * 2.0:
+			near += 1
+	var wanted := randi_range(group_min, maxi(group_max, group_min)) - 1 - near
+	if wanted <= 0:
+		return
+	var scene := load(scene_file_path) as PackedScene
+	var turn := randf() * TAU
+	for i in wanted:
+		var angle := turn + TAU * (i + 1) / (wanted + 1) + randf_range(-0.3, 0.3)
+		var spot := global_position + Vector3(cos(angle), 0.0, sin(angle)) * group_spread * randf_range(0.8, 1.2)
+		var mate := scene.instantiate() as Harvestman
+		mate.is_companion = true
+		mate.position = parent.to_local(_walkable_near(spot)) # before it's added: its _ready() takes it as home
+		mate.rotation.y = randf() * TAU
+		parent.add_child(mate)
+
+
+## The walkable ground nearest `spot`: on the navmesh (so never inside a
+## wall), else -- no navmesh there yet -- straight down onto the ground.
+func _walkable_near(spot: Vector3) -> Vector3:
+	var map := get_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(map) > 0:
+		var on := NavigationServer3D.map_get_closest_point(map, spot)
+		if on != Vector3.ZERO and Vector2(on.x - spot.x, on.z - spot.z).length() < group_spread * 0.5:
+			return on
+	var down := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 60.0, spot + Vector3.DOWN * 60.0)
+	down.collision_mask = 1
+	var hit := _static_hit(get_world_3d().direct_space_state, down)
+	return hit.position if not hit.is_empty() else spot
+
+
+## Every distance it works by, times its size (see `size`). Once, on spawn.
+func _apply_size() -> void:
+	if is_equal_approx(size, 1.0):
+		return
+	stand_height *= size
+	crouch_height *= size
+	footprint_margin *= size
+	body_clearance *= size
+	ground_search_depth *= size
+	foot_radius *= size
+	leg_length *= size
+	sack_radius *= size # (center_core measures it again, sized, off the model)
+	stride *= size
+	step_lift *= size
+	step_shake_range *= size
+	proboscis_length *= size
+	proboscis_extend_speed *= size
+	proboscis_retract_speed *= size
+	skewer_range *= size
+	slam_range *= size
+	slam_radius *= size
+	hose_range_min *= size
+	hose_range_max *= size
+	hose_sweep *= size
+	rush_min_range *= size
+	feel_range *= size
+	feed_range *= size
+	patrol_radius *= size
+	group_spread *= size
+	light_range *= size
+	stun_sag *= size
+
+
 func _ground_under(space: PhysicsDirectSpaceState3D, point: Vector3) -> float:
 	var top := Vector3(point.x, global_position.y + stand_height, point.z)
 	var down := PhysicsRayQueryParameters3D.create(top, top + Vector3.DOWN * (stand_height + ground_search_depth))
@@ -1604,7 +1702,7 @@ func _place_body(delta: float) -> void:
 	if delta > 0.0:
 		_rush_lean = lerpf(_rush_lean, -0.2 if _rushing else 0.0, 1.0 - exp(-4.0 * delta))
 	var tilt := Basis(Vector3.RIGHT, _sway.z * 0.06 + _rush_lean) * Basis(Vector3.BACK, -_sway.x * 0.06)
-	_body.global_transform = Transform3D(facing * tilt, at)
+	_body.global_transform = Transform3D(facing * tilt * Basis.from_scale(Vector3.ONE * size), at)
 	if _core:
 		_core.rotation = Vector3(_sack_lag.x, 0.0, _sack_lag.y)
 
@@ -1840,7 +1938,7 @@ func _draw_tube(delta: float) -> void:
 	var space := get_world_3d().direct_space_state
 	var blocked := _tube_ray(space, start, start + out * _tube_reach)
 	if not blocked.is_empty():
-		_tube_reach = maxf(start.distance_to(blocked.position) - TUBE_RADIUS, 0.0)
+		_tube_reach = maxf(start.distance_to(blocked.position) - TUBE_RADIUS * size, 0.0)
 		if _tube_reach < 0.3:
 			_tube_mm.visible = false
 			return
@@ -1857,9 +1955,9 @@ func _draw_tube(delta: float) -> void:
 		var straight := start + out * _tube_reach * f
 		var point := straight + sag + writhe
 		if k > 0:
-			var touch := _tube_ray(space, straight, point + (point - straight).normalized() * TUBE_RADIUS)
+			var touch := _tube_ray(space, straight, point + (point - straight).normalized() * TUBE_RADIUS * size)
 			if not touch.is_empty():
-				point = (touch.position as Vector3) + (touch.normal as Vector3) * TUBE_RADIUS
+				point = (touch.position as Vector3) + (touch.normal as Vector3) * TUBE_RADIUS * size
 		points.append(point)
 	_lay_segments(_tube_mm.multimesh, 0, TUBE_SEGMENTS, points, 0.2, 0.07)
 
@@ -1907,7 +2005,7 @@ func _lay_segments(multimesh: MultiMesh, first: int, count: int, points: PackedV
 		var dir := b - a
 		if dir.length_squared() < 0.000001:
 			continue
-		var radius := lerpf(thick, thin, float(k) / count)
+		var radius := lerpf(thick, thin, float(k) / count) * size
 		var basis := Basis.looking_at(dir.normalized(), Vector3.UP if absf(dir.normalized().y) < 0.98 else Vector3.FORWARD)
 		basis = basis * Basis(Vector3.BACK, k * 0.3) * Basis.from_scale(Vector3(radius, radius, piece * 1.35 / SEGMENT_MESH_LENGTH))
 		multimesh.set_instance_transform(first + k, Transform3D(basis, (a + b) * 0.5))

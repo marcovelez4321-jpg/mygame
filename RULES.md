@@ -856,3 +856,35 @@ them:
     - Every default group is 4× the members (`GrowthSpecies.GROUP_SCALE`).
     - Glow grass is the commonest growth: 16 groups a chunk, 85% patch cover, 20 strays.
     - The biomes, the sewer growths, the black vines and the far-range shimmer fix are waiting on the user's design choices.
+
+- 2026-10-10: **Two biomes, sewer growths, black vines, eyes, bigger Harvestmen and worm, 160 m chunks, frame counter.** (The user chose each growth decision.)
+  - **Biomes (`scripts/world/biome_map.gd`, BiomeMap):**
+    - A baked grey map (8 m a pixel; white = reef, black = sewer). Sewer almost everywhere, reef in pockets (`REEF_SHARE` 0.25), soft borders about 150 m wide (box-blurred three times). The yard's surroundings (120 m) are always sewer.
+    - Made by the bake tool into `worlds/test_world/biomes.res`. The nearest reef is about 295 m from the yard.
+    - Everything that changes by biome reads this one map, so they all cross over in the same place:
+      - **Ground (`alien_terrain.gdshader`):** a sewer palette next to the reef one (black sludge valleys → olive mud → grimy tan → nicotine ridges, wet black grime slopes, toxic slime and rust blotches), mixed by the map. TerrainLook passes the map in. No map = sewer.
+      - **Growths:** GrowthSpecies has a `biome` (REEF, SEWER or ANYWHERE). Kinds thin out across the border, so the two mix there.
+      - **Air (`biome_atmosphere.gd`, BiomeAtmosphere):** fog colour and distance, valley haze, ambient light and background crossfade by the biome round the camera, eased over 1.5 s. The saved environment is the reef's air; `AlienAtmosphere.sewer()` is the sewer's.
+  - **New growths (GrowthMeshes / GrowthSpecies):**
+    - Sewer: hair mould (the sewer's grass, its commonest), egg sacs, hive mounds, shelf fungus, pus boils, chitin ribs (a dead giant bug), cocoons, slime caps, flesh tendrils, larvae piles.
+    - **Black vines** grow in both biomes, on the ground and up the chunk's buildings (`wall_patches`). They are 4-sided black tubes snaking in and out of the surface over each other, with coiled tips. The whole vine breathes: it swells to about 2.4× its thickness and back (`breathe`, using CUSTOM0 and UV in `alien_growth.gdshader`).
+  - **Growth placement:**
+    - Every growth rolls its own size anywhere in its range, like the creature hordes.
+    - Groups are 4× (earlier entry). Overall density is ×1.2 (`GrowthScatter.density`).
+  - **Far-off flicker fix:** the growths' PS1 snap grid gets finer past `snap_fine_distance` (20 m), so thin far branches stop jumping between grid cells. Close-up wobble is unchanged.
+  - **Eyeball clusters (`eye_cluster.gd`, `eye_scatter.gd`):**
+    - 3–9 eyes in flesh sockets, sewer only, about 0.3 per 128 m of land (rarer than the growths, not super rare).
+    - They open one after another when a player comes within 25 m, all turn to stalk the nearest player with little darting glances, blink, and drift shut slowly once nobody's near.
+    - Look only: each game runs its own, and they're placed by world seed.
+  - **Harvestman:**
+    - `size` 2.0. The body is scaled, and every distance it works by (stance, legs, strides, ranges, hitboxes, proboscis, light) is ×2. Speeds stay as set, so it takes longer, heavier strides.
+    - Always in groups of 2–3: an uncompanioned one brings 1–2 more of its kind (`group_min`/`group_max`), about `group_spread` apart, on the navmesh.
+  - **Boss worm (BurrowWorm):**
+    - `size` 2.0: its body and every distance it works by (depths, leaps, plough, shockwave, rumble) ×2. Its Deepmaw escorts keep their size.
+    - Landing from a leap, it keeps the speed it hit the ground at, curving at up to `swallow_turn` but never braking, until its tail is under. The whole body pours in at one speed (before, the tail slowed down with the head).
+  - **Rat nests (no Bender):** packs are twice their set counts (`RatNest.LEADERLESS_SCALE`).
+  - **Barnacles:** ChunkBarnacles spawn in both biomes. Their chance scales with chunk area.
+  - **Chunks:** 160 m (25% up). Growth, eye and barnacle counts are per 128 m of land and scaled by area, so density is unchanged. The bake tool now clears old chunk files first (stale 128 m ones had to be deleted by hand).
+  - **Fog:** pulled back 10% in both biomes (reef 33–242 m, sewer 22–192.5 m, haze ×0.9). Growth view distances are +10% to match.
+  - **Frame counter (`scripts/ui/frame_counter.gd`, autoload FrameCounter):** small, top right, over everything. Shows fps and the worst frame time (ms) over the last half second.
+  - **`tools/stream_benchmark.gd`:** flies the player across the test world at 6, 12, 26 and 50 m/s for load radius 2, 3 and 4. It prints frame times (average, 1% worst, worst), chunks live, growth jobs queued and how often the ground under the player wasn't loaded yet. Not run yet: it needs the user's yes.

@@ -6,12 +6,21 @@ extends Resource
 ## and then a big one, rarely a huge horde -- and how it looks and moves.
 ## Every number here is a tuning knob for the look of the land.
 
+## Which biome it grows in (BiomeMap): the reef, the sewer/hive land, or
+## both. At a border between them, kinds from both mix, thinning out.
+enum Biome { REEF, SEWER, ANYWHERE }
+
 @export var kind: GrowthMeshes.Kind = GrowthMeshes.Kind.GLOW_GRASS
 ## How many shape variants to mix (each a different random build).
 @export_range(1, 8) var variants: int = 4
 
 @export_group("Where")
-## Groups per chunk (128 x 128 m) where this kind is at its most common.
+@export var biome: Biome = Biome.REEF
+## Also grows up the sides of the chunk's buildings: patches per 1000 m² of
+## wall (0 = only on the ground).
+@export var wall_patches: float = 0.0
+## Groups per 128 x 128 m of land where this kind is at its most common
+## (GrowthScatter scales it to the real chunk size).
 @export var groups_per_chunk: float = 6.0
 ## Its own patchy map over the land: some areas full of it (forests,
 ## groves), others with none. patch_size = the size of those areas
@@ -42,8 +51,8 @@ extends Resource
 @export var loners_per_chunk: float = 4.0
 
 @export_group("Size")
-## Size range: members in the middle of a group are toward the big end,
-## stragglers at the edge toward the small end, plus a random spread.
+## Size range: each one rolls its own size anywhere in it (like the
+## creature hordes), wherever it stands in its group.
 @export var min_scale: float = 0.6
 @export var max_scale: float = 1.4
 ## Now and then an "elder", this many times bigger than the rest.
@@ -60,7 +69,13 @@ extends Resource
 @export_range(0.0, 1.0, 0.05) var tint_variation: float = 0.25
 @export var glow_color: Color = Color(0.45, 0.9, 1.0)
 @export var sway_amount: float = 0.15
-## Gone past this distance (metres). The fog's solid at about 220.
+## Breathing: the whole growth swells fat and shrinks back, in and out.
+## breathe = how far (times its own thickness; 0 = it doesn't), breathe_speed
+## = breaths a second. Only meshes built for it breathe (the black vines).
+@export var breathe: float = 0.0
+@export var breathe_speed: float = 0.35
+## Gone past this distance (metres). The fog's solid at about 240 in the
+## reef, 190 in the sewer.
 @export var view_distance: float = 180.0
 @export var cast_shadows: bool = false
 
@@ -69,9 +84,11 @@ extends Resource
 const GROUP_SCALE := 4
 
 
-## The default set of growths, tuned to each other: the land's flora.
+## The default set of growths, tuned to each other: the land's flora -- the
+## reef's, the sewer/hive land's, and the black vines in both.
 static func defaults() -> Array[GrowthSpecies]:
 	var list: Array[GrowthSpecies] = []
+	# --- The reef ---
 	# Glow grass: carpets the flatter ground in big drifts -- the commonest
 	# growth by far: more groups, over more of the land, more strays.
 	list.append(_make(GrowthMeshes.Kind.GLOW_GRASS, 16.0, 300.0, 0.85, 0.0, 32.0, 0.0, 1.0,
@@ -103,15 +120,57 @@ static func defaults() -> Array[GrowthSpecies]:
 	# Bladder pods: rare glowing heaps in the low ground.
 	list.append(_make(GrowthMeshes.Kind.BLADDER, 1.0, 400.0, 0.4, 0.0, 25.0, 0.0, 0.4,
 			2, 12, 2.0, 1.6, 1.3, 0.8, 0.6, 1.6, Color(0.95, 0.6, 0.85), 0.03, 140.0))
+	# --- The sewer/hive land ---
+	var sewer := Biome.SEWER
+	# Hair mould: the sewer's grass, carpeting the flatter ground -- its
+	# commonest growth, like the reef's glow grass.
+	list.append(_make(GrowthMeshes.Kind.HAIR_MOLD, 16.0, 300.0, 0.85, 0.0, 35.0, 0.0, 1.0,
+			6, 220, 1.1, 0.6, 1.4, 20.0, 0.6, 1.4, Color(0.6, 0.75, 0.2), 0.06, 90.0, sewer))
+	# Egg sacs: heaps in the low ground, now and then a field of them.
+	list.append(_make(GrowthMeshes.Kind.EGG_SACS, 3.0, 300.0, 0.5, 0.0, 28.0, 0.0, 0.8,
+			2, 20, 1.6, 1.6, 1.5, 2.0, 0.6, 1.6, Color(0.9, 0.85, 0.3), 0.0, 130.0, sewer))
+	# Hive mounds: the bugs' chimneys, standing over the land in the fog.
+	list.append(_make(GrowthMeshes.Kind.HIVE_MOUND, 1.5, 450.0, 0.5, 0.0, 25.0, 0.0, 0.9,
+			2, 14, 1.8, 4.0, 1.4, 0.8, 0.6, 1.8, Color(0.8, 0.7, 0.2), 0.0, 230.0, sewer))
+	# Shelf fungus: rotten stalks anywhere, up the hillsides too.
+	list.append(_make(GrowthMeshes.Kind.FUNGUS_SHELF, 2.5, 350.0, 0.55, 0.0, 40.0, 0.0, 1.0,
+			2, 25, 1.6, 1.5, 1.5, 2.0, 0.6, 1.6, Color(0.7, 0.8, 0.4), 0.02, 150.0, sewer))
+	# Pus boils: the ground itself swelling, in the low ground.
+	list.append(_make(GrowthMeshes.Kind.PUS_BOILS, 3.0, 280.0, 0.5, 0.0, 30.0, 0.0, 0.7,
+			2, 30, 1.5, 1.4, 1.6, 2.5, 0.6, 1.5, Color(0.95, 0.85, 0.35), 0.0, 120.0, sewer))
+	# Dead bug husks: rare, alone or a few together, like a graveyard.
+	list.append(_make(GrowthMeshes.Kind.CHITIN_RIBS, 0.8, 500.0, 0.4, 0.0, 25.0, 0.0, 1.0,
+			1, 6, 2.2, 5.0, 1.2, 0.6, 0.7, 2.0, Color(0.5, 0.4, 0.2), 0.0, 220.0, sewer))
+	# Cocoons: up off the valley floors, in clutches.
+	list.append(_make(GrowthMeshes.Kind.COCOON, 1.5, 350.0, 0.45, 0.0, 35.0, 0.2, 1.0,
+			2, 16, 1.8, 2.0, 1.4, 1.0, 0.6, 1.5, Color(0.8, 0.8, 0.6), 0.1, 170.0, sewer))
+	# Slime caps: toxic mushroom patches glowing in the low wet ground.
+	list.append(_make(GrowthMeshes.Kind.SLIME_CAPS, 3.0, 300.0, 0.6, 0.0, 30.0, 0.0, 0.6,
+			3, 50, 1.4, 1.1, 1.6, 3.0, 0.6, 1.5, Color(0.55, 1.0, 0.2), 0.08, 120.0, sewer))
+	# Flesh tendrils: meaty clumps swaying in the low ground.
+	list.append(_make(GrowthMeshes.Kind.FLESH_TENDRILS, 2.0, 350.0, 0.5, 0.0, 35.0, 0.0, 0.6,
+			2, 30, 1.5, 1.5, 1.5, 1.5, 0.6, 1.6, Color(0.9, 0.4, 0.35), 0.35, 150.0, sewer))
+	# Larvae piles: heaps of grubs, near the eggs' ground.
+	list.append(_make(GrowthMeshes.Kind.LARVAE_PILE, 2.0, 300.0, 0.45, 0.0, 25.0, 0.0, 0.6,
+			2, 18, 1.7, 1.4, 1.5, 1.5, 0.6, 1.5, Color(0.9, 0.85, 0.6), 0.02, 110.0, sewer))
+	# --- Both: the black vines, on the ground and up the buildings, breathing ---
+	var vines := _make(GrowthMeshes.Kind.BLACK_VINES, 2.5, 400.0, 0.55, 0.0, 60.0, 0.0, 1.0,
+			1, 8, 1.6, 2.5, 1.4, 1.5, 0.7, 1.8, Color(0.3, 0.05, 0.1), 0.04, 160.0, Biome.ANYWHERE)
+	vines.wall_patches = 1.2
+	vines.breathe = 1.4 # swells to about two and a half times as thick
+	vines.follow_ground = 1.0 # lies on whatever it grows over
+	list.append(vines)
 	return list
 
 
 static func _make(kind: GrowthMeshes.Kind, groups: float, patch: float, cover: float,
 		slope_low: float, slope_high: float, height_low: float, height_high: float,
 		group_low: int, group_high: int, tail: float, space: float, crowd: float, loners: float,
-		scale_low: float, scale_high: float, glow: Color, sway: float, distance: float) -> GrowthSpecies:
+		scale_low: float, scale_high: float, glow: Color, sway: float, distance: float,
+		home: Biome = Biome.REEF) -> GrowthSpecies:
 	var species := GrowthSpecies.new()
 	species.kind = kind
+	species.biome = home
 	species.groups_per_chunk = groups
 	species.patch_size = patch
 	species.patch_cover = cover
@@ -131,7 +190,12 @@ static func _make(kind: GrowthMeshes.Kind, groups: float, patch: float, cover: f
 	species.max_scale = scale_high
 	species.glow_color = glow
 	species.sway_amount = sway
-	species.view_distance = distance
-	species.follow_ground = 0.8 if kind == GrowthMeshes.Kind.GLOW_GRASS or kind == GrowthMeshes.Kind.BRAIN_CORAL else 0.25
-	species.cast_shadows = kind == GrowthMeshes.Kind.KELP or kind == GrowthMeshes.Kind.STAGHORN or kind == GrowthMeshes.Kind.SPIRE
+	species.view_distance = distance * 1.1 # the fog was pulled back 10%: they go with it
+	# Low, spread things lie with the ground; upright things mostly stand up.
+	species.follow_ground = 0.8 if kind in [GrowthMeshes.Kind.GLOW_GRASS, GrowthMeshes.Kind.BRAIN_CORAL,
+			GrowthMeshes.Kind.HAIR_MOLD, GrowthMeshes.Kind.EGG_SACS, GrowthMeshes.Kind.PUS_BOILS,
+			GrowthMeshes.Kind.LARVAE_PILE, GrowthMeshes.Kind.CHITIN_RIBS] else 0.25
+	# Big ones throw shadows; the rest are too small to be worth it.
+	species.cast_shadows = kind in [GrowthMeshes.Kind.KELP, GrowthMeshes.Kind.STAGHORN, GrowthMeshes.Kind.SPIRE,
+			GrowthMeshes.Kind.HIVE_MOUND, GrowthMeshes.Kind.CHITIN_RIBS]
 	return species
