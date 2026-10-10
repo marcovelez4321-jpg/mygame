@@ -1162,3 +1162,8 @@ them:
     - A call button on each lift stop's dock; a panel on the deck sends it to the next stop (back down from the top).
     - The lift waits until called (`StackLift.on_call`), its buttons lit amber when it's ready and red while it travels.
     - The cable car still runs by itself.
+
+- 2026-10-10: **Harvestman: leech-legged only, no rush, legs no longer vanish.**
+  - **Only the leech-legged Harvestman spawns** (the user's call). EncounterDirector's `HARVESTMEN` holds just it; `harvestman_level.tscn`'s barnacle one is now a leech one. Companions copy their leader's scene, so they're leech ones too. The other variants' scenes stay (unused).
+  - **No rush** (`can_rush`, off). It walks at you and uses its other attacks.
+  - **Missing legs (a bug):** the leech legs' and the proboscis's batches are drawn in world space from the world's origin, with a fixed visibility box of ±500 m round it. Any Harvestman more than 500 m from the origin (the roaming ones, the Stack's) had them culled even right in front of you. `_follow_bounds()` moves the box with it every frame (70 m × size round it).

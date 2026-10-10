@@ -214,6 +214,9 @@ const SEGMENT_MESH_LENGTH := 1.55
 ## when it hits a wall or has run rush_max_time.
 ## It rushes when you're past rush_min_range: rush_chance of the time while
 ## you're still in hose range (else it sprays), always past it.
+## Off: the user didn't want it to rush (it walks at you and uses its other
+## attacks). On brings the charge below back.
+@export var can_rush: bool = false
 @export var rush_min_range: float = 16.0
 @export_range(0.0, 1.0, 0.05) var rush_chance: float = 0.5
 @export var rush_speed: float = 9.0
@@ -907,7 +910,7 @@ func _hunt(delta: float) -> void:
 		_start_attack(Attack.SLAM, null)
 	elif distance < skewer_range and leg:
 		_start_attack(Attack.SKEWER, leg)
-	elif distance > rush_min_range and (distance >= hose_range_max or randf() < rush_chance):
+	elif can_rush and distance > rush_min_range and (distance >= hose_range_max or randf() < rush_chance):
 		_start_attack(Attack.RUSH, null)
 	elif distance > hose_range_min and distance < hose_range_max and _hose_streak < hose_max_in_a_row and randf() < hose_chance:
 		_start_attack(Attack.HOSE, null)
@@ -1660,6 +1663,7 @@ func _process(delta: float) -> void:
 		_solve_leg(leg)
 	_draw_leech_legs()
 	_draw_tube(delta)
+	_follow_bounds()
 	_place_hitboxes()
 	_update_sound(delta)
 
@@ -1898,6 +1902,19 @@ func _solve_leg(leg: HLeg) -> void:
 		var turned := Basis(Quaternion(was.normalized(), wants.normalized())) * current.basis
 		leg.skeleton.set_bone_pose_rotation(leg.bones[i], (parent.basis.inverse() * turned).get_rotation_quaternion())
 		parent = Transform3D(turned, current.origin)
+
+
+## The leech legs' and the proboscis's batches are drawn in world space (they
+## sit at the world's origin), so their visibility box has to go where the
+## Harvestman is -- left round the origin, any Harvestman more than 500 m
+## from it had its legs culled even right in front of you.
+func _follow_bounds() -> void:
+	var reach := 70.0 * size
+	var box := AABB(global_position - Vector3.ONE * reach, Vector3.ONE * reach * 2.0)
+	if _leech_mm:
+		_leech_mm.custom_aabb = box
+	if _tube_mm:
+		_tube_mm.custom_aabb = box
 
 
 ## Leech legs: tape-worm segments laid along each leg's joints, thick at the

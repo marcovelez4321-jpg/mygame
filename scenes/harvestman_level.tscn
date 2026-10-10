@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://jymiotf8rty8"]
 
 [ext_resource type="PackedScene" uid="uid://n2tgnc4ptc1o" path="res://scenes/test_map/test_map.tscn" id="1_map"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_barnacle.tscn" id="2_barnacle"]
+[ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="2_barnacle"]
 [ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="5_leech"]
 [ext_resource type="Script" uid="uid://diko2xkhgbb1w" path="res://scripts/missions/spawn_thinner.gd" id="6_thinner"]
 [ext_resource type="PackedScene" path="res://scenes/uzi_pickup.tscn" id="7_uzi"]

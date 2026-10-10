@@ -62,11 +62,9 @@ const TWEAKERS: Array[PackedScene] = [
 	preload("res://scenes/enemy/enemy_gunner.tscn"),
 	preload("res://scenes/enemy/enemy_rusher.tscn"),
 ]
+## Only the leech-legged Harvestman (the user's pick: the others aren't good).
 const HARVESTMEN: Array[PackedScene] = [
 	preload("res://scenes/enemy/harvestman/harvestman_leech.tscn"),
-	preload("res://scenes/enemy/harvestman/harvestman_barnacle.tscn"),
-	preload("res://scenes/enemy/harvestman/harvestman_deepmaw.tscn"),
-	preload("res://scenes/enemy/harvestman/harvestman_fused.tscn"),
 ]
 const RAT_NEST := preload("res://scenes/enemy/rat_nest.tscn")
 const ROACH := preload("res://scenes/enemy/roach.tscn")
