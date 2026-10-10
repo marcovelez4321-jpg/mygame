@@ -28,8 +28,8 @@ extends Node3D
 @export var wind_full_height: float = 400.0
 @export var opening_voices: int = 3
 @export var opening_reach: float = 70.0
-@export var wind_volume_db: float = -6.0
-@export var drone_volume_db: float = -4.0
+@export var wind_volume_db: float = 0.0
+@export var drone_volume_db: float = 2.0
 
 const SILENT := -60.0
 

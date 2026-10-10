@@ -11,7 +11,7 @@ extends Node3D
 ## TrenchBroom tower becomes a 1.6 km one). On load everything under it is
 ## made skyline:
 ##   its materials swapped for shaders/skyline.gdshader (same texture and
-##   colour; its own fog, thick low and thinning with height),
+##   colour; the world's fog, its lights and glow shining through it),
 ##   no shadows, no collision (nothing out there is reachable),
 ## and the camera's far plane pushed out to view_distance.
 ## Cheap: a few hundred triangles a giant, always loaded, no streaming, no
@@ -23,11 +23,12 @@ extends Node3D
 ## How far the camera sees (metres): past the furthest giant.
 @export var view_distance: float = 16000.0
 @export_group("Fog")
-## The skyline's fog (skyline.gdshader): the ground level, how high it
-## thins out over, and how far you see through it at the ground and up high.
+## The skyline's fog (skyline.gdshader): the world's own (height_thinning
+## 0), or thinning with height (up to 1) from fog_floor over thin_height, to
+## far_reach up high. Their glow shines through it either way.
+@export_range(0.0, 1.0, 0.05) var height_thinning: float = 0.0
 @export var fog_floor: float = 0.0
 @export var thin_height: float = 600.0
-@export var near_reach: float = 260.0
 @export var far_reach: float = 9000.0
 
 const SHADER := preload("res://shaders/skyline.gdshader")
@@ -104,9 +105,9 @@ func _convert(original: Material) -> Material:
 func _fresh() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
+	material.set_shader_parameter("height_thinning", height_thinning)
 	material.set_shader_parameter("fog_floor", fog_floor)
 	material.set_shader_parameter("thin_height", thin_height)
-	material.set_shader_parameter("near_reach", near_reach)
 	material.set_shader_parameter("far_reach", far_reach)
 	return material
 
@@ -151,7 +152,7 @@ func _silhouette_material() -> ShaderMaterial:
 		_silhouette = _fresh()
 		_silhouette.set_shader_parameter("use_vertex_color", true)
 		_silhouette.set_shader_parameter("albedo_color", Color(0.45, 0.45, 0.45))
-		_silhouette.set_shader_parameter("glow_color", Color(2.0, 2.0, 2.0))
+		_silhouette.set_shader_parameter("glow_color", Color(4.0, 4.0, 4.0))
 	return _silhouette
 
 func _vertex_material() -> ShaderMaterial:

@@ -1061,3 +1061,20 @@ them:
     - Rats use RatSwarm's `rat_scale` and `rat_damage_multiplier`.
     - Only the megastructure's own hordes: a Rat Bender's keep their size.
   - Barnacle nests on megastructures: 20 (half inside).
+
+- 2026-10-10: **Error spam fixed; the fog back to the original, with giants as silhouettes and a cloud deck; special touches doubled.**
+  - **~2,000 errors at load:** `mesh.get_meta(&"trunk", null)` errors whenever the meta is missing (a null default counts as none). It's now `has_meta` first.
+  - **The fog:**
+    - The user liked the original fog, not the thinning with height. The skyline, megastructure shells, giant growths, the Stack's lights and the swarms now fog exactly like the world: the new globals `world_fog_begin`/`world_fog_end` with `world_fog_color`, kept in step by `AlienAtmosphere.apply_blend`. `height_thinning` (0 by default) keeps the old effect one slider away.
+    - Still visible far off (the user's ask): past the fog's end the fog stops at `silhouette` (0.8), so distant giants and the Stack stay dim shapes in the murk, and their glow and lights shine through it (`light_pierce`).
+    - **Reaching past the clouds:** a cloud band (650–1,000 m) they vanish into and rise out of, in all those shaders.
+    - New CloudDeck (`scripts/world/cloud_deck.gd`, `clouds.gdshader`): a drifting layer of billows in the fog's colour at 800 m, kept over the camera. It's darker from below, lighter from above, and fades out right overhead. It's in the bake tool and the test world.
+  - **Twice as dramatic (the user's ask):**
+    - Stack windows 5,200 (was 2,600), bigger, brightness 5.
+    - Blinkers on almost every block corner, 9 m.
+    - Swarms 700 specks each, bigger.
+    - The coiling worm twice as thick, longer, faster.
+    - Lift lamp and depth lamps ×2 (8 lamps).
+    - Breathing ×2 (vines 2.8, pillars 2.0, in the land too).
+    - Growth glow ×2 on the Stack; skyline glow ×2.
+    - Wind and drone +6 dB.

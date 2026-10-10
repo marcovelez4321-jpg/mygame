@@ -14,11 +14,11 @@ extends MultiMeshInstance3D
 @export var top: float = 2200.0
 @export var turns: float = 5.0
 ## Segments, how far apart along the spiral (metres), and how thick.
-@export var segments: int = 70
-@export var spacing: float = 16.0
-@export var thickness: float = 14.0
+@export var segments: int = 90
+@export var spacing: float = 22.0
+@export var thickness: float = 28.0
 ## How fast it slides along the spiral (metres a second), up then down.
-@export var crawl_speed: float = 6.0
+@export var crawl_speed: float = 10.0
 @export var draw_distance: float = 9000.0
 
 const SEGMENT_MESH := "res://art/worm_boss/worm_segment_mesh.res"

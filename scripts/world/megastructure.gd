@@ -5,10 +5,9 @@ extends Node3D
 ## can reach it, climb it and go inside. Four versions of itself by
 ## distance, so it's a spectacle from anywhere and cheap everywhere:
 ##   Shell (child "Shell"): the outside -- towers, bridges, walls. Always
-##   drawn, with the skyline's fog (thick at the ground, thinning with
-##   height), so from kilometres off its feet drown in the murk while its
-##   upper reaches loom; casts its shadow; its collision always on (you
-##   land on it, grapple it). Simple boxes: cheap.
+##   drawn (in the world's fog, its lights shining through it: from far off
+##   it's windows and blinkers hanging in the murk); casts its shadow; its
+##   collision always on (you land on it, grapple it). Simple boxes: cheap.
 ##   Interior (child "Interior"): the insides -- floors, halls, shafts,
 ##   depths. Only drawn within interior_distance (its collision stays: static
 ##   boxes cost almost nothing).
@@ -49,10 +48,11 @@ extends Node3D
 ## How far the camera sees (metres): enough for its top from anywhere.
 @export var view_distance: float = 16000.0
 @export_group("Shell Fog")
-## The shell's fog (shaders/skyline.gdshader).
+## The shell's fog (shaders/skyline.gdshader): the world's own
+## (height_thinning 0), or thinning with height (up to 1).
+@export_range(0.0, 1.0, 0.05) var height_thinning: float = 0.0
 @export var fog_floor: float = 0.0
 @export var thin_height: float = 700.0
-@export var near_reach: float = 260.0
 @export var far_reach: float = 12000.0
 
 const SKYLINE := preload("res://shaders/skyline.gdshader")
@@ -242,8 +242,8 @@ func _skyline_material(base: BaseMaterial3D) -> ShaderMaterial:
 		if base.albedo_texture:
 			material.set_shader_parameter("albedo_texture", base.albedo_texture)
 		material.set_shader_parameter("albedo_color", base.albedo_color)
+	material.set_shader_parameter("height_thinning", height_thinning)
 	material.set_shader_parameter("fog_floor", fog_floor)
 	material.set_shader_parameter("thin_height", thin_height)
-	material.set_shader_parameter("near_reach", near_reach)
 	material.set_shader_parameter("far_reach", far_reach)
 	return material

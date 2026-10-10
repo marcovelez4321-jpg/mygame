@@ -9,15 +9,24 @@ shader_type spatial;
 render_mode unshaded, fog_disabled, cull_disabled;
 
 global uniform vec4 world_fog_color;
+global uniform float world_fog_begin;
+global uniform float world_fog_end;
 
 uniform float swarm_radius = 300.0;
 uniform float swarm_height = 120.0;
 uniform float speed = 0.06;
 uniform vec3 speck_color : source_color = vec3(0.04, 0.035, 0.03);
+uniform float height_thinning : hint_range(0.0, 1.0) = 0.0;
 uniform float fog_floor = 0.0;
 uniform float thin_height = 700.0;
-uniform float near_reach = 300.0;
 uniform float far_reach = 14000.0;
+// Far off, the fog never quite takes it: at most `silhouette` of the way,
+// so giants kilometres off stay dim shapes in the murk. And the cloud band
+// (cloud_bottom..cloud_top) it vanishes into, coming out above it.
+uniform float silhouette : hint_range(0.0, 1.0) = 0.8;
+uniform float cloud_bottom = 650.0;
+uniform float cloud_top = 1000.0;
+uniform float cloud_density : hint_range(0.0, 1.0) = 0.97;
 
 varying vec3 v_world;
 
@@ -35,7 +44,11 @@ void vertex() {
 
 void fragment() {
 	float up = clamp((v_world.y - fog_floor) / max(thin_height, 1.0), 0.0, 1.0);
-	float reach = mix(near_reach, far_reach, up * up);
-	float fog = clamp(length(v_world - CAMERA_POSITION_WORLD) / reach, 0.0, 1.0);
-	ALBEDO = mix(speck_color, world_fog_color.rgb, fog * fog);
+	float fog_end = mix(world_fog_end, far_reach, up * up * height_thinning);
+	float dist = length(v_world - CAMERA_POSITION_WORLD);
+	float fog = pow(clamp((dist - world_fog_begin) / max(fog_end - world_fog_begin, 1.0), 0.0, 1.0), 1.2);
+	fog = min(fog, silhouette);
+	float band = smoothstep(cloud_bottom - 100.0, cloud_bottom + 60.0, v_world.y) * (1.0 - smoothstep(cloud_top - 60.0, cloud_top + 100.0, v_world.y));
+	fog = max(fog, band * cloud_density * smoothstep(world_fog_begin, world_fog_end, dist));
+	ALBEDO = mix(speck_color, world_fog_color.rgb, fog);
 }

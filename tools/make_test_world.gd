@@ -308,6 +308,11 @@ func _bake() -> void:
 	stack.owner = root
 	# The skyline: giants kilometres tall out past the world's edge, rising out
 	# of the murk (stand-ins until real ones go under it).
+	# The cloud deck the Stack and the giants rise through.
+	var clouds := CloudDeck.new()
+	clouds.name = "CloudDeck"
+	root.add_child(clouds)
+	clouds.owner = root
 	var skyline := SkylineLayer.new()
 	skyline.name = "SkylineLayer"
 	root.add_child(skyline)

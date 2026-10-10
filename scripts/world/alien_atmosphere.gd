@@ -108,8 +108,11 @@ static func apply_blend(environment: Environment, a: AlienAtmosphere, b: AlienAt
 		sun.light_energy = lerpf(a.sun_energy, b.sun_energy, t)
 	var fog := a.fog_color.lerp(b.fog_color, t)
 	environment.fog_light_color = fog
-	# The skyline and the giants draw their own fog in the same colour.
+	# The skyline, the giants and the megastructures draw their own fog: the
+	# same colour and distances.
 	RenderingServer.global_shader_parameter_set(&"world_fog_color", fog)
+	RenderingServer.global_shader_parameter_set(&"world_fog_begin", lerpf(a.fog_start, b.fog_start, t))
+	RenderingServer.global_shader_parameter_set(&"world_fog_end", lerpf(a.fog_end, b.fog_end, t))
 	environment.background_color = fog
 	environment.fog_depth_begin = lerpf(a.fog_start, b.fog_start, t)
 	environment.fog_depth_end = lerpf(a.fog_end, b.fog_end, t)

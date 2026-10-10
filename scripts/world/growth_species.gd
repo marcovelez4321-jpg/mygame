@@ -164,7 +164,7 @@ static func defaults() -> Array[GrowthSpecies]:
 	var vines := _make(GrowthMeshes.Kind.BLACK_VINES, 2.5, 400.0, 0.55, 0.0, 60.0, 0.0, 1.0,
 			1, 8, 1.6, 2.5, 1.4, 1.5, 0.7, 1.8, Color(0.3, 0.05, 0.1), 0.04, 160.0, Biome.ANYWHERE)
 	vines.wall_patches = 1.2
-	vines.breathe = 1.4 # swells to about two and a half times as thick
+	vines.breathe = 2.8 # swells to nearly four times as thick
 	vines.follow_ground = 1.0 # lies on whatever it grows over
 	list.append(vines)
 	# --- Giants: half a megastructure tall, in forests here and there ---
@@ -174,7 +174,7 @@ static func defaults() -> Array[GrowthSpecies]:
 	list.append(_giant(GrowthMeshes.Kind.HIVE_SPIRE, Biome.SEWER, 18.0, Color(0.8, 0.7, 0.2), 0.0))
 	list.append(_giant(GrowthMeshes.Kind.FLESH_STALK, Biome.SEWER, 11.0, Color(0.95, 0.85, 0.35), 0.7))
 	var pillars := _giant(GrowthMeshes.Kind.VINE_PILLAR, Biome.ANYWHERE, 12.0, Color(0.3, 0.05, 0.1), 0.2)
-	pillars.breathe = 1.0
+	pillars.breathe = 2.0
 	list.append(pillars)
 	return list
 

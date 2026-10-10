@@ -289,7 +289,7 @@ func build_scene(concrete: Texture2D, wind: AudioStream, drone: AudioStream) -> 
 	var worm := CoilingWorm.new()
 	worm.name = "CoilingWorm"
 	worm.position = Vector3(TOWERS[2][0], 0.0, TOWERS[2][1])
-	worm.radius = TOWERS[2][2] * 0.55
+	worm.radius = TOWERS[2][2] * 0.6
 	worm.bottom = 300.0
 	worm.top = 2500.0
 	_own(root, worm, decor)
@@ -416,12 +416,12 @@ func _water(root: Node, parent: Node) -> void:
 
 ## A few dim lamps still burning down in the depths.
 func _depth_lights(root: Node, parent: Node) -> void:
-	for i in 5:
+	for i in 8:
 		var lamp := OmniLight3D.new()
 		lamp.name = "DepthLamp_%d" % i
 		lamp.light_color = Color(1.0, 0.62, 0.3)
-		lamp.light_energy = 2.0
-		lamp.omni_range = 70.0
+		lamp.light_energy = 4.0
+		lamp.omni_range = 120.0
 		lamp.position = Vector3(random.randf_range(-130.0, 130.0), WATER_LEVEL + random.randf_range(15.0, 45.0), random.randf_range(-130.0, 130.0))
 		_own(root, lamp, parent)
 
@@ -438,7 +438,7 @@ func _windows(root: Node, parent: Node) -> void:
 	var windows: Array[Transform3D] = []
 	var window_colors: Array[Color] = []
 	var window_customs: Array[Color] = []
-	for i in 2600:
+	for i in 5200:
 		var b: Dictionary = walls[_weighted(walls, total)]
 		var side := random.randi() % 4
 		var half: Vector3 = (b.s as Vector3) * 0.5
@@ -449,20 +449,20 @@ func _windows(root: Node, parent: Node) -> void:
 		windows.append(Transform3D(Basis.IDENTITY, at))
 		window_colors.append(Color(1.0, randf_range(0.55, 0.75), randf_range(0.2, 0.35)) if random.randf() < 0.85 else Color(0.7, 0.85, 1.0))
 		window_customs.append(Color(random.randf(), 0.0, 1.0 if random.randf() < 0.1 else 0.0, 0.0))
-	_light_batch(root, parent, "Windows", Vector3(3.0, 4.0, 3.0), windows, window_colors, window_customs)
+	_light_batch(root, parent, "Windows", Vector3(4.2, 5.6, 3.0), windows, window_colors, window_customs)
 	var blinkers: Array[Transform3D] = []
 	var blinker_colors: Array[Color] = []
 	var blinker_customs: Array[Color] = []
 	for b in walls:
 		var half: Vector3 = (b.s as Vector3) * 0.5
 		for corner in 4:
-			if random.randf() < 0.45:
+			if random.randf() < 0.1:
 				continue
 			var at := (b.c as Vector3) + Vector3(half.x * (1 if corner % 2 == 0 else -1), half.y - 2.0, half.z * (1 if corner < 2 else -1))
 			blinkers.append(Transform3D(Basis.IDENTITY, at))
 			blinker_colors.append(Color(1.0, 0.08, 0.05))
 			blinker_customs.append(Color(random.randf(), 1.0, 0.0, 0.0))
-	_light_batch(root, parent, "Blinkers", Vector3(5.0, 5.0, 5.0), blinkers, blinker_colors, blinker_customs)
+	_light_batch(root, parent, "Blinkers", Vector3(9.0, 9.0, 9.0), blinkers, blinker_colors, blinker_customs)
 
 
 func _light_batch(root: Node, parent: Node, name: String, size: Vector3, places: Array[Transform3D], colors: Array[Color], customs: Array[Color]) -> void:
@@ -505,8 +505,8 @@ func _growth(root: Node, parent: Node) -> void:
 		wall_total += (s.x + s.z) * 2.0 * s.y
 		tops.append(b)
 		top_total += s.x * s.z
-	_grow_on(root, parent, GrowthMeshes.Kind.BLACK_VINES, walls, wall_total, true, 420, 10.0, 22.0, 2500.0, 1.4)
-	_grow_on(root, parent, GrowthMeshes.Kind.VINE_PILLAR, walls, wall_total, true, 30, 3.0, 8.0, 9000.0, 1.0)
+	_grow_on(root, parent, GrowthMeshes.Kind.BLACK_VINES, walls, wall_total, true, 420, 10.0, 22.0, 2500.0, 2.8)
+	_grow_on(root, parent, GrowthMeshes.Kind.VINE_PILLAR, walls, wall_total, true, 30, 3.0, 8.0, 9000.0, 2.0)
 	_grow_on(root, parent, GrowthMeshes.Kind.FUNGUS_TOWER, walls, wall_total, true, 70, 0.8, 2.0, 6000.0, 0.0)
 	_grow_on(root, parent, GrowthMeshes.Kind.HIVE_SPIRE, tops, top_total, false, 70, 1.2, 3.0, 9000.0, 0.0)
 	_grow_on(root, parent, GrowthMeshes.Kind.EGG_SACS, tops, top_total, false, 220, 10.0, 20.0, 2500.0, 0.0)
@@ -557,10 +557,9 @@ func _grow_on(root: Node, parent: Node, kind: GrowthMeshes.Kind, blocks: Array[D
 	material.shader = GrowthScatter._tall_shader()
 	material.set_shader_parameter("sway_amount", 0.05)
 	material.set_shader_parameter("breathe_amount", breathe)
-	material.set_shader_parameter("glow_color", Color(0.8, 0.7, 0.25))
+	material.set_shader_parameter("glow_color", Color(1.6, 1.4, 0.5))
 	material.set_shader_parameter("fog_floor", 0.0)
 	material.set_shader_parameter("thin_height", 700.0)
-	material.set_shader_parameter("near_reach", 260.0)
 	material.set_shader_parameter("far_reach", 12000.0)
 	node.material_override = material
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -572,7 +571,7 @@ func _grow_on(root: Node, parent: Node, kind: GrowthMeshes.Kind, blocks: Array[D
 func _swarms(root: Node, parent: Node) -> void:
 	var speck := SurfaceTool.new()
 	speck.begin(Mesh.PRIMITIVE_TRIANGLES)
-	GrowthMeshes._blob(speck, Vector3.ZERO, 2.0, Color(0.05, 0.04, 0.03), 0.0, 0.0, Vector3(1.6, 0.5, 1.0), false)
+	GrowthMeshes._blob(speck, Vector3.ZERO, 3.5, Color(0.05, 0.04, 0.03), 0.0, 0.0, Vector3(1.6, 0.5, 1.0), false)
 	var mesh := speck.commit()
 	for t in TOWERS.size():
 		var top: float = TOWERS[t][3]
@@ -580,8 +579,8 @@ func _swarms(root: Node, parent: Node) -> void:
 		multimesh.transform_format = MultiMesh.TRANSFORM_3D
 		multimesh.use_custom_data = true
 		multimesh.mesh = mesh
-		multimesh.instance_count = 350
-		for i in 350:
+		multimesh.instance_count = 700
+		for i in 700:
 			multimesh.set_instance_transform(i, Transform3D.IDENTITY)
 			multimesh.set_instance_custom_data(i, Color(random.randf(), random.randf_range(-1.0, 1.0), random.randf(), random.randf()))
 		var node := MultiMeshInstance3D.new()

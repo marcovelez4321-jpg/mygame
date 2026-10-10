@@ -60,15 +60,22 @@ jolt_physics_3d/simulation/position_steps=8
 
 [rendering]
 
-occlusion_culling/use_occlusion_culling=true
-
 rendering_device/d3d12/max_resource_descriptors=262144
 rendering_device/driver.windows="d3d12"
 scaling_3d/mode=5
 scaling_3d/scale=0.35
+occlusion_culling/use_occlusion_culling=true
 
 [shader_globals]
 
+world_fog_begin={
+"type": "float",
+"value": 22.0
+}
+world_fog_end={
+"type": "float",
+"value": 192.5
+}
 world_fog_color={
 "type": "color",
 "value": Color(0.27, 0.29, 0.16, 1)

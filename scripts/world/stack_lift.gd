@@ -39,8 +39,8 @@ func _ready() -> void:
 	# Its lamp: a small light so you can see it climbing in the murk.
 	var lamp := OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.6, 0.25)
-	lamp.light_energy = 3.0
-	lamp.omni_range = 30.0
+	lamp.light_energy = 6.0
+	lamp.omni_range = 60.0
 	lamp.position = Vector3(0.0, size.y * 0.5 + 1.0, 0.0)
 	add_child(lamp)
 
