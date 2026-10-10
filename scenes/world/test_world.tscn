@@ -1,30 +1,31 @@
 [gd_scene format=3]
 
-[ext_resource type="Shader" path="res://shaders/alien_terrain.gdshader" id="1_dwq0o"]
-[ext_resource type="Script" path="res://scripts/world/world_navigation.gd" id="2_yapyo"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="3_ew2ib"]
-[ext_resource type="Script" path="res://scripts/enemies/harvestman.gd" id="4_s4qyy"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/models/harvestman_leech_model.tscn" id="5_tersh"]
-[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_horn.tres" id="6_g4hen"]
-[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_step.tres" id="7_3cvmg"]
-[ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="8_w0w3b"]
-[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="9_s4g5r"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="10_bhy0e"]
-[ext_resource type="Script" path="res://scripts/enemies/spider_pack.gd" id="11_lh68e"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/zombie.tscn" id="12_63a70"]
-[ext_resource type="Script" path="res://scripts/enemy.gd" id="13_e6uwu"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/zombie_rusher.tscn" id="14_k6tl3"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="15_5vhu7"]
-[ext_resource type="Script" path="res://scripts/enemies/rat.gd" id="16_lludv"]
-[ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="17_y826p"]
-[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="18_u65ls"]
-[ext_resource type="Script" path="res://scripts/player_movement.gd" id="19_rsl8k"]
+[ext_resource type="Shader" path="res://shaders/alien_terrain.gdshader" id="1_yapyo"]
+[ext_resource type="Script" path="res://scripts/world/world_navigation.gd" id="2_ew2ib"]
+[ext_resource type="Script" path="res://scripts/world/world_chunks.gd" id="3_s4qyy"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="4_tersh"]
+[ext_resource type="Script" path="res://scripts/enemies/harvestman.gd" id="5_g4hen"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/models/harvestman_leech_model.tscn" id="6_3cvmg"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_horn.tres" id="7_w0w3b"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_step.tres" id="8_s4g5r"]
+[ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="9_bhy0e"]
+[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="10_lh68e"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="11_63a70"]
+[ext_resource type="Script" path="res://scripts/enemies/spider_pack.gd" id="12_e6uwu"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/zombie.tscn" id="13_k6tl3"]
+[ext_resource type="Script" path="res://scripts/enemy.gd" id="14_5vhu7"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/zombie_rusher.tscn" id="15_lludv"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="16_y826p"]
+[ext_resource type="Script" path="res://scripts/enemies/rat.gd" id="17_u65ls"]
+[ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="18_rsl8k"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="19_6n4eo"]
+[ext_resource type="Script" path="res://scripts/player_movement.gd" id="20_22031"]
 
-[sub_resource type="Gradient" id="Gradient_6n4eo"]
+[sub_resource type="Gradient" id="Gradient_wnu4w"]
 offsets = PackedFloat32Array(0.2, 1)
 colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
 
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_22031"]
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_v085t"]
 noise_type = 2
 frequency = 0.03
 cellular_jitter = 3.0
@@ -36,12 +37,12 @@ domain_warp_fractal_type = 2
 domain_warp_fractal_lacunarity = 1.5
 domain_warp_fractal_gain = 1.0
 
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_wnu4w"]
-noise = SubResource("FastNoiseLite_22031")
-color_ramp = SubResource("Gradient_6n4eo")
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_ykgsn"]
+noise = SubResource("FastNoiseLite_v085t")
+color_ramp = SubResource("Gradient_wnu4w")
 seamless = true
 
-[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_v085t"]
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_1ow1t"]
 _shader_parameters = {
 &"bias_distance": null,
 &"blend_sharpness": null,
@@ -67,7 +68,7 @@ _shader_parameters = {
 &"noise1_offset": null,
 &"noise1_scale": null,
 &"noise2_scale": null,
-&"noise_texture": SubResource("NoiseTexture2D_wnu4w"),
+&"noise_texture": SubResource("NoiseTexture2D_ykgsn"),
 &"projection_threshold": null,
 &"ps1": null,
 &"ridge_color": null,
@@ -84,10 +85,10 @@ _shader_parameters = {
 &"valley_color": null
 }
 shader_override_enabled = true
-shader_override = ExtResource("1_dwq0o")
+shader_override = ExtResource("1_yapyo")
 show_checkered = true
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ykgsn"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_c2v4b"]
 transparency = 4
 cull_mode = 2
 vertex_color_use_as_albedo = true
@@ -97,40 +98,44 @@ distance_fade_mode = 1
 distance_fade_min_distance = 128.0
 distance_fade_max_distance = 96.0
 
-[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_1ow1t"]
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_oysqe"]
 generated_type = 1
 height_offset = 0.5
-material_override = SubResource("StandardMaterial3D_ykgsn")
+material_override = SubResource("StandardMaterial3D_c2v4b")
 last_lod = 0
 last_shadow_lod = 0
 lod0_range = 128.0
 
-[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_c2v4b"]
-mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_1ow1t")])
+[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_25kst"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_oysqe")])
 
 [sub_resource type="PhysicsMaterial" id="RatFeet"]
 friction = 0.3
 
-[node name="TestWorld" type="Node3D" unique_id=782064585]
+[node name="TestWorld" type="Node3D" unique_id=124608297]
 
-[node name="Terrain3D" type="Terrain3D" parent="." unique_id=882400551]
+[node name="Terrain3D" type="Terrain3D" parent="." unique_id=1692717313]
 data_directory = "res://worlds/test_world/terrain"
-material = SubResource("Terrain3DMaterial_v085t")
-assets = SubResource("Terrain3DAssets_c2v4b")
+material = SubResource("Terrain3DMaterial_1ow1t")
+assets = SubResource("Terrain3DAssets_25kst")
 collision_mode = 3
 vertex_spacing = 4.0
 show_checkered = true
 top_level = true
 metadata/_edit_lock_ = true
 
-[node name="WorldNavigation" type="Node" parent="." unique_id=1205903916]
-script = ExtResource("2_yapyo")
+[node name="WorldNavigation" type="Node" parent="." unique_id=572661997]
+script = ExtResource("2_ew2ib")
 tiles_dir = "res://worlds/test_world/navigation"
 
-[node name="HarvestmanLeech" type="Node3D" parent="." unique_id=1040049696 instance=ExtResource("3_ew2ib")]
+[node name="WorldChunks" type="Node3D" parent="." unique_id=939043635]
+script = ExtResource("3_s4qyy")
+chunks_dir = "res://worlds/test_world/chunks"
+
+[node name="HarvestmanLeech" type="Node3D" parent="." unique_id=1040049696 instance=ExtResource("4_tersh")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 20.82164, 60)
-script = ExtResource("4_s4qyy")
-model_scene = ExtResource("5_tersh")
+script = ExtResource("5_g4hen")
+model_scene = ExtResource("6_3cvmg")
 proboscis_length = 15.0
 proboscis_extend_speed = 3.0
 proboscis_retract_speed = 3.0
@@ -151,19 +156,19 @@ rush_speed = 10.0
 stun_time = 13.0
 feed_heal = 100.0
 feed_time = 15.0
-horn_sound = ExtResource("6_g4hen")
-step_sound = ExtResource("7_3cvmg")
-hurt_sound = ExtResource("8_w0w3b")
-death_sound = ExtResource("9_s4g5r")
+horn_sound = ExtResource("7_w0w3b")
+step_sound = ExtResource("8_s4g5r")
+hurt_sound = ExtResource("9_bhy0e")
+death_sound = ExtResource("10_lh68e")
 horror_range = 14.0
 
-[node name="SpiderPack" type="Node3D" parent="." unique_id=1629668091 instance=ExtResource("10_bhy0e")]
+[node name="SpiderPack" type="Node3D" parent="." unique_id=291297290 instance=ExtResource("11_63a70")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 25.095348, 50)
-script = ExtResource("11_lh68e")
+script = ExtResource("12_e6uwu")
 
-[node name="Zombie" type="CharacterBody3D" parent="." unique_id=482223739 instance=ExtResource("12_63a70")]
+[node name="Zombie" type="CharacterBody3D" parent="." unique_id=1582790618 instance=ExtResource("13_k6tl3")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 22.662218, -60)
-script = ExtResource("13_e6uwu")
+script = ExtResource("14_5vhu7")
 move_speed = 5.0
 gravity = 30.0
 sight_range = 15.0
@@ -171,9 +176,9 @@ attack_range = 2.2
 attack_windup = 0.47
 pain_time = 0.4
 
-[node name="ZombieRusher" type="CharacterBody3D" parent="." unique_id=551578985 instance=ExtResource("14_k6tl3")]
+[node name="ZombieRusher" type="CharacterBody3D" parent="." unique_id=1944276028 instance=ExtResource("15_lludv")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 27.033876, -50)
-script = ExtResource("13_e6uwu")
+script = ExtResource("14_5vhu7")
 move_speed = 7.5
 gravity = 30.0
 sight_range = 18.0
@@ -184,22 +189,22 @@ attack_windup = 0.3
 attack_recovery = 0.3
 pain_time = 0.2
 
-[node name="Rat" type="RigidBody3D" parent="." unique_id=2002759411 instance=ExtResource("15_5vhu7")]
+[node name="Rat" type="RigidBody3D" parent="." unique_id=2095745403 instance=ExtResource("16_y826p")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.99376, -70)
 mass = 1.27
 physics_material_override = SubResource("RatFeet")
-script = ExtResource("16_lludv")
+script = ExtResource("17_u65ls")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1829897354]
-environment = ExtResource("17_y826p")
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=463302775]
+environment = ExtResource("18_rsl8k")
 metadata/own_look = true
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1552307597]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1137394745]
 transform = Transform3D(0.8660254, -0.38302222, 0.32139382, 0, 0.64278764, 0.76604444, -0.5, -0.66341394, 0.5566704, 0, 0, 0)
 
-[node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("18_u65ls")]
+[node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("19_6n4eo")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
-script = ExtResource("19_rsl8k")
+script = ExtResource("20_22031")
 wall_behind_ray_count = 4
 wall_jump_push = 4.5
 wall_jump_up_velocity = 13.5

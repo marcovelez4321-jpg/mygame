@@ -11,6 +11,18 @@ const DATA_DIR := "res://worlds/test_world/terrain"
 const NAV_DIR := "res://worlds/test_world/navigation"
 const TERRAIN_SHADER := "res://shaders/alien_terrain.gdshader"
 const ENVIRONMENT_PATH := "res://worlds/test_world/environment.tres"
+const CHUNKS_DIR := "res://worlds/test_world/chunks"
+const CHUNK_SIZE := 128.0
+## Test chunks with a megastructure stand-in (a tall monolith) in the middle:
+## chunk -> the monolith's size (width, height). Seen through the fog, they
+## show chunks streaming in and out; the navmesh routes round them.
+const TEST_CHUNKS := {
+	Vector2i(1, 0): Vector2(14.0, 70.0),
+	Vector2i(-2, 1): Vector2(20.0, 45.0),
+	Vector2i(0, -2): Vector2(10.0, 90.0),
+	Vector2i(-3, -3): Vector2(24.0, 60.0),
+	Vector2i(2, 2): Vector2(12.0, 55.0),
+}
 const SCENE_PATH := "res://scenes/world/test_world.tscn"
 const PLAYER_SCENE := "res://scenes/player/player.tscn"
 ## Enemies dropped round the yard to test walking, pathing and foot IK on
@@ -28,6 +40,48 @@ func _initialize() -> void:
 	# A script error stops this function before quit(); never hang on one.
 	create_timer(600.0).timeout.connect(quit)
 	_bake()
+
+
+## Writes each test chunk's scene: a monolith (a static box, sunk a little
+## into the ground) in the middle of the chunk. Chunk-local coordinates.
+func _make_test_chunks(data: Object) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CHUNKS_DIR))
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.22, 0.2, 0.28)
+	material.roughness = 1.0
+	for chunk: Vector2i in TEST_CHUNKS:
+		var size: Vector2 = TEST_CHUNKS[chunk]
+		var middle := Vector3(CHUNK_SIZE * 0.5, 0.0, CHUNK_SIZE * 0.5)
+		var ground := float(data.call("get_height", Vector3(chunk.x * CHUNK_SIZE, 0.0, chunk.y * CHUNK_SIZE) + middle))
+		var content := Node3D.new()
+		content.name = "Megastructure"
+		var body := StaticBody3D.new()
+		body.name = "Monolith"
+		body.position = middle + Vector3(0.0, ground + size.y * 0.5 - 6.0, 0.0)
+		body.rotation_degrees.y = float(chunk.x * 37 + chunk.y * 61) # each turned differently
+		content.add_child(body)
+		body.owner = content
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(size.x, size.y, size.x)
+		shape.shape = box
+		body.add_child(shape)
+		shape.owner = content
+		var mesh := MeshInstance3D.new()
+		var box_mesh := BoxMesh.new()
+		box_mesh.size = box.size
+		box_mesh.material = material
+		mesh.mesh = box_mesh
+		body.add_child(mesh)
+		mesh.owner = content
+		var scene := PackedScene.new()
+		scene.pack(content)
+		ResourceSaver.save(scene, _chunk_path(chunk))
+		content.free()
+
+
+func _chunk_path(chunk: Vector2i) -> String:
+	return CHUNKS_DIR.path_join("chunk_%d_%d.tscn" % [chunk.x, chunk.y])
 
 
 func _bake() -> void:
@@ -77,7 +131,17 @@ func _bake() -> void:
 	navigation.tiles_dir = NAV_DIR
 	var heights: Vector2 = data.call("get_height_range")
 	var half := shape.size * shape.vertex_spacing * 0.5
-	var tiles := navigation.bake_tiles(Rect2(-half, -half, half * 2.0, half * 2.0), terrain, null, heights)
+	# Test chunks (megastructure stand-ins), made first so the navmesh takes
+	# them in: every chunk scene, placed at its chunk, while baking.
+	_make_test_chunks(data)
+	var statics := Node3D.new()
+	root.add_child(statics)
+	for chunk: Vector2i in TEST_CHUNKS:
+		var placed := (load(_chunk_path(chunk)) as PackedScene).instantiate() as Node3D
+		placed.position = Vector3(chunk.x * CHUNK_SIZE, 0.0, chunk.y * CHUNK_SIZE)
+		statics.add_child(placed)
+	var tiles := navigation.bake_tiles(Rect2(-half, -half, half * 2.0, half * 2.0), terrain, statics, heights)
+	statics.queue_free()
 	print("navmesh tiles baked: ", tiles, " into ", NAV_DIR)
 	data.call("save_directory", DATA_DIR)
 	terrain.set("data_directory", DATA_DIR)
@@ -93,6 +157,13 @@ func _bake() -> void:
 	get_root().remove_child(root)
 	root.add_child(navigation)
 	navigation.owner = root
+	# The chunk streamer: chunks load round each player as they go.
+	var chunks := WorldChunks.new()
+	chunks.name = "WorldChunks"
+	chunks.chunks_dir = CHUNKS_DIR
+	chunks.chunk_size = CHUNK_SIZE
+	root.add_child(chunks)
+	chunks.owner = root
 
 
 	# Test enemies on the slopes round the yard: walking, pathing, feet.

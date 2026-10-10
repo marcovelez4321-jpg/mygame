@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_yu3fp"]
+size = Vector3(14, 70, 14)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_u2i50"]
+albedo_color = Color(0.22, 0.2, 0.28, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_i0mn2"]
+material = SubResource("StandardMaterial3D_u2i50")
+size = Vector3(14, 70, 14)
+
+[node name="Megastructure" type="Node3D" unique_id=612576808]
+
+[node name="Monolith" type="StaticBody3D" parent="." unique_id=338238188]
+transform = Transform3D(0.79863554, 0, 0.601815, 0, 1, 0, -0.601815, 0, 0.79863554, 64, 40.309063, 64)
+
+[node name="@CollisionShape3D@180" type="CollisionShape3D" parent="Monolith" unique_id=544119496]
+shape = SubResource("BoxShape3D_yu3fp")
+
+[node name="@MeshInstance3D@181" type="MeshInstance3D" parent="Monolith" unique_id=1300672391]
+mesh = SubResource("BoxMesh_i0mn2")

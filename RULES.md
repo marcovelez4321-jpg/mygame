@@ -779,3 +779,13 @@ them:
   - **Ground shader** (`shaders/alien_terrain.gdshader`, on Terrain3D's minimum shader): purple/blue by height, slope and moss/rust blotches, with PS1 vertex snap, faceted triangles, 1 m colour blocks and 15-bit colour.
   - **Fog** (`scripts/world/alien_atmosphere.gd`; worlds/test_world/environment.tres): purple depth fog 30-220 m, valley haze below 18 m, background in the fog colour until skyboxes, purple ambient light. SewerLook now skips any WorldEnvironment with the `own_look` meta.
   - Terrain3D 1.0.2 added (addons/terrain_3d). Its demo/ folder is left uncommitted (24 MB of samples).
+
+- 2026-10-09: **Open world M0 step 5: chunk streamer** (`scripts/world/world_chunks.gd`, WorldChunks).
+  - Minecraft-style: the world is cut into 128 m chunks (the navmesh tiles' grid), and the chunks within `load_radius` (2: 5 x 5, 640 m across, past the 220 m fog) of every player are loaded.
+  - Each chunk's hand-made content is its own scene (`worlds/<world>/chunks/chunk_<x>_<z>.tscn`, chunk-local coordinates). A chunk with none is just land.
+  - Scenes load on background threads, with at most `max_adds_per_frame` (1) finished chunks added per frame. Chunks unload one ring past the radius (no flicker on a chunk edge).
+  - `chunk_loaded` / `chunk_unloading` signals are the hooks for procedural content (coral, next) and saved per-chunk state.
+  - The bake tool writes 5 test chunks with monoliths (megastructure stand-ins, 45-90 m tall) and bakes them into the navmesh tiles (`bake_tiles` takes in static colliders).
+  - Tested with a stand-in player:
+    - 25 chunks load at the yard; moving 565 m loads 24 and unloads 21.
+    - Paths route round a monolith (82 m vs 71 m straight).
