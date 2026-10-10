@@ -118,3 +118,20 @@ S.T.A.L.K.E.R.-style:
 - **Metroid Prime / Hollow Knight:** locks and shortcuts in an open space.
 - **Half-Life 2:** health chargers (healing polyps).
 - **Subnautica:** reef life and bioluminescence.
+
+## The skyline: giants past the fog (SkylineLayer)
+
+Megastructures and growths kilometres tall, kilometres away, that you see rising out of the murk but never reach. It's the Half-Life 2 3D-skybox idea (the Citadel), done as real geometry at real distance, so they shift slowly as you walk, like mountains.
+
+**Making your own:**
+1. Build it in TrenchBroom (or Blender) at any comfortable size, e.g. a 100 m tower.
+2. Build the map with func_godot as usual (or export the Blender model as glTF).
+3. In the world scene, put the scene under the `SkylineLayer` node, place it 2–8 km out, and scale the instance up (×16 turns a 100 m tower into 1.6 km).
+4. That's it. On load, SkylineLayer swaps its materials for `skyline.gdshader` (same textures and colours), turns off its shadows and collision, and pushes the camera's view distance out to `view_distance`.
+
+**Notes:**
+- Everything scales with it (doorways become 30 m tall, textures chunkier). That's fine for things you never reach. Walk-up megastructures are built at real size and not scaled.
+- Keep them low-poly: a few hundred to a couple of thousand triangles. They're always loaded and never stream.
+- Their fog (`thin_height`, `near_reach`, `far_reach` on SkylineLayer) is as thick as the world's at the ground and thins with height. That's what makes the feet vanish and the tops loom.
+- Small glowing lights or windows on them tell your eye how big they are.
+- While nothing is under SkylineLayer, it grows stand-ins: colossal silhouettes of the giant growths, plus a tower and a loop of land.

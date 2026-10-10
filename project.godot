@@ -67,6 +67,10 @@ scaling_3d/scale=0.35
 
 [shader_globals]
 
+world_fog_color={
+"type": "color",
+"value": Color(0.27, 0.29, 0.16, 1)
+}
 sewer_affine={
 "type": "float",
 "value": 0.0

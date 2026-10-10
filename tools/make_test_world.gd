@@ -265,6 +265,12 @@ func _bake() -> void:
 	encounters.biomes = biomes
 	root.add_child(encounters)
 	encounters.owner = root
+	# The skyline: giants kilometres tall out past the world's edge, rising out
+	# of the murk (stand-ins until real ones go under it).
+	var skyline := SkylineLayer.new()
+	skyline.name = "SkylineLayer"
+	root.add_child(skyline)
+	skyline.owner = root
 
 
 	# Test enemies on the slopes round the yard: walking, pathing, feet.

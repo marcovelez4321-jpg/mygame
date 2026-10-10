@@ -154,6 +154,9 @@ directional_shadow_max_distance = 90.0
 script = ExtResource("9_encounters")
 biomes = ExtResource("5_s4g5r")
 
+[node name="SkylineLayer" type="Node3D" parent="."]
+script = ExtResource("9_skyline")
+
 [node name="Player" parent="." unique_id=1710340998 instance=ExtResource("23_oysqe")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
 

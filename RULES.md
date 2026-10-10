@@ -991,3 +991,13 @@ them:
     - Barnacle nests average 1.5 per chunk (was 0.9).
     - Roaming bands: up to 7 round each player (was 5), started 70–120 m off (was 80–140), a check every 3 s (first after 15 s), at least 60 m apart.
     - Camps start for players within 250 m (was 200).
+
+- 2026-10-10: **The skyline, and giants that rise out of the fog.** (The user wants megalophobic spectacle: structures and growths so big they go past the fog. They picked A, the skyline layer, and B, fog that thins with height.)
+  - **SkylineLayer (`scripts/world/skyline_layer.gd`):** the HL2 3D-skybox idea as real geometry at real distance.
+    - Whatever is put under it (func_godot TrenchBroom scenes, glTF, anything) gets `shaders/skyline.gdshader` with its texture and colour kept, no shadows, no collision (shapes removed, layers zeroed), no occlusion culling. The camera's far plane is pushed to 16 km.
+    - TrenchBroom workflow: build small, scale the instance (×16 like HL2's skybox). See docs/WORLD.md.
+    - Stand-ins (`SkylineMeshes` plus GrowthMeshes): a ring of 10 giants 3.5–7.5 km out, mostly darkened silhouettes of the land's own giant growths scaled to 0.9–2 km tall, plus a brutalist tower with tiny lights and a loop of land 2 km across. 500–1,400 triangles each.
+  - **`skyline.gdshader`:** `fog_disabled` with its own fog. It's as thick as the world's at the ground (`near_reach` 260 m) and thins with height (`thin_height` 600 m → `far_reach` 9 km), so feet drown while tops loom. The fog is applied by hand (albedo fades out, fog colour comes in as emission).
+    - The fog colour is the new global `world_fog_color` (project.godot shader_globals), set by `AlienAtmosphere.apply_blend` as the biomes crossfade.
+  - **Giant growths rise out of the fog too:** `GrowthSpecies.rises_from_fog` (the giants) uses `GrowthScatter._tall_shader()`, the growth shader with the same hand-made fog (thick to 230 m at the ground, 1.4 km past 70 m up). View distance is 600 m, so their tops show past the world's fog.
+  - In the bake tool and the test world.

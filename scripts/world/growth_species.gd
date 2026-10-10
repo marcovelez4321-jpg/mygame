@@ -78,6 +78,10 @@ enum Biome { REEF, SEWER, ANYWHERE }
 ## reef, 190 in the sewer.
 @export var view_distance: float = 180.0
 @export var cast_shadows: bool = false
+## Rises out of the fog (the giants): their own fog, thick low and thinning
+## with height, so their tops loom out of the murk far past where the
+## world's fog would hide them (GrowthScatter._tall_shader()).
+@export var rises_from_fog: bool = false
 ## Ground cover (grass, mould): there's so much of it that it's drawn full
 ## only close up and thinned out further off (GrowthScatter.carpet_near).
 @export var carpet: bool = false
@@ -189,6 +193,8 @@ static func _giant(kind: GrowthMeshes.Kind, home: Biome, space: float, glow: Col
 	giant.sink = 0.6
 	giant.cast_shadows = true
 	giant.tint_variation = 0.15
+	giant.rises_from_fog = true
+	giant.view_distance = 600.0 # their tops show far past the world's fog (as far as chunks are loaded)
 	return giant
 
 
