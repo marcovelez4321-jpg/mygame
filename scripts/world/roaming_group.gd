@@ -26,6 +26,9 @@ extends Node3D
 ## Not finite = free to roam.
 var anchor := Vector3.INF
 var anchor_radius := 50.0
+## Its stops snapped onto the navmesh (the ground). Off for a group living
+## up a megastructure's floors, which the navmesh doesn't reach.
+var use_navmesh := true
 
 ## Where the members wander round now, and where it's heading.
 var home := Vector3.ZERO
@@ -154,6 +157,8 @@ func _pick_destination() -> void:
 ## The nearest walkable point (the navmesh), or the point itself if there's
 ## no navmesh there yet.
 func _on_walkable(point: Vector3) -> Vector3:
+	if not use_navmesh:
+		return point
 	var map := get_world_3d().navigation_map
 	if NavigationServer3D.map_get_iteration_id(map) == 0:
 		return point

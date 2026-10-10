@@ -29,10 +29,23 @@ extends Node3D
 ## Its insides (local space): where the inside nests go.
 @export var inside := AABB()
 @export_group("Nests")
-@export var barnacle_nests: int = 16
+@export var barnacle_nests: int = 20
 ## The outside nests grow up to this high (where players get to).
 @export var nest_height: float = 600.0
 @export var cluster_scene: PackedScene = preload("res://scenes/enemy/barnacle_cluster.tscn")
+@export_group("Infestation")
+## While a player's within infest_range of it, its insides are infested:
+## roach swarms, spider hordes and big rat hordes, each wandering its own
+## patch of a floor (RoamingGroup, staying put). Gone again once everyone's
+## more than infest_range + 150 m away; far-off ones sleep meanwhile.
+@export var infest_range: float = 500.0
+@export var roach_swarms: int = 3
+@export var spider_hordes: int = 2
+@export var rat_hordes: int = 2
+## Everything in its infestation is this much bigger (bites x size; health
+## stays the same) -- a place not built for people breeds things to match.
+## Only its own hordes: a Rat Bender's keep their size.
+@export var infest_magnify: float = 2.0
 ## How far the camera sees (metres): enough for its top from anywhere.
 @export var view_distance: float = 16000.0
 @export_group("Shell Fog")
@@ -43,10 +56,14 @@ extends Node3D
 @export var far_reach: float = 12000.0
 
 const SKYLINE := preload("res://shaders/skyline.gdshader")
+const ROACH := preload("res://scenes/enemy/roach.tscn")
+const SPIDER_PACK := preload("res://scenes/enemy/spider_pack.tscn")
+const RAT_NEST := preload("res://scenes/enemy/rat_nest.tscn")
 ## Megastructure lairs (WormDirector picks them up).
 const LAIR_GROUP := "megastructure_lairs"
 
 var _camera_check := 0.0
+var _infestation: Array[RoamingGroup] = []
 
 
 func _ready() -> void:
@@ -111,6 +128,94 @@ func _process(delta: float) -> void:
 	var camera := get_viewport().get_camera_3d()
 	if camera and camera.far < view_distance:
 		camera.far = view_distance
+	if multiplayer.is_server() and inside.size != Vector3.ZERO:
+		_update_infestation()
+
+
+## Infested while someone's near; cleared once everyone's well away.
+func _update_infestation() -> void:
+	var nearest := INF
+	var middle := to_global(inside.get_center())
+	for node in get_tree().get_nodes_in_group("player"):
+		var at := (node as Node3D).global_position
+		nearest = minf(nearest, Vector2(at.x - middle.x, at.z - middle.z).length())
+	var live: Array[RoamingGroup] = []
+	for group in _infestation:
+		if is_instance_valid(group):
+			live.append(group)
+	_infestation = live
+	if nearest < infest_range and _infestation.is_empty():
+		_infest()
+	elif nearest > infest_range + 150.0 and not _infestation.is_empty():
+		for group in _infestation:
+			group.disband()
+		_infestation.clear()
+
+
+func _infest() -> void:
+	for i in roach_swarms:
+		var group := _floor_group("Roaches")
+		if group:
+			for r in randi_range(6, 12):
+				var roach := ROACH.instantiate() as FlyingRoach
+				roach.size = infest_magnify
+				_member(group, roach, r, 1.5 * infest_magnify)
+	for i in spider_hordes:
+		var group := _floor_group("Spiders")
+		if group:
+			var pack := SPIDER_PACK.instantiate() as SpiderPack
+			pack.start_count = randi_range(12, 20)
+			pack.spider_scale = infest_magnify
+			_member(group, pack, 0)
+	for i in rat_hordes:
+		var group := _floor_group("Rats")
+		if group:
+			var nest := RAT_NEST.instantiate() as RatNest
+			nest.rat_count = randi_range(15, 22) # x2 (leaderless): 30-44
+			nest.bodyguard_count = randi_range(2, 3)
+			var swarm := nest.get_node(^"RatSwarm") as RatSwarm
+			swarm.rat_scale = infest_magnify
+			swarm.rat_damage_multiplier = infest_magnify
+			swarm.separation_distance *= infest_magnify
+			_member(group, nest, 0)
+
+
+## A group staying on a patch of floor somewhere inside, or null if no
+## floor turned up.
+func _floor_group(what: String) -> RoamingGroup:
+	var spot := _inside_spot()
+	if not spot.is_finite():
+		return null
+	var group := RoamingGroup.new()
+	group.name = "Infestation_" + what
+	group.use_navmesh = false
+	group.anchor = spot
+	group.anchor_radius = 45.0
+	group.drift_speed = 0.8
+	add_child(group)
+	group.global_position = spot
+	_infestation.append(group)
+	return group
+
+
+func _member(group: RoamingGroup, member: Node, index: int, lift: float = 0.0) -> void:
+	var around := Vector2.from_angle(index * 2.4 + randf()) * (0.0 if index == 0 else randf_range(1.5, 4.0))
+	(member as Node3D).position = Vector3(around.x, lift, around.y)
+	group.add_child(member)
+
+
+## A spot on a floor inside (a random point in `inside`, straight down onto
+## whatever's under it), or a non-finite vector if none turned up.
+func _inside_spot() -> Vector3:
+	var space := get_world_3d().direct_space_state
+	for attempt in 12:
+		var from := to_global(inside.position + Vector3(randf(), randf(), randf()) * inside.size)
+		var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 60.0)
+		query.collision_mask = 1
+		var hit := space.intersect_ray(query)
+		if not hit.is_empty() and LevelGeometry.is_static(hit.collider) and (hit.normal as Vector3).y > 0.7:
+			return hit.position
+	return Vector3.INF
 
 
 ## The shell's materials made skyline (texture and colour kept), unless

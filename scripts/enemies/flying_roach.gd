@@ -237,6 +237,9 @@ const SPLAT_HEIGHT := 0.35
 @export var blood_color: Color = Color(0.42, 0.5, 0.08)
 ## Size (m) of the goo spot it leaves where it lands.
 @export var splat_size: float = 0.7
+## How big it is (1 = a normal roach): its look and hitbox (its health
+## stays a normal roach's). A megastructure's infestation magnifies its swarms.
+@export var size: float = 1.0
 
 var _state: State = State.HUNT:
 	set(value):
@@ -327,6 +330,24 @@ func _ready() -> void:
 	_decide_kind.call_deferred()
 	_set_home.call_deferred() # once whoever spawned it has put it in place
 	_roll_personality()
+	if not is_equal_approx(size, 1.0):
+		_apply_size()
+
+
+## Bigger (or smaller) than a normal roach: look and hitbox.
+func _apply_size() -> void:
+	var visual := get_node_or_null(^"Visual") as Node3D
+	if visual:
+		visual.scale *= size
+	var shape := get_node_or_null(^"CollisionShape3D") as CollisionShape3D
+	if shape and shape.shape:
+		shape.shape = shape.shape.duplicate()
+		if shape.shape is SphereShape3D:
+			(shape.shape as SphereShape3D).radius *= size
+		elif shape.shape is CapsuleShape3D:
+			(shape.shape as CapsuleShape3D).radius *= size
+			(shape.shape as CapsuleShape3D).height *= size
+	splat_size *= size
 
 
 ## Every roach a little different (messiness): its pace, preferred height,

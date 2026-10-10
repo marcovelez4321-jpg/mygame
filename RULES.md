@@ -1047,3 +1047,17 @@ them:
     - 361 terrain vertices holed for the shaft (Terrain3DData.set_control_hole).
     - In the navmesh bake as statics; monoliths kept 650 m away.
     - Shell blocks standing on the ground are sunk 3 m in.
+
+- 2026-10-10: **Megastructure insides infested, with magnified creatures.**
+  - While a player is within 500 m (`infest_range`), the Megastructure fills its insides:
+    - 3 roach swarms of 6–12;
+    - 2 spider hordes of 12–20;
+    - 2 big rat hordes, leaderless nests of 15–22 (×2) plus 2–3 bodyguards (×2).
+  - Each is a RoamingGroup anchored to its own patch of floor (a random point in `inside`, dropped onto the floor under it), drifting round it within 45 m.
+  - New `RoamingGroup.use_navmesh` (off here): the navmesh only covers the ground and would drag them outside.
+  - They're cleared once everyone's more than 650 m away, and sleep when far as usual.
+  - **Magnified** (the user's ask): everything in the infestation is 2× (`infest_magnify`) in size, and bites 2× as hard (rats). Health stays the same (the user's call).
+    - New `FlyingRoach.size` (look and hitbox) and `SpiderPack.spider_scale` (health put back to a normal spider's after its size roll).
+    - Rats use RatSwarm's `rat_scale` and `rat_damage_multiplier`.
+    - Only the megastructure's own hordes: a Rat Bender's keep their size.
+  - Barnacle nests on megastructures: 20 (half inside).
