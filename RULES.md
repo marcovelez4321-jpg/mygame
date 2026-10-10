@@ -1167,3 +1167,8 @@ them:
   - **Only the leech-legged Harvestman spawns** (the user's call). EncounterDirector's `HARVESTMEN` holds just it; `harvestman_level.tscn`'s barnacle one is now a leech one. Companions copy their leader's scene, so they're leech ones too. The other variants' scenes stay (unused).
   - **No rush** (`can_rush`, off). It walks at you and uses its other attacks.
   - **Missing legs (a bug):** the leech legs' and the proboscis's batches are drawn in world space from the world's origin, with a fixed visibility box of ±500 m round it. Any Harvestman more than 500 m from the origin (the roaming ones, the Stack's) had them culled even right in front of you. `_follow_bounds()` moves the box with it every frame (70 m × size round it).
+
+- 2026-10-10: **Every window has a room, every room leads to a hall: two a hall.**
+  - The base windows (cut straight onto the base's floors, with no room) are gone. The base walls stay solid, with their three ways in.
+  - Window rooms (`_window_room`): exactly 2 per hall (the user's call), 30 in all. Each goes first to a side of its tower that doesn't have one yet, so every side of all five towers has at least one. Checked.
+  - Each is one painted window on a painted spot, a room behind it (its floor at the sill, a warm lamp in half), and a corridor at its back into the hall.

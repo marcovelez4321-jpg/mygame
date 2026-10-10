@@ -124,7 +124,6 @@ func _init() -> void:
 		for range_ in HALLS[t]:
 			_hall(t, range_[0], range_[1])
 	_window_rooms()
-	_base_windows()
 	_hollow_bridges()
 	# Entrances.
 	_lift()
@@ -317,8 +316,8 @@ func _base() -> void:
 	terrain_holes.append(AABB(Vector3(-SHAFT * 0.5 - WALL, -20.0, -SHAFT * 0.5 - WALL), Vector3(SHAFT + WALL * 2.0, 40.0, SHAFT + WALL * 2.0)))
 
 
-## One storey of a base wall (side 0..3: -Z, +Z, -X, +X): solid (windows are
-## cut into it later, _base_windows), except where you walk in -- the
+## One storey of a base wall (side 0..3: -Z, +Z, -X, +X): solid, except
+## where you walk in -- the
 ## bridge's end (+X, storey 1, round z 30), the lift's dock (-Z, storey 1,
 ## round x 0) -- and on +Z, storeys 1-2, the wall the falling block tore
 ## open (no wall there at all, but its ends).
@@ -448,84 +447,72 @@ func _hall(t: int, bottom: float, top: float) -> void:
 	halls.append({tower = t, box = room, name = "Hall_%d_%d" % [t, int(bottom)]})
 
 
-## Lit apartment windows scattered over every tower, at its halls' heights:
-## a room behind each (lit warm, beaming out), its window open to the
-## outside, and a corridor at its back into the hall.
+## Lit apartment windows over every tower, each with its room behind it and
+## the room's corridor into a hall -- every window has its room, every room
+## leads to a hall (the user's ask). Two a hall, put first on the sides of
+## its tower that don't have one yet, so every side of every tower gets at
+## least one (every tower has two halls or more).
 func _window_rooms() -> void:
+	var sides_done := {} # Vector2i(tower, side) -> true
 	for hall in halls:
-		var t: int = hall.tower
-		var room_box: AABB = hall.box
-		for n in random.randi_range(3, 6): # (50% more than the first 2-4)
-			var side := random.randi() % 4
-			var tall := 14.0
-			var y := random.randf_range(room_box.position.y + 2.0, room_box.end.y - tall - 4.0)
-			var face := _face(t, y + tall * 0.5, side)
-			var out := _outward(side)
-			var cross := Vector3(out.z, 0.0, out.x).abs()
-			var hall_reach := (room_box.size.x if side >= 2 else room_box.size.z) * 0.5
-			var along := random.randf_range(-hall_reach * 0.6, hall_reach * 0.6)
-			# On a painted window: across, a window's middle (4 m into an 8 m
-			# tile along the face's direction); up, its sill.
-			var along_world := (Vector3(TOWERS[t][0], 0.0, TOWERS[t][1]) + cross * along).dot(_face_across(side))
-			along += (_snap_to_window(along_world) - along_world) * _face_across(side).dot(cross) # (on two sides the texture runs the other way)
-			y = _snap_sill(y) # the room's floor is the window's sill
-			var centre := Vector3(TOWERS[t][0], y, TOWERS[t][1]) + cross * along
-			# The room: from 3 m inside the face, 22 deep (the wall in front
-			# of it stays, but for its window).
-			var depth := minf(22.0, face - hall_reach - 3.0)
-			if depth < 6.0:
-				continue # no room between the hall and the outside here
-			var near := centre + out * (face - 3.0)
-			var far := centre + out * (face - 3.0 - depth)
-			var room := _span(near, far, cross, 20.0, y, tall)
-			_carve(room)
-			# The corridor from the room's back into the hall.
-			var hall_edge := centre + out * hall_reach
-			_carve(_span(far + out * 0.5, hall_edge - out * 1.0, cross, 8.0, y, 10.0))
-			# The window: one painted window's size, cut through the 3 m of wall
-			# in front of the room, right where it's painted.
-			var window := Vector2(WINDOW_WIDTH, WINDOW_TOP - WINDOW_BOTTOM)
-			var sill := y
-			_carve(_span(centre + out * (face + 1.0), centre + out * (face - 3.5), cross, window.x, sill, window.y))
-			var at := centre + out * face + Vector3.UP * window.y * 0.5
-			window_rooms.append({at = at, normal = out, size = window, room = room})
-			if random.randf() < 0.5:
-				entrance_spots.append(Vector3(room.get_center().x, room.position.y, room.get_center().z))
-			openings.append(at)
-			if random.randf() < 0.5:
-				lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
+		var placed := 0
+		for attempt in 16:
+			if placed >= 2:
+				break
+			var t: int = hall.tower
+			var wanted: Array[int] = []
+			for side in 4:
+				if not sides_done.has(Vector2i(t, side)):
+					wanted.append(side)
+			var side := wanted[random.randi() % wanted.size()] if not wanted.is_empty() and attempt < 8 else random.randi() % 4
+			if _window_room(hall, side):
+				sides_done[Vector2i(t, side)] = true
+				placed += 1
 
-
-## Windows cut into the main tower's base walls, two a side each storey,
-## each exactly a painted window, opening straight onto that floor -- a third
-## of them lit (a lamp just inside, the glow and the beam).
-func _base_windows() -> void:
-	var half: float = TOWERS[0][2] * 0.5
-	var floors := int(INTERIOR_TOP / FLOOR)
-	for f in floors:
-		var y0 := f * FLOOR
-		for side in 4:
-			var out := _outward(side)
-			var cross := Vector3(out.z, 0.0, out.x).abs()
-			var across := _face_across(side)
-			for k in 2:
-				var along := random.randf_range(-half * 0.8, half * 0.8)
-				var sill := _snap_sill(y0 + random.randf_range(4.0, FLOOR - 12.0))
-				var centre := out * half + cross * along
-				var world_along := centre.dot(across)
-				centre += cross * (_snap_to_window(world_along) - world_along) * across.dot(cross)
-				centre.y = sill
-				var window := Vector2(WINDOW_WIDTH, WINDOW_TOP - WINDOW_BOTTOM)
-				# Not into a way in (or the torn wall): those are open already.
-				if (side == 3 or side == 0) and f == 1 or side == 1 and (f == 1 or f == 2):
-					continue
-				_carve(_span(centre + out * 1.0, centre - out * (WALL + 1.0), cross, window.x, sill, window.y))
-				var at := centre + Vector3.UP * window.y * 0.5
-				openings.append(at)
-				if random.randf() < 0.33:
-					var inside := AABB(centre - out * (WALL + 10.0) + Vector3(-6.0, 0.0, -6.0), Vector3(12.0, 12.0, 12.0))
-					window_rooms.append({at = at, normal = out, size = window, room = inside})
-					lamps.append([centre - out * (WALL + 8.0) + Vector3.UP * 6.0, Color(1.0, 0.68, 0.32), 4.0, 26.0])
+## One window room on `side` of a hall's tower, at that hall's height: the
+## window (one painted window, on a painted spot), the room behind it (its
+## floor at the sill, a warm lamp in half of them), and a corridor at its
+## back into the hall. False if there's no room for one there.
+func _window_room(hall: Dictionary, side: int) -> bool:
+	var t: int = hall.tower
+	var room_box: AABB = hall.box
+	var tall := 14.0
+	var y := random.randf_range(room_box.position.y + 2.0, room_box.end.y - tall - 4.0)
+	var face := _face(t, y + tall * 0.5, side)
+	var out := _outward(side)
+	var cross := Vector3(out.z, 0.0, out.x).abs()
+	var hall_reach := (room_box.size.x if side >= 2 else room_box.size.z) * 0.5
+	var hall_wide := (room_box.size.z if side >= 2 else room_box.size.x) * 0.5
+	var along := random.randf_range(-hall_wide * 0.6, hall_wide * 0.6)
+	# On a painted window: across, a window's middle; up, its sill.
+	var along_world := (Vector3(TOWERS[t][0], 0.0, TOWERS[t][1]) + cross * along).dot(_face_across(side))
+	along += (_snap_to_window(along_world) - along_world) * _face_across(side).dot(cross) # (on two sides the texture runs the other way)
+	y = _snap_sill(y) # the room's floor is the window's sill
+	if y < room_box.position.y or y + tall > room_box.end.y:
+		return false
+	var centre := Vector3(TOWERS[t][0], y, TOWERS[t][1]) + cross * along
+	# The room: from 3 m inside the face, up to 22 deep.
+	var depth := minf(22.0, face - hall_reach - 3.0)
+	if depth < 6.0:
+		return false # no room between the hall and the outside here
+	var near := centre + out * (face - 3.0)
+	var far := centre + out * (face - 3.0 - depth)
+	var room := _span(near, far, cross, 20.0, y, tall)
+	_carve(room)
+	# The corridor from the room's back into the hall.
+	var hall_edge := centre + out * hall_reach
+	_carve(_span(far + out * 0.5, hall_edge - out * 1.0, cross, 8.0, y, 10.0))
+	# The window: one painted window's size, through the 3 m of wall in front.
+	var window := Vector2(WINDOW_WIDTH, WINDOW_TOP - WINDOW_BOTTOM)
+	_carve(_span(centre + out * (face + 1.0), centre + out * (face - 3.5), cross, window.x, y, window.y))
+	var at := centre + out * face + Vector3.UP * window.y * 0.5
+	window_rooms.append({at = at, normal = out, size = window, room = room})
+	openings.append(at)
+	if random.randf() < 0.5:
+		lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
+	if random.randf() < 0.5:
+		entrance_spots.append(Vector3(room.get_center().x, room.position.y, room.get_center().z))
+	return true
 
 
 ## The direction "across" a face on `side` runs in for the texture (its u
