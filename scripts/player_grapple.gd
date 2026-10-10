@@ -95,6 +95,9 @@ enum Rope { NONE, LASH, PULL, RIDE, MISS }
 ## Charges ready now, and how far the next one has grown back (0..1), for the HUD.
 var charges: int = 0
 var recharge_fraction: float = 0.0
+## Testing: grapples never run out (the pause menu's "Infinite Grapples"
+## switch, like Infinite Ammo). On for now, while the user tests the Stack.
+var infinite_charges: bool = true
 ## 0..1 how coiled the tentacle is right now (the arm animation reads this).
 var coil: float = 0.0
 
@@ -262,7 +265,8 @@ func _regrow(delta: float) -> void:
 
 
 func _fire(origin: Vector3, aim: Vector3) -> void:
-	charges -= 1
+	if not infinite_charges:
+		charges -= 1
 	_power = lerpf(min_power, 1.0, clampf(inverse_lerp(min_hold, charge_time, _hold), 0.0, 1.0))
 	_hold = 0.0
 	release()

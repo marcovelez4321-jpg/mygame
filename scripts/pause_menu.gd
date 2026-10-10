@@ -56,6 +56,8 @@ var _look_pickers: Dictionary = {}
 var _characters: Array[String] = []
 ## Bus name -> [HSlider, value Label]
 var _audio_rows: Dictionary = {}
+## "Infinite Grapples" (made from a copy of the Infinite Ammo row).
+var _infinite_grapples_check: CheckButton
 
 ## Sensitivity is stored on the player as raw radians-per-pixel (a tiny
 ## number like 0.0025), which makes for an awkward slider. We show/store the
@@ -96,6 +98,7 @@ func _ready() -> void:
 	_populate_character_options()
 	character_option.item_selected.connect(_on_character_selected)
 	_add_tentacle_row()
+	_add_infinite_grapples_row()
 	# Same order as GameSettings.OutlineMode.
 	for label in ["When looking at it", "Always", "Off"]:
 		outlines_option.add_item(label)
@@ -110,6 +113,27 @@ func _ready() -> void:
 	test_map_button.pressed.connect(test_map_loader.pick)
 	test_map_loader.map_ready.connect(_open_test_map)
 	hub_button.pressed.connect(_go_to_hub)
+
+
+## "Infinite Grapples" (PlayerGrapple.infinite_charges): a copy of the
+## Infinite Ammo row placed just under it.
+func _add_infinite_grapples_row() -> void:
+	var ammo_row := infinite_ammo_check.get_parent()
+	var row := ammo_row.duplicate() as HBoxContainer
+	row.name = "InfiniteGrapplesRow"
+	for child in row.get_children():
+		if child is Label:
+			(child as Label).text = "Infinite Grapples"
+		elif child is CheckButton:
+			_infinite_grapples_check = child as CheckButton
+	ammo_row.get_parent().add_child(row)
+	ammo_row.get_parent().move_child(row, ammo_row.get_index() + 1)
+	_infinite_grapples_check.toggled.connect(func(enabled: bool) -> void:
+		if not is_instance_valid(player):
+			player = PlayerMovement.local_player(get_tree())
+		if is_instance_valid(player) and player.has_node("PlayerGrapple"):
+			player.get_node("PlayerGrapple").set("infinite_charges", enabled)
+	)
 
 
 ## "Tentacle style" (GameSettings.tentacle_style): a copy of the Outlines row
@@ -151,6 +175,8 @@ func open() -> void:
 	if is_instance_valid(player):
 		var weapons := player.get_node("WeaponController") as WeaponController
 		infinite_ammo_check.button_pressed = weapons.infinite_ammo
+		if _infinite_grapples_check and player.has_node("PlayerGrapple"):
+			_infinite_grapples_check.set_pressed_no_signal(player.get_node("PlayerGrapple").get("infinite_charges") == true)
 		hit_zones_check.button_pressed = weapons.show_hit_zones
 		invisible_check.set_pressed_no_signal(player.get("hidden_from_enemies") == true)
 

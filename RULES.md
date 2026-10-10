@@ -1092,3 +1092,5 @@ them:
   - **Fix:** `barnacle_cluster.gd` `_throb` did `get_meta(&"throb", null)`, which errors when the meta is missing (a null default counts as none). It's now `has_meta` first. That was the only other one in the scripts.
 
 - 2026-10-10: **Fix: CoilingWorm "target vector can't be zero".** At the spiral's ends the point 1 m ahead was clamped onto the point itself. Each segment now faces across itself (1 m back to 1 m ahead), and a zero direction is skipped.
+
+- 2026-10-10: **Infinite Grapples switch (pause menu).** `PlayerGrapple.infinite_charges` (on for now, the user's ask, while testing the Stack): firing doesn't spend a charge. The pause menu gets an "Infinite Grapples" row, a copy of the Infinite Ammo row placed under it, synced from the player when the menu opens.
