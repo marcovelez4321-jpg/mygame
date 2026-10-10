@@ -47,6 +47,12 @@ enum Brood { ROACHES, SPIDERS }
 ## gets at the last (biggest) pulse (0.3 = 30% taller).
 @export var swell_time: float = 1.2
 @export var swell_amount: float = 0.3
+## It only breeds with a player within wake_range (HL2's spawners: nothing
+## spawns for nobody to see), and keeps at most max_brood of its own alive at
+## once -- so a big nest is a threat, not an endless flood (and the open
+## world's many nests don't fill the game's creature caps from miles off).
+@export var wake_range: float = 40.0
+@export var max_brood: int = 4
 
 @export_group("Look")
 @export var blood_color: Color = Color(0.6, 0.03, 0.03)
@@ -63,6 +69,10 @@ enum Brood { ROACHES, SPIDERS }
 var roaches_per_spit := 1
 ## A spider nest's pack (set by BarnacleCluster; made here if not).
 var spider_pack: SpiderPack
+## What it's spat that's still about (weak refs).
+var _brood: Array[WeakRef] = []
+var _wake_check := 0.0
+var _awake := false
 var _spit_left := 0.0
 var _swelling := false
 var _dead := false
@@ -103,9 +113,36 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server() or _dead or _swelling:
 		return
+	_wake_check -= delta
+	if _wake_check <= 0.0:
+		_wake_check = 0.5 + randf() * 0.25 # (spread out over the frames)
+		_awake = _player_near()
+	if not _awake:
+		return
 	_spit_left -= delta
 	if _spit_left <= 0.0:
+		if _alive_brood() >= max_brood:
+			_spit_left = randf_range(spit_interval_min, spit_interval_max) * 0.5 # full: try again later
+			return
 		_swell()
+
+
+func _player_near() -> bool:
+	for node in get_tree().get_nodes_in_group("player"):
+		if (node as Node3D).global_position.distance_squared_to(global_position) < wake_range * wake_range:
+			return true
+	return false
+
+
+## Its brood still alive (and forgets the rest).
+func _alive_brood() -> int:
+	var alive: Array[WeakRef] = []
+	for ref in _brood:
+		var creature := ref.get_ref() as Node3D
+		if creature != null and Factions.is_alive_target(creature):
+			alive.append(ref)
+	_brood = alive
+	return _brood.size()
 
 
 ## Throbs three times, each pulse bigger than the last (taller than it is
@@ -152,12 +189,13 @@ func _release(count: int) -> void:
 			spider_pack.start_count = 0
 			spider_pack.position = global_position # the level's root sits at the origin
 			world.add_child(spider_pack)
-		spider_pack.spawn_spiders(count, _mouth.global_position + up * 0.2, up * spider_launch_speed)
+		for spider in spider_pack.spawn_spiders(count, _mouth.global_position + up * 0.2, up * spider_launch_speed):
+			_brood.append(weakref(spider))
 		return
 	for i in count:
 		var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * 0.45
 		var direction := (up + spread).normalized()
-		RoachCarry.hatch(world, _mouth.global_position + direction * 0.2, direction)
+		_brood.append(weakref(RoachCarry.hatch(world, _mouth.global_position + direction * 0.2, direction)))
 
 
 func _on_damaged(_amount: float, _attacker_id: int) -> void:

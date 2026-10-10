@@ -32,7 +32,12 @@ void vertex() {
 	// Snap in normalized device coordinates (after the divide-by-w), then
 	// multiply back by w -- this is what makes it a genuine on-SCREEN grid
 	// snap rather than a world-space one.
-	clip_position.xy = floor(clip_position.xy / clip_position.w * snap_resolution) / snap_resolution * clip_position.w;
+	// Not in the sun's shadow pass (an orthographic projection; the player's
+	// camera is perspective): snapped on the sun's grid, shadows came loose
+	// from what cast them and smeared across big flat faces.
+	if (PROJECTION_MATRIX[3][3] < 0.5) {
+		clip_position.xy = floor(clip_position.xy / clip_position.w * snap_resolution) / snap_resolution * clip_position.w;
+	}
 	POSITION = clip_position;
 }
 

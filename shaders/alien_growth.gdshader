@@ -56,7 +56,12 @@ void vertex() {
 	vec4 view = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
 	float grid = snap_resolution * max(1.0, -view.z / snap_fine_distance);
 	vec4 clip = PROJECTION_MATRIX * view;
-	clip.xy = floor(clip.xy / clip.w * grid) / grid * clip.w;
+	// Not in the sun's shadow pass (an orthographic projection; the player's
+	// camera is perspective): snapped on the sun's grid, shadows came loose
+	// from what cast them and smeared across big flat faces.
+	if (PROJECTION_MATRIX[3][3] < 0.5) {
+		clip.xy = floor(clip.xy / clip.w * grid) / grid * clip.w;
+	}
 	POSITION = clip;
 }
 

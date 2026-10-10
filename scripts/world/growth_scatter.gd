@@ -66,8 +66,8 @@ const GROWTH_SHADER := preload("res://shaders/alien_growth.gdshader")
 ## Carpets (GrowthSpecies.carpet: grass, mould): full thickness up to
 ## carpet_near metres; past that only one in carpet_thin_every, out to their
 ## view distance.
-@export var carpet_near: float = 40.0
-@export var carpet_thin_every: int = 4
+@export var carpet_near: float = 32.0
+@export var carpet_thin_every: int = 5
 
 var _data: Object
 var _patches: Array[FastNoiseLite] = []

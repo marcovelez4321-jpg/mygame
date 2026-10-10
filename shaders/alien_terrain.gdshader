@@ -192,7 +192,12 @@ void vertex() {
 
 	// PS1 wobble: snap to a coarse SCREEN grid after projection (as ps1.gdshader).
 	vec4 clip = PROJECTION_MATRIX * vec4(VERTEX, 1.0);
-	clip.xy = floor(clip.xy / clip.w * snap_resolution) / snap_resolution * clip.w;
+	// Not in the sun's shadow pass (an orthographic projection; the player's
+	// camera is perspective): snapped on the sun's grid, shadows came loose
+	// from what cast them and smeared across big flat faces.
+	if (PROJECTION_MATRIX[3][3] < 0.5) {
+		clip.xy = floor(clip.xy / clip.w * snap_resolution) / snap_resolution * clip.w;
+	}
 	POSITION = clip;
 }
 

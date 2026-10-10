@@ -946,3 +946,13 @@ them:
     - SSAO is on as contact shadows under feet, bodies and creases (`AlienAtmosphere.contact_shadows`; also in `environment.tres`).
     - The sun is tinted by biome and crossfades with the fog (BiomeAtmosphere): cool lavender 1.15 in the reef, sickly yellow 1.25 in the sewer.
   - **Boss worm:** its skin and maw materials are two-sided (`cull_mode` 2). The maw is a hollow barnacle cup, and from behind or inside, mid-leap, you saw straight through it. PS1Look keeps two-sided materials two-sided.
+
+- 2026-10-10: **Low FPS and broken shadows at a barnacle nest on a monolith.**
+  - **FPS:** every barnacle spat roaches or spiders every 10–20 s whether anyone was near or not. With the open world's many nests (and today's doubling), creatures were being bred constantly across all loaded chunks. At the creature caps the oldest are killed (gore and ragdolls) to make room.
+    - Barnacles now only breed with a player within `wake_range` (40 m; HL2's spawners: nothing spawns for nobody to see).
+    - Each keeps at most `max_brood` (4) of its own alive (tracked by weak refs; `RoachCarry.hatch` returns the roach now).
+  - **Shadows:** the PS1 vertex snap ran in the sun's shadow pass too, snapping casters to the sun's coarse grid, so shadows came loose from what cast them and smeared across the monolith's faces.
+    - The snap is skipped when the projection is orthographic (the directional shadow pass; the player's camera is perspective) in `ps1.gdshader`, `alien_growth.gdshader`, `alien_terrain.gdshader` and `worm_dirt.gdshader`.
+  - **More optimization:**
+    - Carpets full thickness to 32 m, then 1 in 5.
+    - Sun shadows to 90 m (the fog's thick past that).

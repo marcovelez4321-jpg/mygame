@@ -363,13 +363,14 @@ func bitten() -> void:
 ## (bitten()) and a rat eaten in mid-air (FlyingRoach). Rule 1: host only;
 ## the roll goes with the spawn in co-op.
 ## `direction` is which way it pops out (a barnacle on a wall spits sideways).
-static func hatch(world: Node, at: Vector3, direction: Vector3 = Vector3.UP) -> void:
+static func hatch(world: Node, at: Vector3, direction: Vector3 = Vector3.UP) -> FlyingRoach:
 	Population.make_room_for_roaches(world.get_tree(), 1) # at the cap, the oldest goes
 	var roach := ROACH_SCENE.instantiate() as FlyingRoach
 	roach.kind = FlyingRoach.Kind.SPITTER if randf() < BRED_SPITTER_CHANCE else FlyingRoach.Kind.NORMAL
 	world.add_child(roach)
 	roach.global_position = at
 	roach.burst_out.call_deferred(direction) # after its own setup: a springy pop out
+	return roach
 
 
 func _finish() -> void:
