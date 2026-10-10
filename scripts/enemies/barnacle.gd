@@ -17,6 +17,10 @@ extends StaticBody3D
 ## its clump's SpiderPack so they swarm together.
 ## Rule 1 (co-op): the host runs the timers and spawns the roaches.
 
+## It's started to throb toward a spit (its clump's look-only barnacles
+## swell along with it: BarnacleCluster).
+signal swelling
+
 enum Brood { ROACHES, SPIDERS }
 
 ## What it spits out.
@@ -38,6 +42,9 @@ enum Brood { ROACHES, SPIDERS }
 @export var model_scale: float = 1.0
 ## Health for a size-1 barnacle; scales with size.
 @export var health_per_size: float = 60.0
+## Every barnacle this much bigger than its rolled size (look, hitbox and
+## health; not how many it spits).
+@export var scale_boost: float = 1.4
 
 @export_group("Spitting")
 ## Seconds between spits, rolled fresh each time.
@@ -85,6 +92,8 @@ var _dead := false
 
 func _ready() -> void:
 	add_to_group("barnacles")
+	var spit_share := clampf(inverse_lerp(size_min, size_max, size), 0.0, 1.0)
+	size *= scale_boost
 	_model.scale = Vector3.ONE * size * model_scale
 	_mouth.position *= size
 	# Its own copy of the shape, sized to it (scaling a physics body itself
@@ -94,8 +103,7 @@ func _ready() -> void:
 	cylinder.height *= size
 	_shape.shape = cylinder
 	_shape.position *= size
-	var t := clampf(inverse_lerp(size_min, size_max, size), 0.0, 1.0)
-	roaches_per_spit = 1 + roundi(t * 2.0)
+	roaches_per_spit = 1 + roundi(spit_share * 2.0)
 	health.max_health = health_per_size * size
 	health.current_health = health.max_health
 	health.damaged.connect(_on_damaged)
@@ -149,6 +157,7 @@ func _alive_brood() -> int:
 ## wide, like something pushing up inside it), then spits.
 func _swell() -> void:
 	_swelling = true
+	swelling.emit()
 	var rest := Vector3.ONE * size * model_scale
 	var pulse := swell_time / 6.0
 	var tween := create_tween()

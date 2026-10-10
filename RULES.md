@@ -978,3 +978,16 @@ them:
   - A camp is a gang of 6–12 (`camp_min`/`camp_max`) of enemy, gunner and rusher mixed. It sets up on the structure's far side from the player and patrols round it (`RoamingGroup.anchor`: every stop within the structure's half-width + 30 m), drifting at 1.0 m/s.
   - Wipe a camp out and its structure stays empty for 10 min (`camp_rest`). A camp left behind (240 m away) or whose chunk unloads is disbanded, and can be manned again later.
   - Roaming bands are now rats, roaches, spiders and Harvestmen only.
+
+- 2026-10-10: **More enemies and nests; barnacles 40% bigger; look-only decoy barnacles.**
+  - **Barnacles:**
+    - `Barnacle.scale_boost` 1.4: every barnacle is 40% bigger (look, hitbox, health). How many it spits still goes by its rolled size.
+    - Clusters spread to 3 m.
+  - **Decoys (BarnacleCluster):**
+    - 18 look-only barnacles per clump (`decoy_count`): just the model, in the PS1 look and the nest's skin. No hitbox, spawning or script.
+    - When a real barnacle starts to throb (new `Barnacle.swelling` signal), the decoys within 3.5 m throb too, nearest first, a ripple spreading out. They use the same three swelling pulses and squash.
+    - The real barnacles only exist on the host, so in co-op the decoys only throb there for now.
+  - **More common:**
+    - Barnacle nests average 1.5 per chunk (was 0.9).
+    - Roaming bands: up to 7 round each player (was 5), started 70–120 m off (was 80–140), a check every 3 s (first after 15 s), at least 60 m apart.
+    - Camps start for players within 250 m (was 200).

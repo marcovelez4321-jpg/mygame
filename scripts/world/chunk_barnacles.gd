@@ -12,7 +12,7 @@ extends Node
 @export var cluster_scene: PackedScene = preload("res://scenes/enemy/barnacle_cluster.tscn")
 ## Nests per 128 x 128 m of land, on average (each chunk rolls its own
 ## count: often none or one, sometimes two or three; scaled by chunk area).
-@export var nests_per_chunk: float = 0.9
+@export var nests_per_chunk: float = 1.5
 ## Chance the nest goes up a building, when the chunk has any (else on the land).
 @export_range(0.0, 1.0, 0.05) var building_chance: float = 0.4
 ## Land too steep for a nest (degrees).

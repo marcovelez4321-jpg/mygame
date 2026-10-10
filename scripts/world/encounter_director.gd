@@ -21,15 +21,15 @@ extends Node
 ## The creature caps (Population) still hold on top of all this.
 ## Rule 1 (co-op): the host decides; everything it makes is a normal spawn.
 
-@export var groups_per_player: int = 5
-@export var spawn_min: float = 80.0
-@export var spawn_max: float = 140.0
+@export var groups_per_player: int = 7
+@export var spawn_min: float = 70.0
+@export var spawn_max: float = 120.0
 @export var despawn_distance: float = 240.0
 ## Bands keep at least this far apart when they start.
-@export var group_spacing: float = 70.0
+@export var group_spacing: float = 60.0
 ## Seconds between checks, and before the first band (the land's quiet at first).
-@export var check_interval: float = 4.0
-@export var first_delay: float = 20.0
+@export var check_interval: float = 3.0
+@export var first_delay: float = 15.0
 ## Keep this circle clear (Grandma's yard).
 @export var clear_centre: Vector3 = Vector3.ZERO
 @export var clear_radius: float = 100.0
@@ -40,7 +40,7 @@ extends Node
 ## it has a camp of camp_min..camp_max tweakers; wiped out, it stays empty
 ## for camp_rest seconds.
 @export var structure_min_height: float = 20.0
-@export var camp_range: float = 200.0
+@export var camp_range: float = 250.0
 @export var camp_min: int = 6
 @export var camp_max: int = 12
 @export var camp_rest: float = 600.0
