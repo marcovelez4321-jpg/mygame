@@ -905,3 +905,16 @@ them:
     - TerrainLook is a tool script, so the editor shows the real ground look, not checkers.
     - The ground shader multiplies by Terrain3D's colour map, so the Color brush tints the ground (`paint_strength`; white = untouched).
     - BiomeMap keeps its texture in `biomes.res`, so scenes reference it instead of embedding a copy.
+
+- 2026-10-10: **Giant growths in forests** (the user picked all six, "forests in places", 10–30 a grove).
+  - **New GrowthMeshes kinds, about 15–45 m tall (half a megastructure), scaled 0.7–1.4, with the odd 1.5× elder:**
+    - Reef: KELP_TOWER (swaying stalks, glowing bulbs) and CORAL_TREE (staghorn grown into a branching tree).
+    - Sewer: FUNGUS_TOWER (a rotten stalk with a spiral of shelf caps like platforms and a wide top cap), HIVE_SPIRE (a lumpy clay spire with glowing vents and mouth) and FLESH_STALK (a giant swaying tendril with pus boils).
+    - Both: VINE_PILLAR (black vines wound both ways round each other, tips peeling off the top; it breathes).
+  - **Forests in places** (`GrowthSpecies._giant`): each kind has its own patch map (900 m, 30% cover), so there are big stretches with none and then whole forests.
+    - 10–30 to a grove, not GROUP_SCALE'd. Gentle ground only (under 25°). Standing straight, rooted 0.6 m deep.
+    - They cast shadows and are seen to about 300 m (the fog hides them before that).
+  - **Solid:**
+    - Each giant mesh carries a "trunk" meta (radius, height). GrowthScatter gives every giant a cylinder of that size on one static body per batch.
+    - You can't walk through them, and the grapple and spiders take them for level geometry.
+    - The offline navmesh doesn't know about them, so enemies may bump into trunks until that's handled.

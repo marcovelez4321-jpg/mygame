@@ -34,6 +34,14 @@ enum Kind {
 	LARVAE_PILE,    ## heaps of pale fat grubs
 	# Both biomes, and up the buildings.
 	BLACK_VINES,    ## black tentacle vines snaking out of the surface and over each other, breathing
+	# Giants: half a megastructure tall, in forests (solid: GrowthScatter gives
+	# each a trunk to collide with, from the mesh's "trunk" meta).
+	KELP_TOWER,     ## reef: kelp stalks towering into the fog, glowing bulbs
+	CORAL_TREE,     ## reef: staghorn coral grown into branching trees
+	FUNGUS_TOWER,   ## sewer: a huge rotten stalk stacked with shelf caps
+	HIVE_SPIRE,     ## sewer: a hive mound grown into a towering spire
+	FLESH_STALK,    ## sewer: a giant meaty tendril with boils along it
+	VINE_PILLAR,    ## both: black vines coiled round each other into a breathing pillar
 }
 
 ## Built meshes: "kind:variant" -> ArrayMesh.
@@ -49,7 +57,8 @@ static func get_mesh(kind: Kind, variant: int) -> ArrayMesh:
 	random.seed = hash(Vector2i(kind, variant)) # the same every time, on every machine
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	if kind == Kind.BLACK_VINES:
+	var trunk := Vector2.ZERO
+	if kind == Kind.BLACK_VINES or kind == Kind.VINE_PILLAR:
 		# For breathing: each vertex's outward direction from its vine's
 		# middle (see _vine_vertex).
 		st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_HALF)
@@ -75,8 +84,16 @@ static func get_mesh(kind: Kind, variant: int) -> ArrayMesh:
 		Kind.FLESH_TENDRILS: _flesh_tendrils(st, random)
 		Kind.LARVAE_PILE: _larvae_pile(st, random)
 		Kind.BLACK_VINES: _black_vines(st, random)
+		Kind.KELP_TOWER: trunk = _kelp_tower(st, random)
+		Kind.CORAL_TREE: trunk = _coral_tree(st, random)
+		Kind.FUNGUS_TOWER: trunk = _fungus_tower(st, random)
+		Kind.HIVE_SPIRE: trunk = _hive_spire(st, random)
+		Kind.FLESH_STALK: trunk = _flesh_stalk(st, random)
+		Kind.VINE_PILLAR: trunk = _vine_pillar(st, random)
 	st.generate_normals()
 	var mesh := st.commit()
+	if trunk != Vector2.ZERO:
+		mesh.set_meta(&"trunk", trunk) # (radius, height) of the solid part, metres at scale 1
 	_cache[key] = mesh
 	return mesh
 
@@ -555,6 +572,172 @@ static func _vine_vertex(st: SurfaceTool, at: Vector3, out: Vector3, radius: flo
 	st.set_uv2(Vector2.ZERO)
 	st.set_custom(0, Color(out.x, out.y, out.z, 0.0))
 	st.add_vertex(at)
+
+
+# --- Giants (each returns its trunk: radius and height, metres) ---
+
+## A kelp stalk towering into the fog: wandering up, thinning, with glowing
+## bulbs all the way up and a cluster at the top. The top sways most.
+static func _kelp_tower(st: SurfaceTool, random: RandomNumberGenerator) -> Vector2:
+	var height := random.randf_range(25.0, 45.0)
+	var segments := 14
+	var phase := random.randf() * TAU
+	var stalk := Color(0.08, 0.25, 0.36)
+	var top := Color(0.28, 0.52, 0.68)
+	var previous := Vector3.ZERO
+	for i in range(1, segments + 1):
+		var t := float(i) / segments
+		var t_prev := float(i - 1) / segments
+		var point := Vector3(sin(t * 4.0 + phase) * 1.8 * t, t * height, cos(t * 3.3 + phase) * 1.5 * t)
+		_tube(st, previous, point, lerpf(0.7, 0.2, t_prev), lerpf(0.7, 0.2, t), 6,
+				stalk.lerp(top, t_prev), stalk.lerp(top, t), pow(t_prev, 2.0), pow(t, 2.0), 0.0, 0.0)
+		if i % 2 == 0:
+			var color := Color(0.55, 0.85, 0.95) if random.randf() < 0.6 else Color(0.9, 0.5, 0.85)
+			var side := Vector3(cos(i * 2.1), 0.0, sin(i * 2.1)) * 0.6
+			_blob(st, point + side, random.randf_range(0.6, 1.2), color, pow(t, 2.0), 1.0)
+		previous = point
+	for b in 3:
+		_blob(st, previous + Vector3(random.randf_range(-1.0, 1.0), random.randf_range(0.0, 1.5), random.randf_range(-1.0, 1.0)),
+				random.randf_range(0.9, 1.6), Color(0.55, 0.85, 0.95), 1.0, 1.0)
+	return Vector2(0.7, height * 0.6)
+
+
+## Staghorn coral grown into a tree: a thick trunk forking up and out into
+## a crown of glowing tips.
+static func _coral_tree(st: SurfaceTool, random: RandomNumberGenerator) -> Vector2:
+	var height := random.randf_range(20.0, 32.0)
+	var base := Color(0.30, 0.12, 0.46)
+	var tip := Color(0.85, 0.35, 0.80) if random.randf() < 0.5 else Color(0.35, 0.80, 0.90)
+	_branch(st, random, Vector3.ZERO, Vector3.UP, height * 0.32, 1.1, 0, 5, height, base, tip)
+	return Vector2(1.1, height * 0.32)
+
+
+## A huge rotten stalk stacked with shelf-fungus caps, a spiral of them up
+## its side like platforms, and a wide cap on top.
+static func _fungus_tower(st: SurfaceTool, random: RandomNumberGenerator) -> Vector2:
+	var height := random.randf_range(20.0, 35.0)
+	var stalk := Color(0.22, 0.17, 0.10)
+	var cap := Color(0.68, 0.60, 0.38) if random.randf() < 0.5 else Color(0.52, 0.56, 0.32)
+	var previous := Vector3.ZERO
+	var segments := 6
+	var lean := Vector2(random.randf_range(-1.5, 1.5), random.randf_range(-1.5, 1.5))
+	var spine: Array[Vector3] = [Vector3.ZERO]
+	for i in range(1, segments + 1):
+		var t := float(i) / segments
+		var t_prev := float(i - 1) / segments
+		var point := Vector3(lean.x * t * t, t * height, lean.y * t * t)
+		_tube(st, previous, point, lerpf(1.6, 0.9, t_prev), lerpf(1.6, 0.9, t), 6,
+				stalk, stalk.lightened(0.15), 0.0, 0.02, 0.0, 0.0)
+		spine.append(point)
+		previous = point
+	var caps := random.randi_range(6, 11)
+	for i in caps:
+		var t := lerpf(0.25, 0.95, float(i) / maxf(caps - 1, 1))
+		var angle := i * 2.4 + random.randf() * 0.6
+		var out := Vector3(cos(angle), 0.0, sin(angle))
+		var width := lerpf(6.0, 3.0, t) * random.randf_range(0.8, 1.2)
+		var on := spine[int(t * segments)].lerp(spine[mini(int(t * segments) + 1, segments)], fmod(t * segments, 1.0))
+		var at := on + out * width * 0.55
+		_tube(st, at - Vector3.UP * 0.35, at + Vector3.UP * 0.25, width, width * 0.7, 8,
+				cap.darkened(0.45), cap, 0.0, 0.01, 0.15, 0.2)
+	_tube(st, previous - Vector3.UP * 0.6, previous + Vector3.UP * 1.2, 7.0, 2.5, 9, cap.darkened(0.4), cap, 0.0, 0.01, 0.2, 0.15)
+	return Vector2(1.6, height)
+
+
+## A hive mound grown into a towering spire: lumpy clay narrowing up to an
+## open, glowing mouth, vents all the way up.
+static func _hive_spire(st: SurfaceTool, random: RandomNumberGenerator) -> Vector2:
+	var height := random.randf_range(22.0, 40.0)
+	var clay := Color(0.27, 0.21, 0.12)
+	var crust := Color(0.42, 0.35, 0.20)
+	var lean := Vector2(random.randf_range(-0.12, 0.12), random.randf_range(-0.12, 0.12)) * height
+	var steps := 9
+	var previous := Vector3.ZERO
+	for s in range(1, steps + 1):
+		var t := float(s) / steps
+		var t_prev := float(s - 1) / steps
+		var p := Vector3(lean.x * t + random.randf_range(-0.3, 0.3), t * height, lean.y * t + random.randf_range(-0.3, 0.3))
+		_tube(st, previous, p, _spire_radius(t_prev), _spire_radius(t), 7,
+				clay.lerp(crust, t_prev), clay.lerp(crust, t), 0.0, 0.0, 0.0, 0.0, s == steps)
+		previous = p
+	_tube(st, previous - Vector3.UP * 1.5, previous, 0.7, 0.85, 7, Color(0.55, 0.5, 0.15), Color(0.6, 0.55, 0.2), 0.0, 0.0, 0.7, 1.0, true)
+	for i in random.randi_range(6, 12):
+		var t := random.randf_range(0.1, 0.85)
+		var angle := random.randf() * TAU
+		var out := Vector3(cos(angle), 0.0, sin(angle))
+		var base := Vector3(lean.x * t, t * height, lean.y * t) + out * _spire_radius(t) * 0.9
+		_tube(st, base, base + (out + Vector3.UP * 0.3).normalized() * 1.2, 0.6, 0.45, 6, clay, crust,
+				0.0, 0.0, 0.0, 0.6, true)
+	return Vector2(3.5, height * 0.5)
+
+
+## The hive spire's thickness 	 of the way up: wide at the foot, narrowing.
+static func _spire_radius(t: float) -> float:
+	return lerpf(5.5, 0.9, pow(t, 0.7))
+
+
+## A giant meaty tendril rising out of the ground, wavering, swaying slowly,
+## with pus boils along it.
+static func _flesh_stalk(st: SurfaceTool, random: RandomNumberGenerator) -> Vector2:
+	var height := random.randf_range(18.0, 35.0)
+	var meat := Color(0.48, 0.20, 0.20)
+	var tip := Color(0.75, 0.48, 0.40)
+	var pus := Color(0.85, 0.78, 0.35)
+	var phase := random.randf() * TAU
+	var previous := Vector3.ZERO
+	var steps := 10
+	for s in range(1, steps + 1):
+		var t := float(s) / steps
+		var t_prev := float(s - 1) / steps
+		var p := Vector3(sin(t * 3.5 + phase) * 2.0 * t, t * height, cos(t * 3.0 + phase) * 2.0 * t)
+		var radius := lerpf(1.6, 0.3, t)
+		_tube(st, previous, p, lerpf(1.6, 0.3, t_prev), radius, 6, meat.lerp(tip, t_prev), meat.lerp(tip, t),
+				t_prev * t_prev, t * t, 0.0, 0.0)
+		if s < steps and random.randf() < 0.7:
+			var angle := random.randf() * TAU
+			var out := Vector3(cos(angle), 0.0, sin(angle))
+			_blob(st, p + out * radius * 0.8, radius * 0.45, meat.lerp(pus, 0.4), t * t, 0.0, Vector3.ONE, false)
+			_blob(st, p + out * radius * 1.2, radius * 0.22, pus, t * t, 0.45, Vector3.ONE, false)
+		previous = p
+	return Vector2(1.4, height * 0.5)
+
+
+## Black vines coiled round each other up into a pillar, their tips curling
+## off the top; it breathes like the small vines.
+static func _vine_pillar(st: SurfaceTool, random: RandomNumberGenerator) -> Vector2:
+	var height := random.randf_range(15.0, 32.0)
+	var black := Color(0.03, 0.02, 0.04)
+	var sheen := Color(0.13, 0.09, 0.15)
+	var vines := random.randi_range(5, 8)
+	for v in vines:
+		var phase := TAU * v / vines + random.randf() * 0.4
+		var coil := random.randf_range(0.8, 1.6) # radius round the pillar's middle
+		var turns := random.randf_range(1.5, 3.0) * (1.0 if v % 2 == 0 else -1.0) # wound both ways
+		var thick := random.randf_range(0.28, 0.5)
+		var top := height * random.randf_range(0.8, 1.05)
+		var steps := 18
+		var points := PackedVector3Array()
+		for s in steps + 1:
+			var t := float(s) / steps
+			var angle := phase + t * turns * TAU
+			var r := coil * (1.0 - t * 0.5) + sin(t * 9.0 + phase) * 0.15
+			points.append(Vector3(cos(angle) * r, t * top - 0.5, sin(angle) * r))
+		# Its tip peels off the top and curls.
+		var last := points[points.size() - 1]
+		var out := Vector3(last.x, 0.0, last.z).normalized()
+		for c in range(1, 5):
+			var t := float(c) / 4.0
+			points.append(last + out * t * 1.6 + Vector3.UP * sin(t * PI) * 1.2 - Vector3.UP * t * t * 1.0)
+		var along := 0.0
+		for i in points.size() - 1:
+			var t_a := float(i) / (points.size() - 1)
+			var t_b := float(i + 1) / (points.size() - 1)
+			var length := points[i].distance_to(points[i + 1])
+			_vine_tube(st, points[i], points[i + 1], lerpf(thick, thick * 0.35, t_a), lerpf(thick, thick * 0.35, t_b),
+					black.lerp(sheen, 0.5 + 0.5 * sin(along * 1.5)), black.lerp(sheen, 0.5 + 0.5 * sin((along + length) * 1.5)),
+					t_a * t_a * 0.5, t_b * t_b * 0.5)
+			along += length
+	return Vector2(1.6, height)
 
 
 # --- Shape pieces ---

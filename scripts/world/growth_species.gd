@@ -160,7 +160,33 @@ static func defaults() -> Array[GrowthSpecies]:
 	vines.breathe = 1.4 # swells to about two and a half times as thick
 	vines.follow_ground = 1.0 # lies on whatever it grows over
 	list.append(vines)
+	# --- Giants: half a megastructure tall, in forests here and there ---
+	list.append(_giant(GrowthMeshes.Kind.KELP_TOWER, Biome.REEF, 9.0, Color(0.5, 0.95, 1.0), 0.9))
+	list.append(_giant(GrowthMeshes.Kind.CORAL_TREE, Biome.REEF, 14.0, Color(0.95, 0.5, 0.9), 0.15))
+	list.append(_giant(GrowthMeshes.Kind.FUNGUS_TOWER, Biome.SEWER, 15.0, Color(0.7, 0.8, 0.4), 0.05))
+	list.append(_giant(GrowthMeshes.Kind.HIVE_SPIRE, Biome.SEWER, 18.0, Color(0.8, 0.7, 0.2), 0.0))
+	list.append(_giant(GrowthMeshes.Kind.FLESH_STALK, Biome.SEWER, 11.0, Color(0.95, 0.85, 0.35), 0.7))
+	var pillars := _giant(GrowthMeshes.Kind.VINE_PILLAR, Biome.ANYWHERE, 12.0, Color(0.3, 0.05, 0.1), 0.2)
+	pillars.breathe = 1.0
+	list.append(pillars)
 	return list
+
+
+## A giant kind: forests in patches (big stretches with none, then whole
+## forests of them), 10-30 to a grove, on gentle ground, rooted deep, throwing
+## shadows, seen as far as the fog lets you. `space` = metres between them.
+static func _giant(kind: GrowthMeshes.Kind, home: Biome, space: float, glow: Color, sway: float) -> GrowthSpecies:
+	var giant := _make(kind, 1.2, 900.0, 0.3, 0.0, 25.0, 0.0, 1.0, 10, 30, 1.6, space, 1.3, 0.3,
+			0.7, 1.4, glow, sway, 280.0, home)
+	giant.min_group = 10 # as set: not GROUP_SCALE'd
+	giant.max_group = 30
+	giant.elder_chance = 0.03
+	giant.elder_scale = 1.5
+	giant.follow_ground = 0.05 # stands up straight, whatever the slope
+	giant.sink = 0.6
+	giant.cast_shadows = true
+	giant.tint_variation = 0.15
+	return giant
 
 
 static func _make(kind: GrowthMeshes.Kind, groups: float, patch: float, cover: float,

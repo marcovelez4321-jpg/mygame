@@ -290,6 +290,29 @@ func _draw(kind: GrowthSpecies, root: Node3D, random: RandomNumberGenerator,
 		instance.visibility_range_end_margin = kind.view_distance * 0.1
 		instance.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		root.add_child(instance)
+		var trunk: Variant = multimesh.mesh.get_meta(&"trunk", null)
+		if trunk is Vector2:
+			_add_trunks(root, trunk, members, placed)
+
+
+## Giants are solid: a trunk (an upright cylinder, the mesh's "trunk" size
+## times each one's scale) for each, all on one static body. You can't walk
+## through them, and the grapple, spiders and the rest take them for level.
+func _add_trunks(root: Node3D, trunk: Vector2, members: Array, placed: Array[Transform3D]) -> void:
+	var body := StaticBody3D.new()
+	body.name = "Trunks"
+	root.add_child(body)
+	for i: int in members:
+		var where := placed[i]
+		var size := where.basis.get_scale().x
+		var upright := where.basis.orthonormalized()
+		var cylinder := CylinderShape3D.new()
+		cylinder.radius = trunk.x * size
+		cylinder.height = trunk.y * size
+		var shape := CollisionShape3D.new()
+		shape.shape = cylinder
+		shape.transform = Transform3D(upright, where.origin + upright.y * cylinder.height * 0.5)
+		body.add_child(shape)
 
 
 ## The chunk's buildings: every box collision shape in it.
