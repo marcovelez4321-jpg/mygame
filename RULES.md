@@ -789,3 +789,18 @@ them:
   - Tested with a stand-in player:
     - 25 chunks load at the yard; moving 565 m loads 24 and unloads 21.
     - Paths route round a monolith (82 m vs 71 m straight).
+
+- 2026-10-09: **4 x 4 km test world, and the navmesh optimized for it.**
+  - The bake tool's size is a setting (`-- size=2048` for 8 km). Default 1024 px = 4 km: 64 terrain regions, 1024 navmesh tiles, plus 40 more monoliths scattered at random (seeded) for streaming to chew on.
+  - **Navmesh:** 1 m cells (was 0.5; the terrain's triangles are 4 m) with more polygon merging (`region_min_size` 8, `region_merge_size` 40, `edge_max_error` 2). `agent_max_climb` is 1.0 m, so slopes don't bake as ledges.
+  - **Bake:** tiles bake on every CPU core (`WorkerThreadPool` group task) and save compressed.
+  - **Measured on the 4 km world:**
+
+    | | Before | After |
+    |---|---|---|
+    | Bake | 65 s | 32 s |
+    | Navmesh on disk | 35.9 MB | 6.3 MB |
+    | Joining 192 tiles | 29 s | 3.5 s |
+
+  - In game (25 tiles round a player): 59 ms to join the tiles (in the background), and path searches take 0.07-0.09 ms up to 500 m.
+  - Land: 96.7% reachable from the yard; steepest 66.7 degrees.

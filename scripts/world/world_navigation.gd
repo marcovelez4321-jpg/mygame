@@ -27,12 +27,21 @@ extends Node
 @export var agent_radius: float = 0.5
 @export var agent_height: float = 2.0
 ## Steepest slope they'll walk (degrees: the player's own floor limit, so
-## they can follow you anywhere you can walk) and the biggest step up (metres).
+## they can follow you anywhere you can walk) and the biggest step up
+## (metres). The step has to be at least a cell's rise on the steepest
+## walkable slope (cell_size x tan(slope)), or slopes bake as ledges.
 @export var agent_max_slope: float = 45.0
-@export var agent_max_climb: float = 0.5
-## Navmesh resolution (metres). The terrain's own triangles are 4 m, so 0.5
-## loses nothing that matters and bakes quickly.
-@export var cell_size: float = 0.5
+@export var agent_max_climb: float = 1.0
+## Navmesh resolution (metres). The terrain's own triangles are 4 m, so 1 m
+## loses nothing that matters -- and a finer grid made 4x the polygons,
+## files and search time (0.5 m: ~1,100 polygons a 128 m tile).
+@export var cell_size: float = 1.0
+## Polygon merging: islands smaller than region_min_size (cells^2) are
+## dropped, regions under region_merge_size are merged; and how far edges
+## may stray from the real outline (cells). Bigger = fewer, bigger polygons.
+@export var region_min_size: float = 8.0
+@export var region_merge_size: float = 40.0
+@export var edge_max_error: float = 2.0
 
 @export_group("Runtime Fallback")
 ## Only with no baked tiles: ground baked round each player (x, height, z),
@@ -62,7 +71,10 @@ func make_template() -> NavigationMesh:
 	mesh.agent_max_slope = agent_max_slope
 	mesh.agent_max_climb = agent_max_climb
 	mesh.cell_size = cell_size
-	mesh.cell_height = cell_size * 0.5
+	mesh.cell_height = 0.25
+	mesh.region_min_size = region_min_size
+	mesh.region_merge_size = region_merge_size
+	mesh.edge_max_error = edge_max_error
 	mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	mesh.geometry_collision_mask = 1 # world geometry
 	return mesh
@@ -80,9 +92,12 @@ func bake_tiles(area: Rect2, terrain_node: Node3D, static_root: Node, height_ran
 	if static_root:
 		NavigationServer3D.parse_source_geometry_data(template, statics, static_root)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(tiles_dir))
-	var count := 0
 	var first := Vector2i(floori(area.position.x / tile_size), floori(area.position.y / tile_size))
 	var last := Vector2i(ceili(area.end.x / tile_size) - 1, ceili(area.end.y / tile_size) - 1)
+	# Each tile's source geometry is gathered here (the terrain's faces have
+	# to be read on this thread); the bakes then run on every CPU core at
+	# once, and the finished tiles are saved compressed.
+	var jobs: Array = []
 	for tz in range(first.y, last.y + 1):
 		for tx in range(first.x, last.x + 1):
 			var low := Vector3(tx * tile_size, height_range.x - 5.0, tz * tile_size)
@@ -95,12 +110,20 @@ func bake_tiles(area: Rect2, terrain_node: Node3D, static_root: Node, height_ran
 			var source: NavigationMeshSourceGeometryData3D = statics.duplicate()
 			var faces: PackedVector3Array = terrain_node.call("generate_nav_mesh_source_geometry", box.grow(border), false)
 			source.add_faces(faces, Transform3D.IDENTITY)
-			if not source.has_data():
-				continue
-			NavigationServer3D.bake_from_source_geometry_data(mesh, source)
-			ResourceSaver.save(mesh, _tile_path(Vector2i(tx, tz)))
-			count += 1
-	return count
+			if source.has_data():
+				jobs.append([Vector2i(tx, tz), mesh, source])
+	var group := WorkerThreadPool.add_group_task(_bake_job.bind(jobs), jobs.size(), -1, true, "Bake navmesh tiles")
+	WorkerThreadPool.wait_for_group_task_completion(group)
+	for job in jobs:
+		ResourceSaver.save(job[1], _tile_path(job[0]), ResourceSaver.FLAG_COMPRESS)
+	return jobs.size()
+
+
+## One tile's bake, on a worker thread (bake_tiles()): jobs[index] is
+## [tile, its NavigationMesh, its source geometry].
+func _bake_job(index: int, jobs: Array) -> void:
+	var job: Array = jobs[index]
+	NavigationServer3D.bake_from_source_geometry_data(job[1], job[2])
 
 
 func _tile_path(tile: Vector2i) -> String:

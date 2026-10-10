@@ -1,11 +1,14 @@
 extends SceneTree
 
-## Bakes the M0 test world (docs/WORLD.md): a 1 x 1 km Terrain3D ground from
-## AlienTerrain, saved as Terrain3D region data, plus a scene with the
-## player standing in the middle (Grandma's yard) to walk around in.
+## Bakes the M0 test world (docs/WORLD.md): a Terrain3D ground from
+## AlienTerrain (4 x 4 km by default), saved as Terrain3D region data, its
+## navmesh tiles, test chunks, plus a scene with the player standing in the
+## middle (Grandma's yard) to walk around in.
 ##   godot --headless --path <project> --script res://tools/make_test_world.gd
-## Re-run it after changing AlienTerrain's settings below; it overwrites the
-## terrain data and the scene.
+##   ... --script res://tools/make_test_world.gd -- size=2048   (8 x 8 km)
+## size = heightmap pixels across, 4 m each (256 = 1 km, 1024 = 4 km); a
+## power of two, 256 or more. Re-run it after changing AlienTerrain's
+## settings; it overwrites the terrain data, tiles, chunks and the scene.
 
 const DATA_DIR := "res://worlds/test_world/terrain"
 const NAV_DIR := "res://worlds/test_world/navigation"
@@ -13,16 +16,23 @@ const TERRAIN_SHADER := "res://shaders/alien_terrain.gdshader"
 const ENVIRONMENT_PATH := "res://worlds/test_world/environment.tres"
 const CHUNKS_DIR := "res://worlds/test_world/chunks"
 const CHUNK_SIZE := 128.0
+## Heightmap pixels across by default (x 4 m: 1024 = 4 km).
+const DEFAULT_SIZE := 1024
 ## Test chunks with a megastructure stand-in (a tall monolith) in the middle:
-## chunk -> the monolith's size (width, height). Seen through the fog, they
-## show chunks streaming in and out; the navmesh routes round them.
-const TEST_CHUNKS := {
+## these near the yard, plus MORE_MONOLITHS scattered over the land at
+## random (the same every bake). Chunk -> the monolith's size (width,
+## height). Seen through the fog, they show chunks streaming in and out; the
+## navmesh routes round them.
+const NEAR_CHUNKS := {
 	Vector2i(1, 0): Vector2(14.0, 70.0),
 	Vector2i(-2, 1): Vector2(20.0, 45.0),
 	Vector2i(0, -2): Vector2(10.0, 90.0),
 	Vector2i(-3, -3): Vector2(24.0, 60.0),
 	Vector2i(2, 2): Vector2(12.0, 55.0),
 }
+const MORE_MONOLITHS := 40
+
+var _test_chunks := {}
 const SCENE_PATH := "res://scenes/world/test_world.tscn"
 const PLAYER_SCENE := "res://scenes/player/player.tscn"
 ## Enemies dropped round the yard to test walking, pathing and foot IK on
@@ -38,7 +48,7 @@ const TEST_ENEMIES := {
 
 func _initialize() -> void:
 	# A script error stops this function before quit(); never hang on one.
-	create_timer(600.0).timeout.connect(quit)
+	create_timer(3600.0).timeout.connect(quit)
 	_bake()
 
 
@@ -49,8 +59,8 @@ func _make_test_chunks(data: Object) -> void:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = Color(0.22, 0.2, 0.28)
 	material.roughness = 1.0
-	for chunk: Vector2i in TEST_CHUNKS:
-		var size: Vector2 = TEST_CHUNKS[chunk]
+	for chunk: Vector2i in _test_chunks:
+		var size: Vector2 = _test_chunks[chunk]
 		var middle := Vector3(CHUNK_SIZE * 0.5, 0.0, CHUNK_SIZE * 0.5)
 		var ground := float(data.call("get_height", Vector3(chunk.x * CHUNK_SIZE, 0.0, chunk.y * CHUNK_SIZE) + middle))
 		var content := Node3D.new()
@@ -80,12 +90,36 @@ func _make_test_chunks(data: Object) -> void:
 		content.free()
 
 
+## Heightmap size from the command line (-- size=2048), else the default.
+func _world_size() -> int:
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("size="):
+			return maxi(int(argument.trim_prefix("size=")), 256)
+	return DEFAULT_SIZE
+
+
+## The near test chunks plus MORE_MONOLITHS at random chunks over a world
+## world_metres across (seeded, so every bake places them the same).
+func _pick_test_chunks(world_metres: float) -> void:
+	_test_chunks = NEAR_CHUNKS.duplicate()
+	var random := RandomNumberGenerator.new()
+	random.seed = 4242
+	var half_chunks := int(world_metres / CHUNK_SIZE / 2.0)
+	for i in MORE_MONOLITHS:
+		var chunk := Vector2i(random.randi_range(-half_chunks, half_chunks - 1), random.randi_range(-half_chunks, half_chunks - 1))
+		if chunk.length() < 4.0:
+			continue # keep the yard's surroundings as they are
+		_test_chunks[chunk] = Vector2(random.randf_range(10.0, 30.0), random.randf_range(40.0, 120.0))
+
+
 func _chunk_path(chunk: Vector2i) -> String:
 	return CHUNKS_DIR.path_join("chunk_%d_%d.tscn" % [chunk.x, chunk.y])
 
 
 func _bake() -> void:
 	var shape := AlienTerrain.new()
+	shape.size = _world_size()
+	_pick_test_chunks(shape.size * shape.vertex_spacing)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DATA_DIR))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SCENE_PATH.get_base_dir()))
 
@@ -136,7 +170,7 @@ func _bake() -> void:
 	_make_test_chunks(data)
 	var statics := Node3D.new()
 	root.add_child(statics)
-	for chunk: Vector2i in TEST_CHUNKS:
+	for chunk: Vector2i in _test_chunks:
 		var placed := (load(_chunk_path(chunk)) as PackedScene).instantiate() as Node3D
 		placed.position = Vector3(chunk.x * CHUNK_SIZE, 0.0, chunk.y * CHUNK_SIZE)
 		statics.add_child(placed)

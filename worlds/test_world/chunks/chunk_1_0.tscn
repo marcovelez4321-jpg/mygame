@@ -10,13 +10,13 @@ albedo_color = Color(0.22, 0.2, 0.28, 1)
 material = SubResource("StandardMaterial3D_u2i50")
 size = Vector3(14, 70, 14)
 
-[node name="Megastructure" type="Node3D" unique_id=612576808]
+[node name="Megastructure" type="Node3D" unique_id=155955628]
 
-[node name="Monolith" type="StaticBody3D" parent="." unique_id=338238188]
+[node name="Monolith" type="StaticBody3D" parent="." unique_id=1264092065]
 transform = Transform3D(0.79863554, 0, 0.601815, 0, 1, 0, -0.601815, 0, 0.79863554, 64, 40.309063, 64)
 
-[node name="@CollisionShape3D@180" type="CollisionShape3D" parent="Monolith" unique_id=544119496]
+[node name="@CollisionShape3D@180" type="CollisionShape3D" parent="Monolith" unique_id=1485214482]
 shape = SubResource("BoxShape3D_yu3fp")
 
-[node name="@MeshInstance3D@181" type="MeshInstance3D" parent="Monolith" unique_id=1300672391]
+[node name="@MeshInstance3D@181" type="MeshInstance3D" parent="Monolith" unique_id=73580806]
 mesh = SubResource("BoxMesh_i0mn2")
