@@ -28,9 +28,9 @@ extends Resource
 ## Tallest the land gets, in metres.
 @export var height: float = 70.0
 ## Nothing's left steeper than this (degrees). 66.7 = the steepest the
-## first version of this land got (the user's limit). 45 = everything
-## walkable for the player and enemies.
-@export_range(10.0, 80.0, 0.1) var max_slope_degrees: float = 66.7
+## first version of this land got; 50 since the user found the land away
+## from the yard too steep. 45 = everything walkable for the player and enemies.
+@export_range(10.0, 80.0, 0.1) var max_slope_degrees: float = 50.0
 ## How many settling passes the slope limit gets (more = closer to exact).
 @export var slope_passes: int = 40
 
@@ -45,7 +45,7 @@ extends Resource
 
 @export_group("Hills")
 ## Size of the hills (bigger = broader), and how much they're twisted.
-@export var hill_scale: float = 180.0
+@export var hill_scale: float = 250.0 # was 180: hills less often
 @export var warp: float = 60.0
 @export_range(0.0, 1.0, 0.05) var hill_share: float = 0.6
 ## How much each hill's height differs from the next (0 = all the same,
@@ -54,9 +54,9 @@ extends Resource
 @export_range(0.0, 1.0, 0.05) var hill_variation: float = 0.8
 ## Craggy ground between the smooth hills: its height share, its size, and
 ## how much of the land it covers.
-@export_range(0.0, 1.0, 0.05) var crag_share: float = 0.2
+@export_range(0.0, 1.0, 0.05) var crag_share: float = 0.12
 @export var crag_scale: float = 70.0
-@export_range(0.0, 1.0, 0.05) var crag_cover: float = 0.4
+@export_range(0.0, 1.0, 0.05) var crag_cover: float = 0.25
 ## How much the distance between hills changes across the land (0 = even,
 ## 0.6 = from crowded together to well spread out).
 @export_range(0.0, 0.9, 0.05) var hill_spacing_variation: float = 0.5
@@ -64,13 +64,13 @@ extends Resource
 @export_group("Waves")
 ## The frozen-sea ridges: their spacing (metres), height share, and how much
 ## they meander.
-@export var wave_length: float = 90.0
+@export var wave_length: float = 130.0 # was 90: ridges further apart
 @export_range(0.0, 1.0, 0.05) var wave_share: float = 0.3
 @export var wave_meander: float = 40.0
 ## How sharp the crests are (1 = a plain rolling sine), and how much
 ## sharper they get in places.
 @export var wave_sharpness: float = 1.0
-@export var wave_sharpness_variation: float = 0.8
+@export var wave_sharpness_variation: float = 0.4
 ## How much the ridges' height changes across the land (0 = all the same,
 ## 1 = from full height down to nothing).
 @export_range(0.0, 1.0, 0.05) var wave_variation: float = 0.7

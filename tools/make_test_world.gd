@@ -22,7 +22,7 @@ const BIOMES_PATH := "res://worlds/test_world/biomes.res"
 const REEF_SHARE := 0.25
 const BIOME_BORDER := 150.0
 const YARD_SEWER_RADIUS := 120.0
-const CHUNK_SIZE := 160.0 # 25% up on the first 128
+const CHUNK_SIZE := 128.0 # (160 tried: too heavy round the grass)
 ## Heightmap pixels across by default (x 4 m: 1024 = 4 km).
 const DEFAULT_SIZE := 1024
 ## Test chunks with a megastructure stand-in (a tall monolith) in the middle:

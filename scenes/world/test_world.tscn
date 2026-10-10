@@ -128,9 +128,9 @@ mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_3m1go")])
 [sub_resource type="PhysicsMaterial" id="RatFeet"]
 friction = 0.3
 
-[node name="TestWorld" type="Node3D" unique_id=1745890166]
+[node name="TestWorld" type="Node3D" unique_id=1462549787]
 
-[node name="Terrain3D" type="Terrain3D" parent="." unique_id=866536750]
+[node name="Terrain3D" type="Terrain3D" parent="." unique_id=1017180824]
 data_directory = "res://worlds/test_world/terrain"
 material = SubResource("Terrain3DMaterial_oce4k")
 assets = SubResource("Terrain3DAssets_hshco")
@@ -139,35 +139,35 @@ vertex_spacing = 4.0
 top_level = true
 metadata/_edit_lock_ = true
 
-[node name="WorldNavigation" type="Node" parent="." unique_id=1965471692]
+[node name="WorldNavigation" type="Node" parent="." unique_id=239038408]
 script = ExtResource("2_g4hen")
 tiles_dir = "res://worlds/test_world/navigation"
 
-[node name="WorldChunks" type="Node3D" parent="." unique_id=1104032698]
+[node name="WorldChunks" type="Node3D" parent="." unique_id=1907778254]
 script = ExtResource("3_3cvmg")
 chunks_dir = "res://worlds/test_world/chunks"
 
-[node name="TerrainLook" type="Node" parent="." unique_id=779625946]
+[node name="TerrainLook" type="Node" parent="." unique_id=1861596751]
 script = ExtResource("4_w0w3b")
 biomes = ExtResource("5_s4g5r")
 
-[node name="GrowthScatter" type="Node" parent="." unique_id=273699699]
+[node name="GrowthScatter" type="Node" parent="." unique_id=219436274]
 script = ExtResource("6_bhy0e")
-high_ground = 55.20166
+high_ground = 50.248306
 biomes = ExtResource("5_s4g5r")
 
-[node name="ChunkBarnacles" type="Node" parent="." unique_id=212719808]
+[node name="ChunkBarnacles" type="Node" parent="." unique_id=1841496776]
 script = ExtResource("7_lh68e")
 
-[node name="EyeScatter" type="Node" parent="." unique_id=929864603]
+[node name="EyeScatter" type="Node" parent="." unique_id=1317950998]
 script = ExtResource("8_63a70")
 biomes = ExtResource("5_s4g5r")
 
-[node name="WormDirector" type="Node" parent="." unique_id=1748971617]
+[node name="WormDirector" type="Node" parent="." unique_id=1310794734]
 script = ExtResource("9_e6uwu")
 
 [node name="HarvestmanLeech" type="Node3D" parent="." unique_id=1040049696 instance=ExtResource("10_k6tl3")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 20.82164, 60)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 18.25733, 60)
 script = ExtResource("11_5vhu7")
 model_scene = ExtResource("12_lludv")
 proboscis_length = 15.0
@@ -196,25 +196,25 @@ hurt_sound = ExtResource("15_rsl8k")
 death_sound = ExtResource("16_6n4eo")
 horror_range = 14.0
 
-[node name="SpiderPack" type="Node3D" parent="." unique_id=1400535471 instance=ExtResource("17_22031")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 25.095348, 50)
+[node name="SpiderPack" type="Node3D" parent="." unique_id=1338142567 instance=ExtResource("17_22031")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 22.390194, 50)
 script = ExtResource("18_wnu4w")
 
-[node name="Rat" type="RigidBody3D" parent="." unique_id=575890583 instance=ExtResource("19_v085t")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.99376, -70)
+[node name="Rat" type="RigidBody3D" parent="." unique_id=850500079 instance=ExtResource("19_v085t")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.045486, -70)
 mass = 1.27
 physics_material_override = SubResource("RatFeet")
 script = ExtResource("20_ykgsn")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=787622417]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=340968487]
 environment = ExtResource("21_1ow1t")
 metadata/own_look = true
 
-[node name="BiomeAtmosphere" type="Node" parent="." unique_id=1607837608]
+[node name="BiomeAtmosphere" type="Node" parent="." unique_id=476801053]
 script = ExtResource("22_c2v4b")
 biomes = ExtResource("5_s4g5r")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1216444264]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1475911816]
 transform = Transform3D(0.8660254, -0.38302222, 0.32139382, 0, 0.64278764, 0.76604444, -0.5, -0.66341394, 0.5566704, 0, 0, 0)
 
 [node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("23_oysqe")]

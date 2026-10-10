@@ -56,12 +56,22 @@ const GROWTH_SHADER := preload("res://shaders/alien_growth.gdshader")
 
 ## How thick the flora is overall: every kind's groups and loners times this.
 @export var density: float = 1.2
-## Kinds grown per frame (each is one kind's plants for one chunk).
-@export var kinds_per_frame: int = 3
+## Growing gets at most this many milliseconds a frame (each job is one
+## kind in a quarter of a chunk; the rest wait for the next frame), so a
+## chunk arriving never costs a hitch.
+@export var grow_budget_ms: float = 2.0
+## Drawn in cells this big (metres): each cell its own batch, so the ones
+## off screen or out of range are skipped. Giants go one batch a chunk.
+@export var cell_size: float = 32.0
+## Carpets (GrowthSpecies.carpet: grass, mould): full thickness up to
+## carpet_near metres; past that only one in carpet_thin_every, out to their
+## view distance.
+@export var carpet_near: float = 40.0
+@export var carpet_thin_every: int = 4
 
 var _data: Object
 var _patches: Array[FastNoiseLite] = []
-## Waiting: [chunk, its root, kind index].
+## Waiting: [chunk, its root, kind index, quarter (0-3)].
 var _jobs: Array = []
 ## GrowthSpecies -> its ShaderMaterial (shared by all its chunks).
 var _materials := {}
@@ -104,14 +114,16 @@ func _find_sibling(type: String) -> Node:
 	return found[0] if not found.is_empty() else null
 
 
-## A chunk arrived: queue its growing, a kind at a time (see _process).
+## A chunk arrived: queue its growing, a kind and a quarter of the chunk at
+## a time (see _process).
 func _on_chunk_loaded(chunk: Vector2i, root: Node3D) -> void:
 	for index in species.size():
-		_jobs.append([chunk, root, index])
+		for quarter in 4:
+			_jobs.append([chunk, root, index, quarter])
 
 
-## Grows a few kinds per frame (kinds_per_frame), so a chunk arriving never
-## costs one frame all its plants at once.
+## Grows for up to grow_budget_ms each frame (always at least one job), so a
+## chunk arriving is spread over a few frames, never one big hitch.
 func _process(_delta: float) -> void:
 	if _jobs.is_empty():
 		return
@@ -119,33 +131,35 @@ func _process(_delta: float) -> void:
 		_data = terrain.call("get_data")
 		if _data == null:
 			return
-	for n in kinds_per_frame:
-		if _jobs.is_empty():
-			return
+	var started := Time.get_ticks_usec()
+	while not _jobs.is_empty():
 		var job: Array = _jobs.pop_front()
 		var root: Node3D = job[1] if is_instance_valid(job[1]) else null
 		if root == null or not root.is_inside_tree():
 			continue # the chunk's already gone again
-		_grow(species[job[2]], job[2], job[0], root, _blocked_areas(root), _buildings(root))
+		_grow(species[job[2]], job[2], job[0], job[3], root, _blocked_areas(root), _buildings(root))
+		if Time.get_ticks_usec() - started > grow_budget_ms * 1000.0:
+			return
 
 
-## Places one kind's groups and loners in `chunk` and draws them.
-func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, root: Node3D, blocked: Array[Rect2],
+## Places one kind's groups and loners in a quarter of `chunk` and draws them.
+func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, quarter: int, root: Node3D, blocked: Array[Rect2],
 		buildings: Array[CollisionShape3D]) -> void:
 	var random := RandomNumberGenerator.new()
-	random.seed = hash(Vector4i(seed, index, chunk.x, chunk.y))
-	var size := chunks.chunk_size
-	var origin := Vector2(chunk.x * size, chunk.y * size)
-	# How common it is here: its patch map at the chunk's middle (with a soft
-	# edge, so patches thin out rather than stopping dead).
-	var patch := _patches[index].get_noise_2dv(origin + Vector2(size, size) * 0.5) * 0.5 + 0.5
+	random.seed = hash([seed, index, chunk, quarter])
+	var origin := Vector2(chunk.x, chunk.y) * chunks.chunk_size # where the chunk's root is
+	var size := chunks.chunk_size * 0.5
+	var area := origin + Vector2(quarter % 2, quarter / 2) * size # this quarter
+	# How common it is here: its patch map at the quarter's middle (with a
+	# soft edge, so patches thin out rather than stopping dead).
+	var patch := _patches[index].get_noise_2dv(area + Vector2(size, size) * 0.5) * 0.5 + 0.5
 	var abundance := smoothstep(1.0 - kind.patch_cover, 1.0 - kind.patch_cover + 0.2, patch)
 	var placed: Array[Transform3D] = []
 	var customs: Array[Color] = []
 	var colors: Array[Color] = []
-	var groups := _poisson(random, kind.groups_per_chunk * abundance * _area_scale())
+	var groups := _poisson(random, kind.groups_per_chunk * abundance * _area_scale() * 0.25)
 	for g in groups:
-		var centre := origin + Vector2(random.randf(), random.randf()) * size
+		var centre := area + Vector2(random.randf(), random.randf()) * size
 		if _at_home(kind, centre.x, centre.y) < 0.05:
 			continue # a group of it right out in the other biome: none
 		# Long-tailed group size: mostly small, sometimes big, rarely a horde.
@@ -160,11 +174,11 @@ func _grow(kind: GrowthSpecies, index: int, chunk: Vector2i, root: Node3D, block
 			var offset := Vector2(cos(angle), sin(angle) * stretch).rotated(turn) * radius * t
 			_try_place(kind, random, centre + offset, random.randf_range(kind.min_scale, kind.max_scale),
 					origin, blocked, placed, customs, colors)
-	var loners := _poisson(random, kind.loners_per_chunk * maxf(abundance, 0.15) * _area_scale())
+	var loners := _poisson(random, kind.loners_per_chunk * maxf(abundance, 0.15) * _area_scale() * 0.25)
 	for l in loners:
-		var spot := origin + Vector2(random.randf(), random.randf()) * size
+		var spot := area + Vector2(random.randf(), random.randf()) * size
 		_try_place(kind, random, spot, random.randf_range(kind.min_scale, kind.max_scale), origin, blocked, placed, customs, colors)
-	if kind.wall_patches > 0.0:
+	if kind.wall_patches > 0.0 and quarter == 0: # the buildings once a chunk
 		_climb(kind, random, root, buildings, placed, customs, colors)
 	if placed.is_empty():
 		return
@@ -256,44 +270,65 @@ func _climb(kind: GrowthSpecies, random: RandomNumberGenerator, root: Node3D, bu
 				_add_looks(kind, random, customs, colors)
 
 
-## Splits the placed plants over the kind's shape variants, one MultiMesh
-## each, under the chunk's root (so they go with the chunk).
+## Draws the placed plants: split over the kind's shape variants and into
+## cells (cell_size; giants one per chunk), one MultiMesh each, under the
+## chunk's root (so they go with the chunk). A cell off screen or out of
+## range costs nothing. Carpets get a second, thinned batch for further off.
 func _draw(kind: GrowthSpecies, root: Node3D, random: RandomNumberGenerator,
 		placed: Array[Transform3D], customs: Array[Color], colors: Array[Color]) -> void:
-	var buckets: Array = []
-	for v in kind.variants:
-		buckets.append([])
+	var cell := cell_size if kind.view_distance < 200.0 else chunks.chunk_size
+	var buckets := {} # Vector3i(variant, cell x, cell z) -> indices into placed
 	for i in placed.size():
-		(buckets[random.randi() % kind.variants] as Array).append(i)
-	for v in kind.variants:
-		var members: Array = buckets[v]
-		if members.is_empty():
-			continue
-		var multimesh := MultiMesh.new()
-		multimesh.transform_format = MultiMesh.TRANSFORM_3D
-		multimesh.use_colors = true
-		multimesh.use_custom_data = true
-		multimesh.mesh = GrowthMeshes.get_mesh(kind.kind, v)
-		multimesh.instance_count = members.size()
-		for n in members.size():
-			var i: int = members[n]
-			multimesh.set_instance_transform(n, placed[i])
-			multimesh.set_instance_color(n, colors[i])
-			multimesh.set_instance_custom_data(n, customs[i])
-		var instance := MultiMeshInstance3D.new()
-		instance.name = "%s_%d" % [GrowthMeshes.Kind.keys()[kind.kind], v]
-		instance.multimesh = multimesh
-		instance.material_override = _materials[kind]
-		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if kind.cast_shadows \
-				else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		instance.visibility_range_end = kind.view_distance
-		instance.visibility_range_end_margin = kind.view_distance * 0.1
-		instance.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-		root.add_child(instance)
-		var trunk: Variant = multimesh.mesh.get_meta(&"trunk", null)
+		var at := placed[i].origin
+		var key := Vector3i(random.randi() % kind.variants, floori(at.x / cell), floori(at.z / cell))
+		if not buckets.has(key):
+			buckets[key] = []
+		(buckets[key] as Array).append(i)
+	for key: Vector3i in buckets:
+		var members: Array = buckets[key]
+		var mesh := GrowthMeshes.get_mesh(kind.kind, key.x)
+		var centre := Vector3((key.y + 0.5) * cell, 0.0, (key.z + 0.5) * cell)
+		if kind.carpet:
+			_batch(kind, root, mesh, members, placed, customs, colors, centre, 0.0, carpet_near)
+			var sparse := members.filter(func(i: int) -> bool: return i % carpet_thin_every == 0)
+			_batch(kind, root, mesh, sparse, placed, customs, colors, centre, carpet_near, kind.view_distance)
+		else:
+			_batch(kind, root, mesh, members, placed, customs, colors, centre, 0.0, kind.view_distance)
+		var trunk: Variant = mesh.get_meta(&"trunk", null)
 		if trunk is Vector2:
 			_add_trunks(root, trunk, members, placed)
 
+
+## One batch: `members` of placed as a MultiMesh at `centre` (chunk space),
+## drawn from `near` to `far` metres away.
+func _batch(kind: GrowthSpecies, root: Node3D, mesh: Mesh, members: Array, placed: Array[Transform3D],
+		customs: Array[Color], colors: Array[Color], centre: Vector3, near: float, far: float) -> void:
+	if members.is_empty():
+		return
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.use_custom_data = true
+	multimesh.mesh = mesh
+	multimesh.instance_count = members.size()
+	for n in members.size():
+		var i: int = members[n]
+		multimesh.set_instance_transform(n, placed[i].translated(-centre)) # relative to the batch's own place
+		multimesh.set_instance_color(n, colors[i])
+		multimesh.set_instance_custom_data(n, customs[i])
+	var instance := MultiMeshInstance3D.new()
+	instance.name = GrowthMeshes.Kind.keys()[kind.kind]
+	instance.multimesh = multimesh
+	instance.position = centre
+	instance.material_override = _materials[kind]
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if kind.cast_shadows \
+			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.visibility_range_begin = near
+	instance.visibility_range_begin_margin = near * 0.15
+	instance.visibility_range_end = far
+	instance.visibility_range_end_margin = far * 0.1
+	instance.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	root.add_child(instance)
 
 ## Giants are solid: a trunk (an upright cylinder, the mesh's "trunk" size
 ## times each one's scale) for each, all on one static body. You can't walk

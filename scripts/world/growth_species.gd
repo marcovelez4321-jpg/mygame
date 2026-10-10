@@ -78,6 +78,9 @@ enum Biome { REEF, SEWER, ANYWHERE }
 ## reef, 190 in the sewer.
 @export var view_distance: float = 180.0
 @export var cast_shadows: bool = false
+## Ground cover (grass, mould): there's so much of it that it's drawn full
+## only close up and thinned out further off (GrowthScatter.carpet_near).
+@export var carpet: bool = false
 
 
 ## How many times bigger every default group is than the numbers below.
@@ -221,7 +224,7 @@ static func _make(kind: GrowthMeshes.Kind, groups: float, patch: float, cover: f
 	species.follow_ground = 0.8 if kind in [GrowthMeshes.Kind.GLOW_GRASS, GrowthMeshes.Kind.BRAIN_CORAL,
 			GrowthMeshes.Kind.HAIR_MOLD, GrowthMeshes.Kind.EGG_SACS, GrowthMeshes.Kind.PUS_BOILS,
 			GrowthMeshes.Kind.LARVAE_PILE, GrowthMeshes.Kind.CHITIN_RIBS] else 0.25
-	# Big ones throw shadows; the rest are too small to be worth it.
-	species.cast_shadows = kind in [GrowthMeshes.Kind.KELP, GrowthMeshes.Kind.STAGHORN, GrowthMeshes.Kind.SPIRE,
-			GrowthMeshes.Kind.HIVE_MOUND, GrowthMeshes.Kind.CHITIN_RIBS]
+	# Only the giants throw shadows (_giant()): the rest aren't worth the frame time.
+	species.cast_shadows = false
+	species.carpet = kind == GrowthMeshes.Kind.GLOW_GRASS or kind == GrowthMeshes.Kind.HAIR_MOLD
 	return species

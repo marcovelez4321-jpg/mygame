@@ -185,10 +185,10 @@ static func _brain_coral(st: SurfaceTool, random: RandomNumberGenerator) -> void
 
 ## A clump of thin curved blades, glowing toward their tips.
 static func _glow_grass(st: SurfaceTool, random: RandomNumberGenerator) -> void:
-	var blades := random.randi_range(8, 14)
+	var blades := random.randi_range(6, 10)
 	var root := Color(0.10, 0.18, 0.40)
 	var tip := Color(0.40, 0.90, 0.95) if random.randf() < 0.55 else Color(0.80, 0.45, 0.95)
-	_blades(st, random, blades, root, tip, Vector2(0.1, 0.45), Vector2(0.35, 0.8), Vector2(0.04, 0.07), 0.18, 1.0)
+	_blades(st, random, blades, root, tip, Vector2(0.1, 0.45), Vector2(0.35, 0.8), Vector2(0.05, 0.08), 0.18, 1.0)
 
 
 ## `count` thin curved blades from round the foot: grass, mould hairs.
@@ -312,10 +312,10 @@ static func _bladder(st: SurfaceTool, random: RandomNumberGenerator) -> void:
 ## Fuzzy mould: a dense tuft of short grey-green hairs, the tips a little
 ## slimy-bright. The sewer's grass.
 static func _hair_mold(st: SurfaceTool, random: RandomNumberGenerator) -> void:
-	var hairs := random.randi_range(14, 22)
+	var hairs := random.randi_range(8, 12) # fewer, wider: it's everywhere
 	var root := Color(0.10, 0.10, 0.06)
 	var tip := Color(0.45, 0.50, 0.22) if random.randf() < 0.6 else Color(0.55, 0.52, 0.38)
-	_blades(st, random, hairs, root, tip, Vector2(0.05, 0.6), Vector2(0.15, 0.45), Vector2(0.02, 0.04), 0.25, 0.3)
+	_blades(st, random, hairs, root, tip, Vector2(0.05, 0.6), Vector2(0.15, 0.45), Vector2(0.03, 0.055), 0.25, 0.3)
 
 
 ## Insect eggs heaped in a slick of mucus: glistening pale yellow, the odd
@@ -458,7 +458,7 @@ static func _slime_caps(st: SurfaceTool, random: RandomNumberGenerator) -> void:
 static func _flesh_tendrils(st: SurfaceTool, random: RandomNumberGenerator) -> void:
 	var meat := Color(0.50, 0.22, 0.22)
 	var tip := Color(0.75, 0.50, 0.42)
-	for i in random.randi_range(3, 7):
+	for i in random.randi_range(2, 5):
 		var at := Vector3(random.randf_range(-0.3, 0.3), 0.0, random.randf_range(-0.3, 0.3))
 		var height := random.randf_range(0.6, 1.6)
 		var phase := random.randf() * TAU
@@ -478,7 +478,7 @@ static func _flesh_tendrils(st: SurfaceTool, random: RandomNumberGenerator) -> v
 static func _larvae_pile(st: SurfaceTool, random: RandomNumberGenerator) -> void:
 	var pale := Color(0.85, 0.80, 0.62)
 	var head := Color(0.25, 0.15, 0.08)
-	for i in random.randi_range(5, 10):
+	for i in random.randi_range(3, 6):
 		var angle := random.randf() * TAU
 		var out := sqrt(random.randf()) * 0.5
 		var at := Vector3(cos(angle) * out, 0.08 + (0.5 - out) * 0.4 * random.randf(), sin(angle) * out)

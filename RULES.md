@@ -918,3 +918,20 @@ them:
     - Each giant mesh carries a "trunk" meta (radius, height). GrowthScatter gives every giant a cylinder of that size on one static body per batch.
     - You can't walk through them, and the grapple and spiders take them for level geometry.
     - The offline navmesh doesn't know about them, so enemies may bump into trunks until that's handled.
+
+- 2026-10-10: **Back to 128 m chunks; growth optimization; more barnacles; calmer land.**
+  - **Chunks:** back to 128 m. With 160 m, the frame rate dropped near grass, worst in the sewer.
+  - **Why grass was heavy:** a sewer chunk had about 4,500 mould tufts at 66 triangles in one batch per kind. A batch can't be partly culled, so a whole chunk's mould was drawn whenever any of it was on screen.
+  - **Growth optimization (GrowthScatter):**
+    - **Cells:** every kind is drawn in 32 m cells (`cell_size`), one MultiMesh per kind, variant and cell, placed at the cell's middle. Off-screen and out-of-range cells cost nothing. Giants stay one batch per chunk.
+    - **Carpets** (`GrowthSpecies.carpet`: glow grass, hair mould): full thickness to 40 m (`carpet_near`), then a second batch of 1 in 4 (`carpet_thin_every`) out to their view distance, cross-faded.
+    - **Time-budgeted growing:** jobs are one kind in a quarter chunk, run for at most 2 ms a frame (`grow_budget_ms`, at least one job). This replaces the fixed 3 kinds a frame that caused the 30–55 ms hitches.
+    - **Lighter meshes:** hair mould 33 triangles (was 66), glow grass 27 (was 39), larvae piles and flesh tendrils smaller.
+    - **Shadows:** only the giants cast them.
+  - **Barnacles:** each chunk rolls a Poisson count averaging 0.9 nests (`nests_per_chunk`; was a 25% chance of one), on land or buildings. About 3.5× as many hives.
+  - **Terrain (AlienTerrain defaults):** the user found the land away from the yard too steep and too hilly.
+    - Hills 250 m across (was 180), so fewer of them.
+    - Ridges 130 m apart (was 90), with softer crests (sharpness variation 0.4).
+    - Less crag (cover 0.25, share 0.12).
+    - Max slope 50° (was 66.7).
+    - Re-baked: the land now tops out at 50 m.

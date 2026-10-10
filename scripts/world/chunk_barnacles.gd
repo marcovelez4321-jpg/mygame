@@ -10,9 +10,9 @@ extends Node
 ## Rule 1 (co-op): the host rolls and places them.
 
 @export var cluster_scene: PackedScene = preload("res://scenes/enemy/barnacle_cluster.tscn")
-## Chance a 128 x 128 m piece of land gets a nest (scaled up for bigger
-## chunks: a chunk's chance goes up with its area).
-@export_range(0.0, 1.0, 0.05) var nest_chance: float = 0.25
+## Nests per 128 x 128 m of land, on average (each chunk rolls its own
+## count: often none or one, sometimes two or three; scaled by chunk area).
+@export var nests_per_chunk: float = 0.9
 ## Chance the nest goes up a building, when the chunk has any (else on the land).
 @export_range(0.0, 1.0, 0.05) var building_chance: float = 0.4
 ## Land too steep for a nest (degrees).
@@ -40,8 +40,16 @@ func _ready() -> void:
 
 
 func _on_chunk_loaded(chunk: Vector2i, root: Node3D) -> void:
-	var chance := 1.0 - pow(1.0 - nest_chance, pow(chunks.chunk_size / 128.0, 2.0))
-	if not multiplayer.is_server() or randf() >= chance:
+	if not multiplayer.is_server():
+		return
+	# How many: a Poisson count round nests_per_chunk.
+	var count := 0
+	var limit := exp(-nests_per_chunk * pow(chunks.chunk_size / 128.0, 2.0))
+	var product := randf()
+	while product > limit:
+		product *= randf()
+		count += 1
+	if count == 0:
 		return
 	# A physics frame first: the chunk's buildings only stop rays once their
 	# collision's in the physics world.
@@ -49,6 +57,12 @@ func _on_chunk_loaded(chunk: Vector2i, root: Node3D) -> void:
 	if not is_instance_valid(root) or not root.is_inside_tree():
 		return
 	var buildings := _building_boxes(root)
+	for nest in count:
+		_grow_nest(chunk, root, buildings)
+
+
+## One nest somewhere in the chunk (a few tries for a good spot).
+func _grow_nest(chunk: Vector2i, root: Node3D, buildings: Array[CollisionShape3D]) -> void:
 	for attempt in attempts:
 		var spot: Transform3D
 		if not buildings.is_empty() and randf() < building_chance:
