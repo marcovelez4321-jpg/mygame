@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="2V2"
-run/main_scene="uid://ymdve07f084a"
+run/main_scene="uid://bl2omemxuci1v"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -68,14 +68,6 @@ occlusion_culling/use_occlusion_culling=true
 
 [shader_globals]
 
-world_fog_begin={
-"type": "float",
-"value": 22.0
-}
-world_fog_end={
-"type": "float",
-"value": 192.5
-}
 world_fog_color={
 "type": "color",
 "value": Color(0.27, 0.29, 0.16, 1)

@@ -1078,3 +1078,15 @@ them:
     - Breathing ×2 (vines 2.8, pillars 2.0, in the land too).
     - Growth glow ×2 on the Stack; skyline glow ×2.
     - Wind and drone +6 dB.
+
+- 2026-10-10: **The original fog back; all fog in one inspector; another get_meta error fixed.**
+  - **The user's call:** the custom fog made distant shapes white. Everything is back on the world's own fog, even though it hides the distant giants.
+    - `skyline.gdshader`, `stack_lights.gdshader` and `swarm.gdshader` are plain shaders now (no `fog_disabled`, no fog by hand).
+    - The giants' growth variant (`_tall_shader`, `rises_from_fog`) is removed; the giants' view distance is back to normal.
+    - The fog settings are gone from SkylineLayer, Megastructure, CoilingWorm and StackBuilder.
+    - The globals `world_fog_begin`/`world_fog_end` are removed. `world_fog_color` stays for the CloudDeck, which the user kept.
+  - **All the fog in one place (the user asked for an inspector value): the BiomeAtmosphere node.**
+    - `fog_distance` (0.25–3) scales every biome's fog distances at once; valley haze scales with it.
+    - `reef_air` and `sewer_air` are written into the scene by the bake tool, so every value is there to open and tune: colour, start, end, curve, haze, ambient, sun.
+    - Changes apply live: it re-applies twice a second, and right away when they change.
+  - **Fix:** `barnacle_cluster.gd` `_throb` did `get_meta(&"throb", null)`, which errors when the meta is missing (a null default counts as none). It's now `has_meta` first. That was the only other one in the scripts.

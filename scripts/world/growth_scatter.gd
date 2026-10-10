@@ -53,10 +53,6 @@ extends Node
 @export var terrain: Node3D
 
 const GROWTH_SHADER := preload("res://shaders/alien_growth.gdshader")
-## The giants' version (made once, _tall_shader()): their own fog -- the
-## world's, with their glow shining on through it (and height_thinning
-## there to let their tops loom out of it, if wanted).
-static var _tall: Shader
 
 ## How thick the flora is overall: every kind's groups and loners times this.
 @export var density: float = 1.2
@@ -98,7 +94,7 @@ func _ready() -> void:
 		noise.fractal_octaves = 3
 		_patches.append(noise)
 		var material := ShaderMaterial.new()
-		material.shader = _tall_shader() if species[index].rises_from_fog else GROWTH_SHADER
+		material.shader = GROWTH_SHADER
 		material.set_shader_parameter("glow_color", species[index].glow_color)
 		material.set_shader_parameter("sway_amount", species[index].sway_amount)
 		material.set_shader_parameter("breathe_amount", species[index].breathe)
@@ -106,52 +102,6 @@ func _ready() -> void:
 		material.set_shader_parameter("night", night)
 		_materials[species[index]] = material
 	chunks.chunk_loaded.connect(_on_chunk_loaded)
-
-
-## The growth shader with the skyline's fog in place of the world's: drawn
-## with fog_disabled, the murk added by hand, thick low and thin high (see
-## shaders/skyline.gdshader). The fog colour is the world's, kept in step by
-## BiomeAtmosphere (global world_fog_color).
-static func _tall_shader() -> Shader:
-	if _tall:
-		return _tall
-	var code := GROWTH_SHADER.code
-	code = code.replace("render_mode cull_disabled,", "render_mode fog_disabled, cull_disabled,")
-	code = code.replace("varying float v_glow;", "varying float v_glow;
-varying vec3 v_world;
-global uniform vec4 world_fog_color;
-global uniform float world_fog_begin;
-global uniform float world_fog_end;
-// The world's fog (height_thinning: see skyline.gdshader); how much of its
-// glow shines through.
-uniform float height_thinning = 0.0;
-uniform float fog_floor = 20.0;
-uniform float thin_height = 70.0;
-uniform float far_reach = 1400.0;
-uniform float fog_curve = 1.2;
-uniform float light_pierce = 0.8;
-// Far off, the fog never quite takes it: at most `silhouette` of the way,
-// so giants kilometres off stay dim shapes in the murk. And the cloud band
-// (cloud_bottom..cloud_top) it vanishes into, coming out above it.
-uniform float silhouette : hint_range(0.0, 1.0) = 0.8;
-uniform float cloud_bottom = 650.0;
-uniform float cloud_top = 1000.0;
-uniform float cloud_density : hint_range(0.0, 1.0) = 0.97;")
-	code = code.replace("	v_glow = UV2.x * (0.6 + INSTANCE_CUSTOM.g * 0.8);", "	v_glow = UV2.x * (0.6 + INSTANCE_CUSTOM.g * 0.8);
-	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;")
-	code = code.replace("	EMISSION = glow_color * color * v_glow * mix(glow_day, glow_night, night);", "	vec3 glow = glow_color * color * v_glow * mix(glow_day, glow_night, night);
-	float up = clamp((v_world.y - fog_floor) / max(thin_height, 1.0), 0.0, 1.0);
-	float fog_end = mix(world_fog_end, far_reach, up * up * height_thinning);
-	float dist = length(v_world - CAMERA_POSITION_WORLD);
-	float fog = pow(clamp((dist - world_fog_begin) / max(fog_end - world_fog_begin, 1.0), 0.0, 1.0), fog_curve);
-	fog = min(fog, silhouette);
-	float band = smoothstep(cloud_bottom - 100.0, cloud_bottom + 60.0, v_world.y) * (1.0 - smoothstep(cloud_top - 60.0, cloud_top + 100.0, v_world.y));
-	fog = max(fog, band * cloud_density * smoothstep(world_fog_begin, world_fog_end, dist));
-	ALBEDO *= 1.0 - fog;
-	EMISSION = mix(glow, world_fog_color.rgb, fog) + glow * fog * light_pierce;")
-	_tall = Shader.new()
-	_tall.code = code
-	return _tall
 
 
 ## The node of `type` next to this one: by its usual name first (the world

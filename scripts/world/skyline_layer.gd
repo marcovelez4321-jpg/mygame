@@ -11,7 +11,7 @@ extends Node3D
 ## TrenchBroom tower becomes a 1.6 km one). On load everything under it is
 ## made skyline:
 ##   its materials swapped for shaders/skyline.gdshader (same texture and
-##   colour; the world's fog, its lights and glow shining through it),
+##   colour, lit, in the world's fog like everything else),
 ##   no shadows, no collision (nothing out there is reachable),
 ## and the camera's far plane pushed out to view_distance.
 ## Cheap: a few hundred triangles a giant, always loaded, no streaming, no
@@ -22,14 +22,6 @@ extends Node3D
 @export var placeholders: bool = true
 ## How far the camera sees (metres): past the furthest giant.
 @export var view_distance: float = 16000.0
-@export_group("Fog")
-## The skyline's fog (skyline.gdshader): the world's own (height_thinning
-## 0), or thinning with height (up to 1) from fog_floor over thin_height, to
-## far_reach up high. Their glow shines through it either way.
-@export_range(0.0, 1.0, 0.05) var height_thinning: float = 0.0
-@export var fog_floor: float = 0.0
-@export var thin_height: float = 600.0
-@export var far_reach: float = 9000.0
 
 const SHADER := preload("res://shaders/skyline.gdshader")
 
@@ -105,10 +97,6 @@ func _convert(original: Material) -> Material:
 func _fresh() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = SHADER
-	material.set_shader_parameter("height_thinning", height_thinning)
-	material.set_shader_parameter("fog_floor", fog_floor)
-	material.set_shader_parameter("thin_height", thin_height)
-	material.set_shader_parameter("far_reach", far_reach)
 	return material
 
 

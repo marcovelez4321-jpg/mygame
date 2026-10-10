@@ -41,8 +41,6 @@ func _ready() -> void:
 	var skin := ShaderMaterial.new()
 	skin.shader = SKYLINE
 	skin.set_shader_parameter("albedo_texture", SKIN)
-	skin.set_shader_parameter("thin_height", 700.0)
-	skin.set_shader_parameter("far_reach", 12000.0)
 	material_override = skin
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	visibility_range_end = draw_distance

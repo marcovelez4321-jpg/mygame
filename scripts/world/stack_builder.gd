@@ -554,13 +554,10 @@ func _grow_on(root: Node, parent: Node, kind: GrowthMeshes.Kind, blocks: Array[D
 	node.name = "Growth_%s" % GrowthMeshes.Kind.keys()[kind]
 	node.multimesh = multimesh
 	var material := ShaderMaterial.new()
-	material.shader = GrowthScatter._tall_shader()
+	material.shader = GrowthScatter.GROWTH_SHADER
 	material.set_shader_parameter("sway_amount", 0.05)
 	material.set_shader_parameter("breathe_amount", breathe)
 	material.set_shader_parameter("glow_color", Color(1.6, 1.4, 0.5))
-	material.set_shader_parameter("fog_floor", 0.0)
-	material.set_shader_parameter("thin_height", 700.0)
-	material.set_shader_parameter("far_reach", 12000.0)
 	node.material_override = material
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.visibility_range_end = distance

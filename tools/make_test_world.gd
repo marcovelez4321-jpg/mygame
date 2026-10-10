@@ -345,6 +345,8 @@ func _bake() -> void:
 	var air := BiomeAtmosphere.new()
 	air.name = "BiomeAtmosphere"
 	air.biomes = biomes
+	air.reef_air = AlienAtmosphere.from_environment(world_environment.environment)
+	air.sewer_air = AlienAtmosphere.sewer()
 	root.add_child(air)
 	air.owner = root
 

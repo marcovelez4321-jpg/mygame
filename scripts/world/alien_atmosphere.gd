@@ -100,24 +100,21 @@ static func from_environment(environment: Environment) -> AlienAtmosphere:
 
 
 ## Puts the blend of `a` and `b` (t: 0 = a, 1 = b) on an Environment, and
-## on the sun if there is one.
+## on the sun if there is one. `distance` scales every fog distance (1 = as set).
 static func apply_blend(environment: Environment, a: AlienAtmosphere, b: AlienAtmosphere, t: float,
-		sun: DirectionalLight3D = null) -> void:
+		sun: DirectionalLight3D = null, distance: float = 1.0) -> void:
 	if sun:
 		sun.light_color = a.sun_color.lerp(b.sun_color, t)
 		sun.light_energy = lerpf(a.sun_energy, b.sun_energy, t)
 	var fog := a.fog_color.lerp(b.fog_color, t)
 	environment.fog_light_color = fog
-	# The skyline, the giants and the megastructures draw their own fog: the
-	# same colour and distances.
+	# The cloud deck is coloured by the fog.
 	RenderingServer.global_shader_parameter_set(&"world_fog_color", fog)
-	RenderingServer.global_shader_parameter_set(&"world_fog_begin", lerpf(a.fog_start, b.fog_start, t))
-	RenderingServer.global_shader_parameter_set(&"world_fog_end", lerpf(a.fog_end, b.fog_end, t))
 	environment.background_color = fog
-	environment.fog_depth_begin = lerpf(a.fog_start, b.fog_start, t)
-	environment.fog_depth_end = lerpf(a.fog_end, b.fog_end, t)
+	environment.fog_depth_begin = lerpf(a.fog_start, b.fog_start, t) * distance
+	environment.fog_depth_end = lerpf(a.fog_end, b.fog_end, t) * distance
 	environment.fog_depth_curve = lerpf(a.fog_curve, b.fog_curve, t)
 	environment.fog_height = lerpf(a.haze_height, b.haze_height, t)
-	environment.fog_height_density = lerpf(a.haze_density, b.haze_density, t)
+	environment.fog_height_density = lerpf(a.haze_density, b.haze_density, t) / maxf(distance, 0.05)
 	environment.ambient_light_color = a.ambient_color.lerp(b.ambient_color, t)
 	environment.ambient_light_energy = lerpf(a.ambient_energy, b.ambient_energy, t)

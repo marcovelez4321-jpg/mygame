@@ -149,7 +149,8 @@ func _on_barnacle_swelling(barnacle: Barnacle) -> void:
 ## Three swelling pulses, each bigger than the last (taller than wide), then
 ## a little squash: Barnacle's throb, without the spit.
 func _throb(decoy: Node3D, delay: float) -> void:
-	var previous: Variant = decoy.get_meta(&"throb", null)
+	# (get_meta with a null default still errors when it's missing: check first)
+	var previous: Variant = decoy.get_meta(&"throb") if decoy.has_meta(&"throb") else null
 	if previous is Tween and (previous as Tween).is_valid():
 		return # already throbbing
 	var rest: Vector3 = decoy.get_meta(&"rest")

@@ -13,10 +13,25 @@ extends Node
 ## The world's sun (empty = the one called Sun next to this node): tinted by
 ## biome too.
 @export var sun: DirectionalLight3D
-## The reef's air (empty = the environment as saved, tuned in the inspector)
-## and the sewer's (empty = AlienAtmosphere.sewer()).
-@export var reef_air: AlienAtmosphere
-@export var sewer_air: AlienAtmosphere
+@export_group("Fog")
+## ALL THE FOG, in one place. fog_distance pushes every biome's fog nearer
+## (below 1) or further off (above 1) at once; reef_air and sewer_air are
+## each biome's full set (fog colour, start, end, curve, valley haze,
+## ambient light, sun) -- open them to tune any value. Changes show live.
+@export_range(0.25, 3.0, 0.05) var fog_distance: float = 1.0:
+	set(value):
+		fog_distance = value
+		_mix = -1.0 # re-apply
+## The reef's air (empty = the environment as saved) and the sewer's
+## (empty = AlienAtmosphere.sewer()).
+@export var reef_air: AlienAtmosphere:
+	set(value):
+		reef_air = value
+		_mix = -1.0
+@export var sewer_air: AlienAtmosphere:
+	set(value):
+		sewer_air = value
+		_mix = -1.0
 ## Seconds the air takes to catch up with where you are.
 @export var blend_time: float = 1.5
 ## How far round the camera the biome is averaged (metres): a wider look
@@ -24,6 +39,7 @@ extends Node
 @export var sample_reach: float = 30.0
 
 var _environment: Environment
+var _refresh_left := 0.0
 ## 0 = sewer air, 1 = reef air; -1 = not set yet.
 var _mix := -1.0
 
@@ -56,7 +72,11 @@ func _process(delta: float) -> void:
 			+ biomes.reef(at.x + reach, at.z) + biomes.reef(at.x - reach, at.z)
 			+ biomes.reef(at.x, at.z + reach) + biomes.reef(at.x, at.z - reach)) / 6.0
 	var mix := target if _mix < 0.0 else lerpf(_mix, target, 1.0 - exp(-delta / maxf(blend_time, 0.01)))
-	if absf(mix - _mix) < 0.0005:
+	# Re-applied as you move between biomes, and every so often anyway (so
+	# tuning the airs in the inspector shows straight away).
+	_refresh_left -= delta
+	if absf(mix - _mix) < 0.0005 and _refresh_left > 0.0:
 		return
+	_refresh_left = 0.5
 	_mix = mix
-	AlienAtmosphere.apply_blend(_environment, sewer_air, reef_air, _mix, sun)
+	AlienAtmosphere.apply_blend(_environment, sewer_air, reef_air, _mix, sun, fog_distance)
