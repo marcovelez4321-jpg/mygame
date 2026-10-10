@@ -2,18 +2,43 @@
 
 [ext_resource type="Shader" uid="uid://dkm5q24etjal" path="res://shaders/alien_terrain.gdshader" id="1_yapyo"]
 [ext_resource type="Script" uid="uid://bdy1lul7nr03o" path="res://scripts/world/world_navigation.gd" id="2_ew2ib"]
+[ext_resource type="Script" uid="uid://cd6q03pxw5dko" path="res://scripts/world/growth_scatter.gd" id="3_growth"]
+[ext_resource type="Script" uid="uid://b5kdycf53rthc" path="res://scripts/world/terrain_look.gd" id="3_look"]
 [ext_resource type="Script" uid="uid://udb4fv61c1q5" path="res://scripts/world/world_chunks.gd" id="3_s4qyy"]
-[ext_resource type="Script" path="res://scripts/world/growth_scatter.gd" id="3_growth"]
-[ext_resource type="Script" path="res://scripts/world/terrain_look.gd" id="3_look"]
+[ext_resource type="Script" path="res://scripts/world/chunk_barnacles.gd" id="3_barnacles"]
 [ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="4_tersh"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="11_63a70"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/zombie.tscn" id="13_k6tl3"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/zombie_rusher.tscn" id="15_lludv"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="16_y826p"]
 [ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="18_rsl8k"]
 [ext_resource type="PackedScene" uid="uid://djmeis3phxch8" path="res://scenes/player/player.tscn" id="19_6n4eo"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_1ow1t"]
+_shader_parameters = {
+&"blotch_size": null,
+&"blotches": null,
+&"color_steps": null,
+&"flat_terrain_normals": null,
+&"height_gradient": null,
+&"high_color": null,
+&"high_height": null,
+&"low_color": null,
+&"low_height": null,
+&"moss_amount": null,
+&"moss_color": null,
+&"ps1": null,
+&"ridge_color": null,
+&"rust_amount": null,
+&"rust_color": null,
+&"slope": null,
+&"slope_color": null,
+&"slope_end": null,
+&"slope_start": null,
+&"snap_resolution": null,
+&"speckle_amount": null,
+&"speckle_size": null,
+&"texel_size": null,
+&"valley_color": null
+}
 shader_override_enabled = true
 shader_override = ExtResource("1_yapyo")
 show_checkered = false
@@ -62,10 +87,13 @@ tiles_dir = "res://worlds/test_world/navigation"
 script = ExtResource("3_s4qyy")
 chunks_dir = "res://worlds/test_world/chunks"
 
-[node name="GrowthScatter" type="Node" parent="."]
+[node name="GrowthScatter" type="Node" parent="." unique_id=249654051]
 script = ExtResource("3_growth")
 
-[node name="TerrainLook" type="Node" parent="."]
+[node name="ChunkBarnacles" type="Node" parent="."]
+script = ExtResource("3_barnacles")
+
+[node name="TerrainLook" type="Node" parent="." unique_id=37011589]
 script = ExtResource("3_look")
 
 [node name="HarvestmanLeech" parent="." unique_id=1040049696 instance=ExtResource("4_tersh")]
@@ -73,12 +101,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 20.82164, 60)
 
 [node name="SpiderPack" parent="." unique_id=44489844 instance=ExtResource("11_63a70")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 25.095348, 50)
-
-[node name="Zombie" parent="." unique_id=467441740 instance=ExtResource("13_k6tl3")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 22.662218, -60)
-
-[node name="ZombieRusher" parent="." unique_id=545266518 instance=ExtResource("15_lludv")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 27.033876, -50)
 
 [node name="Rat" parent="." unique_id=2144272134 instance=ExtResource("16_y826p")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.99376, -70)

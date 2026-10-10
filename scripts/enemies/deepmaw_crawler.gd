@@ -84,7 +84,8 @@ var _gravity := 9.8
 
 func _ready() -> void:
 	add_to_group("enemies")
-	_gravity = ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float
+	floor_snap_length = maxf(floor_snap_length, 0.5) # down hills, not off them (see Enemy)
+	_gravity =ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float
 	rhythm_seed = randf() * 1000.0
 	speed_scale = randf_range(0.9, 1.1)
 	_facing = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)

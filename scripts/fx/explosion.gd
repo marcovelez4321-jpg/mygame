@@ -83,8 +83,8 @@ static func _apply_damage_and_push(world: Node3D, center: Vector3, settings: Set
 	var seen := {}
 	for result in space.intersect_shape(query, 128):
 		var body := result.collider as Node3D
-		if body == null or seen.has(body):
-			continue
+		if LevelGeometry.is_terrain(body) or seen.has(body):
+			continue # the ground (or a body with no node) takes no blast
 		seen[body] = true
 		var aim_point := _aim_point(body)
 		var distance := center.distance_to(aim_point)
@@ -146,15 +146,16 @@ static func _aim_point(body: Node3D) -> Vector3:
 	return body.global_position
 
 
-## Blocked if world geometry (a StaticBody3D -- walls, floors, map brushes)
-## is between the blast and the target. Other bodies don't shield.
+## Blocked if world geometry (a StaticBody3D -- walls, floors, map brushes --
+## or the open world's ground) is between the blast and the target. Other
+## bodies don't shield.
 static func _in_line_of_sight(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3, target: Node3D) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 1
 	if target is CollisionObject3D:
 		query.exclude = [(target as CollisionObject3D).get_rid()]
 	var hit := space.intersect_ray(query)
-	return hit.is_empty() or not hit.collider is StaticBody3D
+	return hit.is_empty() or not LevelGeometry.is_solid(hit.collider)
 
 
 ## The look and sound. Public so a client in co-op can play it from the

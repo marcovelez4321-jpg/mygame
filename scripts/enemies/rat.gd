@@ -158,6 +158,9 @@ func _ready() -> void:
 	add_to_group(Factions.GROUPS[Factions.Side.RAT])
 	Population.mark_born(self)
 	lock_rotation = true # upright; the Visual turns to face where it runs
+	# Small and fast against the open world's ground, which is a surface with
+	# no thickness: swept, so a step can't carry it through a hillside.
+	continuous_cd = true
 	_roll_variety()
 	health.died.connect(_on_died)
 	body_entered.connect(_on_body_entered)

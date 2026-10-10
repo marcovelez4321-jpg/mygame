@@ -143,19 +143,27 @@ static func _glow_grass(st: SurfaceTool, random: RandomNumberGenerator) -> void:
 	var blades := random.randi_range(8, 14)
 	var root := Color(0.10, 0.18, 0.40)
 	var tip := Color(0.40, 0.90, 0.95) if random.randf() < 0.55 else Color(0.80, 0.45, 0.95)
-	for i in blades:
+	_blades(st, random, blades, root, tip, Vector2(0.1, 0.45), Vector2(0.35, 0.8), Vector2(0.04, 0.07), 0.18, 1.0)
+
+
+## `count` thin curved blades from round the foot: grass, mould hairs.
+## lean/height/width are (min, max) ranges; `glow` = how much the tips glow.
+static func _blades(st: SurfaceTool, random: RandomNumberGenerator, count: int, root: Color, tip: Color,
+		leans: Vector2, heights: Vector2, widths: Vector2, spread: float, glow: float) -> void:
+	for i in count:
 		var angle := random.randf() * TAU
-		var lean := random.randf_range(0.1, 0.45)
-		var height := random.randf_range(0.35, 0.8)
-		var width := random.randf_range(0.04, 0.07)
+		var lean := random.randf_range(leans.x, leans.y)
+		var height := random.randf_range(heights.x, heights.y)
+		var width := random.randf_range(widths.x, widths.y)
 		var out := Vector3(cos(angle), 0.0, sin(angle))
-		var start := out * random.randf_range(0.0, 0.18)
+		var start := out * random.randf_range(0.0, spread)
 		var side := out.cross(Vector3.UP) * width
 		var mid := start + out * lean * height * 0.4 + Vector3.UP * height * 0.55
 		var end := start + out * lean * height + Vector3.UP * height
 		var mid_color := root.lerp(tip, 0.55)
-		_quad(st, start - side, start + side, mid + side * 0.6, mid - side * 0.6, root, root, mid_color, mid_color, 0.0, 0.3, 0.3)
-		_triangle(st, mid - side * 0.6, mid + side * 0.6, end, mid_color, mid_color, tip, 0.3, 0.3, 1.0, 0.3, 0.3, 1.0)
+		var mid_glow := glow * 0.3
+		_quad(st, start - side, start + side, mid + side * 0.6, mid - side * 0.6, root, root, mid_color, mid_color, 0.0, 0.3, mid_glow)
+		_triangle(st, mid - side * 0.6, mid + side * 0.6, end, mid_color, mid_color, tip, 0.3, 0.3, 1.0, mid_glow, mid_glow, glow)
 
 
 ## A flat fan: ribs radiating up from the foot, braced by cross ribs.

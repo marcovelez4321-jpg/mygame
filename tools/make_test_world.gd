@@ -40,8 +40,6 @@ const PLAYER_SCENE := "res://scenes/player/player.tscn"
 const TEST_ENEMIES := {
 	"res://scenes/enemy/harvestman/harvestman_leech.tscn": Vector2(80.0, 60.0),
 	"res://scenes/enemy/spider_pack.tscn": Vector2(-70.0, 50.0),
-	"res://scenes/enemy/zombie.tscn": Vector2(-60.0, -60.0),
-	"res://scenes/enemy/zombie_rusher.tscn": Vector2(-70.0, -50.0),
 	"res://scenes/enemy/rat.tscn": Vector2(55.0, -70.0),
 }
 
@@ -213,6 +211,11 @@ func _bake() -> void:
 	growth.high_ground = maxf(heights.y, 1.0)
 	root.add_child(growth)
 	growth.owner = root
+	# Barnacle nests: a chance of one on the land or a building in each chunk.
+	var barnacles := ChunkBarnacles.new()
+	barnacles.name = "ChunkBarnacles"
+	root.add_child(barnacles)
+	barnacles.owner = root
 
 
 	# Test enemies on the slopes round the yard: walking, pathing, feet.

@@ -841,7 +841,7 @@ func _blocked(from: Vector3, to: Vector3) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 1
 	var hit := get_viewport().find_world_3d().direct_space_state.intersect_ray(query)
-	return not hit.is_empty() and hit.collider is StaticBody3D
+	return not hit.is_empty() and LevelGeometry.is_solid(hit.collider)
 
 
 ## Up to eat_max_rats of the nearest rats eat _corpse; the rest carry on.

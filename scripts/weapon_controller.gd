@@ -885,7 +885,8 @@ func resolve_shot(shot: Shot) -> void:
 				continue
 
 			# Anything with a Health child can be hurt: targets, monsters, players.
-			var health := (result.collider as Node).get_node_or_null("Health") as Health
+			var hit_node := result.collider as Node # null on a body with no node (see LevelGeometry)
+			var health := hit_node.get_node_or_null("Health") as Health if hit_node else null
 			shot_resolved.emit(ray_origin, result.position, health != null)
 			_push_physics_body(result.collider, direction, result.position, shot.weapon.impact_force)
 			if health == null:

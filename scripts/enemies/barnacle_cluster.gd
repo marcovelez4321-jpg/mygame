@@ -24,13 +24,14 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 @export var nest: Nest = Nest.RANDOM
 @export_range(0.0, 1.0, 0.05) var spider_nest_chance: float = 0.4
 @export var spider_fungus_color: Color = Color(0.5, 0.5, 0.47)
-@export var count: int = 6
-## How far from the middle barnacles and mounds can grow.
-@export var radius: float = 1.8
+@export var count: int = 12
+## How far from the middle barnacles and mounds can grow (spread wider as
+## the count went up, so a clump covers more ground rather than piling up).
+@export var radius: float = 2.5
 @export var size_min: float = 0.6
 @export var size_max: float = 1.6
 ## Flat fungal mounds around the barnacles (no collision, look only).
-@export var fungus_count: int = 7
+@export var fungus_count: int = 14
 @export var fungus_color: Color = Color(0.26, 0.24, 0.12)
 @export var leech_scene: PackedScene = preload("res://scenes/enemy/leech.tscn")
 @export var leech_count: int = 3
@@ -103,8 +104,10 @@ func _grow() -> void:
 func _surface_near(up: Vector3, within: float) -> Dictionary:
 	var flat := Vector2.from_angle(randf() * TAU) * sqrt(randf()) * within
 	var along := global_basis * Vector3(flat.x, 0.0, flat.y)
-	var from := global_position + along + up * 0.6
-	var query := PhysicsRayQueryParameters3D.create(from, from - up * 1.6)
+	# Reaching well past the surface either way: the open world's hillsides
+	# rise and fall across a clump's width.
+	var from := global_position + along + up * 1.5
+	var query := PhysicsRayQueryParameters3D.create(from, from - up * 3.5)
 	query.collision_mask = 1
 	query.exclude = _barnacle_rids()
 	return get_world_3d().direct_space_state.intersect_ray(query)

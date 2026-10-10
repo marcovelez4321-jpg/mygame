@@ -615,7 +615,7 @@ func _static_ray(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -
 	for attempt in 4:
 		query.exclude = exclude
 		var hit := space.intersect_ray(query)
-		if hit.is_empty() or (hit.collider is StaticBody3D and not hit.collider is AnimatableBody3D):
+		if hit.is_empty() or LevelGeometry.is_static(hit.collider):
 			return hit
 		exclude.append(hit.rid)
 	return {}

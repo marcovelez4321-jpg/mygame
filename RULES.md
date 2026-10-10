@@ -837,3 +837,22 @@ them:
   - TerrainLook re-applies the shader in the right order once Terrain3D has set up (two frames in) and calls `update()`. It's in the test world and the bake tool.
   - The same run also showed the growth scripts' new class names weren't registered yet (no import had run since they were written); an `--import` fixed it.
   - Not yet seen in game.
+
+- 2026-10-10: **Enemies collide with the open world's ground; zombies out; barnacles everywhere; bigger growth groups.**
+  - **Why the Harvestman walked through a hill:** Terrain3D's in-game collision has no body node, so a ray that hits the ground reports the Terrain3D node as its collider, not a StaticBody3D. Every "is this the level?" test (`collider is StaticBody3D`) took the hills for something passing by, and the rays went straight through them.
+  - **New `scripts/world/level_geometry.gd` (LevelGeometry):** `is_terrain`, `is_static` and `is_solid`. Every level test now goes through it: the Harvestman, both worms, spider packs, rat swarms, barnacle scatter, gunner and enemy line of sight, explosions' line of sight (and explosions no longer try to hurt the ground). Shots that hit a body with no node no longer crash.
+  - **Harvestman:** it stands on the highest ground under its whole footprint (six probes round the sack plus the middle), keeping `body_clearance` above it, so the sack never sinks into a slope. Its foot and ground rays reach further. Its "wall ahead" probe ignores the ground (it climbs hills) but still turns off walls.
+  - **Proboscis:** it stops short of the first solid thing on its line (ground, walls, props; not people, creatures or corpses). Its sag and writhe rest on surfaces instead of passing through them.
+  - **Burrow Worm and Deepmaw:** their floor line follows the ground under the head on Terrain3D, so they swim under hills, not through them. In levels the floor they were put on stays their floor.
+  - **Ground-walking enemies (Enemy, DeepmawCrawler):** `floor_snap_length` is at least 0.5 m, so they stick to the ground walking downhill (HL2's step-height stick).
+  - **Rats, leeches, roaches:** `continuous_cd` is on, so a fast step can't carry them through the ground, which is a surface with no thickness.
+  - **Zombies removed** (the user doesn't want them): out of the test world and the bake tool; `zombie.tscn` and `zombie_rusher.tscn` deleted (they're in git history). The PSX zombie models are still in NEWPSXMODELS.
+  - **Barnacles:**
+    - Clusters have twice the barnacles (12) and fungus mounds (14), over a wider area (radius 2.5 m). The surface probes reach further for hillsides.
+    - BarnacleScatter can put nests on floors too (`floor_chance` 0.3).
+    - New `scripts/world/chunk_barnacles.gd` (ChunkBarnacles): each open-world chunk has a chance (`nest_chance` 0.25) of a nest as it loads, on the land or up a building. It's in the test world and the bake tool.
+  - **Small hordes:** `Population` caps for rats, roaches and spiders raised from 60 to 100 each.
+  - **Growths:**
+    - Every default group is 4× the members (`GrowthSpecies.GROUP_SCALE`).
+    - Glow grass is the commonest growth: 16 groups a chunk, 85% patch cover, 20 strays.
+    - The biomes, the sewer growths, the black vines and the far-range shimmer fix are waiting on the user's design choices.

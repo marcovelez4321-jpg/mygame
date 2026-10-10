@@ -29,7 +29,7 @@ extends Node3D
 
 ## Sizes every model to this height in meters (its rest-pose mesh bounds),
 ## whatever scale it was made at -- for a set of models that aren't all built
-## at the same size (the zombies are real-sized; the Killers are made big and
+## at the same size (some are real-sized; the Killers are made big and
 ## scaled down by this node). 0 = leave them at this node's own scale.
 @export var fit_height: float = 0.0
 

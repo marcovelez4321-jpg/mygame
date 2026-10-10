@@ -84,6 +84,7 @@ var _pulse: Tween
 func _ready() -> void:
 	add_to_group("leeches")
 	lock_rotation = true
+	continuous_cd = true # swept: never through the open world's thin ground (see Rat)
 	health.died.connect(_on_died)
 	health.damaged.connect(func(_amount: float, _attacker: int) -> void: HitFlash.flash(self))
 	for player in get_tree().get_nodes_in_group("player"):

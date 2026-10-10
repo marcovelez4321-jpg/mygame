@@ -2,15 +2,15 @@ class_name BarnacleScatter
 extends Node3D
 
 ## Grows a few barnacle nests (BarnacleCluster) in random spots on the
-## level's walls and ceilings when it loads, so no two runs have them in the
+## level's floors, walls and ceilings when it loads, so no two runs have them in the
 ## same places. Light by design: up to max_nests, each only `chance` likely,
 ## kept min_spacing apart from each other (and every hand-placed nest) and
 ## safe_radius away from every player at the start. Each one rolls its own
 ## roach-or-spider nest like any other.
 ##
 ## How it finds a spot: a random point in the area, then a ray out sideways
-## for a wall, or up for a ceiling -- the same probing the level designer
-## would do by hand. Rule 1 (co-op): the host picks the spots.
+## for a wall, up for a ceiling or down for a floor -- the same probing the
+## level designer would do by hand. Rule 1 (co-op): the host picks the spots.
 
 @export var cluster_scene: PackedScene = preload("res://scenes/enemy/barnacle_cluster.tscn")
 ## Most nests it can grow, and the chance each one actually does.
@@ -25,6 +25,8 @@ extends Node3D
 @export var probe_reach: float = 12.0
 ## Chance a nest goes on a ceiling (if a probe finds one) instead of a wall.
 @export_range(0.0, 1.0, 0.05) var ceiling_chance: float = 0.35
+## Chance a nest goes on the floor instead (the rest go on walls).
+@export_range(0.0, 1.0, 0.05) var floor_chance: float = 0.3
 ## A ceiling has to be at least this high above the floor under it.
 @export var min_ceiling_height: float = 2.5
 @export var min_spacing: float = 15.0
@@ -44,7 +46,9 @@ func _scatter() -> void:
 		if randf() >= chance:
 			continue
 		for attempt in attempts:
-			var spot := _find_spot(randf() < ceiling_chance)
+			var roll := randf()
+			var spot := _find_spot(Surface.CEILING if roll < ceiling_chance
+					else Surface.FLOOR if roll < ceiling_chance + floor_chance else Surface.WALL)
 			if spot.is_empty():
 				continue
 			var cluster := cluster_scene.instantiate() as Node3D
@@ -53,17 +57,27 @@ func _scatter() -> void:
 			break
 
 
-## A spot on a wall (or a ceiling) clear of players and other nests, or {}.
-func _find_spot(ceiling: bool) -> Dictionary:
+enum Surface { WALL, CEILING, FLOOR }
+
+
+## A spot on a wall, ceiling or floor clear of players and other nests, or {}.
+func _find_spot(surface: Surface) -> Dictionary:
 	var space := get_world_3d().direct_space_state
 	var half := area_size * 0.5
 	var from := global_position + Vector3(randf_range(-half.x, half.x), randf_range(probe_height_min, probe_height_max), randf_range(-half.y, half.y))
-	var to := from + (Vector3.UP if ceiling else Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)) * probe_reach
-	var hit := _static_ray(space, from, to)
+	var direction := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	if surface == Surface.CEILING:
+		direction = Vector3.UP
+	elif surface == Surface.FLOOR:
+		direction = Vector3.DOWN
+	var hit := _static_ray(space, from, from + direction * probe_reach)
 	if hit.is_empty():
 		return {}
 	var normal := hit.normal as Vector3
-	if ceiling:
+	if surface == Surface.FLOOR:
+		if normal.y < 0.6:
+			return {} # too steep to be floor
+	elif surface == Surface.CEILING:
 		if normal.y > -0.7:
 			return {}
 		var floor_hit := _static_ray(space, hit.position + Vector3.DOWN * 0.1, hit.position + Vector3.DOWN * 50.0)
@@ -89,7 +103,7 @@ func _static_ray(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -
 	for attempt in 4:
 		query.exclude = exclude
 		var hit := space.intersect_ray(query)
-		if hit.is_empty() or hit.collider is StaticBody3D and not hit.collider is AnimatableBody3D:
+		if hit.is_empty() or LevelGeometry.is_static(hit.collider):
 			return hit
 		exclude.append(hit.rid)
 	return {}

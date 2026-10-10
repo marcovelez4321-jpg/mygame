@@ -313,6 +313,7 @@ func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group(Factions.GROUPS[Factions.Side.ROACH])
 	Population.mark_born(self)
+	continuous_cd = true # swept: never through the open world's thin ground (see Rat)
 	gravity_scale = 0.0
 	lock_rotation = true # the model shows tumbling; the body stays upright
 	health.damaged.connect(_on_damaged)

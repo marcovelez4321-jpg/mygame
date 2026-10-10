@@ -575,6 +575,7 @@ func _physics_process(delta: float) -> void:
 		_ignore_players()
 	_breach_fx_left = maxf(_breach_fx_left - delta, 0.0)
 	var head := _pos[0]
+	_follow_ground(head)
 	var was_inside := _inside
 	_inside = _in_ground(head)
 	_update_phase(head, delta)
@@ -1006,7 +1007,7 @@ func _shockwave(at: Vector3) -> void:
 	var seen := {}
 	for result in get_world_3d().direct_space_state.intersect_shape(query, 64):
 		var body := result.collider as Node3D
-		if body == null or seen.has(body) or (body is StaticBody3D and not body is AnimatableBody3D):
+		if body == null or seen.has(body) or LevelGeometry.is_static(body):
 			continue
 		seen[body] = true
 		if _is_escort(body):
@@ -1141,7 +1142,7 @@ func _plough_shove() -> void:
 	var thrown_bodies := {}
 	for result in get_world_3d().direct_space_state.intersect_shape(query, 32):
 		var body := result.collider as Node3D
-		if body == null or body is PlayerMovement or (body is StaticBody3D and not body is AnimatableBody3D):
+		if body == null or body is PlayerMovement or LevelGeometry.is_static(body):
 			continue
 		if _is_escort(body):
 			continue
@@ -1245,6 +1246,18 @@ func _nearest_player() -> Node3D:
 	return best
 
 
+## On the open world's hills the floor isn't one flat level: the floor line
+## follows the ground right under its head, so it swims under the hills and
+## breaches out of their sides rather than through them. Only the Terrain3D
+## ground moves it -- in a level the floor it was put on stays its floor (a
+## platform it passes under isn't one).
+func _follow_ground(head: Vector3) -> void:
+	var top := Vector3(head.x, maxf(head.y, _ground_y) + 6.0, head.z)
+	var hit := _static_ray(top, Vector3(head.x, minf(head.y, _ground_y) - 8.0, head.z))
+	if not hit.is_empty() and LevelGeometry.is_terrain(hit.collider):
+		_ground_y = (hit.position as Vector3).y
+
+
 ## In the ground: under the floor it lives in, or inside level geometry (a
 ## wall, a pillar, a platform).
 func _in_ground(point: Vector3) -> bool:
@@ -1255,7 +1268,7 @@ func _in_ground(point: Vector3) -> bool:
 	query.collision_mask = 1
 	for result in get_world_3d().direct_space_state.intersect_point(query, 8):
 		var collider = result.collider
-		if collider is StaticBody3D and not collider is AnimatableBody3D:
+		if LevelGeometry.is_static(collider):
 			return true
 	return false
 
@@ -1429,7 +1442,7 @@ func _static_ray(from: Vector3, to: Vector3) -> Dictionary:
 	for attempt in 4:
 		query.exclude = exclude
 		var hit := space.intersect_ray(query)
-		if hit.is_empty() or (hit.collider is StaticBody3D and not hit.collider is AnimatableBody3D):
+		if hit.is_empty() or LevelGeometry.is_static(hit.collider):
 			return hit
 		exclude.append(hit.rid)
 	return {}

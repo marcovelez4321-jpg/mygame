@@ -400,6 +400,7 @@ func _physics_process(delta: float) -> void:
 		_look_out()
 		_ignore_players()
 	var head := global_position
+	_follow_ground(head)
 	var was_inside := _inside
 	_inside = _in_ground(head)
 	_update_phase(head, delta)
@@ -663,6 +664,16 @@ func _try_bite() -> void:
 	_fx.bite_spray(jaws, (middle - jaws).normalized(), false) # gore, no spit
 
 
+## The floor line follows the open world's ground under its head (the
+## BurrowWorm's _follow_ground): under the hills, not through them. A level's
+## floor stays the one it was put on.
+func _follow_ground(head: Vector3) -> void:
+	var top := Vector3(head.x, maxf(head.y, _ground_y) + 6.0, head.z)
+	var hit := _static_ray(top, Vector3(head.x, minf(head.y, _ground_y) - 8.0, head.z))
+	if not hit.is_empty() and LevelGeometry.is_terrain(hit.collider):
+		_ground_y = (hit.position as Vector3).y
+
+
 func _in_ground(point: Vector3) -> bool:
 	if point.y < _ground_y - 0.05:
 		return true
@@ -671,7 +682,7 @@ func _in_ground(point: Vector3) -> bool:
 	query.collision_mask = 1
 	for result in get_world_3d().direct_space_state.intersect_point(query, 8):
 		var collider = result.collider
-		if collider is StaticBody3D and not collider is AnimatableBody3D:
+		if LevelGeometry.is_static(collider):
 			return true
 	return false
 
@@ -785,7 +796,7 @@ func _static_ray(from: Vector3, to: Vector3) -> Dictionary:
 	for attempt in 4:
 		query.exclude = exclude
 		var hit := space.intersect_ray(query)
-		if hit.is_empty() or (hit.collider is StaticBody3D and not hit.collider is AnimatableBody3D):
+		if hit.is_empty() or LevelGeometry.is_static(hit.collider):
 			return hit
 		exclude.append(hit.rid)
 	return {}

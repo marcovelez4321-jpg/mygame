@@ -65,6 +65,8 @@ const LEECH_SEGMENTS := 12
 const LEECH_SPLIT := [0.34, 0.38, 0.28]
 ## Segments in the proboscis.
 const TUBE_SEGMENTS := 16
+## How far the proboscis keeps its middle off anything solid (its thickest).
+const TUBE_RADIUS := 0.25
 ## The slam's rise before it drops (a rush skips it).
 const SLAM_RISE := 0.6
 ## The puff a footfall kicks up.
@@ -122,6 +124,12 @@ const SEGMENT_MESH_LENGTH := 1.55
 ## (to get under things, to feed).
 @export var stand_height: float = 8.0
 @export var crouch_height: float = 3.2
+## Uneven ground (the open world's hills): how far past the sack its
+## footprint reaches for the highest ground, how far the sack's bottom keeps
+## above that, and how far below it looks for ground (valleys, slopes).
+@export var footprint_margin: float = 2.0
+@export var body_clearance: float = 1.0
+@export var ground_search_depth: float = 30.0
 ## How far out from under its body its feet stand.
 @export var foot_radius: float = 6.0
 ## Leech legs: how long each is laid out straight (spider legs are as long
@@ -829,7 +837,10 @@ func _spotted() -> void:
 	SoundPlayer.play_3d(horn_sound, _body.global_position, get_tree().current_scene)
 
 
-func _clear_line(from: Vector3, to: Vector3) -> bool:
+## Nothing of the level between the two points. `walking`: the open world's
+## ground doesn't count -- it walks up the hills (_update_ground) -- only
+## walls, megastructures and the like do.
+func _clear_line(from: Vector3, to: Vector3, walking: bool = false) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 1
 	var exclude: Array[RID] = []
@@ -837,7 +848,9 @@ func _clear_line(from: Vector3, to: Vector3) -> bool:
 		exclude.append(body.get_rid())
 	query.exclude = exclude
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	return hit.is_empty() or not (hit.collider is StaticBody3D and not hit.collider is AnimatableBody3D)
+	if hit.is_empty() or not LevelGeometry.is_static(hit.collider):
+		return true
+	return walking and LevelGeometry.is_terrain(hit.collider)
 
 
 ## Hunting: close in (or crawl, collapsed) and pick an attack when ready.
@@ -900,7 +913,7 @@ func _walk_to(point: Vector3, speed: float, delta: float) -> void:
 	var forward := Vector3(sin(_yaw), 0.0, cos(_yaw)) * -1.0
 	# Something tall in the way (a wall the body won't clear): veer off it.
 	var ahead := global_position + Vector3.UP * 3.0
-	if not _clear_line(ahead, ahead + forward * 5.0):
+	if not _clear_line(ahead, ahead + forward * 5.0, true):
 		_yaw += turn_speed * delta * 1.5
 		forward = Vector3(sin(_yaw), 0.0, cos(_yaw)) * -1.0
 	global_position += forward * _speed * delta
@@ -915,14 +928,35 @@ func _face_toward(point: Vector3, delta: float) -> void:
 	_yaw = rotate_toward(_yaw, want, turn_speed * delta)
 
 
-## Stands on the floor under it; crouches under anything overhead.
+## Stands on the ground under it, and lifts its body clear of the highest
+## ground under its footprint (a hill crest between its legs mustn't pass
+## through the sack). The rays start at the body's height, so rising ground
+## ahead is found from above (a ray starting inside a hill misses it), and
+## reach far down, so it follows the ground into deep valleys too.
 func _update_ground() -> void:
 	var space := get_world_3d().direct_space_state
-	var down := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 3.0, global_position + Vector3.DOWN * 10.0)
+	var centre := _ground_under(space, global_position)
+	if is_nan(centre):
+		return
+	var highest := centre
+	var reach := sack_radius + footprint_margin
+	for i in 6:
+		var angle := TAU * i / 6.0 + _yaw
+		var around := _ground_under(space, global_position + Vector3(sin(angle), 0.0, cos(angle)) * reach)
+		if not is_nan(around):
+			highest = maxf(highest, around)
+	# The sack's bottom stays body_clearance over the highest ground.
+	var lowest_allowed := highest + body_clearance + sack_radius - _height
+	global_position.y = maxf(centre, lowest_allowed)
+
+
+## The ground's height under `point` (a ray from body height down), or NAN.
+func _ground_under(space: PhysicsDirectSpaceState3D, point: Vector3) -> float:
+	var top := Vector3(point.x, global_position.y + stand_height, point.z)
+	var down := PhysicsRayQueryParameters3D.create(top, top + Vector3.DOWN * (stand_height + ground_search_depth))
 	down.collision_mask = 1
 	var hit := _static_hit(space, down)
-	if not hit.is_empty():
-		global_position.y = (hit.position as Vector3).y
+	return (hit.position as Vector3).y if not hit.is_empty() else NAN
 
 
 func _static_hit(space: PhysicsDirectSpaceState3D, query: PhysicsRayQueryParameters3D) -> Dictionary:
@@ -932,7 +966,7 @@ func _static_hit(space: PhysicsDirectSpaceState3D, query: PhysicsRayQueryParamet
 	for attempt in 4:
 		query.exclude = exclude
 		var hit := space.intersect_ray(query)
-		if hit.is_empty() or (hit.collider is StaticBody3D and not hit.collider is AnimatableBody3D):
+		if hit.is_empty() or LevelGeometry.is_static(hit.collider):
 			return hit
 		exclude.append(hit.rid)
 	return {}
@@ -1136,7 +1170,7 @@ func _move_forward(speed: float, delta: float, reach: float = -1.0) -> bool:
 	var forward := Vector3(-sin(_yaw), 0.0, -cos(_yaw))
 	var ahead := global_position + Vector3.UP * 3.0
 	var probe := reach if reach > 0.0 else maxf(speed * 0.4, 2.0)
-	if not _clear_line(ahead, ahead + forward * (probe + speed * delta)):
+	if not _clear_line(ahead, ahead + forward * (probe + speed * delta), true):
 		return false
 	global_position += forward * speed * delta
 	_update_ground()
@@ -1293,7 +1327,7 @@ func _bodies_near(at: Vector3, radius: float) -> Array[Node3D]:
 	query.exclude = exclude
 	for result in get_world_3d().direct_space_state.intersect_shape(query, 32):
 		var body := result.collider as Node3D
-		if body == null or found.has(body) or (body is StaticBody3D and not body is AnimatableBody3D):
+		if body == null or found.has(body) or LevelGeometry.is_static(body):
 			continue
 		found.append(body)
 	return found
@@ -1700,9 +1734,13 @@ func _plant_all() -> void:
 		leg.foot = leg.planted
 
 
-## The floor under a spot (one ray), or the spot.
+## The floor under a spot (one ray), or the spot. The ray starts at the
+## body's height and reaches well below the feet, so a foot finds steep
+## hillsides and dips (a short ray started inside a slope, or ended above a
+## dip, and left the foot in the hill or in the air).
 func _foot_spot(point: Vector3) -> Vector3:
-	var query := PhysicsRayQueryParameters3D.create(point + Vector3.UP * 4.0, point + Vector3.DOWN * 6.0)
+	var top := maxf(point.y, global_position.y + _height) + 2.0
+	var query := PhysicsRayQueryParameters3D.create(Vector3(point.x, top, point.z), Vector3(point.x, point.y - ground_search_depth, point.z))
 	query.collision_mask = 1
 	var hit := _static_hit(get_world_3d().direct_space_state, query)
 	return hit.position if not hit.is_empty() else point
@@ -1797,6 +1835,15 @@ func _draw_tube(delta: float) -> void:
 		if _tube_mm.visible:
 			_tube_mm.visible = false
 		return
+	# Never through anything solid -- the ground, walls, props: it stops
+	# short of the first thing in its way (and slides on out once that's gone).
+	var space := get_world_3d().direct_space_state
+	var blocked := _tube_ray(space, start, start + out * _tube_reach)
+	if not blocked.is_empty():
+		_tube_reach = maxf(start.distance_to(blocked.position) - TUBE_RADIUS, 0.0)
+		if _tube_reach < 0.3:
+			_tube_mm.visible = false
+			return
 	_tube_mm.visible = true
 	var side := out.cross(Vector3.UP)
 	side = side.normalized() if side.length_squared() > 0.001 else Vector3.RIGHT
@@ -1805,8 +1852,36 @@ func _draw_tube(delta: float) -> void:
 		var f := k / 4.0
 		var sag := Vector3.DOWN * sin(f * PI) * _tube_reach * 0.08
 		var writhe := side * sin(_time * 3.0 + f * 5.0) * 0.25 * f + Vector3.UP * cos(_time * 2.3 + f * 4.0) * 0.15 * f
-		points.append(start + out * _tube_reach * f + sag + writhe)
+		# The straight line's clear (above); its sag and writhe only go as far
+		# as the surface, resting on it.
+		var straight := start + out * _tube_reach * f
+		var point := straight + sag + writhe
+		if k > 0:
+			var touch := _tube_ray(space, straight, point + (point - straight).normalized() * TUBE_RADIUS)
+			if not touch.is_empty():
+				point = (touch.position as Vector3) + (touch.normal as Vector3) * TUBE_RADIUS
+		points.append(point)
 	_lay_segments(_tube_mm.multimesh, 0, TUBE_SEGMENTS, points, 0.2, 0.07)
+
+
+## What the proboscis can't pass through, between two points: the level, the
+## ground, props -- not its own body, nor people and creatures (it reaches
+## for those) or corpses (it feeds on them).
+func _tube_ray(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> Dictionary:
+	if from.distance_squared_to(to) < 0.0001:
+		return {}
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 1
+	var exclude: Array[RID] = []
+	for body in _bodies:
+		exclude.append(body.get_rid())
+	for attempt in 4:
+		query.exclude = exclude
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or not (hit.collider is CharacterBody3D or hit.collider is PhysicalBone3D):
+			return hit
+		exclude.append(hit.rid)
+	return {}
 
 
 ## Where the proboscis ends now (the hose sprays from here).

@@ -65,12 +65,17 @@ extends Resource
 @export var cast_shadows: bool = false
 
 
+## How many times bigger every default group is than the numbers below.
+const GROUP_SCALE := 4
+
+
 ## The default set of growths, tuned to each other: the land's flora.
 static func defaults() -> Array[GrowthSpecies]:
 	var list: Array[GrowthSpecies] = []
-	# Glow grass: carpets the flatter ground in big drifts.
-	list.append(_make(GrowthMeshes.Kind.GLOW_GRASS, 10.0, 300.0, 0.7, 0.0, 32.0, 0.0, 1.0,
-			6, 220, 1.1, 0.7, 1.4, 12.0, 0.6, 1.4, Color(0.5, 0.95, 1.0), 0.12, 90.0))
+	# Glow grass: carpets the flatter ground in big drifts -- the commonest
+	# growth by far: more groups, over more of the land, more strays.
+	list.append(_make(GrowthMeshes.Kind.GLOW_GRASS, 16.0, 300.0, 0.85, 0.0, 32.0, 0.0, 1.0,
+			6, 220, 1.1, 0.7, 1.4, 20.0, 0.6, 1.4, Color(0.5, 0.95, 1.0), 0.12, 90.0))
 	# Brain coral: lumps dotted about, in twos and threes and small beds.
 	list.append(_make(GrowthMeshes.Kind.BRAIN_CORAL, 4.0, 350.0, 0.6, 0.0, 30.0, 0.0, 0.8,
 			2, 25, 1.6, 2.2, 1.5, 3.0, 0.5, 1.6, Color(0.7, 0.5, 1.0), 0.0, 160.0))
@@ -114,8 +119,10 @@ static func _make(kind: GrowthMeshes.Kind, groups: float, patch: float, cover: f
 	species.max_slope = slope_high
 	species.min_height = height_low
 	species.max_height = height_high
-	species.min_group = group_low
-	species.max_group = group_high
+	# Groups four times the size they were first tuned at (the members per
+	# group; a group spreads twice as wide to hold them at the same density).
+	species.min_group = group_low * GROUP_SCALE
+	species.max_group = group_high * GROUP_SCALE
 	species.group_tail = tail
 	species.spacing = space
 	species.crowding = crowd

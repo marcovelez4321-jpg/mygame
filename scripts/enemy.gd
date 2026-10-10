@@ -319,6 +319,9 @@ var _has_seen_target: bool = false
 func _ready() -> void:
 	add_to_group("enemies")
 	add_to_group(Factions.GROUPS[faction()])
+	# Stays on the ground walking down the open world's hills instead of
+	# skipping off them (HL2's NPCs stick to the floor within a step's height).
+	floor_snap_length = maxf(floor_snap_length, 0.5)
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
 	_apply_tint()
@@ -809,7 +812,8 @@ func _fire_shot() -> void:
 		shot_fired.emit(from + direction * sight_range)
 		return
 	shot_fired.emit(result.position)
-	var hit_health := (result.collider as Node).get_node_or_null("Health") as Health
+	var hit_node := result.collider as Node # null on a body with no node (see LevelGeometry)
+	var hit_health := hit_node.get_node_or_null("Health") as Health if hit_node else null
 	if hit_health == null:
 		BloodFX.spawn_bullet_hole(get_tree().current_scene, result.position, result.normal)
 		return
@@ -1018,7 +1022,7 @@ func _can_see(target: Node3D) -> bool:
 	# Only the level blocks sight. A rat, a roach or another tweaker in the
 	# way used to count as a wall, so in a swarm they never "saw" what was
 	# eating them and died without fighting back.
-	return result.is_empty() or result.collider == target or not result.collider is StaticBody3D
+	return result.is_empty() or result.collider == target or not LevelGeometry.is_solid(result.collider)
 
 
 
