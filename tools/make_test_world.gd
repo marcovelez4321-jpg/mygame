@@ -183,6 +183,10 @@ func _bake() -> void:
 	var material: Object = terrain.call("get_material")
 	material.call("set_shader_override", load(TERRAIN_SHADER))
 	material.call("enable_shader_override", true)
+	# Terrain3D turns its checkerboard debug view on for a terrain with no
+	# textures; it draws over any shader, so it goes off.
+	material.set("show_checkered", false)
+	terrain.set("show_checkered", false)
 	# Ground collision over the whole 1 km, not just round the camera:
 	# enemies' feet and ground rays need it wherever they are.
 	terrain.set("collision_mode", 3) # Terrain3DCollision.FULL_GAME
@@ -198,6 +202,12 @@ func _bake() -> void:
 	chunks.chunk_size = CHUNK_SIZE
 	root.add_child(chunks)
 	chunks.owner = root
+	# The flora: grown into each chunk as it streams in.
+	var growth := GrowthScatter.new()
+	growth.name = "GrowthScatter"
+	growth.high_ground = maxf(heights.y, 1.0)
+	root.add_child(growth)
+	growth.owner = root
 
 
 	# Test enemies on the slopes round the yard: walking, pathing, feet.

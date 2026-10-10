@@ -804,3 +804,29 @@ them:
 
   - In game (25 tiles round a player): 59 ms to join the tiles (in the background), and path searches take 0.07-0.09 ms up to 500 m.
   - Land: 96.7% reachable from the yard; steepest 66.7 degrees.
+
+- 2026-10-09: **Open world M0 step 6: the growths** (not yet run; the user was away).
+  - `scripts/world/growth_meshes.gd` (GrowthMeshes): low-poly meshes built in code, 4 shape variants each, PS1-chunky. Kinds:
+    - staghorn (branching, glowing tips)
+    - kelp (tall wandering stalks, glowing bulbs)
+    - brain coral (ridged domes)
+    - glow grass (blade clumps)
+    - sea fans (ribbed lattices)
+    - anemones (tendril clumps)
+    - tube sponges (hollow chimneys, glowing rims)
+    - extras: puffballs (spore balls), spire coral (twisted spikes; the future stinging coral), bladder pods (glowing heaps)
+
+    Every vertex carries its colour, a sway weight (vertex alpha) and a glow amount (UV2.x).
+  - `shaders/alien_growth.gdshader`: PS1 vertex snap and per-vertex light, wind sway (out of step per plant, with slow gusts), glow (`glow_day` / `glow_night`, `night` 0..1 for the coming day/night cycle), 15-bit colour.
+  - `scripts/world/growth_species.gd` (GrowthSpecies): each kind's rules, all exports:
+    - where it grows: a patch map, plus slope and height bands
+    - group sizes: long-tailed, so mostly small groups, some big, rarely a horde
+    - spacing, crowding toward the middle, loners, size range, elders, leaning with the ground, tint spread, glow colour, sway, view distance, shadows
+
+    `defaults()` holds the tuned set (kelp in valleys, sponges on ridges, grass carpets on flats, spires on steep ground...).
+  - `scripts/world/growth_scatter.gd` (GrowthScatter): grows each chunk WorldChunks streams in, deterministic from seed and chunk (co-op: every player gets the same, nothing sent).
+    - Groups are Pareto-sized and spread with their size. Members crowd toward the middle, are bigger in the middle and smaller at the edge, with rare elders. Groups are stretched ovals, not circles.
+    - It keeps off Grandma's yard and out of the chunk's megastructures.
+    - One MultiMesh per kind and variant per chunk, faded out past each kind's view distance. 3 kinds grown per frame, so chunks arrive without a hitch.
+  - Test world: GrowthScatter added (bake tool and scene).
+  - **Terrain fix:** the checkerboard was Terrain3D's `show_checkered` debug view, switched on (on the material and the node) for a terrain with no textures. It draws over any shader. Now off in the scene and in the bake tool, so the purple PS1 ground shader should show.
