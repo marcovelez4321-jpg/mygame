@@ -1116,3 +1116,14 @@ them:
   - **Eyes at the entrances** (the user's ask): 28 EyeClusters of 10–20 eyes, spread 3.2, sizes to 0.55, at every way in and half the window rooms.
   - **Megastructure:** `inside_zones` (the infestation picks a hall, then a floor in it) and `terrain_holes` (the bake tool punches them: the shaft and the outfall's mouth, 603 vertices).
   - **Counts:** 881 shell and 652 interior boxes, 75 lamps (distance-faded at 400 m), 158 wind openings.
+
+- 2026-10-10: **Open-world HUD and loadout; player tracers first; the grapple landing ring.**
+  - **HUD in the open world:** the test world never had `scenes/ui/hud.tscn` (the crosshair, ammo, health, stamina), which every level includes. It's added to the test world and the bake tool.
+  - **Loadout (`scripts/world/loadout.gd`):** in the test world, every weapon (both Uzis for the pair, grenades), plenty of ammo, and full pills and bandages, through the pickup calls (`pickup_weapon` / `add_ammo` / `add_item`), then back to the first weapon. The user's ask.
+  - **Player tracers (BulletFX):** player and enemy tracers shared one cap of 24, and a camp's gunners could take every slot. Enemy tracers now get at most 16 (`MAX_ENEMY_TRACERS`). The player's always spawn: at the cap, the oldest enemy tracer is ended to make room.
+  - **Grapple landing ring (GrappleIndicator, `grapple_ring.gdshader`):** every detail the user's.
+    - Only while holding the grapple.
+    - A thin ring lying on the surface it would grab (floor, wall, ceiling), sized by view angle (2.6°) so it frames the crosshair instead of hiding under it.
+    - It fills round like a dial with the charge (notched in eighths) and flashes when full.
+    - Red where the grapple would give out when there's nothing to grab, or on a small enemy (which would be a miss).
+    - It uses the grapple's own ray at the reach the current charge gives, so it shows exactly where it'll land. Your own view only.

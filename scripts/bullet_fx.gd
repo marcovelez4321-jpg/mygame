@@ -19,9 +19,13 @@ static var _settings: BulletTrailSettings
 static var _mesh: TubeTrailMesh
 
 
-## Most tracers alive at once (see spawn()).
+## Most tracers alive at once (see spawn()), and the most of those that can
+## be enemies': the player's own always get through (the user found theirs
+## missing in big firefights: enemy fire had taken every slot).
 const MAX_LIVE_TRACERS := 24
+const MAX_ENEMY_TRACERS := 16
 const TRACER_GROUP := "bullet_tracers"
+const ENEMY_TRACER_GROUP := "enemy_bullet_tracers"
 
 
 ## `from_enemy` picks the enemy colour instead of the player's.
@@ -34,12 +38,27 @@ static func spawn(world: Node, from: Vector3, to: Vector3, from_enemy: bool = fa
 		return
 	var travel_time := maxf(distance / settings.speed, MIN_VISIBLE_TIME)
 	# Capped like BloodFX's bursts: every tracer is a particle system holding
-	# GPU descriptors, and a firefight of machine guns stacked them up.
-	if world.get_tree().get_nodes_in_group(TRACER_GROUP).size() >= MAX_LIVE_TRACERS:
-		return
+	# GPU descriptors, and a firefight of machine guns stacked them up. The
+	# player's come first: an enemy's is skipped when enemies have their share
+	# or it's full; at full, a player's makes room by ending the oldest
+	# enemy one.
+	var tree := world.get_tree()
+	var live := tree.get_nodes_in_group(TRACER_GROUP).size()
+	if from_enemy:
+		if live >= MAX_LIVE_TRACERS or tree.get_nodes_in_group(ENEMY_TRACER_GROUP).size() >= MAX_ENEMY_TRACERS:
+			return
+	elif live >= MAX_LIVE_TRACERS:
+		var enemy_ones := tree.get_nodes_in_group(ENEMY_TRACER_GROUP)
+		if not enemy_ones.is_empty():
+			var oldest := enemy_ones[0]
+			oldest.remove_from_group(TRACER_GROUP)
+			oldest.remove_from_group(ENEMY_TRACER_GROUP)
+			oldest.queue_free()
 
 	var particles := GPUParticles3D.new()
 	particles.add_to_group(TRACER_GROUP)
+	if from_enemy:
+		particles.add_to_group(ENEMY_TRACER_GROUP)
 	particles.amount = 1
 	particles.one_shot = true
 	particles.explosiveness = 1.0

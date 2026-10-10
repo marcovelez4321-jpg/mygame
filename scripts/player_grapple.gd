@@ -125,6 +125,8 @@ var _attacker_id := 0
 
 var _line: MeshInstance3D
 var _tentacle: GrappleTentacle
+## Your own view: the landing ring while you hold the grapple.
+var _indicator: GrappleIndicator
 ## Your first-person arms (set by the Viewmodel): the tentacle coils round
 ## the left forearm and lashes out of that palm.
 var arms: FirstPersonArms
@@ -365,6 +367,34 @@ func _is_small_enemy(node: Node) -> bool:
 
 # --- Drawing (per peer, never touches the simulation) ---
 
+## Your own view: while you hold the grapple, the ring (GrappleIndicator) on
+## whatever it would grab at the reach this charge gives -- the same ray it
+## fires -- filling like a dial; red where it'd give out if there's nothing.
+func _update_indicator(delta: float) -> void:
+	var camera := _player.camera
+	if not _coiling or camera == null or not camera.current:
+		if _indicator:
+			_indicator.hide_ring()
+		return
+	if _indicator == null:
+		_indicator = GrappleIndicator.new()
+		add_child(_indicator)
+	var origin := camera.global_position
+	var aim := -camera.global_basis.z
+	var power := lerpf(min_power, 1.0, clampf(inverse_lerp(min_hold, charge_time, _hold), 0.0, 1.0))
+	var reach := max_range * power
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + aim * reach)
+	query.exclude = [_player.get_rid()]
+	query.collision_mask = 1
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var fill := clampf(_hold / charge_time, 0.0, 1.0)
+	if hit.is_empty():
+		_indicator.show_at(origin + aim * reach, Vector3.UP, false, fill, origin, delta)
+		return
+	var target := hit.collider as Node3D
+	var grabs := target != null and (_big_enemy(target) != null or not _is_small_enemy(target))
+	_indicator.show_at(hit.position, hit.normal, grabs, fill, origin, delta)
+
 func _process(delta: float) -> void:
 	var showing := _rope != Rope.NONE
 	var tip := Vector3.ZERO
@@ -390,6 +420,7 @@ func _process(delta: float) -> void:
 			arm_points = arms.left_arm_points()
 			arm_coil = arms.coil
 		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, arm_points, arm_coil, delta)
+		_update_indicator(delta)
 		if _line:
 			_line.visible = false
 	else:

@@ -2,6 +2,8 @@
 
 [ext_resource type="Shader" path="res://shaders/alien_terrain.gdshader" id="1_lh68e"]
 [ext_resource type="Script" path="res://scripts/world/world_navigation.gd" id="2_63a70"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="9_hud"]
+[ext_resource type="Script" path="res://scripts/world/loadout.gd" id="9_loadout"]
 [ext_resource type="Script" path="res://scripts/world/world_chunks.gd" id="3_e6uwu"]
 [ext_resource type="Script" path="res://scripts/world/terrain_look.gd" id="4_k6tl3"]
 [ext_resource type="Resource" path="res://worlds/test_world/biomes.res" id="5_5vhu7"]
@@ -266,3 +268,8 @@ directional_shadow_max_distance = 90.0
 
 [node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("29_8sgms")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
+
+[node name="HUD" parent="." instance=ExtResource("9_hud")]
+
+[node name="Loadout" type="Node" parent="."]
+script = ExtResource("9_loadout")

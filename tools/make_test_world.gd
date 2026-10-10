@@ -373,6 +373,17 @@ func _bake() -> void:
 	player.owner = root
 	player.position = Vector3(0.0, shape.yard_level * shape.height + 2.0, 0.0)
 
+	# The HUD (crosshair, ammo, health, stamina...), like every level has.
+	var hud := (load("res://scenes/ui/hud.tscn") as PackedScene).instantiate()
+	hud.name = "HUD"
+	root.add_child(hud)
+	hud.owner = root
+	# Testing: every weapon and full heals from the start.
+	var loadout := Loadout.new()
+	loadout.name = "Loadout"
+	root.add_child(loadout)
+	loadout.owner = root
+
 	var scene := PackedScene.new()
 	var error := scene.pack(root)
 	if error == OK:
