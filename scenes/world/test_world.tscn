@@ -216,6 +216,10 @@ biomes = ExtResource("5_s4g5r")
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=1475911816]
 transform = Transform3D(0.8660254, -0.38302222, 0.32139382, 0, 0.64278764, 0.76604444, -0.5, -0.66341394, 0.5566704, 0, 0, 0)
+light_energy = 1.15
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 120.0
 
 [node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("23_oysqe")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)

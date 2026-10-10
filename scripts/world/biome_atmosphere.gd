@@ -10,6 +10,9 @@ extends Node
 @export var biomes: BiomeMap
 ## The world's WorldEnvironment (empty = the one next to this node).
 @export var world_environment: WorldEnvironment
+## The world's sun (empty = the one called Sun next to this node): tinted by
+## biome too.
+@export var sun: DirectionalLight3D
 ## The reef's air (empty = the environment as saved, tuned in the inspector)
 ## and the sewer's (empty = AlienAtmosphere.sewer()).
 @export var reef_air: AlienAtmosphere
@@ -28,6 +31,8 @@ var _mix := -1.0
 func _ready() -> void:
 	if world_environment == null:
 		world_environment = get_parent().get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+	if sun == null:
+		sun = get_parent().get_node_or_null(^"Sun") as DirectionalLight3D
 	if world_environment == null or world_environment.environment == null or biomes == null:
 		push_warning("BiomeAtmosphere: needs a BiomeMap and a WorldEnvironment next to it")
 		set_process(false)
@@ -54,4 +59,4 @@ func _process(delta: float) -> void:
 	if absf(mix - _mix) < 0.0005:
 		return
 	_mix = mix
-	AlienAtmosphere.apply_blend(_environment, sewer_air, reef_air, _mix)
+	AlienAtmosphere.apply_blend(_environment, sewer_air, reef_air, _mix, sun)

@@ -10,11 +10,13 @@
 [ext_resource type="Resource" path="res://audio/events/enemy/worm_roar.tres" id="9_roar"]
 
 [sub_resource type="StandardMaterial3D" id="WormSkin"]
+cull_mode = 2
 albedo_texture = ExtResource("3_skin")
 roughness = 0.6
 texture_filter = 0
 
 [sub_resource type="StandardMaterial3D" id="WormMaw"]
+cull_mode = 2
 albedo_texture = ExtResource("4_maw")
 roughness = 0.8
 texture_filter = 0

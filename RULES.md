@@ -935,3 +935,14 @@ them:
     - Less crag (cover 0.25, share 0.12).
     - Max slope 50° (was 66.7).
     - Re-baked: the land now tops out at 50 m.
+
+- 2026-10-10: **Lighting that grounds things; the worm's head no longer see-through.**
+  - **Why enemies looked pasted on:**
+    - The test world's sun had no shadows, so nothing cast one.
+    - The ambient fill was a strong flat purple (0.7) that lit everything evenly from all round.
+  - **The fix:**
+    - The sun casts shadows to 120 m (2 splits; bake tool and test world).
+    - Ambient is down to 0.45 (reef) and 0.4 (sewer), so the sun shapes things.
+    - SSAO is on as contact shadows under feet, bodies and creases (`AlienAtmosphere.contact_shadows`; also in `environment.tres`).
+    - The sun is tinted by biome and crossfades with the fog (BiomeAtmosphere): cool lavender 1.15 in the reef, sickly yellow 1.25 in the sewer.
+  - **Boss worm:** its skin and maw materials are two-sided (`cull_mode` 2). The maw is a hollow barnacle cup, and from behind or inside, mid-leap, you saw straight through it. PS1Look keeps two-sided materials two-sided.

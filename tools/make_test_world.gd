@@ -294,6 +294,12 @@ func _bake() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.rotation_degrees = Vector3(-50.0, 30.0, 0.0)
+	# Shadows: what grounds the creatures (and the giants' shade) -- out to
+	# 120 m, two splits so the near ones stay sharp. BiomeAtmosphere tints it.
+	sun.shadow_enabled = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 120.0
+	sun.light_energy = 1.15
 	root.add_child(sun)
 	sun.owner = root
 
