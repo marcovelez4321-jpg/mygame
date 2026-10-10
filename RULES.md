@@ -972,3 +972,9 @@ them:
     - New `set_home()` on Enemy, FlyingRoach and Harvestman; SpiderPack and RatSwarm already had `home`.
     - **AI level of detail:** members more than 150 m from every player are disabled. No scripts run, and their physics bodies leave the physics world (the default disable mode). They wake when someone's near again. The group frees itself once every member is dead.
   - In the bake tool and the test world (`biomes` set).
+
+- 2026-10-10: **Tweakers are camps at megastructures, and bigger.** (The user wanted human groups way bigger, and only near megastructures.)
+  - Tweakers no longer roam. Every megastructure (a building at least 20 m tall) in a loaded chunk gets a camp when a player comes within 200 m (`camp_range`).
+  - A camp is a gang of 6–12 (`camp_min`/`camp_max`) of enemy, gunner and rusher mixed. It sets up on the structure's far side from the player and patrols round it (`RoamingGroup.anchor`: every stop within the structure's half-width + 30 m), drifting at 1.0 m/s.
+  - Wipe a camp out and its structure stays empty for 10 min (`camp_rest`). A camp left behind (240 m away) or whose chunk unloads is disbanded, and can be manned again later.
+  - Roaming bands are now rats, roaches, spiders and Harvestmen only.

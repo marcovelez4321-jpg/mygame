@@ -21,6 +21,11 @@ extends Node3D
 @export var leg_min: float = 150.0
 @export var leg_max: float = 350.0
 @export var sleep_distance: float = 150.0
+## Tied to a place (a camp round a megastructure): every stop is within
+## anchor_radius of `anchor`, so it patrols round it instead of moving on.
+## Not finite = free to roam.
+var anchor := Vector3.INF
+var anchor_radius := 50.0
 
 ## Where the members wander round now, and where it's heading.
 var home := Vector3.ZERO
@@ -135,8 +140,13 @@ func _set_asleep(asleep: bool, members: Array[Node]) -> void:
 		body.process_mode = mode
 
 
-## The next stop: somewhere leg_min..leg_max away, on walkable ground.
+## The next stop: somewhere leg_min..leg_max away (or, camped, somewhere
+## round its anchor), on walkable ground.
 func _pick_destination() -> void:
+	if anchor.is_finite():
+		var round_it := Vector2.from_angle(randf() * TAU) * randf_range(anchor_radius * 0.5, anchor_radius)
+		_destination = _on_walkable(anchor + Vector3(round_it.x, 0.0, round_it.y))
+		return
 	var away := Vector2.from_angle(randf() * TAU) * randf_range(leg_min, leg_max)
 	_destination = _on_walkable(home + Vector3(away.x, 0.0, away.y))
 
