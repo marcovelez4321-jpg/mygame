@@ -32,6 +32,11 @@ extends Node
 	set(value):
 		sewer_air = value
 		_mix = -1.0
+## Below this height (world y) you're underground (the Stack's depths, its
+## sewer tunnels): the valley haze -- which thickens the lower you go, made
+## for the land's low ground -- is off there, or it'd be a solid wall that
+## deep down. The rest of the fog stays.
+@export var underground_y: float = -15.0
 ## Seconds the air takes to catch up with where you are.
 @export var blend_time: float = 1.5
 ## How far round the camera the biome is averaged (metres): a wider look
@@ -40,6 +45,7 @@ extends Node
 
 var _environment: Environment
 var _refresh_left := 0.0
+var _underground := false
 ## 0 = sewer air, 1 = reef air; -1 = not set yet.
 var _mix := -1.0
 
@@ -75,8 +81,12 @@ func _process(delta: float) -> void:
 	# Re-applied as you move between biomes, and every so often anyway (so
 	# tuning the airs in the inspector shows straight away).
 	_refresh_left -= delta
-	if absf(mix - _mix) < 0.0005 and _refresh_left > 0.0:
+	var underground := camera.global_position.y < underground_y
+	if absf(mix - _mix) < 0.0005 and _refresh_left > 0.0 and underground == _underground:
 		return
 	_refresh_left = 0.5
 	_mix = mix
+	_underground = underground
 	AlienAtmosphere.apply_blend(_environment, sewer_air, reef_air, _mix, sun, fog_distance)
+	if underground:
+		_environment.fog_height_density = 0.0

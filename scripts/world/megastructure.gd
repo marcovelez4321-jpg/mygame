@@ -16,8 +16,11 @@ extends Node3D
 ##   or any OccluderInstance3D you add): what's behind it isn't drawn.
 ## Its base is a lair for the boss worm (child CollisionShape3D "Lair", in
 ## no body, so it collides with nothing: WormDirector only reads its size).
-## Barnacle nests grow on it (barnacle_nests): half up its outside walls (up
-## to nest_height), half inside (within `inside`), found by rays against it.
+## Barnacle nests grow on it: barnacle_nests up its outside walls (up to
+## nest_height, found by rays against it), and inside on its floors
+## (floor_nests: spots the builder picked) -- each of those only while a
+## player's within floor_nest_reach of it, gone again once they've left, so
+## a building full of them costs nothing where nobody is.
 ## Made from TrenchBroom: build the outside and the inside as separate maps
 ## (megastructure maps are 8 units a metre:
 ## maps/megastructures/megastructure_map_settings.tres), func_godot them, and
@@ -36,6 +39,9 @@ extends Node3D
 ## The outside nests grow up to this high (where players get to).
 @export var nest_height: float = 600.0
 @export var cluster_scene: PackedScene = preload("res://scenes/enemy/barnacle_cluster.tscn")
+## Spots on its floors (local space) where a nest grows while a player's near.
+@export var floor_nests := PackedVector3Array()
+@export var floor_nest_reach: float = 90.0
 @export_group("Infestation")
 ## While a player's within infest_range of it, its insides are infested:
 ## roach swarms, spider hordes and big rat hordes, each wandering its own
@@ -61,6 +67,8 @@ const LAIR_GROUP := "megastructure_lairs"
 
 var _camera_check := 0.0
 var _infestation: Array[RoamingGroup] = []
+## floor_nests index -> its nest, while it's grown.
+var _floor_nests := {}
 
 
 func _ready() -> void:
@@ -92,7 +100,7 @@ func _grow_nests() -> void:
 	for attempt in barnacle_nests * 6:
 		if grown >= barnacle_nests:
 			return
-		var outside := grown % 2 == 0 or inside.size == Vector3.ZERO
+		var outside := floor_nests.size() > 0 or grown % 2 == 0 or inside.size == Vector3.ZERO
 		var direction := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 		var from: Vector3
 		var to: Vector3
@@ -127,6 +135,30 @@ func _process(delta: float) -> void:
 		camera.far = view_distance
 	if multiplayer.is_server() and inside.size != Vector3.ZERO:
 		_update_infestation()
+	if multiplayer.is_server():
+		_update_floor_nests()
+
+
+## The floor nests near a player grown; the ones nobody's near any more gone.
+func _update_floor_nests() -> void:
+	var players := get_tree().get_nodes_in_group("player")
+	for i in floor_nests.size():
+		var at := to_global(floor_nests[i])
+		var nearest := INF
+		for node in players:
+			nearest = minf(nearest, (node as Node3D).global_position.distance_to(at))
+		var nest: Node3D = _floor_nests.get(i)
+		if nest != null and not is_instance_valid(nest):
+			_floor_nests.erase(i)
+			nest = null
+		if nest == null and nearest < floor_nest_reach:
+			nest = cluster_scene.instantiate() as Node3D
+			nest.position = floor_nests[i] # standing up out of the floor
+			add_child(nest)
+			_floor_nests[i] = nest
+		elif nest != null and nearest > floor_nest_reach + 50.0:
+			nest.queue_free()
+			_floor_nests.erase(i)
 
 
 ## Infested while someone's near; cleared once everyone's well away.

@@ -32,6 +32,14 @@ extends RefCounted
 
 const SEED := 5000
 const TEX_METRES := 8.0 # one texture tile every 8 m
+## The windows painted on the concrete (make_concrete): one a tile, 3 m wide,
+## centred 4 m into each 8 m along a wall, from 2.25 m to 6 m up each 8 m.
+## The texture's laid on one grid for the whole Stack (_box_faces), so they
+## line up everywhere -- and the real windows (lit, or a room behind) sit
+## exactly on painted ones.
+const WINDOW_WIDTH := 3.0
+const WINDOW_BOTTOM := 2.25
+const WINDOW_TOP := 6.0
 const MAP_UNITS := 8.0 # TrenchBroom units a metre (megastructure maps)
 const TOWERS := [ # x, z, footprint (m), height (m)
 	[0.0, 0.0, 200.0, 5000.0],
@@ -91,6 +99,8 @@ var cable_stops := PackedVector3Array()
 var lift_face := 0.0
 ## Spots near every entrance (floor level): eyeball clusters gather there.
 var entrance_spots := PackedVector3Array()
+## Spots on floors and mezzanines inside where a barnacle nest may grow.
+var nest_spots := PackedVector3Array()
 var random := RandomNumberGenerator.new()
 
 
@@ -273,14 +283,18 @@ func _base() -> void:
 	for f in floors + 1:
 		_slab_with_hole(f * FLOOR - SLAB * 0.5, inner, SHAFT, "Base")
 	for f in floors:
+		if random.randf() < 0.45:
+			var ring := Vector2.from_angle(random.randf() * TAU) * random.randf_range(SHAFT * 0.5 + 12.0, inner * 0.5 - 10.0)
+			nest_spots.append(Vector3(ring.x, f * FLOOR, ring.y))
+	for f in floors:
 		var y0 := f * FLOOR
 		for gx in range(-2, 2):
 			for gz in range(-2, 2):
 				var cell := Vector2(gx + 0.5, gz + 0.5) * 46.0
 				if absf(cell.x) < SHAFT * 0.5 + 20.0 and absf(cell.y) < SHAFT * 0.5 + 20.0:
 					continue # the shaft and the ring round it stay open
-				if random.randf() < 0.2:
-					continue # a gap: a hall
+				if random.randf() > 0.32:
+					continue # most cells open: a few blocks, wide halls between
 				var tall := random.randf_range(16.0, FLOOR - 6.0)
 				var size := Vector3(random.randf_range(24.0, 34.0), tall, random.randf_range(24.0, 34.0))
 				_add(Vector3(cell.x, y0 + tall * 0.5, cell.y), size, &"interior", "Base")
@@ -441,6 +455,11 @@ func _window_rooms() -> void:
 			var cross := Vector3(out.z, 0.0, out.x).abs()
 			var hall_reach := (room_box.size.x if side >= 2 else room_box.size.z) * 0.5
 			var along := random.randf_range(-hall_reach * 0.6, hall_reach * 0.6)
+			# On a painted window: across, a window's middle (4 m into an 8 m
+			# tile along the face's direction); up, its sill.
+			var along_world := (Vector3(TOWERS[t][0], 0.0, TOWERS[t][1]) + cross * along).dot(_face_across(side))
+			along += (_snap_to_window(along_world) - along_world) * _face_across(side).dot(cross) # (on two sides the texture runs the other way)
+			y = _snap_sill(y) # the room's floor is the window's sill
 			var centre := Vector3(TOWERS[t][0], y, TOWERS[t][1]) + cross * along
 			# The room: from 3 m inside the face, 22 deep (the wall in front
 			# of it stays, but for its window).
@@ -454,16 +473,33 @@ func _window_rooms() -> void:
 			# The corridor from the room's back into the hall.
 			var hall_edge := centre + out * hall_reach
 			_carve(_span(far + out * 0.5, hall_edge - out * 1.0, cross, 8.0, y, 10.0))
-			# The window: through the 3 m of wall in front of the room.
-			var window := Vector2(10.0, 8.0)
-			var sill := y + 2.5
+			# The window: one painted window's size, cut through the 3 m of wall
+			# in front of the room, right where it's painted.
+			var window := Vector2(WINDOW_WIDTH, WINDOW_TOP - WINDOW_BOTTOM)
+			var sill := y
 			_carve(_span(centre + out * (face + 1.0), centre + out * (face - 3.5), cross, window.x, sill, window.y))
-			var at := centre + out * face + Vector3.UP * (sill - y + window.y * 0.5)
+			var at := centre + out * face + Vector3.UP * window.y * 0.5
 			window_rooms.append({at = at, normal = out, size = window, room = room})
 			if random.randf() < 0.5:
 				entrance_spots.append(Vector3(room.get_center().x, room.position.y, room.get_center().z))
 			openings.append(at)
 			lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
+
+
+## The direction "across" a face on `side` runs in for the texture (its u
+## axis in _box_faces): what the window grid is measured along.
+static func _face_across(side: int) -> Vector3:
+	return [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK][side]
+
+
+## The middle of the painted window nearest `along` (metres along a face).
+static func _snap_to_window(along: float) -> float:
+	return floorf(along / TEX_METRES) * TEX_METRES + TEX_METRES * 0.5
+
+
+## The sill of the painted window nearest y (its bottom).
+static func _snap_sill(y: float) -> float:
+	return roundf((y - WINDOW_BOTTOM) / TEX_METRES) * TEX_METRES + WINDOW_BOTTOM
 
 
 ## A box spanning from `a` to `b` (along an axis, at the same height), `width`
@@ -717,7 +753,15 @@ func _hall_features(hall: Dictionary) -> void:
 		var deck_y := floor_y + tall * level
 		var wall_mid := box.get_center() + out * (across_len * 0.5 - depth * 0.5)
 		_add(Vector3(wall_mid.x, deck_y - 2.0, wall_mid.z), cross * span + Vector3.UP * 4.0 + out.abs() * depth, &"interior", group)
-		_switchback(box, out, cross, across_len * 0.5 - depth, along_len - 24.0, floor_y, deck_y, group)	# Columns in a skewed grid, a few leaning.
+		if random.randf() < 0.45:
+			nest_spots.append(Vector3(wall_mid.x, deck_y, wall_mid.z) + cross * random.randf_range(-span * 0.3, span * 0.3))
+		_switchback(box, out, cross, across_len * 0.5 - depth, along_len - 24.0, floor_y, deck_y, group)
+	# Now and then a barnacle nest's spot on the hall floor.
+	if random.randf() < 0.6:
+		var spot := Vector3(random.randf_range(box.position.x + 12.0, box.end.x - 12.0), floor_y, random.randf_range(box.position.z + 12.0, box.end.z - 12.0))
+		if not (main and shaft.has_point(Vector2(spot.x, spot.z))):
+			nest_spots.append(spot)
+	# Columns in a skewed grid, a few leaning.
 	for i in random.randi_range(4, 8):
 		var at := Vector3(random.randf_range(box.position.x + 8.0, box.end.x - 8.0), 0.0, random.randf_range(box.position.z + 8.0, box.end.z - 8.0))
 		if main and shaft.has_point(Vector2(at.x, at.z)):
@@ -817,6 +861,8 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	root.inside_zones = zones
 	root.inside = AABB(Vector3(-TOWERS[0][2] * 0.5, DEPTHS_FLOOR - 10.0, -TOWERS[0][2] * 0.5), Vector3(TOWERS[0][2], TOWERS[0][3] - DEPTHS_FLOOR, TOWERS[0][2]))
 	root.terrain_holes = terrain_holes
+	root.floor_nests = nest_spots
+	root.barnacle_nests = 10 # the outside walls; inside, floor_nests
 	var shell := Node3D.new()
 	shell.name = "Shell"
 	_own(root, shell, root)
@@ -959,13 +1005,24 @@ func _box_faces(st: SurfaceTool, b: Dictionary) -> void:
 		var uh := absf(u.dot(half))
 		var vh := absf(v.dot(half))
 		var corners := [-u * uh - v * vh, u * uh - v * vh, u * uh + v * vh, -u * uh + v * vh]
-		var uvs := [Vector2(0.0, vh * 2.0), Vector2(uh * 2.0, vh * 2.0), Vector2(uh * 2.0, 0.0), Vector2(0.0, 0.0)]
 		var points: Array[Vector3] = []
 		for corner: Vector3 in corners:
 			points.append(centre + basis * (n * nh + corner))
+		# One texture grid for the whole Stack: laid by where each corner is
+		# (across the face along its world direction, down by height), so the
+		# painted windows line up on every piece of every block.
+		var world_n := basis * n
+		var world_u := basis * u
 		for i in [0, 1, 2, 0, 2, 3]:
-			st.set_uv((uvs[i] as Vector2) / TEX_METRES)
-			st.add_vertex(points[i])
+			var at: Vector3 = points[i]
+			var uv: Vector2
+			if absf(world_n.y) > 0.7:
+				uv = Vector2(at.x, at.z)
+			else:
+				var across := world_u.normalized()
+				uv = Vector2(at.dot(across), -at.y)
+			st.set_uv(uv / TEX_METRES)
+			st.add_vertex(at)
 
 
 func _collision(root: Node, parent: Node, name: String, part: StringName) -> void:
@@ -1059,16 +1116,20 @@ func _windows(root: Node, parent: Node) -> void:
 		var b: Dictionary = blocks[_weighted(blocks, total, true)]
 		var side := random.randi() % 4
 		var half: Vector3 = (b.s as Vector3) * 0.5
-		var along := random.randf_range(-1.0, 1.0) * (half.x if side < 2 else half.z) * 0.95
-		var y := (b.c as Vector3).y + random.randf_range(-1.0, 1.0) * half.y * 0.95
-		var out := (half.z if side < 2 else half.x) + 0.3
+		var along := random.randf_range(-1.0, 1.0) * (half.x if side < 2 else half.z) * 0.9
+		var y := (b.c as Vector3).y + random.randf_range(-1.0, 1.0) * half.y * 0.9
+		var out := (half.z if side < 2 else half.x) + 0.2
 		var at := _on_wall(side, out, along, 0.0) + Vector3((b.c as Vector3).x, y, (b.c as Vector3).z)
+		# Onto the painted window there.
+		var across := _face_across(side)
+		at += across * (_snap_to_window(at.dot(across)) - at.dot(across))
+		at.y = _snap_sill(at.y - 2.0) + (WINDOW_TOP - WINDOW_BOTTOM) * 0.5
 		if not _outside(at):
 			continue
 		windows.append(Transform3D(Basis.IDENTITY, at))
 		window_colors.append(Color(1.0, random.randf_range(0.55, 0.75), random.randf_range(0.2, 0.35)) if random.randf() < 0.85 else Color(0.7, 0.85, 1.0))
 		window_customs.append(Color(random.randf(), 0.0, 1.0 if random.randf() < 0.1 else 0.0, 0.0))
-	_light_batch(root, parent, "Windows", Vector3(4.2, 5.6, 3.0), windows, window_colors, window_customs)
+	_light_batch(root, parent, "Windows", Vector3(WINDOW_WIDTH, WINDOW_TOP - WINDOW_BOTTOM, WINDOW_WIDTH), windows, window_colors, window_customs)
 	var blinkers: Array[Transform3D] = []
 	var blinker_colors: Array[Color] = []
 	var blinker_customs: Array[Color] = []
@@ -1123,11 +1184,11 @@ func _window_glow(root: Node, parent: Node) -> void:
 		var size: Vector2 = w.size
 		var cross := Vector3(out.z, 0.0, out.x).abs()
 		# The frame: four glowing bars round the opening.
-		var thick := out.abs() * 1.2
-		for bar: Array in [[cross * (size.x * 0.5 + 0.6), cross * 1.2 + Vector3.UP * (size.y + 2.4)],
-				[-cross * (size.x * 0.5 + 0.6), cross * 1.2 + Vector3.UP * (size.y + 2.4)],
-				[Vector3.UP * (size.y * 0.5 + 0.6), cross * (size.x + 2.4) + Vector3.UP * 1.2],
-				[Vector3.DOWN * (size.y * 0.5 + 0.6), cross * (size.x + 2.4) + Vector3.UP * 1.2]]:
+		var thick := out.abs() * 0.5
+		for bar: Array in [[cross * (size.x * 0.5 + 0.25), cross * 0.5 + Vector3.UP * (size.y + 1.0)],
+				[-cross * (size.x * 0.5 + 0.25), cross * 0.5 + Vector3.UP * (size.y + 1.0)],
+				[Vector3.UP * (size.y * 0.5 + 0.25), cross * (size.x + 1.0) + Vector3.UP * 0.5],
+				[Vector3.DOWN * (size.y * 0.5 + 0.25), cross * (size.x + 1.0) + Vector3.UP * 0.5]]:
 			var offset: Vector3 = bar[0]
 			var extent: Vector3 = bar[1] + thick
 			frames.append(Transform3D(Basis.from_scale(extent), at + offset + out * 0.4))
@@ -1151,8 +1212,8 @@ func _window_glow(root: Node, parent: Node) -> void:
 func _beam(st: SurfaceTool, at: Vector3, out: Vector3, cross: Vector3, size: Vector2) -> void:
 	var near := [at - cross * size.x * 0.5 - Vector3.UP * size.y * 0.5, at + cross * size.x * 0.5 - Vector3.UP * size.y * 0.5,
 			at + cross * size.x * 0.5 + Vector3.UP * size.y * 0.5, at - cross * size.x * 0.5 + Vector3.UP * size.y * 0.5]
-	var far_centre := at + out * 28.0 + Vector3.DOWN * 9.0
-	var spread := 1.7
+	var far_centre := at + out * 16.0 + Vector3.DOWN * 5.0
+	var spread := 2.2
 	var far := [far_centre - cross * size.x * 0.5 * spread - Vector3.UP * size.y * 0.5 * spread,
 			far_centre + cross * size.x * 0.5 * spread - Vector3.UP * size.y * 0.5 * spread,
 			far_centre + cross * size.x * 0.5 * spread + Vector3.UP * size.y * 0.5 * spread,

@@ -1127,3 +1127,16 @@ them:
     - It fills round like a dial with the charge (notched in eighths) and flashes when full.
     - Red where the grapple would give out when there's nothing to grab, or on a small enemy (which would be a miss).
     - It uses the grapple's own ray at the reach the current charge gives, so it shows exactly where it'll land. Your own view only.
+
+- 2026-10-10: **Windows on the painted grid, lights dimmed in the fog, fewer floor boxes, floor nests, the depths' fog fixed.**
+  - **Light through the fog:** only somewhat now (the user's ask).
+    - `stack_lights.gdshader` dims windows, blinkers and frames from 30 m to 12% by 220 m (the fog does the rest).
+    - `window_beam.gdshader` is additive, so it showed through fog undimmed. It now has `fog_disabled` and fades by hand from 25 m to 8% by 180 m.
+  - **Windows where the texture paints them (the user's ask):**
+    - The Stack's texture is laid on one grid for the whole thing, by world position rather than per box. Before, each carved piece restarted the pattern and the painted windows didn't line up.
+    - Painted windows: 3 m wide, centred 4 m into each 8 m along a wall, from 2.25 m to 6 m up each 8 m (`WINDOW_*`).
+    - Window rooms' openings are exactly one painted window, cut on a painted spot, the room's floor at its sill. The faces where the texture runs opposite the wall's axis are allowed for. All 32 check out on the grid.
+    - The 5,200 lit windows snap onto painted ones, at the painted size. Frames and beams are scaled to match.
+  - **Fewer boxes:** 60% fewer apartment blocks on each base floor (keep chance 0.32 instead of 0.8). Hall columns are unchanged (the user's call).
+  - **Barnacles on the floors, cheaply:** a 45% chance on each base storey and each mezzanine, 60% on each hall floor (21 spots, `Megastructure.floor_nests`). Each nest is grown only while a player is within 90 m and freed once everyone's 140 m away. The fixed nests are now 10, all on the outside walls.
+  - **The depths' fog (a bug):** the valley haze thickens with depth below its height, made for the land's low ground. At ~260 m underground it became a solid wall. BiomeAtmosphere turns it off while the camera is below `underground_y` (-15 m); the rest of the fog stays.
