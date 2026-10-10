@@ -108,6 +108,27 @@ var lift_buttons := PackedVector3Array()
 var entrance_spots := PackedVector3Array()
 ## Spots on floors and mezzanines inside where a barnacle nest may grow.
 var nest_spots := PackedVector3Array()
+## Floors the sewer growths grow on inside: {rect (x/z), y, zone, kinds
+## (Kind -> weight), density, shaft (keep its middle clear)}.
+var growth_floors: Array[Dictionary] = []
+## What grows indoors: the sewer kinds that would, by where they are.
+const HALL_GROWTH := {
+	GrowthMeshes.Kind.HAIR_MOLD: 3.0, GrowthMeshes.Kind.EGG_SACS: 2.0, GrowthMeshes.Kind.FUNGUS_SHELF: 2.0,
+	GrowthMeshes.Kind.LARVAE_PILE: 2.0, GrowthMeshes.Kind.FLESH_TENDRILS: 1.5, GrowthMeshes.Kind.COCOON: 1.5,
+	GrowthMeshes.Kind.PUS_BOILS: 1.5, GrowthMeshes.Kind.SLIME_CAPS: 1.0, GrowthMeshes.Kind.BLACK_VINES: 2.0,
+}
+## The base: damper, closer to the depths -- more slime and boils.
+const BASE_GROWTH := {
+	GrowthMeshes.Kind.HAIR_MOLD: 3.0, GrowthMeshes.Kind.SLIME_CAPS: 2.5, GrowthMeshes.Kind.PUS_BOILS: 2.0,
+	GrowthMeshes.Kind.EGG_SACS: 1.5, GrowthMeshes.Kind.FUNGUS_SHELF: 1.5, GrowthMeshes.Kind.LARVAE_PILE: 1.5,
+	GrowthMeshes.Kind.BLACK_VINES: 2.0, GrowthMeshes.Kind.FLESH_TENDRILS: 1.0,
+}
+## A window room: a little of the quieter ones.
+const ROOM_GROWTH := {
+	GrowthMeshes.Kind.HAIR_MOLD: 3.0, GrowthMeshes.Kind.FUNGUS_SHELF: 1.5, GrowthMeshes.Kind.EGG_SACS: 1.0,
+	GrowthMeshes.Kind.COCOON: 1.0,
+}
+
 var random := RandomNumberGenerator.new()
 
 
@@ -293,6 +314,8 @@ func _base() -> void:
 		if random.randf() < 0.45:
 			var ring := Vector2.from_angle(random.randf() * TAU) * random.randf_range(SHAFT * 0.5 + 12.0, inner * 0.5 - 10.0)
 			nest_spots.append(Vector3(ring.x, f * FLOOR, ring.y))
+		growth_floors.append({rect = Rect2(-inner * 0.5, -inner * 0.5, inner, inner), y = f * FLOOR, zone = "Base_%d" % f,
+				kinds = BASE_GROWTH, density = 1.0, shaft = SHAFT * 0.5 + 6.0})
 	for f in floors:
 		var y0 := f * FLOOR
 		for gx in range(-2, 2):
@@ -507,6 +530,9 @@ func _window_room(hall: Dictionary, side: int) -> bool:
 	_carve(_span(centre + out * (face + 1.0), centre + out * (face - 3.5), cross, window.x, y, window.y))
 	var at := centre + out * face + Vector3.UP * window.y * 0.5
 	window_rooms.append({at = at, normal = out, size = window, room = room})
+	if random.randf() < 0.6:
+		growth_floors.append({rect = Rect2(room.position.x + 1.0, room.position.z + 1.0, room.size.x - 2.0, room.size.z - 2.0), y = y,
+				zone = hall.name, kinds = ROOM_GROWTH, density = 1.0, shaft = 0.0})
 	openings.append(at)
 	if random.randf() < 0.5:
 		lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
@@ -786,7 +812,12 @@ func _hall_features(hall: Dictionary) -> void:
 		_add(Vector3(wall_mid.x, deck_y - 2.0, wall_mid.z), cross * span + Vector3.UP * 4.0 + out.abs() * depth, &"interior", group)
 		if random.randf() < 0.45:
 			nest_spots.append(Vector3(wall_mid.x, deck_y, wall_mid.z) + cross * random.randf_range(-span * 0.3, span * 0.3))
+		var deck_size := cross * span + out.abs() * depth
+		growth_floors.append({rect = Rect2(wall_mid.x - deck_size.x * 0.5, wall_mid.z - deck_size.z * 0.5, deck_size.x, deck_size.z),
+				y = deck_y, zone = group, kinds = HALL_GROWTH, density = 0.8, shaft = 0.0})
 		_switchback(box, out, cross, across_len * 0.5 - depth, along_len - 24.0, floor_y, deck_y, group)
+	growth_floors.append({rect = Rect2(box.position.x + 4.0, box.position.z + 4.0, box.size.x - 8.0, box.size.z - 8.0), y = floor_y,
+			zone = group, kinds = HALL_GROWTH, density = 1.2, shaft = (UPPER_SHAFT * 0.5 + 6.0) if main else 0.0})
 	# Now and then a barnacle nest's spot on the hall floor.
 	if random.randf() < 0.6:
 		var spot := Vector3(random.randf_range(box.position.x + 12.0, box.end.x - 12.0), floor_y, random.randf_range(box.position.z + 12.0, box.end.z - 12.0))
@@ -924,6 +955,7 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	_windows(root, decor)
 	_window_glow(root, decor)
 	_growth(root, decor)
+	_indoor_growth(root, decor)
 	_swarms(root, decor)
 	var worm := CoilingWorm.new()
 	worm.name = "CoilingWorm"
@@ -1342,6 +1374,123 @@ func _growth_batch(root: Node, parent: Node, kind: GrowthMeshes.Kind, places: Ar
 	_own(root, node, parent)
 
 
+## The sewer growths that would grow indoors, on the floors inside: in the
+## same kind of clusters as out on the land (GrowthSpecies: long-tailed
+## group sizes, crowded to the middle, every one its own size) at their
+## first-tuned group sizes (indoors isn't carpeted wall to wall), never in
+## the shaft or inside a block, a column or a wall. One batch per kind per
+## zone (a hall, a base storey), placed at the zone so it's only drawn near.
+func _indoor_growth(root: Node, parent: Node) -> void:
+	var species := {}
+	for s in GrowthSpecies.defaults():
+		species[s.kind] = s
+	var batches := {} # "zone|kind" -> Array[Transform3D]
+	for f in growth_floors:
+		var rect: Rect2 = f.rect
+		var y: float = f.y
+		if rect.size.x < 4.0 or rect.size.y < 4.0:
+			continue
+		# What could be in the way on this floor.
+		var blockers: Array[AABB] = []
+		for b in boxes:
+			if b.b != Basis.IDENTITY:
+				continue
+			var box := AABB((b.c as Vector3) - (b.s as Vector3) * 0.5, b.s)
+			if box.position.y < y + 1.0 and box.end.y > y + 0.5 and Rect2(box.position.x, box.position.z, box.size.x, box.size.z).intersects(rect):
+				blockers.append(box)
+		var groups := maxi(1, int(rect.get_area() / 3500.0 * float(f.density) + random.randf()))
+		for g in groups:
+			var kind: int = _pick(f.kinds)
+			var s: GrowthSpecies = species[kind]
+			var least := maxi(1, s.min_group / GrowthSpecies.GROUP_SCALE)
+			var most := clampi(s.max_group / GrowthSpecies.GROUP_SCALE, least, 120)
+			var count := clampi(int(least * pow(1.0 - random.randf() * 0.999, -1.0 / maxf(s.group_tail, 0.1))), least, most)
+			var centre := Vector2(random.randf_range(rect.position.x, rect.end.x), random.randf_range(rect.position.y, rect.end.y))
+			var radius := s.spacing * sqrt(float(count)) * random.randf_range(0.6, 1.4)
+			var key := "%s|%d" % [f.zone, kind]
+			if not batches.has(key):
+				var fresh: Array[Transform3D] = []
+				batches[key] = fresh
+			for m in count:
+				var spread := pow(random.randf(), s.crowding * 0.5)
+				var angle := random.randf() * TAU
+				var at := centre + Vector2(cos(angle), sin(angle)) * radius * spread
+				if not rect.has_point(at):
+					continue
+				var shaft: float = f.shaft
+				if shaft > 0.0 and absf(at.x) < shaft and absf(at.y) < shaft:
+					continue
+				var point := Vector3(at.x, y + 0.6, at.y)
+				var inside := false
+				for blocker in blockers:
+					if blocker.has_point(point):
+						inside = true
+						break
+				if inside:
+					continue
+				var size := random.randf_range(s.min_scale, s.max_scale)
+				if random.randf() < s.elder_chance:
+					size *= s.elder_scale
+				(batches[key] as Array).append(Transform3D(Basis(Vector3.UP, random.randf() * TAU).scaled(Vector3.ONE * size),
+						Vector3(at.x, y - s.sink * size, at.y)))
+	var materials := {}
+	var holder := Node3D.new()
+	holder.name = "IndoorGrowth"
+	_own(root, holder, parent)
+	for key: String in batches:
+		var places: Array = batches[key]
+		if places.is_empty():
+			continue
+		var kind := int(key.get_slice("|", 1))
+		var s: GrowthSpecies = species[kind]
+		if not materials.has(kind):
+			var material := ShaderMaterial.new()
+			material.shader = GrowthScatter.GROWTH_SHADER
+			material.set_shader_parameter("glow_color", s.glow_color)
+			material.set_shader_parameter("sway_amount", s.sway_amount * 0.4) # no wind indoors: a stir
+			material.set_shader_parameter("breathe_amount", s.breathe)
+			material.set_shader_parameter("breathe_speed", s.breathe_speed)
+			materials[kind] = material
+		var middle := Vector3.ZERO
+		for place: Transform3D in places:
+			middle += place.origin
+		middle /= places.size()
+		var multimesh := MultiMesh.new()
+		multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		multimesh.use_colors = true
+		multimesh.use_custom_data = true
+		multimesh.mesh = GrowthMeshes.get_mesh(kind, random.randi() % s.variants)
+		multimesh.instance_count = places.size()
+		for i in places.size():
+			multimesh.set_instance_transform(i, (places[i] as Transform3D).translated(-middle))
+			var shade := 1.0 + random.randf_range(-s.tint_variation, s.tint_variation)
+			multimesh.set_instance_color(i, Color(shade, shade, shade))
+			multimesh.set_instance_custom_data(i, Color(random.randf(), random.randf(), 0.0, 0.0))
+		var node := MultiMeshInstance3D.new()
+		node.name = key.replace("|", "_")
+		node.multimesh = multimesh
+		node.position = middle
+		node.material_override = materials[kind]
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.visibility_range_end = 220.0
+		node.visibility_range_end_margin = 20.0
+		node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		_own(root, node, holder)
+
+
+## A key picked from {key: weight}, in proportion to the weights.
+func _pick(weights: Dictionary) -> int:
+	var total := 0.0
+	for key in weights:
+		total += weights[key]
+	var roll := random.randf() * total
+	for key in weights:
+		roll -= weights[key]
+		if roll <= 0.0:
+			return key
+	return weights.keys()[0]
+
+
 ## Roach swarms circling each tower's top like birds round a cliff.
 func _swarms(root: Node, parent: Node) -> void:
 	var speck := SurfaceTool.new()
@@ -1541,7 +1690,10 @@ static func make_wind(seconds: float = 12.0) -> AudioStreamWAV:
 	return _wav(_crossfade_loop(samples, rate), rate)
 
 
-## The drone: low tones beating slowly against each other, a rumble under them.
+## The drone: a deep buzzing hum (two voices a hair apart, beating slowly),
+## its overtones through a slowly gliding resonance so the building seems to
+## moan, a rumble under it. Built from overtones, not just the deep tone, so
+## it's heard on any speakers -- the ear fills the low note back in.
 static func make_drone(seconds: float = 16.0) -> AudioStreamWAV:
 	var rate := 22050
 	var frames := int(seconds * rate)
@@ -1550,13 +1702,30 @@ static func make_drone(seconds: float = 16.0) -> AudioStreamWAV:
 	var noise_random := RandomNumberGenerator.new()
 	noise_random.seed = 4
 	var rumble := 0.0
+	var low := 0.0
+	var band := 0.0
 	for i in frames:
 		var t := float(i) / rate
-		var swell := 0.75 + 0.25 * sin(t / seconds * TAU * 2.0)
-		var tone := sin(TAU * 38.0 * t) * 0.45 + sin(TAU * 38.5 * t) * 0.35 + sin(TAU * 57.0 * t) * 0.2 \
-				+ sin(TAU * 76.0 * t) * 0.1 + sin(TAU * 113.0 * t) * 0.05
-		rumble += (noise_random.randf_range(-1.0, 1.0) - rumble) * 0.01
-		samples[i] = (tone * 0.6 + rumble * 2.5) * swell * 0.7
+		var phase := t / seconds * TAU
+		var swell := 0.75 + 0.25 * sin(phase * 2.0)
+		var buzz := 0.0
+		for n in range(1, 13):
+			buzz += (sin(TAU * 55.0 * n * t) + 0.8 * sin(TAU * 55.3 * n * t)) / n
+		buzz += sin(TAU * 82.5 * t) * 0.5 # a fifth above, faint
+		# The moan: the buzz through a resonance gliding 150..330 Hz.
+		var centre := 240.0 + 90.0 * sin(phase * 3.0) + 30.0 * sin(phase * 7.0 + 1.0)
+		var f := 2.0 * sin(PI * centre / rate)
+		low += f * band
+		var high := buzz - low - 0.25 * band
+		band += f * high
+		rumble += (noise_random.randf_range(-1.0, 1.0) - rumble) * 0.04
+		samples[i] = (buzz * 0.12 + band * 0.12 + rumble * 2.0) * swell
+	# Driven a little into saturation: louder for its peaks, and grittier.
+	var peak := 0.0001
+	for s in samples:
+		peak = maxf(peak, absf(s))
+	for i in frames:
+		samples[i] = tanh(samples[i] / peak * 2.5)
 	return _wav(_crossfade_loop(samples, rate), rate)
 
 

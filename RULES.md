@@ -1172,3 +1172,16 @@ them:
   - The base windows (cut straight onto the base's floors, with no room) are gone. The base walls stay solid, with their three ways in.
   - Window rooms (`_window_room`): exactly 2 per hall (the user's call), 30 in all. Each goes first to a side of its tower that doesn't have one yet, so every side of all five towers has at least one. Checked.
   - Each is one painted window on a painted spot, a room behind it (its floor at the sill, a warm lamp in half), and a corridor at its back into the hall.
+
+- 2026-10-10: **Sewer growth inside the Stack; a drone you can actually hear.**
+  - **Indoor growth** (the user's ask: the sewer growths that would make sense growing in there, in the same kind of clusters). `StackBuilder._indoor_growth` scatters them in the same Pareto clusters as outside (GrowthSpecies sizes) on the floors it records as it builds (`growth_floors`): the hall floors and mezzanine decks (60% of them), the base, and the window rooms. Each place has its own mix:
+    - halls: mould, eggs, shelf fungus, grubs, tendrils, cocoons, boils, slime caps, black vines;
+    - base: damper, with more slime caps and boils;
+    - window rooms: only a little of the quieter ones (mould, shelf fungus, eggs, cocoons).
+    - Hive mounds and chitin ribs stay outside (too big for a room). Nothing grows in the shaft, the lift's way or the ramps.
+    - About 1,000 pieces in 112 batches (MultiMesh), under Decor/IndoorGrowth, each batch drawn only within 220 m.
+  - **The drone was inaudible**: it was all 38-113 Hz tones and a rumble under 40 Hz, which laptop speakers and most earbuds can't play.
+    - Rebuilt (`make_drone`): a 55 Hz buzz with its overtones (two voices beating slowly) through a resonance gliding between about 150 and 330 Hz, so it moans, with the rumble under it, lightly saturated.
+    - About half its energy is now above 120 Hz, against 12% before: roughly 9 dB more of it where ordinary speakers play.
+  - **Where the sounds are** (unchanged): the drone is full inside and fades in within 500 m of the base. The wind rises with height (off below 60 m, full from 400 m), plus 3 voices on the nearest openings within 70 m.
+  - To use your own recordings: set `wind_stream` and `drone_stream` on TheStack/Decor/Sound, or point `make_the_stack.gd`'s WIND/DRONE at them.
