@@ -21,6 +21,9 @@ extends Node
 ## Visual only (Rule 1): each player's game does this to its own copy.
 
 const WORLD_SHADER := preload("res://shaders/sewer_world.gdshader")
+## Meta on a WorldEnvironment whose place keeps its own look (no sewer fog,
+## grade or wall/floor conversion).
+const OWN_LOOK_META := &"own_look"
 
 ## Every look value below can also be changed in-game (pause menu > Graphics,
 ## saved in GameSettings.look_values); these are the defaults "Reset" goes
@@ -146,6 +149,10 @@ func reset_values() -> void:
 func _on_node_added(node: Node) -> void:
 	var world_environment := node as WorldEnvironment
 	if world_environment == null or world_environment.environment == null:
+		return
+	# A place with its own look (the open world: purple fog, no sewer grade)
+	# says so with this meta, and is left alone.
+	if world_environment.has_meta(OWN_LOOK_META):
 		return
 	_environment = world_environment.environment
 	_apply_environment(_environment)

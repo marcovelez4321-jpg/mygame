@@ -1,14 +1,14 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://10uds4exqyym"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
-[ext_resource type="PackedScene" uid="uid://doj6tojorb7yi" path="res://art/weapons/PSX_Guns/FBX/UZI.fbx" id="2_uzi"]
+[ext_resource type="PackedScene" uid="uid://cltemeim1tfp1" path="res://art/weapons/NEWPSXWEAPONS/MP5/MP5k_fbx.fbx" id="2_uzi"]
 [ext_resource type="Resource" uid="uid://ddl7ovj3rpstk" path="res://audio/events/weapons/machine_gun_fire.tres" id="3_fire"]
 [ext_resource type="Resource" path="res://audio/events/weapons/machine_gun_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/machine_gun_switch.tres" id="5_switch"]
 
 [resource]
 script = ExtResource("1")
-weapon_name = "Dual Uzis"
+weapon_name = "Dual MP5s"
 damage = 9.0
 fire_interval = 0.06
 max_range = 40.0
@@ -24,14 +24,14 @@ recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-
 recoil_scale = 3.0
 recoil_jitter = 0.5
 draw_time = 0.5
+grip_point = Vector3(-0.035, -0.25, -0.4)
+model_facing_degrees = Vector3(0, 180, 0)
 dual_wield = true
 hold_cant_degrees = 90.0
-grip_point = Vector3(0.058, -0.045, 0)
-model_facing_degrees = Vector3(0, -90, 0)
 viewmodel_scene = ExtResource("2_uzi")
-viewmodel_rotation_degrees = Vector3(0, -90, 0)
-viewmodel_scale = 0.75
-muzzle_offset = Vector3(-0.233, 0.058, 0)
+viewmodel_rotation_degrees = Vector3(0, 180, 0)
+viewmodel_scale = 0.15
+muzzle_offset = Vector3(0, 0.42, 1.32)
 placeholder_color = Color(0.25, 0.25, 0.28, 1)
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")

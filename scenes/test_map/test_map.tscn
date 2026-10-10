@@ -25,7 +25,7 @@
 [ext_resource type="PackedScene" path="res://scenes/bandage_pickup.tscn" id="32_bandage"]
 [ext_resource type="PackedScene" path="res://scenes/pkm_pickup.tscn" id="33_pkm"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="36_spiders"]
-[ext_resource type="Script" path="res://scripts/enemies/barnacle_scatter.gd" id="37_scatter"]
+[ext_resource type="Script" uid="uid://bsrbuckldnxr1" path="res://scripts/enemies/barnacle_scatter.gd" id="37_scatter"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.25, 0.45, 0.75, 1)
@@ -72,36 +72,6 @@ size = Vector3(1, 13.5, 120)
 
 [sub_resource type="BoxMesh" id="WallMeshEW"]
 size = Vector3(1, 13.5, 120)
-
-[sub_resource type="BoxShape3D" id="CeilingShapeWest"]
-size = Vector3(6, 0.5, 14)
-
-[sub_resource type="BoxMesh" id="CeilingMeshWest"]
-size = Vector3(6, 0.5, 14)
-
-[sub_resource type="BoxShape3D" id="CeilingShapeNorth"]
-size = Vector3(14, 0.5, 6)
-
-[sub_resource type="BoxMesh" id="CeilingMeshNorth"]
-size = Vector3(14, 0.5, 6)
-
-[sub_resource type="BoxShape3D" id="CeilingShapeNook"]
-size = Vector3(4.75, 0.4, 5)
-
-[sub_resource type="BoxMesh" id="CeilingMeshNook"]
-size = Vector3(4.75, 0.4, 5)
-
-[sub_resource type="BoxShape3D" id="TallWallShapeNS"]
-size = Vector3(1.2, 13.5, 8)
-
-[sub_resource type="BoxMesh" id="TallWallMeshNS"]
-size = Vector3(1.2, 13.5, 8)
-
-[sub_resource type="BoxShape3D" id="TallWallShapeEW"]
-size = Vector3(8, 13.5, 1.2)
-
-[sub_resource type="BoxMesh" id="TallWallMeshEW"]
-size = Vector3(8, 13.5, 1.2)
 
 [sub_resource type="CylinderShape3D" id="PillarShape"]
 height = 4.0
@@ -153,6 +123,36 @@ size = Vector3(0.5, 9, 3.5)
 
 [sub_resource type="BoxMesh" id="LWallShortMesh"]
 size = Vector3(0.5, 9, 3.5)
+
+[sub_resource type="BoxShape3D" id="TallWallShapeNS"]
+size = Vector3(1.2, 13.5, 8)
+
+[sub_resource type="BoxMesh" id="TallWallMeshNS"]
+size = Vector3(1.2, 13.5, 8)
+
+[sub_resource type="BoxShape3D" id="TallWallShapeEW"]
+size = Vector3(8, 13.5, 1.2)
+
+[sub_resource type="BoxMesh" id="TallWallMeshEW"]
+size = Vector3(8, 13.5, 1.2)
+
+[sub_resource type="BoxShape3D" id="CeilingShapeWest"]
+size = Vector3(6, 0.5, 14)
+
+[sub_resource type="BoxMesh" id="CeilingMeshWest"]
+size = Vector3(6, 0.5, 14)
+
+[sub_resource type="BoxShape3D" id="CeilingShapeNorth"]
+size = Vector3(14, 0.5, 6)
+
+[sub_resource type="BoxMesh" id="CeilingMeshNorth"]
+size = Vector3(14, 0.5, 6)
+
+[sub_resource type="BoxShape3D" id="CeilingShapeNook"]
+size = Vector3(4.75, 0.4, 5)
+
+[sub_resource type="BoxMesh" id="CeilingMeshNook"]
+size = Vector3(4.75, 0.4, 5)
 
 [node name="TestMap" type="Node3D" unique_id=1614722928]
 script = ExtResource("3")

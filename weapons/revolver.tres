@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
-[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
-[ext_resource type="PackedScene" uid="uid://0uu4iinxor0g" path="res://art/weapons/PSX_Guns/FBX/Revolver.fbx" id="2_revolver"]
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://art/weapons/PSX_Guns/FBX/Revolver.fbx" id="2_revolver"]
 [ext_resource type="Resource" path="res://audio/events/weapons/sniper_fire.tres" id="3_fire"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_reload.tres" id="4_reload"]
 [ext_resource type="Resource" path="res://audio/events/weapons/pistol_switch.tres" id="5_switch"]
@@ -11,25 +11,27 @@ script = ExtResource("1")
 weapon_name = "Revolver"
 damage = 50.0
 fire_interval = 0.6
-max_range = 100.0
 impact_force = 4.0
 magazine_size = 6
 reload_time = 2.4
 recoil_kick_distance = 0.1
 recoil_kick_rotation_degrees = 12.0
 recoil_pattern = Array[Vector2]([Vector2(0, 2.5), Vector2(0.2, 2.5), Vector2(-0.2, 2.5)])
-recoil_scale = 1.0
 recoil_jitter = 0.3
 draw_time = 0.5
 one_handed = true
-grip_point = Vector3(0, -0.00111, -0.00021)
-model_facing_degrees = Vector3(-90, 0, 0)
+arms_fitted = true
+grip_point = Vector3(0, -0.021, 0.111)
+right_arm_offset = Vector3(-0.019886365, 0.04513617, -0.042825967)
+right_arm_rotation_degrees = Vector3(-31.605898, 0, 0)
 viewmodel_scene = ExtResource("2_revolver")
-viewmodel_rotation_degrees = Vector3(-90, 0, 0)
-viewmodel_scale = 100.0
-muzzle_offset = Vector3(0, 0.00139, 0.0004)
+viewmodel_position = Vector3(0.19400401, -0.15953681, -0.47306836)
+viewmodel_rotation_degrees = Vector3(-2.6017997, -8.326918, 20.055983)
+viewmodel_scale = 1.2753310066964276
+muzzle_offset = Vector3(0, 0.04, -0.139)
 muzzle_flash_time = 0.12
 placeholder_color = Color(0.55, 0.55, 0.6, 1)
+arms_position = Vector3(0.005253993, 0.015113834, -0.06120392)
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")
 switch_sound = ExtResource("5_switch")

@@ -135,15 +135,21 @@ Working title: **Grandma's Boy**. New enemies, weapons, levels, sounds and UI
 get checked against this the same way code gets checked against the rules
 above.
 
-- **Setting.** You live at Grandma's suburban house (the hub). Her portals drop
-  you into a **lawless city** — not a post-apocalypse or a wasteland, but a
-  living, rotten, Gotham-style city where the cops gave up and nobody's in
-  charge. Alleys, rooftops, fire escapes, corner stores, trap houses, subway
-  tunnels. It should feel like a real place gone wrong, not a ruin.
-- **Enemies.** Crackheads and the city's lowlifes: tweakers, junkies,
-  scavengers, petty crime crews. Exaggerated caricatures played for dark
-  comedy — twitchy, unpredictable, desperate, occasionally pathetic, dangerous
-  in a crowd.
+- **Setting.** You live at Grandma's suburban house, the one piece of the old
+  world that didn't change. Everything past her yard did: an **alien land** of
+  purple and blue, wavy and wrong, grown over with coral-reef growths, where
+  the old world's **megastructures** (towers, overpasses, malls, hulks nobody
+  can name) stand half-swallowed. It's one open world you walk out into from
+  her yard (no portals). Grandma gives you quests, and so do the people still
+  living out there. It should feel like somewhere that used to be normal,
+  gone very wrong, not a clean sci-fi planet. (The world plan: docs/WORLD.md.)
+- **Enemies.** Two kinds. The changed world's creatures (Harvestman, worms,
+  Deepmaw, leeches, roaches, spiders): grotesque, biological, sewer-gross.
+  And the people still out there: scavenger crews, tweakers, cultists and
+  squatters living in the megastructures, in factions that fight each other
+  and you (S.T.A.L.K.E.R.-style). Both are exaggerated caricatures played for
+  dark comedy: twitchy, unpredictable, desperate, occasionally pathetic,
+  dangerous in a crowd.
 - **The player.** Inspired by the Postal Dude: deadpan, unbothered, a little
   unhinged — the straight man in a city that's lost its mind, and just as much
   a target of the joke as everyone else.
@@ -153,8 +159,11 @@ above.
   land as slapstick.
 - **Look.** Grimy and dirty, through an old-school PS1 lens: low-poly models,
   low-res textures, dithering (PS1Dither autoload), low internal render scale.
-  Grime comes from texture and color (stains, trash, graffiti, sodium-orange
-  streetlights, sickly greens, nicotine yellows), not from modern effects —
+  The alien land is purple and blue in gradients (indigo valleys, violet and
+  periwinkle ridges, teal moss, magenta rust) under purple fog, glowing at
+  night. Grime comes from texture and color (stains, trash, graffiti,
+  sodium-orange lamps on dead megastructures, sickly greens, nicotine
+  yellows), not from modern effects —
   no realistic PBR wear, no film grain stacks, nothing that breaks the PS1
   illusion.
 - **Feel.** Old-school boomer-shooter movement: fast, VQ3 strafe-jumping, dash,
@@ -736,3 +745,37 @@ them:
   - Mirrored for the left-hand gun. One flash per hand, made once and reused (no nodes made per shot). It follows the muzzle through kick and sway for its muzzle_flash_time (at least 0.06 s).
   - F2 then L: the arrows move the key light, which stays lit so you see the lighting live. F3 saves.
   - Headless check run (with the user's OK): no errors. Firing not yet seen in game.
+
+- 2026-10-09: **The world: an open alien land replaces the lawless city** (full plan: docs/WORLD.md). Decided with the user:
+  - Grandma's house is the one untouched piece of the old world, inside an alien land of purple and blue gradients grown over with coral-reef growths, with old-world megastructures half-swallowed.
+  - One continuous world streamed in chunks (Minecraft-style), hybrid-made (procedural wilds + hand-made places), Terrain3D with the PS1 shader, first playable 1 x 1 km, free-roam co-op, no gravity zones.
+  - Quests from Grandma and from people in the world; no portals.
+  - Full day/night with bioluminescent growth.
+  - Growth: staghorn, kelp, brain coral, glow grass, sea fans, anemones, tube sponges, reef crust; breakable coral walls, healing polyps and stinging coral as gameplay.
+  - Life: sky flocks, sky jellyfish, passive flying beetles, giant fog silhouettes, hermit beetles, giant isopods, nautilus snails, urchin ticks.
+  - Enemies are the changed world's creatures plus scavenger/cultist factions (A-Life). Tone and player unchanged.
+  - Creative Direction (Setting, Enemies, Look) rewritten to match.
+
+- 2026-10-09: **Arms and guns, since the muzzle flash.**
+  - **Straighter elbows:** `FirstPersonArms.elbow_straighten` (0.6). The gun arms' elbows open toward straight while the hand stays exactly where it was (the arm swings back from the shoulder). Applies to the right hand, the dual second hand and the support hand; the grapple arm is unchanged.
+  - **Template placement:** one-handed guns copy the Pistol's arm placement, held angle (via `WeaponData.model_facing_degrees`) and grip spot. Two-handed and dual guns start with the right arm where the one-handed guns hold theirs.
+  - **Support hand:** two-handed guns use a sideways barrel grip, as in the user's reference photo. The upper arm comes from below and behind (its cut end off screen), the forearm crosses the view into the gun, and the hand is half-open (`support_hand_open` 0.5) round the barrel. It's placed automatically on `WeaponData.support_point`, which defaults to 35% from the grip toward the muzzle. `WeaponData.support_pose` OPEN_HAND keeps the old reaching pose (the PKM's).
+  - **Guns and models:**
+    - The MP5 (NEWPSXWEAPONS/MP5k) replaces the Uzi. The files keep their uzi names; the Dual MP5s pair as before, and you start with two.
+    - The Revolver's model was already scaled and turned by its own node: scale 1, no extra turn. Its missing texture is fixed with an external material (`revolver_material.tres`, using revolver.png, since the FBX pointed at a missing .psd).
+    - The Pump Shotgun was removed. The RPG is 40% bigger.
+    - Gun models lose any light or camera exported with them (`Viewmodel._strip_scene_extras()`); the MP5 also skips them at import.
+
+- 2026-10-09: **Open world M0 steps 2-4: test world, pathfinding, ground shader, fog** (docs/WORLD.md).
+  - **Terrain generator** (`scripts/world/alien_terrain.gd`, AlienTerrain):
+    - The land's shape: warped hills, each with its own random height and random spacing, plus craggy patches.
+    - Frozen-sea ridges whose height, spacing and crest sharpness vary, crossed by a second swell.
+    - Grandma's yard flat in the middle.
+    - A slope cap (`max_slope_degrees` 66.7, the first version's steepest) settles anything steeper.
+    - Walkable passes (40 degrees, about every 110 m) cut through steep ridges: 99.9% of the land is reachable from the yard.
+  - **Bake tool** (`tools/make_test_world.gd`): a 1 x 1 km Terrain3D world (4 m vertices, 4 regions of 512 m) with full-terrain collision, navmesh tiles, the ground shader, the fog, test enemies and the player, into scenes/world/test_world.tscn.
+  - **Navigation, the AAA way** (`scripts/world/world_navigation.gd`, WorldNavigation): the navmesh is baked offline into 128 m tiles (shared border; edge connections bridge the one-cell seam) and streamed around every player on the host in game. A runtime per-player baker remains only as a fallback.
+  - **Path queue** (`scripts/world/path_requests.gd`, PathRequests): enemies (enemy.gd) re-path only after the target moves 1.5 m or every 0.5 s, at most 6 paths a frame, with up to 20000 polygons a search (Godot's 4096 cut cross-map routes short). Tested: all long cross-map paths reach their goal.
+  - **Ground shader** (`shaders/alien_terrain.gdshader`, on Terrain3D's minimum shader): purple/blue by height, slope and moss/rust blotches, with PS1 vertex snap, faceted triangles, 1 m colour blocks and 15-bit colour.
+  - **Fog** (`scripts/world/alien_atmosphere.gd`; worlds/test_world/environment.tres): purple depth fog 30-220 m, valley haze below 18 m, background in the fog colour until skyboxes, purple ambient light. SewerLook now skips any WorldEnvironment with the `own_look` meta.
+  - Terrain3D 1.0.2 added (addons/terrain_3d). Its demo/ folder is left uncommitted (24 MB of samples).

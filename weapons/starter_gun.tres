@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://csda6r47llmpj"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://4o8gxqlvnutb"]
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://i02bor72sm53" path="res://art/weapons/PSX_Guns/FBX/Pistol.fbx" id="2_pistol"]
@@ -15,14 +15,22 @@ recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-
 recoil_scale = 4.0
 recoil_jitter = 0.32
 aim_position = Vector3(-0.00096765015, -0.11331543, -0.3)
+one_handed = true
+arms_fitted = true
+grip_point = Vector3(0.05289026, -0.03200796, 0.023460455)
+model_facing_degrees = Vector3(0, -90, 0)
+right_arm_offset = Vector3(-0.019886365, 0.04513617, -0.042825967)
+right_arm_rotation_degrees = Vector3(-31.605898, 0, 0)
+left_arm_offset = Vector3(0, 0.061147172, 0)
 viewmodel_scene = ExtResource("2_pistol")
-viewmodel_position = Vector3(0.115640216, -0.12794662, -0.5408055)
-viewmodel_rotation_degrees = Vector3(0, -95.03305, 0)
-viewmodel_scale = 1.7111437043233877
-muzzle_offset = Vector3(-0.11555157, 0.040567916, 0.0130987475)
+viewmodel_position = Vector3(0.1908773, -0.19137616, -0.45708945)
+viewmodel_rotation_degrees = Vector3(11.4020195, -93.0615, 1.6178313)
+viewmodel_scale = 1.7302576
+muzzle_offset = Vector3(-0.11983719, 0.04342529, 0.00014266704)
 muzzle_flash_time = 0.1
 placeholder_color = Color(0.85, 0.75, 0.3, 1)
 hold_animation = ExtResource("6_hold")
+arms_position = Vector3(0.005253993, -0.008067982, -0.06120392)
 fire_sound = ExtResource("3_fire")
 reload_sound = ExtResource("4_reload")
 switch_sound = ExtResource("5_switch")

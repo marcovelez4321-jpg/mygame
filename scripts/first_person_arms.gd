@@ -31,11 +31,31 @@ const LEFT_ROOT := "shoulder.L"
 ## Keep the right wrist straight (the hand in line with the forearm, as in
 ## the rig's rest pose) instead of the hold pose's bent wrist.
 @export var straight_wrist: bool = true
+## How far the gun arms' elbows open toward straight (0 = the pose as it
+## is, 1 = locked straight). The hand stays exactly where it was (the arm
+## swings back from the shoulder to keep it there), so it's the arm behind
+## the gun that reaches out longer and straighter. Not the grapple arm.
+@export_range(0.0, 1.0, 0.05) var elbow_straighten: float = 0.6
 @export var reach_animation: StringName = &"push_L"
 ## Two-handed guns: the left hand comes up in this one pose (the rig's grab_L
 ## at support_time of the way through: reaching forward under the gun).
 @export var support_animation: StringName = &"grab_L"
 @export_range(0.0, 1.0, 0.05) var support_time: float = 0.5
+## The barrel grip's arm, aimed directly (camera space: x = right, y = up,
+## -z = ahead): the upper arm out to the left and down toward the elbow,
+## the forearm across the bottom of the view into the gun -- held sideways,
+## like a rifle's support arm -- and the closed hand straight off it, its
+## grip running along the barrel. Roll turns the hand round the forearm
+## (palm down over the handguard <-> palm up under it).
+## (The upper arm comes up from below and behind, so its cut-off shoulder end
+## stays under the bottom of the screen.)
+@export var support_upper_arm_direction: Vector3 = Vector3(-0.2, 0.3, -0.9)
+@export var support_forearm_direction: Vector3 = Vector3(1.0, 0.08, -0.35)
+@export_range(-180.0, 180.0, 5.0) var support_hand_roll_degrees: float = 0.0
+## How open the support hand is: 0 = closed fist round the barrel, 1 = the
+## open reaching hand. Part-open cups the barrel so it rests in the middle
+## of the hand without the fingers going through it.
+@export_range(0.0, 1.0, 0.05) var support_hand_open: float = 0.5
 ## How far below its pose the left arm hides (meters), and how fast it comes
 ## up / goes back down (per second, 0..1).
 @export var hide_drop: float = 0.55
@@ -73,6 +93,10 @@ var _dual := false
 ## A two-handed gun out: the left hand's up in the support pose.
 var _support := false
 var _support_pose := {}
+## The support hand closed round the barrel, and that fist's finger poses
+## (the right hand's grip, mirrored: every bone below hand.L).
+var _barrel_grip := false
+var _left_fist := {}
 ## The left arm's pose while dual wielding (the right grip, mirrored).
 var _left_hold := {}
 ## Follows the left hand bone: the second gun hangs off it when dual wielding.
@@ -128,6 +152,14 @@ func _ready() -> void:
 	_current = _rest.duplicate()
 	for bone in _right_bones:
 		_current[bone] = _hold[bone]
+	# The barrel grip's fist: the closed right hand, mirrored onto the left
+	# (fingers only -- the arm and wrist stay the support pose's).
+	var mirrored := _mirrored_right()
+	var fist_bones := PackedInt32Array()
+	for child in skeleton.get_bone_children(_hand_l):
+		_collect(child, fist_bones)
+	for bone in fist_bones:
+		_left_fist[bone] = mirrored[bone]
 
 	hand_attachment = BoneAttachment3D.new()
 	hand_attachment.bone_name = "hand.R"
@@ -167,12 +199,14 @@ func set_dual(on: bool) -> void:
 	tick(0.0, false, 0.0, false, false)
 
 
-## Two-handed guns: the left hand comes up in the support pose (one pose for
-## every such gun, not fitted to each).
-func set_support(on: bool) -> void:
-	if on == _support:
+## Two-handed guns: the left hand comes up in the support pose, either
+## closed round the barrel (`barrel_grip`: the right hand's grip, mirrored)
+## or open (the reaching grab_L pose, the PKM's).
+func set_support(on: bool, barrel_grip: bool = false) -> void:
+	if on == _support and barrel_grip == _barrel_grip:
 		return
 	_support = on
+	_barrel_grip = barrel_grip
 	if not on:
 		raise = 0.0
 		reach = 0.0
@@ -218,9 +252,29 @@ func _pose_right() -> void:
 		var pose: Array = _current[forearm]
 		_current[forearm] = [pose[0], (parent_basis.inverse() * turned).get_rotation_quaternion(), pose[2]]
 	_nudge(skeleton.find_bone(RIGHT_ROOT), _right_move, _right_turn)
+	_straighten(skeleton.find_bone(RIGHT_ROOT), skeleton.find_bone("forearm.R"), hand_bone)
 	if _dual:
 		_left_hold = _mirrored_right()
 	_write()
+
+
+## Opens the elbow elbow_straighten of the way to straight, then moves the
+## whole arm (round and along from its shoulder `root`) so the hand is
+## exactly where and how it was: the gun stays in it, the arm reaches longer.
+func _straighten(root: int, forearm: int, hand: int) -> void:
+	if elbow_straighten <= 0.0:
+		return
+	var before := _bone_in_skeleton(hand)
+	var pose: Array = _current[forearm]
+	var straight: Array = _rest[forearm]
+	_current[forearm] = [pose[0], (pose[1] as Quaternion).slerp(straight[1], elbow_straighten), pose[2]]
+	var after := _bone_in_skeleton(hand)
+	var back_onto_hand := before * after.affine_inverse()
+	var place := back_onto_hand * _bone_in_skeleton(root)
+	var parent := skeleton.get_bone_parent(root)
+	var parent_place := _bone_in_skeleton(parent) if parent != -1 else Transform3D.IDENTITY
+	var local := parent_place.affine_inverse() * place
+	_current[root] = [local.origin, local.basis.get_rotation_quaternion(), local.basis.get_scale()]
 
 
 ## Moves a whole arm (from its shoulder bone `root`) by `move` and turns it
@@ -249,6 +303,38 @@ func _close_hand(grip: Dictionary) -> void:
 		_hold[bone] = [(closed[0] as Vector3).lerp(flat[0], grip_room),
 				(closed[1] as Quaternion).slerp(flat[1], grip_room),
 				(closed[2] as Vector3).lerp(flat[2], grip_room)]
+
+
+## The barrel grip's sideways support arm: the upper arm, forearm and hand
+## aimed along support_*_direction (camera space, turned into the skeleton's)
+## with their twist matched so the wrist doesn't wring. Each bone's length
+## runs along its own +Y. The hand's grip (its local Z, thumb side) runs
+## along the barrel; support_hand_roll_degrees turns it round the forearm.
+func _aim_support_arm() -> void:
+	var to_skeleton := _skeleton_in_self.basis.orthonormalized().inverse() \
+			* camera_transform().basis.inverse()
+	var upper := (to_skeleton * support_upper_arm_direction).normalized()
+	var fore := (to_skeleton * support_forearm_direction).normalized()
+	var barrel := (to_skeleton * Vector3.FORWARD)
+	# The forearm and hand share one frame (a straight wrist): Y along the
+	# forearm, Z (the grip) along the barrel as near as it can be.
+	var grip := (barrel - fore * barrel.dot(fore)).normalized()
+	var fore_frame := Basis(fore.cross(grip), fore, grip)
+	fore_frame = Basis(fore, deg_to_rad(support_hand_roll_degrees)) * fore_frame
+	# The upper arm: Y along it, its twist as close to the forearm's as fits.
+	var upper_z := (fore_frame.z - upper * fore_frame.z.dot(upper)).normalized()
+	var upper_frame := Basis(upper.cross(upper_z), upper, upper_z)
+	_aim_bone(skeleton.find_bone("upper_arm.L"), upper_frame)
+	_aim_bone(_forearm_l, fore_frame)
+	_aim_bone(_hand_l, fore_frame)
+
+
+## Turns `bone` so its place (skeleton space) has the basis `frame`.
+func _aim_bone(bone: int, frame: Basis) -> void:
+	var parent := skeleton.get_bone_parent(bone)
+	var parent_basis := _bone_in_skeleton(parent).basis.orthonormalized() if parent != -1 else Basis.IDENTITY
+	var pose: Array = _current[bone]
+	_current[bone] = [pose[0], (parent_basis.inverse() * frame.orthonormalized()).get_rotation_quaternion(), pose[2]]
 
 
 ## The right arm's pose as it is now, mirrored onto the left arm (the rig is
@@ -298,6 +384,15 @@ func grip_socket_in_rig() -> Vector3:
 	return (palm + knuckle + tip) / 3.0
 
 
+## The middle of the closed LEFT hand, in this node's space: where a
+## two-handed gun's support_point goes (the barrel grip).
+func left_grip_socket_in_rig() -> Vector3:
+	var palm := bone_in_rig(_palm_l).origin
+	var knuckle := bone_in_rig(skeleton.find_bone("f_middle.02.L")).origin
+	var tip := bone_in_rig(skeleton.find_bone("f_middle.03.L")).origin
+	return (palm + knuckle + tip) / 3.0
+
+
 ## Called every frame by the Viewmodel with the grapple's state.
 func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_allowed: bool) -> void:
 	if _dual or _support:
@@ -307,6 +402,17 @@ func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_
 		var pose: Dictionary = _left_hold if _dual else _support_pose
 		for bone in _left_bones:
 			_current[bone] = pose[bone]
+		if _support and _barrel_grip:
+			for bone in _left_fist:
+				var closed: Array = _left_fist[bone]
+				var open: Array = _support_pose[bone]
+				_current[bone] = [(closed[0] as Vector3).lerp(open[0], support_hand_open),
+						(closed[1] as Quaternion).slerp(open[1], support_hand_open),
+						(closed[2] as Vector3).lerp(open[2], support_hand_open)]
+			_aim_support_arm()
+		elif _support:
+			# (Dual's mirrored grip is already straightened, from the right.)
+			_straighten(_left_root, _forearm_l, _hand_l)
 		_nudge(_left_root, _left_move, _left_turn)
 		_write()
 		return

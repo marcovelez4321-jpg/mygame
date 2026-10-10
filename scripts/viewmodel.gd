@@ -819,6 +819,7 @@ func _show_weapon(weapon: WeaponData) -> void:
 		var gun: Node3D
 		if weapon.viewmodel_scene:
 			gun = weapon.viewmodel_scene.instantiate() as Node3D
+			_strip_scene_extras(gun)
 		else:
 			gun = _make_placeholder(weapon)
 		model.add_child(gun)
@@ -850,6 +851,8 @@ func _apply_transform(weapon: WeaponData) -> void:
 			_cant_basis(weapon) * Basis.from_euler(_model_rest_rotation * (PI / 180.0)) * Basis.from_scale(Vector3.ONE * weapon.viewmodel_scale),
 			_model_rest_position)
 	_apply_arms_transform(weapon)
+	if _fp_arms and _two_handed(weapon):
+		_apply_arm_offsets(weapon) # the support hand follows the gun if it moved
 	if is_instance_valid(_model):
 		_model.transform = _anchor_in_rig().affine_inverse() * _model_rest_transform
 	if is_instance_valid(_left_model):
@@ -872,6 +875,7 @@ func _show_left_gun(weapon: WeaponData) -> void:
 		model = Node3D.new()
 		_fp_arms.left_hand_attachment.add_child(model)
 		var gun := weapon.viewmodel_scene.instantiate() as Node3D if weapon.viewmodel_scene else _make_placeholder(weapon)
+		_strip_scene_extras(gun)
 		model.add_child(gun)
 		_center_on_pivot(gun)
 		_left_models[weapon] = model
@@ -1028,8 +1032,11 @@ func _ensure_new_arms() -> bool:
 ##     model_facing_degrees, so a model facing another way still points the
 ##     same way) and its grip_point where the Pistol's grip is, in the hand.
 ##     Its size stays its own.
-##   Anything else: the arms as the rig was made (camera bone on your eye),
-##     the gun seated in the hand by its grip_point.
+##   Two-handed and dual guns: the template's arm placement too (so the
+##     right arm starts where the one-handed guns hold theirs), the gun seated
+##     in that hand by its grip_point, keeping its own angle.
+##   Grenades and healing items: the arms as the rig was made (camera bone
+##     on your eye), the item seated in the hand by its grip_point.
 ## F2 tunes it from there (G for the grip); F3 saves it.
 func _fit_to_new_arms(weapon: WeaponData) -> void:
 	var template := one_handed_arms_template
@@ -1049,6 +1056,17 @@ func _fit_to_new_arms(weapon: WeaponData) -> void:
 		weapon.viewmodel_position = template_grip - _gun_basis(weapon) * weapon.grip_point
 		_apply_arms_transform(weapon)
 		_apply_arm_offsets(weapon)
+	elif template and template.arms_fitted and not weapon.throws_grenade and weapon.heal_item < 0:
+		# Two-handed (and dual) guns: the right arm starts where the one-handed
+		# ones hold theirs, and the gun's seated in that hand by its grip.
+		weapon.arms_position = template.arms_position
+		weapon.arms_rotation_degrees = template.arms_rotation_degrees
+		weapon.arms_scale = template.arms_scale
+		weapon.right_arm_offset = template.right_arm_offset
+		weapon.right_arm_rotation_degrees = template.right_arm_rotation_degrees
+		_apply_arms_transform(weapon)
+		_apply_arm_offsets(weapon)
+		_seat_in_hand(weapon)
 	else:
 		weapon.arms_position = Vector3.ZERO
 		weapon.arms_rotation_degrees = Vector3.ZERO
@@ -1070,16 +1088,39 @@ func _gun_basis(weapon: WeaponData) -> Basis:
 
 
 ## Hands the weapon's per-arm nudges (camera space) to the new arms, turned
-## into the arms' own space.
+## into the arms' own space. A barrel-gripping support hand is then moved
+## onto the gun's support point (left_arm_offset nudging it from there).
 func _apply_arm_offsets(weapon: WeaponData) -> void:
 	if _fp_arms == null:
 		return
 	var to_rig := _arms.transform.basis.inverse()
 	var to_cam := _arms.transform.basis
-	var right_turn := Basis.from_euler(weapon.right_arm_rotation_degrees * (PI / 180.0))
-	var left_turn := Basis.from_euler(weapon.left_arm_rotation_degrees * (PI / 180.0))
-	_fp_arms.set_arm_offsets(to_rig * weapon.right_arm_offset, (to_rig * right_turn * to_cam).orthonormalized(),
-			to_rig * weapon.left_arm_offset, (to_rig * left_turn * to_cam).orthonormalized())
+	var right_turn := (to_rig * Basis.from_euler(weapon.right_arm_rotation_degrees * (PI / 180.0)) * to_cam).orthonormalized()
+	var left_turn := (to_rig * Basis.from_euler(weapon.left_arm_rotation_degrees * (PI / 180.0)) * to_cam).orthonormalized()
+	_fp_arms.set_arm_offsets(to_rig * weapon.right_arm_offset, right_turn, to_rig * weapon.left_arm_offset, left_turn)
+	if _two_handed(weapon) and weapon.support_pose == WeaponData.SupportPose.BARREL_GRIP:
+		var hand := _arms.transform * _fp_arms.left_grip_socket_in_rig()
+		var onto_barrel := _support_point_on_screen(weapon) - hand
+		_fp_arms.set_arm_offsets(to_rig * weapon.right_arm_offset, right_turn,
+				to_rig * (weapon.left_arm_offset + onto_barrel), left_turn)
+
+
+## A gun held in both hands (the left one supporting it), not a one-handed
+## gun, a dual pair, a grenade or a healing item.
+func _two_handed(weapon: WeaponData) -> bool:
+	return not weapon.one_handed and not weapon.dual_wield and not weapon.hide_left_arm \
+			and not weapon.throws_grenade and weapon.heal_item < 0
+
+
+## Where the support hand grips the gun, in camera space (the gun at rest):
+## its support_point, or if that's unset, 35% of the way from the gun's
+## middle (its grip) toward its muzzle -- on the barrel or handguard, close
+## enough that the arm doesn't have to reach so far out it shows its end.
+func _support_point_on_screen(weapon: WeaponData) -> Vector3:
+	var point := weapon.support_point
+	if point == Vector3.ZERO:
+		point = weapon.grip_point.lerp(weapon.muzzle_offset, 0.35)
+	return weapon.viewmodel_position + _gun_basis(weapon) * point
 
 
 ## Moves the gun (keeping its rotation and size) so its grip_point sits in
@@ -1104,8 +1145,7 @@ func _pose_arms(weapon: WeaponData) -> void:
 		_fp_arms.set_dual(weapon.dual_wield)
 		# Two-handed guns get the left hand up under them; one-handed guns,
 		# grenades and healing items leave it free (the grapple's arm).
-		_fp_arms.set_support(not weapon.one_handed and not weapon.dual_wield and not weapon.hide_left_arm \
-				and not weapon.throws_grenade and weapon.heal_item < 0)
+		_fp_arms.set_support(_two_handed(weapon), weapon.support_pose == WeaponData.SupportPose.BARREL_GRIP)
 		if not weapon.arms_fitted:
 			_fit_to_new_arms(weapon)
 		else:
@@ -1284,6 +1324,16 @@ func _apply_arms_transform(weapon: WeaponData) -> void:
 		_arms.transform = Transform3D(tweak, weapon.arms_position) * _fp_arms.camera_transform()
 		return
 	_arms.transform = Transform3D(_arms_basis(weapon), weapon.arms_position)
+
+
+## Some gun packs export the artist's whole scene: a light and a camera ride
+## along with the model. In your hand that light would glow on everything
+## all the time, so they're taken out (the model's own import can skip them
+## too, see the MP5's).
+func _strip_scene_extras(gun: Node) -> void:
+	for node in gun.find_children("*", "Light3D", true, false) + gun.find_children("*", "Camera3D", true, false):
+		node.get_parent().remove_child(node)
+		node.queue_free()
 
 
 ## Shifts gun so the centre of its visible meshes sits at its parent's origin.

@@ -261,6 +261,16 @@ var _sidestep := Vector3.ZERO
 ## MapLevel (no baked navmesh) doesn't crash, just falls back to straight-line
 ## movement -- see _nav_direction_to().
 @onready var _nav_agent: NavigationAgent3D = get_node_or_null("NavigationAgent3D") as NavigationAgent3D
+## The route being walked (from PathRequests, the shared budgeted queue),
+## the point on it being walked to, where it leads, and how old it is.
+var _path := PackedVector3Array()
+var _path_index := 0
+var _path_goal := Vector3.INF
+var _path_age := 0.0
+## Ask for a new route once the destination has moved this far from the
+## one the route leads to, or the route is this old (seconds).
+const REPATH_DISTANCE := 1.5
+const REPATH_TIME := 0.5
 
 # A "setter": every time _state is assigned anywhere in this script, this
 # runs, so the signal fires automatically without editing each assignment.
@@ -1028,18 +1038,30 @@ func _nav_direction_to(destination: Vector3) -> Vector3:
 	# random direction every tick -- the shaking on the spot.
 	if _flat_distance_to_position(destination) <= arrive_distance:
 		return Vector3.ZERO
-	if _nav_agent.target_position.distance_squared_to(destination) > 0.01:
-		_nav_agent.target_position = destination
-	if _nav_agent.is_navigation_finished():
+	# A new route only once the destination's moved a step or the route's
+	# getting old -- not every frame the player shifts (the queue serves a few
+	# routes a frame for everyone, see PathRequests).
+	_path_age += get_physics_process_delta_time()
+	if destination.distance_squared_to(_path_goal) > REPATH_DISTANCE * REPATH_DISTANCE or _path_age > REPATH_TIME:
+		_path_goal = destination
+		_path_age = 0.0
+		PathRequests.ask(get_tree(), self, global_position, destination)
+	# Past every point near enough to count as reached.
+	while _path_index < _path.size() and _flat_distance_to_position(_path[_path_index]) < 0.6:
+		_path_index += 1
+	# No route yet, or it's walked; or no walkable route there -- e.g. the
+	# player is down below a ledge with no stairs: the path just ends at the
+	# brink. Walk straight at them instead and drop off the edge (gravity does
+	# the rest), like Quake's monsters, rather than standing stuck at the top.
+	if _path_index >= _path.size() or _path[_path.size() - 1].distance_to(_path_goal) > 2.0:
 		return _flat_direction_to_position(destination)
-	var next_point := _nav_agent.get_next_path_position()
-	# No walkable route there -- e.g. the player is down below a ledge with no
-	# stairs: the path just ends at the brink. Walk straight at them instead
-	# and drop off the edge (gravity does the rest), like Quake's monsters,
-	# rather than standing stuck at the top.
-	if not _nav_agent.is_target_reachable() or _flat_distance_to_position(next_point) < 0.05:
-		return _flat_direction_to_position(destination)
-	return _flat_direction_to_position(next_point)
+	return _flat_direction_to_position(_path[_path_index])
+
+
+## PathRequests' answer to this enemy's last request.
+func _on_path_found(path: PackedVector3Array) -> void:
+	_path = path
+	_path_index = 1 if path.size() > 1 else 0 # the first point is where it stood
 
 
 ## Position-based versions below, so a gunner's memory system (which tracks a

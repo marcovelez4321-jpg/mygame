@@ -7,6 +7,8 @@ extends Resource
 ## never means digging through game logic.
 
 enum AmmoType { BULLETS, SHELLS, ROCKETS, GRENADES }
+## How a two-handed gun's support hand holds it (support_pose).
+enum SupportPose { BARREL_GRIP, OPEN_HAND }
 
 @export var weapon_name: String = "Weapon"
 
@@ -204,13 +206,23 @@ enum ReloadStyle {
 ## How this gun's model has to be turned to face forward and upright (barrel
 ## pointing -Z, top up), in degrees. Lets one gun's held angle be copied onto
 ## another whose model faces a different way (one-handed guns copy the
-## Pistol's, see Viewmodel.one_handed_arms_template). PSX_Guns models point
-## along -X: (0, -90, 0). NEWPSXWEAPONS models already face -Z: zero.
+## Pistol's, see Viewmodel.one_handed_arms_template). It varies even within
+## a kit: the PSX_Guns Pistol points along -X (0, -90, 0), its UZI along +X
+## (0, 90, 0), its Revolver and new Shotgun along +Y, top +Z (-90, 0, 0).
 @export var model_facing_degrees: Vector3 = Vector3.ZERO
 ## Each first-person arm's own nudge for this weapon, in camera space: the
 ## whole arm moved (meters) and turned (degrees) round its shoulder. The gun
 ## stays where it is on screen. Left = the dual-wield / support arm only.
 ## F2 then J (right arm) or K (left arm), F3 to save.
+## Two-handed guns: how the left (support) hand holds it.
+##   BARREL_GRIP: closed round the barrel/handguard (like the right hand's
+##     grip, mirrored), placed on support_point automatically.
+##   OPEN_HAND: the open reaching pose, placed only by left_arm_offset (the
+##     PKM's).
+@export var support_pose: SupportPose = SupportPose.BARREL_GRIP
+## Where the left hand grips, in the gun's own space like grip_point.
+## Zero = worked out: partway from the gun's middle toward its muzzle.
+@export var support_point: Vector3 = Vector3.ZERO
 @export var right_arm_offset: Vector3 = Vector3.ZERO
 @export var right_arm_rotation_degrees: Vector3 = Vector3.ZERO
 @export var left_arm_offset: Vector3 = Vector3.ZERO

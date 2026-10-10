@@ -1,0 +1,205 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/alien_terrain.gdshader" id="1_dwq0o"]
+[ext_resource type="Script" path="res://scripts/world/world_navigation.gd" id="2_yapyo"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="3_ew2ib"]
+[ext_resource type="Script" path="res://scripts/enemies/harvestman.gd" id="4_s4qyy"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/models/harvestman_leech_model.tscn" id="5_tersh"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_horn.tres" id="6_g4hen"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_step.tres" id="7_3cvmg"]
+[ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="8_w0w3b"]
+[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="9_s4g5r"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="10_bhy0e"]
+[ext_resource type="Script" path="res://scripts/enemies/spider_pack.gd" id="11_lh68e"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/zombie.tscn" id="12_63a70"]
+[ext_resource type="Script" path="res://scripts/enemy.gd" id="13_e6uwu"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/zombie_rusher.tscn" id="14_k6tl3"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="15_5vhu7"]
+[ext_resource type="Script" path="res://scripts/enemies/rat.gd" id="16_lludv"]
+[ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="17_y826p"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="18_u65ls"]
+[ext_resource type="Script" path="res://scripts/player_movement.gd" id="19_rsl8k"]
+
+[sub_resource type="Gradient" id="Gradient_6n4eo"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_22031"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_wnu4w"]
+noise = SubResource("FastNoiseLite_22031")
+color_ramp = SubResource("Gradient_6n4eo")
+seamless = true
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_v085t"]
+_shader_parameters = {
+&"bias_distance": null,
+&"blend_sharpness": null,
+&"blotch_size": null,
+&"blotches": null,
+&"color_steps": null,
+&"depth_blur": null,
+&"enable_macro_variation": null,
+&"enable_projection": null,
+&"flat_terrain_normals": null,
+&"height_gradient": null,
+&"high_color": null,
+&"high_height": null,
+&"low_color": null,
+&"low_height": null,
+&"macro_variation1": null,
+&"macro_variation2": null,
+&"macro_variation_slope": null,
+&"mipmap_bias": null,
+&"moss_amount": null,
+&"moss_color": null,
+&"noise1_angle": null,
+&"noise1_offset": null,
+&"noise1_scale": null,
+&"noise2_scale": null,
+&"noise_texture": SubResource("NoiseTexture2D_wnu4w"),
+&"projection_threshold": null,
+&"ps1": null,
+&"ridge_color": null,
+&"rust_amount": null,
+&"rust_color": null,
+&"slope": null,
+&"slope_color": null,
+&"slope_end": null,
+&"slope_start": null,
+&"snap_resolution": null,
+&"speckle_amount": null,
+&"speckle_size": null,
+&"texel_size": null,
+&"valley_color": null
+}
+shader_override_enabled = true
+shader_override = ExtResource("1_dwq0o")
+show_checkered = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ykgsn"]
+transparency = 4
+cull_mode = 2
+vertex_color_use_as_albedo = true
+backlight_enabled = true
+backlight = Color(0.5, 0.5, 0.5, 1)
+distance_fade_mode = 1
+distance_fade_min_distance = 128.0
+distance_fade_max_distance = 96.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_1ow1t"]
+generated_type = 1
+height_offset = 0.5
+material_override = SubResource("StandardMaterial3D_ykgsn")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 128.0
+
+[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_c2v4b"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_1ow1t")])
+
+[sub_resource type="PhysicsMaterial" id="RatFeet"]
+friction = 0.3
+
+[node name="TestWorld" type="Node3D" unique_id=782064585]
+
+[node name="Terrain3D" type="Terrain3D" parent="." unique_id=882400551]
+data_directory = "res://worlds/test_world/terrain"
+material = SubResource("Terrain3DMaterial_v085t")
+assets = SubResource("Terrain3DAssets_c2v4b")
+collision_mode = 3
+vertex_spacing = 4.0
+show_checkered = true
+top_level = true
+metadata/_edit_lock_ = true
+
+[node name="WorldNavigation" type="Node" parent="." unique_id=1205903916]
+script = ExtResource("2_yapyo")
+tiles_dir = "res://worlds/test_world/navigation"
+
+[node name="HarvestmanLeech" type="Node3D" parent="." unique_id=1040049696 instance=ExtResource("3_ew2ib")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 20.82164, 60)
+script = ExtResource("4_s4qyy")
+model_scene = ExtResource("5_tersh")
+proboscis_length = 15.0
+proboscis_extend_speed = 3.0
+proboscis_retract_speed = 3.0
+walk_speed = 2.1
+hunt_speed = 4.0
+turn_speed = 0.8
+slip_chance = 0.0
+squash_damage = 50.0
+slam_range = 6.0
+hose_time = 2.5
+hose_chance = 0.25
+hose_damage = 10.0
+hose_speed = 15.0
+puddle_time = 20.0
+brood_count = 15
+rush_chance = 0.25
+rush_speed = 10.0
+stun_time = 13.0
+feed_heal = 100.0
+feed_time = 15.0
+horn_sound = ExtResource("6_g4hen")
+step_sound = ExtResource("7_3cvmg")
+hurt_sound = ExtResource("8_w0w3b")
+death_sound = ExtResource("9_s4g5r")
+horror_range = 14.0
+
+[node name="SpiderPack" type="Node3D" parent="." unique_id=1629668091 instance=ExtResource("10_bhy0e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 25.095348, 50)
+script = ExtResource("11_lh68e")
+
+[node name="Zombie" type="CharacterBody3D" parent="." unique_id=482223739 instance=ExtResource("12_63a70")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -60, 22.662218, -60)
+script = ExtResource("13_e6uwu")
+move_speed = 5.0
+gravity = 30.0
+sight_range = 15.0
+attack_range = 2.2
+attack_windup = 0.47
+pain_time = 0.4
+
+[node name="ZombieRusher" type="CharacterBody3D" parent="." unique_id=551578985 instance=ExtResource("14_k6tl3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 27.033876, -50)
+script = ExtResource("13_e6uwu")
+move_speed = 7.5
+gravity = 30.0
+sight_range = 18.0
+attack_range = 1.8
+attack_damage = 10.0
+attack_interval = 0.7
+attack_windup = 0.3
+attack_recovery = 0.3
+pain_time = 0.2
+
+[node name="Rat" type="RigidBody3D" parent="." unique_id=2002759411 instance=ExtResource("15_5vhu7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.99376, -70)
+mass = 1.27
+physics_material_override = SubResource("RatFeet")
+script = ExtResource("16_lludv")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1829897354]
+environment = ExtResource("17_y826p")
+metadata/own_look = true
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1552307597]
+transform = Transform3D(0.8660254, -0.38302222, 0.32139382, 0, 0.64278764, 0.76604444, -0.5, -0.66341394, 0.5566704, 0, 0, 0)
+
+[node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("18_u65ls")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
+script = ExtResource("19_rsl8k")
+wall_behind_ray_count = 4
+wall_jump_push = 4.5
+wall_jump_up_velocity = 13.5

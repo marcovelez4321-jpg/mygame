@@ -264,7 +264,16 @@ func _ready() -> void:
 	_ammo[WeaponData.AmmoType.ROCKETS] = 0
 	_ammo[WeaponData.AmmoType.GRENADES] = 0
 
-	_owned.assign(starting_weapons)
+	# Two of a weapon that comes in pairs (WeaponData.dual_version) in the
+	# loadout: you start with the pair (V goes dual), in one slot.
+	for weapon in starting_weapons:
+		if weapon == null:
+			continue
+		if _owned.has(weapon):
+			if weapon.dual_version:
+				_pairs[weapon] = true
+			continue
+		_owned.append(weapon)
 	if _owned.is_empty():
 		for path in TEST_WEAPON_PATHS:
 			var loaded := load(path) as WeaponData
