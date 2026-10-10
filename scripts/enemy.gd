@@ -334,6 +334,12 @@ func _set_home() -> void:
 	_patrol_to = global_position
 
 
+## Moves where it patrols round (a RoamingGroup carrying its gang across the
+## land): it walks there on its next patrol pick.
+func set_home(point: Vector3) -> void:
+	_home = point
+
+
 ## Multiplies every MeshInstance3D's material albedo by tint_color. Duplicates
 ## each material first (StandardMaterial3D is a shared resource by default --
 ## editing it in place would tint every OTHER enemy using the same imported

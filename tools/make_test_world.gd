@@ -259,6 +259,12 @@ func _bake() -> void:
 	worm.name = "WormDirector"
 	root.add_child(worm)
 	worm.owner = root
+	# Who you run into: bands of enemies on the move round each player.
+	var encounters := EncounterDirector.new()
+	encounters.name = "EncounterDirector"
+	encounters.biomes = biomes
+	root.add_child(encounters)
+	encounters.owner = root
 
 
 	# Test enemies on the slopes round the yard: walking, pathing, feet.

@@ -956,3 +956,19 @@ them:
   - **More optimization:**
     - Carpets full thickness to 32 m, then 1 in 5.
     - Sun shadows to 90 m (the fog's thick past that).
+
+- 2026-10-10: **Roaming bands of enemies: an encounter director, not A-Life.** (The user asked for more enemies, human ones too, met naturally; A-Life not needed.)
+  - **EncounterDirector (`scripts/world/encounter_director.gd`):** like Left 4 Dead's director and HL2's spawners, not a whole-world simulation.
+    - Every 4 s (the first after 20 s) it counts the bands within 240 m of each player. Below 5, it starts one 80–140 m off: behind or beside the player (never in front of their camera), on the navmesh, at least 100 m from the yard and 70 m from other bands. One band per check, so they trickle in.
+    - The biome there sets the odds (sewer → reef weights): tweakers 2 → 1, rats 3 → 1, roaches 3 → 2, spiders 2 → 3, Harvestmen 1 → 2.
+    - Bands:
+      - tweakers: 2–4 of enemy, gunner and rusher mixed;
+      - a rat swarm: a leaderless RatNest of 5–9 (×2) plus 0–1 bodyguards (×2);
+      - roaches: 4–8;
+      - a spider pack: 6–12;
+      - Harvestmen: one, which brings its own 1–2 companions.
+    - A band more than 240 m from every player is disbanded, its rats and spiders included.
+  - **RoamingGroup (`scripts/world/roaming_group.gd`):** members keep their own behaviour (patrolling or wandering round a home). The group drifts that home along a route at 1.4 m/s toward a spot 150–350 m off, then another, so you cross paths with them on their way somewhere.
+    - New `set_home()` on Enemy, FlyingRoach and Harvestman; SpiderPack and RatSwarm already had `home`.
+    - **AI level of detail:** members more than 150 m from every player are disabled. No scripts run, and their physics bodies leave the physics world (the default disable mode). They wake when someone's near again. The group frees itself once every member is dead.
+  - In the bake tool and the test world (`biomes` set).

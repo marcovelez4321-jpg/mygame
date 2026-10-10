@@ -347,6 +347,11 @@ func _set_home() -> void:
 	_wander_to = global_position
 
 
+## Moves where it wanders round (a RoamingGroup carrying its swarm along).
+func set_home(point: Vector3) -> void:
+	_home = point
+
+
 ## Normal or spitter: the mapper's choice, or a spitter_chance roll.
 ## Rule 1: rolled by the host; in co-op the result goes with the spawn.
 func _decide_kind() -> void:

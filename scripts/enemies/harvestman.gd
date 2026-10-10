@@ -976,6 +976,11 @@ func _update_ground() -> void:
 
 
 ## The ground's height under `point` (a ray from body height down), or NAN.
+## Moves where it patrols round (a RoamingGroup carrying it across the land).
+func set_home(point: Vector3) -> void:
+	_home = point
+
+
 ## Brings the rest of its group (group_min..group_max in all, counting any
 ## already standing near): more of its own kind round it, each on the
 ## walkable ground nearest its spot.
