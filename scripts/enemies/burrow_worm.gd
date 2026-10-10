@@ -300,6 +300,10 @@ var _breach_fx_left := 0.0
 ## in at one speed rather than the tail braking with the head.
 var _swallow_speed := 0.0
 var _swallow_left := 0.0
+## Its Deepmaw escorts (they go with it when it leaves).
+var _escorts: Array[Node3D] = []
+## Leaving (retreat()): seconds until it's gone, below 0 = not leaving.
+var _leave_left := -1.0
 
 var _segments: Array[AnimatableBody3D] = []
 var _visuals: Array[Node3D] = []
@@ -395,6 +399,32 @@ func _spawn_escorts() -> void:
 		escort.position = Vector3(_home.x + around.x, _ground_y, _home.z + around.y) # the level's root sits at the origin
 		escort.set("guard_node", self)
 		world.add_child(escort)
+		_escorts.append(escort)
+
+
+## For an event (WormDirector): straight into a leap at `prey` from where it
+## was put, the wind-up's rumble and all, instead of tunnelling over first.
+func erupt_at_once(prey: Node3D) -> void:
+	target = prey
+	_retarget = 2.0
+	_plan_leap()
+	var head := _pos[0]
+	_leap_from = Vector3(head.x, _ground_y, head.z)
+	_phase = Phase.WINDUP
+	_phase_left = windup_time
+
+
+## It's had enough (WormDirector: the players got away, or it's been up long
+## enough): it stops hunting, dives deep and is gone after a few seconds,
+## its escorts with it.
+func retreat() -> void:
+	if _leave_left < 0.0 and not _dead:
+		_leave_left = 6.0
+		target = null
+
+
+func is_leaving() -> bool:
+	return _leave_left >= 0.0
 
 
 ## The floor right under its head (what its escorts guard).
@@ -605,6 +635,14 @@ func _physics_process(delta: float) -> void:
 		return
 	if not multiplayer.is_server():
 		return
+	if _leave_left >= 0.0:
+		_leave_left -= delta
+		if _leave_left <= 0.0:
+			for escort in _escorts:
+				if is_instance_valid(escort):
+					escort.queue_free()
+			queue_free()
+			return
 	_retarget -= delta
 	if _retarget <= 0.0:
 		_retarget = 0.5
@@ -1267,6 +1305,10 @@ func _goal(head: Vector3, delta: float) -> Vector3:
 		Phase.DIVE:
 			var on := Vector3(_vel.x, 0.0, _vel.z).normalized() * 6.0
 			return Vector3(head.x + on.x, _ground_y - lurk_depth - 1.0, head.z + on.z)
+	if _leave_left >= 0.0:
+		# Leaving: on and down, as deep as it goes.
+		var on := Vector3(_vel.x, 0.0, _vel.z).normalized() * 10.0
+		return Vector3(head.x + on.x, _ground_y - max_depth, head.z + on.z)
 	_wander_left -= delta
 	if _wander_left <= 0.0 or head.distance_to(_wander_to) < 2.0:
 		_pick_wander()
@@ -1292,6 +1334,8 @@ func _ignore_players() -> void:
 
 
 func _nearest_player() -> Node3D:
+	if _leave_left >= 0.0:
+		return null # leaving: it's done with them
 	var best: Node3D = null
 	var best_distance := notice_range
 	for node in get_tree().get_nodes_in_group("player"):

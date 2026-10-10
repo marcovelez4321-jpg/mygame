@@ -16,6 +16,10 @@ extends Resource
 ## covers (x/z, metres).
 @export var image: Image
 @export var area: Rect2
+## The map as a texture for the ground shader, kept in the same file (so a
+## scene that uses it, e.g. the Terrain3D material in the editor, points at
+## it rather than carrying a copy).
+@export var map_texture: ImageTexture
 
 var _bytes := PackedByteArray()
 var _width := 0
@@ -69,6 +73,7 @@ static func generate(world_area: Rect2, seed: int, pixel_metres: float = 8.0, bi
 	var map := BiomeMap.new()
 	map.image = Image.create_from_data(width, height, false, Image.FORMAT_L8, bytes)
 	map.area = world_area
+	map.map_texture = ImageTexture.create_from_image(map.image)
 	return map
 
 
@@ -119,8 +124,10 @@ func reef(x: float, z: float) -> float:
 	return lerpf(top, bottom, fy) / 255.0
 
 
-## The map as a texture, for the ground shader (made once).
+## The map as a texture, for the ground shader.
 func texture() -> ImageTexture:
+	if map_texture:
+		return map_texture
 	if _texture == null and image != null:
 		_texture = ImageTexture.create_from_image(image)
 	return _texture

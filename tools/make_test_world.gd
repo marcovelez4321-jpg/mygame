@@ -254,6 +254,11 @@ func _bake() -> void:
 	eyes.biomes = biomes
 	root.add_child(eyes)
 	eyes.owner = root
+	# The boss worm as an event: up from under a megastructure players linger by.
+	var worm := WormDirector.new()
+	worm.name = "WormDirector"
+	root.add_child(worm)
+	worm.owner = root
 
 
 	# Test enemies on the slopes round the yard: walking, pathing, feet.

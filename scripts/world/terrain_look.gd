@@ -1,3 +1,4 @@
+@tool
 class_name TerrainLook
 extends Node
 
@@ -8,6 +9,8 @@ extends Node
 ## on with no shader yet, builds its own default (the grey checkerboard you
 ## get with no textures) and doesn't rebuild when ours arrives a moment
 ## later. Re-applying it here, in the right order, after setup, does.
+## A tool script: it does the same in the editor, so sculpting and painting
+## the ground there shows the real look, not the checkerboard.
 
 @export var shader: Shader = preload("res://shaders/alien_terrain.gdshader")
 ## The ground (empty = the Terrain3D next to this node).

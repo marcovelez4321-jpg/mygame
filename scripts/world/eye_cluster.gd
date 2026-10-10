@@ -43,6 +43,20 @@ var _eyes: Array[Eye] = []
 var _target: Node3D
 var _scan_left := 0.0
 
+## Something big coming (WormDirector's build-up): every cluster within
+## _stare_reach of _stare_point opens and stares at it until _stare_until
+## (msec), whoever's near.
+static var _stare_point := Vector3.ZERO
+static var _stare_reach := 0.0
+static var _stare_until := 0
+
+
+## Every cluster within `reach` of `point` stares at it for `seconds`.
+static func stare(point: Vector3, reach: float, seconds: float) -> void:
+	_stare_point = point
+	_stare_reach = reach
+	_stare_until = Time.get_ticks_msec() + int(seconds * 1000.0)
+
 
 class Eye:
 	var pivot: Node3D
@@ -130,12 +144,15 @@ func _process(delta: float) -> void:
 	if _scan_left <= 0.0:
 		_scan_left = 0.25
 		_target = _nearest_player()
-	var waking := _target != null
+	var look := Factions.aim_point(_target) + Vector3.UP * 0.5 if _target else Vector3.INF # their face
+	if Time.get_ticks_msec() < _stare_until and global_position.distance_to(_stare_point) < _stare_reach:
+		look = _stare_point
+	var waking := look.is_finite()
 	for eye in _eyes:
-		_update_eye(eye, waking, delta)
+		_update_eye(eye, waking, look, delta)
 
 
-func _update_eye(eye: Eye, waking: bool, delta: float) -> void:
+func _update_eye(eye: Eye, waking: bool, look: Vector3, delta: float) -> void:
 	# Lids: open one after another for a player near, drifting shut once none is.
 	if waking:
 		eye.delay -= delta
@@ -156,7 +173,7 @@ func _update_eye(eye: Eye, waking: bool, delta: float) -> void:
 	var angle := LID_OPEN * shown
 	eye.upper.rotation.x = angle # its front edge swings up and back
 	eye.lower.rotation.x = -angle # ...and the lower one's down and back
-	if _target == null or eye.open <= 0.0:
+	if not waking or eye.open <= 0.0:
 		return
 	# Stalking: turn onto the player, with little darting glances round them.
 	eye.next_dart -= delta
@@ -164,7 +181,7 @@ func _update_eye(eye: Eye, waking: bool, delta: float) -> void:
 		eye.next_dart = randf_range(0.4, 1.8)
 		eye.dart = Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), 0.0) * deg_to_rad(dart_degrees)
 	var from := eye.pivot.global_position
-	var to := Factions.aim_point(_target) + Vector3.UP * 0.5 # their face
+	var to := look
 	if from.distance_squared_to(to) < 0.01:
 		return
 	var want := Basis.looking_at(to - from, Vector3.UP) * Basis.from_euler(eye.dart)

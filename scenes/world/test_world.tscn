@@ -1,35 +1,82 @@
-[gd_scene format=3 uid="uid://bpr317a0mvnne"]
+[gd_scene format=3]
 
-[ext_resource type="Shader" uid="uid://dkm5q24etjal" path="res://shaders/alien_terrain.gdshader" id="1_s4qyy"]
-[ext_resource type="Script" uid="uid://bdy1lul7nr03o" path="res://scripts/world/world_navigation.gd" id="2_tersh"]
-[ext_resource type="Script" uid="uid://udb4fv61c1q5" path="res://scripts/world/world_chunks.gd" id="3_g4hen"]
-[ext_resource type="Script" uid="uid://b5kdycf53rthc" path="res://scripts/world/terrain_look.gd" id="4_3cvmg"]
-[ext_resource type="Resource" path="res://worlds/test_world/biomes.res" id="5_w0w3b"]
-[ext_resource type="Script" uid="uid://cd6q03pxw5dko" path="res://scripts/world/growth_scatter.gd" id="6_s4g5r"]
-[ext_resource type="Script" uid="uid://c5mvcdsfkfeog" path="res://scripts/world/chunk_barnacles.gd" id="7_bhy0e"]
-[ext_resource type="Script" uid="uid://blpts7jbv0f5n" path="res://scripts/world/eye_scatter.gd" id="8_lh68e"]
-[ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="9_63a70"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="16_rsl8k"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="18_22031"]
-[ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="20_v085t"]
-[ext_resource type="Script" uid="uid://dyxx8s0555h3a" path="res://scripts/world/biome_atmosphere.gd" id="21_ykgsn"]
-[ext_resource type="PackedScene" uid="uid://djmeis3phxch8" path="res://scenes/player/player.tscn" id="22_1ow1t"]
+[ext_resource type="Shader" path="res://shaders/alien_terrain.gdshader" id="1_tersh"]
+[ext_resource type="Script" path="res://scripts/world/world_navigation.gd" id="2_g4hen"]
+[ext_resource type="Script" path="res://scripts/world/world_chunks.gd" id="3_3cvmg"]
+[ext_resource type="Script" path="res://scripts/world/terrain_look.gd" id="4_w0w3b"]
+[ext_resource type="Resource" path="res://worlds/test_world/biomes.res" id="5_s4g5r"]
+[ext_resource type="Script" path="res://scripts/world/growth_scatter.gd" id="6_bhy0e"]
+[ext_resource type="Script" path="res://scripts/world/chunk_barnacles.gd" id="7_lh68e"]
+[ext_resource type="Script" path="res://scripts/world/eye_scatter.gd" id="8_63a70"]
+[ext_resource type="Script" path="res://scripts/world/worm_director.gd" id="9_e6uwu"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="10_k6tl3"]
+[ext_resource type="Script" path="res://scripts/enemies/harvestman.gd" id="11_5vhu7"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/models/harvestman_leech_model.tscn" id="12_lludv"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_horn.tres" id="13_y826p"]
+[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_step.tres" id="14_u65ls"]
+[ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="15_rsl8k"]
+[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="16_6n4eo"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="17_22031"]
+[ext_resource type="Script" path="res://scripts/enemies/spider_pack.gd" id="18_wnu4w"]
+[ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="19_v085t"]
+[ext_resource type="Script" path="res://scripts/enemies/rat.gd" id="20_ykgsn"]
+[ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="21_1ow1t"]
+[ext_resource type="Script" path="res://scripts/world/biome_atmosphere.gd" id="22_c2v4b"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="23_oysqe"]
 
-[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_irhx2"]
+[sub_resource type="Gradient" id="Gradient_25kst"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_irhx2"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_77f8d"]
+noise = SubResource("FastNoiseLite_irhx2")
+color_ramp = SubResource("Gradient_25kst")
+seamless = true
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_oce4k"]
 _shader_parameters = {
+&"bias_distance": null,
 &"biome_area": null,
 &"biome_map": null,
+&"blend_sharpness": null,
 &"blotch_size": null,
 &"blotches": null,
 &"color_steps": null,
+&"depth_blur": null,
+&"enable_macro_variation": null,
+&"enable_projection": null,
 &"flat_terrain_normals": null,
 &"height_gradient": null,
 &"high_color": null,
 &"high_height": null,
 &"low_color": null,
 &"low_height": null,
+&"macro_variation1": null,
+&"macro_variation2": null,
+&"macro_variation_slope": null,
+&"mipmap_bias": null,
 &"moss_amount": null,
 &"moss_color": null,
+&"noise1_angle": null,
+&"noise1_offset": null,
+&"noise1_scale": null,
+&"noise2_scale": null,
+&"noise_texture": SubResource("NoiseTexture2D_77f8d"),
+&"paint": null,
+&"paint_strength": null,
+&"projection_threshold": null,
 &"ps1": null,
 &"ridge_color": null,
 &"rust_amount": null,
@@ -55,10 +102,9 @@ _shader_parameters = {
 &"valley_color": null
 }
 shader_override_enabled = true
-shader_override = ExtResource("1_s4qyy")
-show_checkered = true
+shader_override = ExtResource("1_tersh")
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_77f8d"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oh41w"]
 transparency = 4
 cull_mode = 2
 vertex_color_use_as_albedo = true
@@ -68,76 +114,108 @@ distance_fade_mode = 1
 distance_fade_min_distance = 128.0
 distance_fade_max_distance = 96.0
 
-[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_oce4k"]
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_3m1go"]
 generated_type = 1
 height_offset = 0.5
-material_override = SubResource("StandardMaterial3D_77f8d")
+material_override = SubResource("StandardMaterial3D_oh41w")
 last_lod = 0
 last_shadow_lod = 0
 lod0_range = 128.0
 
-[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_oh41w"]
-mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_oce4k")])
+[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_hshco"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_3m1go")])
 
 [sub_resource type="PhysicsMaterial" id="RatFeet"]
 friction = 0.3
 
-[node name="TestWorld" type="Node3D" unique_id=509369507]
+[node name="TestWorld" type="Node3D" unique_id=1745890166]
 
-[node name="Terrain3D" type="Terrain3D" parent="." unique_id=1989486059]
+[node name="Terrain3D" type="Terrain3D" parent="." unique_id=866536750]
 data_directory = "res://worlds/test_world/terrain"
-material = SubResource("Terrain3DMaterial_irhx2")
-assets = SubResource("Terrain3DAssets_oh41w")
+material = SubResource("Terrain3DMaterial_oce4k")
+assets = SubResource("Terrain3DAssets_hshco")
 collision_mode = 3
 vertex_spacing = 4.0
-show_checkered = true
 top_level = true
 metadata/_edit_lock_ = true
 
-[node name="WorldNavigation" type="Node" parent="." unique_id=1111269370]
-script = ExtResource("2_tersh")
+[node name="WorldNavigation" type="Node" parent="." unique_id=1965471692]
+script = ExtResource("2_g4hen")
 tiles_dir = "res://worlds/test_world/navigation"
 
-[node name="WorldChunks" type="Node3D" parent="." unique_id=501866819]
-script = ExtResource("3_g4hen")
+[node name="WorldChunks" type="Node3D" parent="." unique_id=1104032698]
+script = ExtResource("3_3cvmg")
 chunks_dir = "res://worlds/test_world/chunks"
 
-[node name="TerrainLook" type="Node" parent="." unique_id=2085775670]
-script = ExtResource("4_3cvmg")
-biomes = ExtResource("5_w0w3b")
+[node name="TerrainLook" type="Node" parent="." unique_id=779625946]
+script = ExtResource("4_w0w3b")
+biomes = ExtResource("5_s4g5r")
 
-[node name="GrowthScatter" type="Node" parent="." unique_id=42011591]
-script = ExtResource("6_s4g5r")
+[node name="GrowthScatter" type="Node" parent="." unique_id=273699699]
+script = ExtResource("6_bhy0e")
 high_ground = 55.20166
-biomes = ExtResource("5_w0w3b")
+biomes = ExtResource("5_s4g5r")
 
-[node name="ChunkBarnacles" type="Node" parent="." unique_id=1390266677]
-script = ExtResource("7_bhy0e")
+[node name="ChunkBarnacles" type="Node" parent="." unique_id=212719808]
+script = ExtResource("7_lh68e")
 
-[node name="EyeScatter" type="Node" parent="." unique_id=647078097]
-script = ExtResource("8_lh68e")
-biomes = ExtResource("5_w0w3b")
+[node name="EyeScatter" type="Node" parent="." unique_id=929864603]
+script = ExtResource("8_63a70")
+biomes = ExtResource("5_s4g5r")
 
-[node name="HarvestmanLeech" parent="." unique_id=1040049696 instance=ExtResource("9_63a70")]
+[node name="WormDirector" type="Node" parent="." unique_id=1748971617]
+script = ExtResource("9_e6uwu")
+
+[node name="HarvestmanLeech" type="Node3D" parent="." unique_id=1040049696 instance=ExtResource("10_k6tl3")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 20.82164, 60)
+script = ExtResource("11_5vhu7")
+model_scene = ExtResource("12_lludv")
+proboscis_length = 15.0
+proboscis_extend_speed = 3.0
+proboscis_retract_speed = 3.0
+walk_speed = 2.1
+hunt_speed = 4.0
+turn_speed = 0.8
+slip_chance = 0.0
+squash_damage = 50.0
+slam_range = 6.0
+hose_time = 2.5
+hose_chance = 0.25
+hose_damage = 10.0
+hose_speed = 15.0
+puddle_time = 20.0
+brood_count = 15
+rush_chance = 0.25
+rush_speed = 10.0
+stun_time = 13.0
+feed_heal = 100.0
+feed_time = 15.0
+horn_sound = ExtResource("13_y826p")
+step_sound = ExtResource("14_u65ls")
+hurt_sound = ExtResource("15_rsl8k")
+death_sound = ExtResource("16_6n4eo")
+horror_range = 14.0
 
-[node name="SpiderPack" parent="." unique_id=1932043349 instance=ExtResource("16_rsl8k")]
+[node name="SpiderPack" type="Node3D" parent="." unique_id=1400535471 instance=ExtResource("17_22031")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 25.095348, 50)
+script = ExtResource("18_wnu4w")
 
-[node name="Rat" parent="." unique_id=149298611 instance=ExtResource("18_22031")]
+[node name="Rat" type="RigidBody3D" parent="." unique_id=575890583 instance=ExtResource("19_v085t")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.99376, -70)
+mass = 1.27
 physics_material_override = SubResource("RatFeet")
+script = ExtResource("20_ykgsn")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1295864685]
-environment = ExtResource("20_v085t")
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=787622417]
+environment = ExtResource("21_1ow1t")
 metadata/own_look = true
 
-[node name="BiomeAtmosphere" type="Node" parent="." unique_id=550121354]
-script = ExtResource("21_ykgsn")
-biomes = ExtResource("5_w0w3b")
+[node name="BiomeAtmosphere" type="Node" parent="." unique_id=1607837608]
+script = ExtResource("22_c2v4b")
+biomes = ExtResource("5_s4g5r")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=142402811]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1216444264]
 transform = Transform3D(0.8660254, -0.38302222, 0.32139382, 0, 0.64278764, 0.76604444, -0.5, -0.66341394, 0.5566704, 0, 0, 0)
 
-[node name="Player" parent="." unique_id=1710340998 instance=ExtResource("22_1ow1t")]
+[node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("23_oysqe")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)

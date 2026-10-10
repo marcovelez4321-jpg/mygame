@@ -42,6 +42,7 @@ uniform int _region_map_size = 32;
 uniform int _region_map[1024];
 uniform highp sampler2DArray _height_maps : repeat_disable;
 uniform highp sampler2DArray _control_maps : repeat_disable;
+uniform highp sampler2DArray _color_maps : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 
 // --- Biomes (TerrainLook sets these from the world's BiomeMap) ---
 uniform sampler2D biome_map : hint_default_black, filter_linear, repeat_disable;
@@ -86,6 +87,10 @@ uniform vec3 slime_color : source_color = vec3(0.22, 0.34, 0.05);        // toxi
 uniform vec3 sewer_rust_color : source_color = vec3(0.34, 0.15, 0.06);
 uniform float slime_amount : hint_range(0.0, 1.0) = 0.3;
 uniform float sewer_rust_amount : hint_range(0.0, 1.0) = 0.3;
+group_uniforms paint;
+// Terrain3D's Color brush tints the ground on top of all this (its colour
+// map; white = untouched). How strongly it shows.
+uniform float paint_strength : hint_range(0.0, 1.0) = 1.0;
 group_uniforms ps1;
 // Screen-space vertex snap (lower = more wobble, as shaders/ps1.gdshader).
 uniform float snap_resolution : hint_range(16.0, 320.0) = 160.0;
@@ -282,6 +287,13 @@ void fragment() {
 	// Which biome here (sampled per block too, so the border's blocky like the rest).
 	float reefness = texture(biome_map, (cell - biome_area.xy) / biome_area.zw).r;
 	vec3 color = mix(sewer, reef, reefness);
+	// Hand-painted tint (Terrain3D's Color brush), blended across the four
+	// corners round this point like the normals above.
+	vec3 tint = texelFetch(_color_maps, index[0], 0).rgb * weights[0]
+			+ texelFetch(_color_maps, index[1], 0).rgb * weights[1]
+			+ texelFetch(_color_maps, index[2], 0).rgb * weights[2]
+			+ texelFetch(_color_maps, index[3], 0).rgb * weights[3];
+	color *= mix(vec3(1.0), tint, paint_strength);
 	// Fine speckle.
 	color *= 1.0 + (value_noise(cell / speckle_size) - 0.5) * 2.0 * speckle_amount;
 	// 15-bit colour.

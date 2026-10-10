@@ -888,3 +888,20 @@ them:
   - **Fog:** pulled back 10% in both biomes (reef 33–242 m, sewer 22–192.5 m, haze ×0.9). Growth view distances are +10% to match.
   - **Frame counter (`scripts/ui/frame_counter.gd`, autoload FrameCounter):** small, top right, over everything. Shows fps and the worst frame time (ms) over the last half second.
   - **`tools/stream_benchmark.gd`:** flies the player across the test world at 6, 12, 26 and 50 m/s for load radius 2, 3 and 4. It prints frame times (average, 1% worst, worst), chunks live, growth jobs queued and how often the ground under the player wasn't loaded yet. Not run yet: it needs the user's yes.
+
+- 2026-10-10: **Stream test results; the worm as an event; terrain painter usable.**
+  - **Stream test (run with the user's yes; 160 m chunks):**
+    - 5×5 averaged 1–5 ms a frame, 7×7 7–11 ms, 9×9 10–15 ms.
+    - The ground under the player was never late, even at 50 m/s.
+    - Worst frames were 30–55 ms hitches. The growth queue backed up at grapple speed and faster (up to 380 jobs), so growths fill in late.
+    - Next step: give the growth queue a per-frame time budget.
+  - **WormDirector (`scripts/world/worm_director.gd`):** the boss worm comes as an event from under a megastructure. Every building at least 20 m tall is a lair.
+    - Hunger fills while a player stays within 220 m of a lair (about 90 s, plus 1.5 s per shot fired) and drains while nobody's there.
+    - Cooldown is 15–20 min between events; the first comes after 7.5–15 min.
+    - Build-up (15 s): a rumble growing louder, camera shake, dust pouring off the structure, and nearby eye clusters staring at it (`EyeCluster.stare`).
+    - It erupts 18 m off the structure's side facing the nearest player, straight into a leap (`BurrowWorm.erupt_at_once`).
+    - It leaves (`BurrowWorm.retreat`: dives deep, gone in 6 s with its escorts) once everyone's been 160 m away for 8 s, or after 2 minutes. That lair then rests for an hour.
+  - **Terrain painter:**
+    - TerrainLook is a tool script, so the editor shows the real ground look, not checkers.
+    - The ground shader multiplies by Terrain3D's colour map, so the Color brush tints the ground (`paint_strength`; white = untouched).
+    - BiomeMap keeps its texture in `biomes.res`, so scenes reference it instead of embedding a copy.
