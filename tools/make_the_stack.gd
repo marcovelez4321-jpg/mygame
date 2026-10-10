@@ -1,7 +1,8 @@
 extends SceneTree
 
 ## Builds the Stack (StackBuilder): its scene, its TrenchBroom map, and the
-## things it's made with (the concrete texture, the wind and the drone).
+## things it's made with (its concrete -- windowed outside, plain inside and
+## for the rubble -- the wind and the drone).
 ##   godot --headless --path <project> --script res://tools/make_the_stack.gd
 ## Re-running overwrites the scene and the map (so once the map's been
 ## edited by hand in TrenchBroom, build that with func_godot instead).
@@ -9,41 +10,46 @@ extends SceneTree
 const SCENE := "res://scenes/megastructures/the_stack.scn"
 const MAP := "res://maps/megastructures/the_stack.map"
 const MAP_SETTINGS := "res://maps/megastructures/megastructure_map_settings.tres"
-const TEXTURE_PNG := "res://trenchbroom/textures/Megastructure/stack_concrete.png"
-const TEXTURE := "res://art/megastructures/stack_concrete.res"
+const TEXTURE_DIR := "res://trenchbroom/textures/Megastructure"
+const ART_DIR := "res://art/megastructures"
 const WIND := "res://audio/sfx/ambience/stack_wind.res"
 const DRONE := "res://audio/sfx/ambience/stack_drone.res"
 
 
 func _initialize() -> void:
 	create_timer(600.0).timeout.connect(quit) # never hang on a script error
-	for path in [SCENE, MAP, TEXTURE_PNG, TEXTURE, WIND]:
+	for path in [SCENE, MAP, TEXTURE_DIR + "/x", ART_DIR + "/x", WIND]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
-	# What it's made of.
-	var concrete := StackBuilder.make_concrete()
-	concrete.save_png(ProjectSettings.globalize_path(TEXTURE_PNG)) # for TrenchBroom
-	ResourceSaver.save(ImageTexture.create_from_image(concrete), TEXTURE)
+	# What it's made of: the textures (PNGs for TrenchBroom, textures for the game).
+	var textures := {}
+	for kind in [["windows", "stack_concrete", true], ["plain", "stack_plain", false]]:
+		var image := StackBuilder.make_concrete(kind[2])
+		image.save_png(ProjectSettings.globalize_path("%s/%s.png" % [TEXTURE_DIR, kind[1]]))
+		var path := "%s/%s.res" % [ART_DIR, kind[1]]
+		ResourceSaver.save(ImageTexture.create_from_image(image), path)
+		textures[kind[0]] = load(path)
 	ResourceSaver.save(StackBuilder.make_wind(), WIND)
 	ResourceSaver.save(StackBuilder.make_drone(), DRONE)
 	# The Stack.
 	var builder := StackBuilder.new()
-	var stack := builder.build_scene(load(TEXTURE) as Texture2D, load(WIND) as AudioStream, load(DRONE) as AudioStream)
+	var stack := builder.build_scene(textures, load(WIND) as AudioStream, load(DRONE) as AudioStream)
 	var scene := PackedScene.new()
 	var error := scene.pack(stack)
 	if error == OK:
 		error = ResourceSaver.save(scene, SCENE, ResourceSaver.FLAG_COMPRESS)
-	var shell := 0
-	var inside := 0
+	var counts := {}
 	for b in builder.boxes:
-		if b.part == &"shell":
-			shell += 1
-		else:
-			inside += 1
-	print("the Stack: ", shell, " shell boxes, ", inside, " interior boxes, ", builder.openings.size(), " openings -> ", SCENE, " (error ", error, ")")
+		counts[b.part] = int(counts.get(b.part, 0)) + 1
+	print("the Stack: ", counts, " boxes, ", builder.halls.size(), " halls, ", builder.window_rooms.size(), " window rooms, ",
+			builder.entrance_spots.size(), " entrance eyes, ", builder.lamps.size(), " lamps, ", builder.openings.size(),
+			" openings -> ", SCENE, " (error ", error, ")")
 	stack.free()
 	# The same boxes for TrenchBroom, and the map settings megastructure maps use
 	# (8 units a metre, so kilometres stay workable).
-	print("map: ", MAP, " (error ", builder.write_map(ProjectSettings.globalize_path(MAP), "Megastructure/stack_concrete"), ")")
+	var names := {&"concrete": "Megastructure/stack_concrete", &"plain": "Megastructure/stack_plain",
+			&"rubble": "Megastructure/stack_plain", &"clay": "Megastructure/stack_plain",
+			&"metal": "Megastructure/stack_plain", &"sludge": "Megastructure/stack_plain"}
+	print("map: ", MAP, " (error ", builder.write_map(ProjectSettings.globalize_path(MAP), names), ")")
 	var settings := (load("res://addons/func_godot/func_godot_default_map_settings.tres") as Resource).duplicate()
 	settings.set("inverse_scale_factor", StackBuilder.MAP_UNITS)
 	print("map settings: ", MAP_SETTINGS, " (error ", ResourceSaver.save(settings, MAP_SETTINGS), ")")

@@ -1094,3 +1094,25 @@ them:
 - 2026-10-10: **Fix: CoilingWorm "target vector can't be zero".** At the spiral's ends the point 1 m ahead was clamped onto the point itself. Each segment now faces across itself (1 m back to 1 m ahead), and a zero direction is skipped.
 
 - 2026-10-10: **Infinite Grapples switch (pause menu).** `PlayerGrapple.infinite_charges` (on for now, the user's ask, while testing the Stack): firing doesn't spend a charge. The pause menu gets an "Infinite Grapples" row, a copy of the Infinite Ammo row placed under it, synced from the player when the menu opens.
+
+- 2026-10-10: **The Stack reworked: entrances at every height, halls inside every tower, eyes at the ways in.** (Every detail the user's.)
+  - **StackBuilder rewritten.** Towers are stacked blocks; spaces are CARVED out of them (axis-aligned box subtraction, `_carve`); then everything inside and on them is added. Boxes carry a full Basis now (ramps, rubble, tunnels tilt). The map writer uses it too.
+  - **Halls (`HALLS`), 11:** cavernous brutalist spaces in every tower at several heights. Each has:
+    - mezzanines reached by switchback ramps at 28° (lanes zig-zagging along a wall with landings at each turn, `_switchback`);
+    - leaning columns, an upside-down stepped pyramid hanging from the ceiling, a slab leaning on a wall, stairs that stop in mid-air;
+    - lamps (cold high, warm low).
+  - **The main tower's shaft runs the whole height** (30 m above the base). Platforms cross it every 100–140 m outside the halls, half the shaft, alternating sides, so a slip is a drop, not the bottom (the user didn't want to just fall through).
+  - **Hollow skybridges** link the main tower's mid hall to tower 1's and tower 3's.
+  - **Entrances:**
+    - **Low:**
+      - The collapsed block: three broken slab sections, overlapping so there's no ledge, as a 28° ramp up into the base's +Z wall, torn open at storeys 1–2, among tumbled chunks and bent rebar. Plain broken concrete, so no windows underfoot (the user's point).
+      - The sewer outfall: a culvert mouth in a retaining wall, sludge down its floor, a tunnel down with one bend in a chamber (holed both ways it's met), to a hole in the depths' west wall.
+      - The entrance bridge.
+      - **Lit apartment windows** (the user's idea): 32 rooms carved behind windows at the halls' heights. Each has a warm lamp, a glowing frame, and a beam of light falling out into the air (`window_beam.gdshader`, additive). A corridor at each room's back leads into the hall.
+    - **Mid:** the lift's dock (a corridor in, a 30 m door hanging half open) and the hive tunnel (a ledge of hive spires, a tunnel lined in clay lumps with glowing vents).
+    - **High (above the clouds):** the cable car between tower 1's high hall and the main tower's, and the broken bridge (a 30 m gap to grapple) at one height in both.
+    - **Crown:** the lift's summit station and the hangar (70 × 46 m), open to the sky.
+  - **Lift:** StackLift is now stop to stop with easing (an express at 35 m/s: base 40 m, mid 1,100 m, crown 4,760 m). The deck's top is level with each stop, with railings and a lamp. It also runs the cable car (`hanging`).
+  - **Eyes at the entrances** (the user's ask): 28 EyeClusters of 10–20 eyes, spread 3.2, sizes to 0.55, at every way in and half the window rooms.
+  - **Megastructure:** `inside_zones` (the infestation picks a hall, then a floor in it) and `terrain_holes` (the bake tool punches them: the shaft and the outfall's mouth, 603 vertices).
+  - **Counts:** 881 shell and 652 interior boxes, 75 lamps (distance-faded at 400 m), 158 wind openings.

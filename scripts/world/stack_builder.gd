@@ -1,26 +1,37 @@
 class_name StackBuilder
 extends RefCounted
 
-## The Stack (docs/WORLD.md -- every detail the user's choice, Rule 9): a
-## cluster of five brutalist towers, the tallest 5 km, tangled together by
-## skybridges at every height, overgrown with the sewer land's growth the
-## whole way up, scattered lit windows and red blinkers climbing it, roach
-## swarms circling the tops, a colossal worm coiling up one tower, a lift
-## still running. The way in is up: grapple to the lowest skybridge (28 m
-## up) and walk it into the main tower. Inside, built for something far
-## bigger than a person: 40 m floors of huge apartment blocks round a
-## central shaft that drops through the ground to the flooded sewer depths.
-## The boss worm's home: its lair is the main tower's foot.
+## The Stack (docs/WORLD.md -- every detail the user's choice, Rule 9): five
+## brutalist towers, the tallest 5 km, tangled by skybridges, overgrown the
+## whole way up, windows lit and blinkers climbing it, swarms circling the
+## tops, a colossal worm coiling up one tower. Built for something far bigger
+## than a person, and you can get into it at every height:
+##   LOW: grapple to the lowest skybridge; climb the collapsed block's rubble
+##   into a torn-open wall; walk into the sewer outfall's culvert, down to
+##   the flooded depths; or climb in through any lit apartment window.
+##   MID (~1.1 km): the lift's loading dock with its half-open door, and the
+##   hive tunnel off a ledge of hive spires.
+##   HIGH (~3.5 km, above the clouds): the cable car from the next tower's
+##   hall, and the broken bridge you grapple across.
+##   CROWN (~4.8 km): the lift's summit station, and the hangar open to the sky.
+## Inside: cavernous brutalist halls at several heights in every tower --
+## mezzanines up walkable ramps, leaning columns, stepped pyramids hanging
+## from the ceilings, stairs that stop in mid-air -- hollow skybridges
+## between halls, the main tower's shaft running the whole height with
+## platforms across it (a slip is a drop, not the bottom), and its base:
+## ten 40 m floors of apartment blocks round the shaft, down to the flooded
+## depths. The express lift joins base, mid and crown.
 ##
-## Laid out as boxes (seeded, the same every build) and made into:
-##   scenes/megastructures/the_stack.scn -- a Megastructure scene (Shell,
-##   Interior, Decor, Lair), ready to place;
-##   maps/megastructures/the_stack.map -- the same boxes as a TrenchBroom
-##   map (8 units a metre), to edit by hand from now on.
+## Laid out as boxes (seeded, the same every build): towers stacked from
+## blocks, then spaces CARVED out of them (halls, rooms, corridors, the
+## shaft), then everything inside and on them added. Made into:
+##   scenes/megastructures/the_stack.scn -- a Megastructure scene;
+##   maps/megastructures/the_stack.map -- the same boxes for TrenchBroom
+##   (8 units a metre), to edit by hand from now on.
 ## tools/make_the_stack.gd runs it.
 
 const SEED := 5000
-const TEX_METRES := 8.0 # one concrete tile (with its window) every 8 m
+const TEX_METRES := 8.0 # one texture tile every 8 m
 const MAP_UNITS := 8.0 # TrenchBroom units a metre (megastructure maps)
 const TOWERS := [ # x, z, footprint (m), height (m)
 	[0.0, 0.0, 200.0, 5000.0],
@@ -29,139 +40,204 @@ const TOWERS := [ # x, z, footprint (m), height (m)
 	[80.0, -270.0, 120.0, 2000.0],
 	[-250.0, -170.0, 110.0, 1400.0],
 ]
-const FLOOR := 40.0 # ceiling height inside
+## Every tower's halls: [bottom, top] heights. The main tower's base (0-400)
+## is its own thing (the apartment floors), not in this list.
+const HALLS := [
+	[[1100.0, 1300.0], [3450.0, 3620.0], [4760.0, 4950.0]],
+	[[1100.0, 1260.0], [3440.0, 3570.0]],
+	[[1120.0, 1260.0], [2560.0, 2700.0]],
+	[[1100.0, 1250.0], [1780.0, 1900.0]],
+	[[300.0, 420.0], [1180.0, 1320.0]],
+]
+const FLOOR := 40.0 # the base's storeys
 const SLAB := 4.0
 const WALL := 6.0
-const INTERIOR_TOP := 400.0 # the main tower's hollow, walkable part: 10 floors
-const SHAFT := 60.0
+const HALL_WALL := 10.0 # the least wall left round a hall
+const INTERIOR_TOP := 400.0 # the main tower's base: 10 storeys
+const SHAFT := 60.0 # the base's shaft
+const UPPER_SHAFT := 30.0 # the shaft above the base
 const SHAFT_BOTTOM := -240.0
 const DEPTHS_FLOOR := -293.0
 const DEPTHS_SIZE := 320.0
 const WATER_LEVEL := -290.0
 const ENTRANCE_UNDERSIDE := 28.0 # within the grapple's 35 m from the ground
+const RAMP_SLOPE := 28.0 # degrees: every ramp you walk up
+## The lift's stops: the base (its -Z storey-1 dock), the mid hall, the crown.
+const LIFT_STOPS := [40.0, 1100.0, 4760.0]
 
-## Every box: {c: centre, s: size, yaw: radians round Y, part: &"shell" or
-## &"interior", solid: a big closed block (an occluder), tower: index or -1}.
+## Every box: {c: centre, s: size, b: Basis, part: &"shell" or &"interior",
+## solid: a tower block (carved, an occluder), tower: index or -1,
+## group: which mesh it joins, mat: &"concrete" (windowed), &"plain",
+## &"rubble", &"clay" or &"metal"}.
 var boxes: Array[Dictionary] = []
+## The towers' blocks before anything was carved (windows and growth go on
+## their outsides).
+var blocks: Array[Dictionary] = []
+## Everything carved out (nothing outside goes in these).
+var carved: Array[AABB] = []
 ## Openings to the outside (the wind howls through them).
 var openings := PackedVector3Array()
+## Each hall: {tower, box: AABB, name}.
+var halls: Array[Dictionary] = []
+## Each lit apartment window: {at, normal, size, room: AABB}.
+var window_rooms: Array[Dictionary] = []
+## Lamps: [position, colour, energy, range].
+var lamps: Array = []
+## Where the ground must be holed (local AABBs): the shaft, the outfall's mouth.
+var terrain_holes: Array[AABB] = []
+## The lift's stops (local) and the cable car's.
+var lift_stops := PackedVector3Array()
+var cable_stops := PackedVector3Array()
+var lift_face := 0.0
+## Spots near every entrance (floor level): eyeball clusters gather there.
+var entrance_spots := PackedVector3Array()
 var random := RandomNumberGenerator.new()
 
 
 func _init() -> void:
 	random.seed = SEED
-	_main_tower()
-	for t in range(1, TOWERS.size()):
-		_solid_tower(t, 0.0)
-	_bridges()
+	for t in TOWERS.size():
+		_solid_tower(t, INTERIOR_TOP if t == 0 else 0.0)
+	_base()
 	_depths()
+	_bridges()
+	# Spaces carved out of the towers.
+	_main_shaft()
+	for t in TOWERS.size():
+		for range_ in HALLS[t]:
+			_hall(t, range_[0], range_[1])
+	_window_rooms()
+	_hollow_bridges()
+	# Entrances.
+	_lift()
+	_collapsed_block()
+	_outfall()
+	_hive_tunnel()
+	_high_crossings()
+	_crown_hangar()
+	# What's inside the halls.
+	for hall in halls:
+		_hall_features(hall)
+	_shaft_platforms()
 
 
-func _box(centre: Vector3, size: Vector3, part: StringName, solid: bool = false, tower: int = -1, yaw: float = 0.0) -> void:
-	if part == &"shell" and absf(centre.y - size.y * 0.5) < 0.01:
+# ---- Boxes and carving --------------------------------------------------------
+
+func _add(c: Vector3, s: Vector3, part: StringName, group: String, mat: StringName = &"plain",
+		basis: Basis = Basis.IDENTITY, solid: bool = false, tower: int = -1) -> void:
+	if part == &"shell" and basis == Basis.IDENTITY and absf(c.y - s.y * 0.5) < 0.01:
 		# Standing on the ground: sunk 3 m into it, so no gap shows on a slope.
-		size.y += 3.0
-		centre.y -= 1.5
-	boxes.append({c = centre, s = size, yaw = yaw, part = part, solid = solid, tower = tower})
+		s.y += 3.0
+		c.y -= 1.5
+	boxes.append({c = c, s = s, b = basis, part = part, solid = solid, tower = tower, group = group, mat = mat})
 
 
-# ---- Layout -----------------------------------------------------------------
-
-## The main tower: hollow for its first ten floors (walls with openings,
-## floors round the shaft, apartment blocks), solid stacked blocks above.
-func _main_tower() -> void:
-	var foot: float = TOWERS[0][2]
-	var half := foot * 0.5
-	var inner := foot - WALL * 2.0
-	var floors := int(INTERIOR_TOP / FLOOR)
-	for f in floors:
-		var y0 := f * FLOOR
-		for side in 4:
-			_wall_with_openings(side, y0, half, f)
-	# Floors (and the ceiling at the top), each with the shaft's hole.
-	for f in floors + 1:
-		_slab_with_hole(f * FLOOR - SLAB * 0.5, inner)
-	# Apartment blocks: a maze of huge blocks round the shaft on every floor,
-	# corridors 30 m wide between them.
-	for f in floors:
-		var y0 := f * FLOOR
-		for gx in range(-2, 2):
-			for gz in range(-2, 2):
-				var cell := Vector2(gx + 0.5, gz + 0.5) * 46.0
-				if absf(cell.x) < SHAFT * 0.5 + 20.0 and absf(cell.y) < SHAFT * 0.5 + 20.0:
-					continue # the shaft and the ring round it stay open
-				if random.randf() < 0.2:
-					continue # a gap: a hall
-				var tall := random.randf_range(16.0, FLOOR - 6.0)
-				var size := Vector3(random.randf_range(24.0, 34.0), tall, random.randf_range(24.0, 34.0))
-				_box(Vector3(cell.x, y0 + tall * 0.5, cell.y), size, &"interior")
-	# The shaft's walls, down through the ground to the depths.
-	var down := -SHAFT_BOTTOM
-	var ring := SHAFT + WALL * 2.0
-	for side in 4:
-		var along := ring if side < 2 else SHAFT
-		var out := (SHAFT + WALL) * 0.5
-		var centre := Vector3(0.0, SHAFT_BOTTOM * 0.5 - SLAB, 0.0)
-		match side:
-			0: centre.z = -out
-			1: centre.z = out
-			2: centre.x = -out
-			3: centre.x = out
-		var size := Vector3(along, down, WALL) if side < 2 else Vector3(WALL, down, along)
-		_box(centre, size, &"interior")
-	_solid_tower(0, INTERIOR_TOP)
+## Cuts `space` out of every tower block it touches (each block becomes the
+## pieces of it left round the space).
+func _carve(space: AABB) -> void:
+	carved.append(space)
+	var kept: Array[Dictionary] = []
+	for b in boxes:
+		if not b.solid:
+			kept.append(b)
+			continue
+		var own := AABB((b.c as Vector3) - (b.s as Vector3) * 0.5, b.s)
+		if not own.intersects(space):
+			kept.append(b)
+			continue
+		for piece in _subtract(own, space):
+			if piece.size.x > 0.05 and piece.size.y > 0.05 and piece.size.z > 0.05:
+				var copy: Dictionary = b.duplicate()
+				copy.c = piece.get_center()
+				copy.s = piece.size
+				kept.append(copy)
+	boxes = kept
 
 
-## One storey of an outer wall (side 0..3: -Z, +Z, -X, +X) with two great
-## openings in it -- and on the entrance side, the floor the bridge comes in at.
-func _wall_with_openings(side: int, y0: float, half: float, storey: int) -> void:
-	var length := half * 2.0
-	var sill := 8.0
-	var lintel := 12.0
-	var gap := 34.0
-	var entrance := side == 3 and storey == 1 # +X, 40 m up: the bridge's end
-	if entrance:
-		sill = 0.0
-	# Pieces along the wall: pillar, opening, pillar, opening, pillar.
-	var pillar := (length - gap * 2.0) / 3.0
-	var cursor := -half
-	for piece in 5:
-		var width := pillar if piece % 2 == 0 else gap
-		var middle := cursor + width * 0.5
-		if piece % 2 == 0:
-			_wall_piece(side, half, middle, width, y0, FLOOR)
-		else:
-			if sill > 0.0:
-				_wall_piece(side, half, middle, width, y0, sill)
-			_wall_piece(side, half, middle, width, y0 + FLOOR - lintel, lintel)
-			openings.append(_on_wall(side, half, middle, y0 + sill + (FLOOR - lintel - sill) * 0.5))
-		cursor += width
+## `a` with `b` taken out: up to six boxes.
+func _subtract(a: AABB, b: AABB) -> Array[AABB]:
+	var i := a.intersection(b)
+	var out: Array[AABB] = []
+	if i.position.y > a.position.y:
+		out.append(AABB(a.position, Vector3(a.size.x, i.position.y - a.position.y, a.size.z)))
+	if i.end.y < a.end.y:
+		out.append(AABB(Vector3(a.position.x, i.end.y, a.position.z), Vector3(a.size.x, a.end.y - i.end.y, a.size.z)))
+	if i.position.x > a.position.x:
+		out.append(AABB(Vector3(a.position.x, i.position.y, a.position.z), Vector3(i.position.x - a.position.x, i.size.y, a.size.z)))
+	if i.end.x < a.end.x:
+		out.append(AABB(Vector3(i.end.x, i.position.y, a.position.z), Vector3(a.end.x - i.end.x, i.size.y, a.size.z)))
+	if i.position.z > a.position.z:
+		out.append(AABB(Vector3(i.position.x, i.position.y, a.position.z), Vector3(i.size.x, i.size.y, i.position.z - a.position.z)))
+	if i.end.z < a.end.z:
+		out.append(AABB(Vector3(i.position.x, i.position.y, i.end.z), Vector3(i.size.x, i.size.y, a.end.z - i.end.z)))
+	return out
 
 
-func _wall_piece(side: int, half: float, along: float, width: float, y0: float, tall: float) -> void:
-	var centre := _on_wall(side, half - WALL * 0.5, along, y0 + tall * 0.5)
-	var size := Vector3(width, tall, WALL) if side < 2 else Vector3(WALL, tall, width)
-	_box(centre, size, &"shell", false, 0)
+## The tower's block at height y (before carving), or {}.
+func _block_at(t: int, y: float) -> Dictionary:
+	for b in blocks:
+		if b.tower == t and absf(y - (b.c as Vector3).y) <= (b.s as Vector3).y * 0.5:
+			return b
+	return {}
 
 
-## A point on wall `side`, `along` it, at height y (`out` from the middle).
-func _on_wall(side: int, out: float, along: float, y: float) -> Vector3:
+## The room a tower has round its middle between two heights: the biggest
+## box centred on its axis that leaves HALL_WALL of every block there.
+func _room_in(t: int, bottom: float, top: float) -> AABB:
+	var centre := Vector2(TOWERS[t][0], TOWERS[t][1])
+	var half := Vector2(INF, INF)
+	for b in blocks:
+		if b.tower != t:
+			continue
+		var c: Vector3 = b.c
+		var s: Vector3 = b.s
+		if c.y + s.y * 0.5 < bottom or c.y - s.y * 0.5 > top:
+			continue
+		half.x = minf(half.x, minf(c.x + s.x * 0.5 - centre.x, centre.x - (c.x - s.x * 0.5)) - HALL_WALL)
+		half.y = minf(half.y, minf(c.z + s.z * 0.5 - centre.y, centre.y - (c.z - s.z * 0.5)) - HALL_WALL)
+	half = half.max(Vector2(12.0, 12.0))
+	return AABB(Vector3(centre.x - half.x, bottom, centre.y - half.y), Vector3(half.x * 2.0, top - bottom, half.y * 2.0))
+
+
+## The tower's outside face at height y on `side` (0 -Z, 1 +Z, 2 -X, 3 +X):
+## how far out from the tower's middle (along that axis).
+func _face(t: int, y: float, side: int) -> float:
+	var b := _block_at(t, y)
+	if b.is_empty():
+		return TOWERS[t][2] * 0.5
+	var c: Vector3 = b.c
+	var s: Vector3 = b.s
 	match side:
-		0: return Vector3(along, y, -out)
-		1: return Vector3(along, y, out)
-		2: return Vector3(-out, y, along)
-	return Vector3(out, y, along)
+		0: return TOWERS[t][1] - (c.z - s.z * 0.5)
+		1: return (c.z + s.z * 0.5) - TOWERS[t][1]
+		2: return TOWERS[t][0] - (c.x - s.x * 0.5)
+	return (c.x + s.x * 0.5) - TOWERS[t][0]
 
 
-## A floor slab with the shaft's square hole in the middle (four boxes).
-func _slab_with_hole(y: float, inner: float) -> void:
-	var rim := (inner - SHAFT) * 0.5
-	var off := SHAFT * 0.5 + rim * 0.5
-	_box(Vector3(0.0, y, -off), Vector3(inner, SLAB, rim), &"interior")
-	_box(Vector3(0.0, y, off), Vector3(inner, SLAB, rim), &"interior")
-	_box(Vector3(-off, y, 0.0), Vector3(rim, SLAB, SHAFT), &"interior")
-	_box(Vector3(off, y, 0.0), Vector3(rim, SLAB, SHAFT), &"interior")
+static func _outward(side: int) -> Vector3:
+	return [Vector3.FORWARD, Vector3.BACK, Vector3.LEFT, Vector3.RIGHT][side]
 
+
+## A passage straight out of `room` through the tower's wall on `side`, at
+## floor height y (`width` across, `tall` high), past the outside by `beyond`.
+func _passage_out(t: int, room: AABB, side: int, y: float, along: float, width: float, tall: float, beyond: float = 4.0) -> Vector3:
+	var out := _outward(side)
+	var face := _face(t, y + tall * 0.5, side)
+	var centre := Vector3(TOWERS[t][0], y, TOWERS[t][1])
+	var cross := Vector3(out.z, 0.0, out.x).abs() # the axis along the wall
+	var start := centre + cross * along
+	var reach := face + beyond
+	var a := start + out * minf(room.size.x if side >= 2 else room.size.z, reach * 2.0) * 0.25
+	var b := start + out * reach
+	var lo := Vector3(minf(a.x, b.x), y, minf(a.z, b.z)) - cross * width * 0.5
+	var hi := Vector3(maxf(a.x, b.x), y + tall, maxf(a.z, b.z)) + cross * width * 0.5
+	_carve(AABB(lo, hi - lo))
+	var mouth := centre + cross * along + out * face + Vector3.UP * tall * 0.5
+	openings.append(mouth)
+	return centre + cross * along + out * face # where the passage comes out, at floor height
+
+
+# ---- The towers -----------------------------------------------------------------
 
 ## A tower of stacked blocks from `from` up to its height: each block a
 ## different size and nudged off the one below, narrowing as it climbs.
@@ -174,24 +250,154 @@ func _solid_tower(t: int, from: float) -> void:
 	while y < height - 20.0:
 		var tall := minf(random.randf_range(140.0, 340.0), height - y)
 		var progress := y / height
-		var width := foot * lerpf(1.0, 0.42, progress) * random.randf_range(0.8, 1.15)
-		var depth := foot * lerpf(1.0, 0.42, progress) * random.randf_range(0.8, 1.15)
-		var nudge := Vector2(random.randf_range(-0.12, 0.12) * width, random.randf_range(-0.12, 0.12) * depth)
-		_box(Vector3(x + nudge.x, y + tall * 0.5, z + nudge.y), Vector3(width, tall, depth), &"shell", true, t)
+		var width := foot * lerpf(1.0, 0.42, progress) * random.randf_range(0.85, 1.15)
+		var depth := foot * lerpf(1.0, 0.42, progress) * random.randf_range(0.85, 1.15)
+		var nudge := Vector2(random.randf_range(-0.08, 0.08) * width, random.randf_range(-0.08, 0.08) * depth)
+		var c := Vector3(x + nudge.x, y + tall * 0.5, z + nudge.y)
+		var s := Vector3(width, tall, depth)
+		_add(c, s, &"shell", "Tower_%d" % t, &"concrete", Basis.IDENTITY, true, t)
+		blocks.append(boxes[boxes.size() - 1].duplicate())
 		y += tall
 
 
-## Skybridges: the entrance (28 m up, into the main tower's second floor),
-## and dozens more between the towers at every height.
+## The main tower's base: ten 40 m storeys of outer walls with great
+## openings, floors round the 60 m shaft, and a maze of apartment blocks.
+func _base() -> void:
+	var foot: float = TOWERS[0][2]
+	var half := foot * 0.5
+	var inner := foot - WALL * 2.0
+	var floors := int(INTERIOR_TOP / FLOOR)
+	for f in floors:
+		for side in 4:
+			_base_wall(side, f * FLOOR, half, f)
+	for f in floors + 1:
+		_slab_with_hole(f * FLOOR - SLAB * 0.5, inner, SHAFT, "Base")
+	for f in floors:
+		var y0 := f * FLOOR
+		for gx in range(-2, 2):
+			for gz in range(-2, 2):
+				var cell := Vector2(gx + 0.5, gz + 0.5) * 46.0
+				if absf(cell.x) < SHAFT * 0.5 + 20.0 and absf(cell.y) < SHAFT * 0.5 + 20.0:
+					continue # the shaft and the ring round it stay open
+				if random.randf() < 0.2:
+					continue # a gap: a hall
+				var tall := random.randf_range(16.0, FLOOR - 6.0)
+				var size := Vector3(random.randf_range(24.0, 34.0), tall, random.randf_range(24.0, 34.0))
+				_add(Vector3(cell.x, y0 + tall * 0.5, cell.y), size, &"interior", "Base")
+	# The shaft's walls, down through the ground to the depths.
+	var down := -SHAFT_BOTTOM
+	for side in 4:
+		var out := (SHAFT + WALL) * 0.5
+		var centre := _on_wall(side, out, 0.0, SHAFT_BOTTOM * 0.5 - SLAB)
+		var along := SHAFT + WALL * 2.0 if side < 2 else SHAFT
+		var size := Vector3(along, down, WALL) if side < 2 else Vector3(WALL, down, along)
+		_add(centre, size, &"interior", "Depths")
+	terrain_holes.append(AABB(Vector3(-SHAFT * 0.5 - WALL, -20.0, -SHAFT * 0.5 - WALL), Vector3(SHAFT + WALL * 2.0, 40.0, SHAFT + WALL * 2.0)))
+
+
+## One storey of a base wall (side 0..3: -Z, +Z, -X, +X) with two great
+## openings: 8 m sills, except where you walk in -- the bridge (+X, storey
+## 1), the lift dock (-Z, storey 1) -- and on +Z, storeys 1-2, the wall the
+## falling block tore open (no wall there at all).
+func _base_wall(side: int, y0: float, half: float, storey: int) -> void:
+	var torn := side == 1 and (storey == 1 or storey == 2)
+	var length := half * 2.0
+	var sill := 8.0
+	var lintel := 12.0
+	var gap := 34.0
+	if (side == 3 or side == 0) and storey == 1:
+		sill = 0.0
+	var pillar := (length - gap * 2.0) / 3.0
+	var cursor := -half
+	for piece in 5:
+		var width := pillar if piece % 2 == 0 else gap
+		var middle := cursor + width * 0.5
+		cursor += width
+		if torn and absf(middle) < half * 0.6:
+			continue # ripped out
+		if piece % 2 == 0:
+			_wall_piece(side, half, middle, width, y0, FLOOR)
+		else:
+			if sill > 0.0:
+				_wall_piece(side, half, middle, width, y0, sill)
+			_wall_piece(side, half, middle, width, y0 + FLOOR - lintel, lintel)
+			openings.append(_on_wall(side, half, middle, y0 + sill + (FLOOR - lintel - sill) * 0.5))
+	if torn:
+		openings.append(_on_wall(side, half, 0.0, y0 + FLOOR * 0.5))
+
+
+func _wall_piece(side: int, half: float, along: float, width: float, y0: float, tall: float) -> void:
+	var centre := _on_wall(side, half - WALL * 0.5, along, y0 + tall * 0.5)
+	var size := Vector3(width, tall, WALL) if side < 2 else Vector3(WALL, tall, width)
+	_add(centre, size, &"shell", "Tower_0", &"concrete", Basis.IDENTITY, false, 0)
+
+
+## A point on wall `side` of the main tower, `along` it, at height y.
+func _on_wall(side: int, out: float, along: float, y: float) -> Vector3:
+	match side:
+		0: return Vector3(along, y, -out)
+		1: return Vector3(along, y, out)
+		2: return Vector3(-out, y, along)
+	return Vector3(out, y, along)
+
+
+## A floor slab with a square hole in the middle (four boxes).
+func _slab_with_hole(y: float, inner: float, hole: float, group: String) -> void:
+	var rim := (inner - hole) * 0.5
+	var off := hole * 0.5 + rim * 0.5
+	_add(Vector3(0.0, y, -off), Vector3(inner, SLAB, rim), &"interior", group)
+	_add(Vector3(0.0, y, off), Vector3(inner, SLAB, rim), &"interior", group)
+	_add(Vector3(-off, y, 0.0), Vector3(rim, SLAB, hole), &"interior", group)
+	_add(Vector3(off, y, 0.0), Vector3(rim, SLAB, hole), &"interior", group)
+
+
+## The flooded depths: a vast drowned hall at the shaft's foot, pillars out
+## of black water, half-sunk blocks, sewer tunnels off into the dark, and on
+## its west side the way in from the outfall.
+func _depths() -> void:
+	var half := DEPTHS_SIZE * 0.5
+	var tall := SHAFT_BOTTOM - DEPTHS_FLOOR
+	_add(Vector3(0.0, DEPTHS_FLOOR - 5.0, 0.0), Vector3(DEPTHS_SIZE, 10.0, DEPTHS_SIZE), &"interior", "Depths")
+	_slab_with_hole(SHAFT_BOTTOM + SLAB * 0.5, DEPTHS_SIZE, SHAFT, "Depths")
+	for side in 4:
+		var centre := _on_wall(side, half + WALL * 0.5, 0.0, DEPTHS_FLOOR + tall * 0.5)
+		if side == 2:
+			# The west wall: holed where the outfall comes in (z -140, 30 x 24).
+			var span := DEPTHS_SIZE + WALL * 2.0
+			var hole_lo := -140.0 - 17.0
+			var hole_hi := -140.0 + 17.0
+			var x := centre.x
+			_add(Vector3(x, centre.y, (-span * 0.5 + hole_lo) * 0.5), Vector3(WALL, tall, hole_lo + span * 0.5), &"interior", "Depths")
+			_add(Vector3(x, centre.y, (hole_hi + span * 0.5) * 0.5), Vector3(WALL, tall, span * 0.5 - hole_hi), &"interior", "Depths")
+			_add(Vector3(x, DEPTHS_FLOOR + 28.0 + (tall - 28.0) * 0.5, -140.0), Vector3(WALL, tall - 28.0, 34.0), &"interior", "Depths")
+			continue
+		var size := Vector3(DEPTHS_SIZE + WALL * 2.0, tall, WALL) if side < 2 else Vector3(WALL, tall, DEPTHS_SIZE + WALL * 2.0)
+		_add(centre, size, &"interior", "Depths")
+	for gx in range(-2, 3):
+		for gz in range(-2, 3):
+			if gx == 0 and gz == 0:
+				continue
+			var at := Vector2(gx, gz) * 60.0
+			if random.randf() < 0.3:
+				var block := random.randf_range(18.0, 30.0)
+				_add(Vector3(at.x, DEPTHS_FLOOR + block * 0.5, at.y), Vector3(28.0, block, 28.0), &"interior", "Depths")
+			else:
+				_add(Vector3(at.x, DEPTHS_FLOOR + tall * 0.5, at.y), Vector3(10.0, tall, 10.0), &"interior", "Depths")
+	for k in 5:
+		lamps.append([Vector3(random.randf_range(-130.0, 130.0), WATER_LEVEL + random.randf_range(15.0, 45.0), random.randf_range(-130.0, 130.0)),
+				Color(1.0, 0.62, 0.3), 4.0, 120.0])
+
+
+## Skybridges between the towers at every height (walked on, not through:
+## the hollow ones are _hollow_bridges), and the entrance bridge.
 func _bridges() -> void:
-	# The entrance: from tower 1 to the main tower's +X wall, its deck level
-	# with the main tower's floor at 40 m.
 	var start := Vector3(TOWERS[1][0] - TOWERS[1][2] * 0.5 + 4.0, 0.0, 30.0)
 	var finish := Vector3(TOWERS[0][2] * 0.5 + WALL, 0.0, 30.0)
-	var deck := FLOOR
-	var thick := deck - ENTRANCE_UNDERSIDE
-	_box(Vector3((start.x + finish.x) * 0.5, deck - thick * 0.5, 30.0), Vector3(start.x - finish.x, thick, 26.0), &"shell")
-	openings.append(Vector3((start.x + finish.x) * 0.5, deck + 8.0, 30.0))
+	var thick := FLOOR - ENTRANCE_UNDERSIDE
+	_add(Vector3((start.x + finish.x) * 0.5, FLOOR - thick * 0.5, 30.0), Vector3(start.x - finish.x, thick, 26.0), &"shell", "Bridges", &"concrete")
+	openings.append(Vector3((start.x + finish.x) * 0.5, FLOOR + 8.0, 30.0))
+	entrance_spots.append(Vector3(finish.x + 12.0, FLOOR, 30.0))
+	entrance_spots.append(Vector3(finish.x - 20.0, FLOOR, 40.0)) # just inside
 	for i in 34:
 		var a := random.randi() % TOWERS.size()
 		var b := (a + 1 + random.randi() % (TOWERS.size() - 1)) % TOWERS.size()
@@ -201,60 +407,416 @@ func _bridges() -> void:
 		var to := Vector3(TOWERS[b][0], y, TOWERS[b][1])
 		var across := Vector2(to.x - from.x, to.z - from.z)
 		var size := Vector3(random.randf_range(14.0, 40.0), random.randf_range(8.0, 26.0), across.length())
-		_box((from + to) * 0.5, size, &"shell", false, -1, atan2(across.x, across.y))
+		_add((from + to) * 0.5, size, &"shell", "Bridges", &"concrete", Basis(Vector3.UP, atan2(across.x, across.y)))
 		openings.append((from + to) * 0.5 + Vector3.UP * (size.y * 0.5 + 6.0))
 
 
-## The flooded depths: a vast drowned hall at the shaft's foot, pillars
-## rising out of black water, half-sunk apartment blocks, sewer tunnels
-## leading off into the dark.
-func _depths() -> void:
-	var half := DEPTHS_SIZE * 0.5
-	var top := SHAFT_BOTTOM
-	var tall := top - DEPTHS_FLOOR
-	_box(Vector3(0.0, DEPTHS_FLOOR - 5.0, 0.0), Vector3(DEPTHS_SIZE, 10.0, DEPTHS_SIZE), &"interior")
-	# Its ceiling, holed for the shaft.
-	_slab_with_hole(top + SLAB * 0.5, DEPTHS_SIZE)
-	for side in 4:
-		var centre := _on_wall(side, half + WALL * 0.5, 0.0, DEPTHS_FLOOR + tall * 0.5)
-		var size := Vector3(DEPTHS_SIZE + WALL * 2.0, tall, WALL) if side < 2 else Vector3(WALL, tall, DEPTHS_SIZE + WALL * 2.0)
-		_box(centre, size, &"interior")
-	for gx in range(-2, 3):
-		for gz in range(-2, 3):
-			if gx == 0 and gz == 0:
-				continue # under the shaft
-			var at := Vector2(gx, gz) * 60.0
-			if random.randf() < 0.3:
-				# A half-sunk apartment block.
-				var block := random.randf_range(18.0, 30.0)
-				_box(Vector3(at.x, DEPTHS_FLOOR + block * 0.5, at.y), Vector3(28.0, block, 28.0), &"interior")
-			else:
-				_box(Vector3(at.x, DEPTHS_FLOOR + tall * 0.5, at.y), Vector3(10.0, tall, 10.0), &"interior")
-	# Sewer tunnels off two sides: arches of three boxes going off into the dark.
-	for side in [0, 3]:
+# ---- Carved spaces ------------------------------------------------------------------
+
+## The main tower's shaft above the base, all the way up.
+func _main_shaft() -> void:
+	var half := UPPER_SHAFT * 0.5
+	_carve(AABB(Vector3(-half, INTERIOR_TOP - 2.0, -half), Vector3(UPPER_SHAFT, TOWERS[0][3] - 60.0 - INTERIOR_TOP, UPPER_SHAFT)))
+
+
+func _hall(t: int, bottom: float, top: float) -> void:
+	var room := _room_in(t, bottom, top)
+	_carve(room)
+	halls.append({tower = t, box = room, name = "Hall_%d_%d" % [t, int(bottom)]})
+
+
+## Lit apartment windows scattered over every tower, at its halls' heights:
+## a room behind each (lit warm, beaming out), its window open to the
+## outside, and a corridor at its back into the hall.
+func _window_rooms() -> void:
+	for hall in halls:
+		var t: int = hall.tower
+		var room_box: AABB = hall.box
+		for n in random.randi_range(2, 4):
+			var side := random.randi() % 4
+			var tall := 14.0
+			var y := random.randf_range(room_box.position.y + 2.0, room_box.end.y - tall - 4.0)
+			var face := _face(t, y + tall * 0.5, side)
+			var out := _outward(side)
+			var cross := Vector3(out.z, 0.0, out.x).abs()
+			var hall_reach := (room_box.size.x if side >= 2 else room_box.size.z) * 0.5
+			var along := random.randf_range(-hall_reach * 0.6, hall_reach * 0.6)
+			var centre := Vector3(TOWERS[t][0], y, TOWERS[t][1]) + cross * along
+			# The room: from 3 m inside the face, 22 deep (the wall in front
+			# of it stays, but for its window).
+			var depth := minf(22.0, face - hall_reach - 3.0)
+			if depth < 6.0:
+				continue # no room between the hall and the outside here
+			var near := centre + out * (face - 3.0)
+			var far := centre + out * (face - 3.0 - depth)
+			var room := _span(near, far, cross, 20.0, y, tall)
+			_carve(room)
+			# The corridor from the room's back into the hall.
+			var hall_edge := centre + out * hall_reach
+			_carve(_span(far + out * 0.5, hall_edge - out * 1.0, cross, 8.0, y, 10.0))
+			# The window: through the 3 m of wall in front of the room.
+			var window := Vector2(10.0, 8.0)
+			var sill := y + 2.5
+			_carve(_span(centre + out * (face + 1.0), centre + out * (face - 3.5), cross, window.x, sill, window.y))
+			var at := centre + out * face + Vector3.UP * (sill - y + window.y * 0.5)
+			window_rooms.append({at = at, normal = out, size = window, room = room})
+			if random.randf() < 0.5:
+				entrance_spots.append(Vector3(room.get_center().x, room.position.y, room.get_center().z))
+			openings.append(at)
+			lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
+
+
+## A box spanning from `a` to `b` (along an axis, at the same height), `width`
+## across `cross`, from floor y up `tall`.
+func _span(a: Vector3, b: Vector3, cross: Vector3, width: float, y: float, tall: float) -> AABB:
+	var lo := Vector3(minf(a.x, b.x), y, minf(a.z, b.z)) - cross * width * 0.5
+	var hi := Vector3(maxf(a.x, b.x), y + tall, maxf(a.z, b.z)) + cross * width * 0.5
+	return AABB(lo, hi - lo)
+
+
+## Hollow skybridges joining halls in different towers at the same height:
+## the main tower's mid hall to tower 1's and tower 3's.
+func _hollow_bridges() -> void:
+	_hollow_bridge(0, 1, 1110.0, 3)
+	_hollow_bridge(0, 3, 1110.0, 0)
+
+
+## A walk-through bridge from tower a's hall to tower b's at floor height y,
+## leaving a on `side` (b on the opposite side).
+func _hollow_bridge(a: int, b: int, y: float, side: int) -> void:
+	var tall := 16.0
+	var width := 16.0
+	var from := _passage_out(a, _hall_box(a, y), side, y, 0.0, width + 4.0, tall + 4.0, 2.0)
+	var back := side ^ 1 # the opposite side
+	var to := _passage_out(b, _hall_box(b, y), back, y, 0.0, width + 4.0, tall + 4.0, 2.0)
+	var length := Vector2(to.x - from.x, to.z - from.z).length()
+	var basis := Basis(Vector3.UP, atan2(to.x - from.x, to.z - from.z))
+	var middle := (from + to) * 0.5
+	var group := "Bridge_%d_%d" % [a, b]
+	_add(middle + Vector3.UP * -2.0, Vector3(width + 8.0, 4.0, length), &"interior", group, &"plain", basis)
+	_add(middle + Vector3.UP * (tall + 2.0), Vector3(width + 8.0, 4.0, length), &"interior", group, &"plain", basis)
+	for s in [-1.0, 1.0]:
+		_add(middle + basis * Vector3(s * (width * 0.5 + 2.0), tall * 0.5, 0.0), Vector3(4.0, tall, length), &"interior", group, &"plain", basis)
+	for k in 3:
+		lamps.append([from.lerp(to, (k + 1) / 4.0) + Vector3.UP * (tall - 3.0), Color(0.9, 0.95, 1.0), 2.5, 28.0])
+
+
+## The hall of tower t that holds height y.
+func _hall_box(t: int, y: float) -> AABB:
+	for hall in halls:
+		var box: AABB = hall.box
+		if hall.tower == t and y >= box.position.y - 1.0 and y <= box.end.y:
+			return box
+	return AABB(Vector3(TOWERS[t][0], y, TOWERS[t][1]), Vector3.ONE)
+
+
+# ---- Entrances --------------------------------------------------------------------
+
+## The express lift up the main tower's -Z side: the base (storey 1, its
+## dock opening), the mid hall's dock (a corridor in, a huge door hanging
+## half open), the crown's summit station.
+func _lift() -> void:
+	var most := 0.0
+	for b in blocks:
+		if b.tower == 0:
+			most = maxf(most, -((b.c as Vector3).z - (b.s as Vector3).z * 0.5))
+	lift_face = -(maxf(most, TOWERS[0][2] * 0.5) + 14.0)
+	for stop: float in LIFT_STOPS:
+		lift_stops.append(Vector3(0.0, stop, lift_face))
+		if stop <= INTERIOR_TOP:
+			# From the wall (its storey-1 opening has no sill) out to the lift.
+			var wall := -TOWERS[0][2] * 0.5
+			_add(Vector3(0.0, stop - 1.5, (wall + lift_face) * 0.5), Vector3(24.0, 3.0, wall - lift_face), &"shell", "Docks", &"metal")
+			entrance_spots.append(Vector3(0.0, stop, wall - 8.0))
+			continue
+		var mouth := _passage_out(0, _hall_box(0, stop), 0, stop, 0.0, 24.0, 22.0, 2.0)
+		_add(Vector3(0.0, stop - 1.5, (lift_face + mouth.z) * 0.5 + 4.0), Vector3(24.0, 3.0, mouth.z - lift_face - 4.0), &"shell", "Docks", &"metal")
+		entrance_spots.append(Vector3(0.0, stop, mouth.z - 8.0))
+		if stop < 2000.0:
+			# The mid dock's door: a slab 30 m tall, hanging half open.
+			var hinge := Vector3(-12.0, stop + 15.0, mouth.z - 2.0)
+			_add(hinge + Basis(Vector3.UP, -0.7) * Vector3(12.0, 0.0, 0.0), Vector3(24.0, 30.0, 3.0), &"shell", "Docks", &"metal",
+					Basis(Vector3.UP, -0.7))
+		lamps.append([Vector3(0.0, stop + 10.0, mouth.z - 6.0), Color(1.0, 0.55, 0.25), 4.0, 40.0])
+
+
+## The collapsed block: a slab broken from a kilometre up, lying where it
+## fell against the main tower's +Z side, its broken sections a ramp up into
+## the torn-open wall 80 m up -- broken concrete, rubble and bent rebar,
+## nothing like a wall of windows underfoot.
+func _collapsed_block() -> void:
+	var face := TOWERS[0][2] * 0.5
+	var top := Vector3(0.0, 2.0 * FLOOR, face - 4.0) # the torn floor's edge, 80 m up
+	var run := top.y / tan(deg_to_rad(RAMP_SLOPE))
+	var foot := top + Vector3(0.0, -top.y, run)
+	entrance_spots.append(top + Vector3(-18.0, 0.0, -14.0)) # inside the tear
+	entrance_spots.append(foot + Vector3(30.0, 0.0, 8.0)) # by the rubble's foot
+	var sections := 3
+	for i in sections:
+		var a := top.lerp(foot, float(i) / sections)
+		var b := top.lerp(foot, float(i + 1) / sections)
+		var length := a.distance_to(b) + 3.0 # each overlaps the next: no ledge to climb
+		var dir := (b - a).normalized()
+		var basis := Basis.looking_at(dir, Vector3.UP).rotated(dir, random.randf_range(-0.05, 0.05))
+		basis = Basis(Vector3.UP, random.randf_range(-0.06, 0.06)) * basis
+		_add((a + b) * 0.5 + basis.y * -5.0, Vector3(46.0, 10.0, length), &"shell", "Rubble", &"rubble", basis)
+	# Chunks broken off it, tumbled round it; and its rebar.
+	for i in 26:
+		var t := random.randf()
+		var along := top.lerp(foot, t)
+		var side := random.randf_range(26.0, 60.0) * (1.0 if random.randf() < 0.5 else -1.0)
+		var size := Vector3(random.randf_range(5.0, 18.0), random.randf_range(4.0, 14.0), random.randf_range(5.0, 18.0))
+		var at := Vector3(side, maxf(along.y * random.randf_range(0.0, 0.7), size.y * 0.3), along.z + random.randf_range(-15.0, 15.0))
+		var tumble := Basis.from_euler(Vector3(random.randf_range(-0.6, 0.6), random.randf() * TAU, random.randf_range(-0.6, 0.6)))
+		_add(at, size, &"shell", "Rubble", &"rubble", tumble)
+	for i in 20:
+		var at := top.lerp(foot, random.randf()) + Vector3(random.randf_range(-22.0, 22.0), 0.0, 0.0)
+		var bend := Basis.from_euler(Vector3(random.randf_range(-1.2, 1.2), random.randf() * TAU, random.randf_range(-1.2, 1.2)))
+		_add(at + bend.y * 6.0, Vector3(0.5, 14.0, 0.5), &"shell", "Rubble", &"metal", bend)
+
+
+## The sewer outfall: a colossal culvert mouth at the foot of the Stack,
+## sludge on its floor, its tunnel going down -- one bend, in a chamber --
+## to the flooded depths' west wall.
+func _outfall() -> void:
+	var points := [Vector3(-400.0, 0.0, 180.0), Vector3(-400.0, -150.0, -140.0), Vector3(-163.0, DEPTHS_FLOOR, -140.0)]
+	var inner := Vector2(30.0, 24.0)
+	for i in points.size() - 1:
+		var a: Vector3 = points[i]
+		var b: Vector3 = points[i + 1]
+		var dir := (b - a).normalized()
+		var basis := Basis.looking_at(dir, Vector3.UP)
+		var length := a.distance_to(b) + 6.0
+		var middle := (a + b) * 0.5
+		var group := "Outfall"
+		_add(middle + basis.y * -2.0, Vector3(inner.x + 8.0, 4.0, length), &"interior", group, &"plain", basis)
+		_add(middle + basis.y * (inner.y + 2.0), Vector3(inner.x + 8.0, 4.0, length), &"interior", group, &"plain", basis)
+		for s in [-1.0, 1.0]:
+			_add(middle + basis * Vector3(s * (inner.x * 0.5 + 2.0), inner.y * 0.5, 0.0), Vector3(4.0, inner.y, length), &"interior", group, &"plain", basis)
+		# Sludge down the floor.
+		_add(middle + basis.y * 0.2, Vector3(inner.x * 0.6, 0.4, length), &"interior", group, &"sludge", basis)
+		for k in 2:
+			lamps.append([a.lerp(b, (k + 1) / 3.0) + Vector3.UP * (inner.y - 4.0), Color(0.75, 0.9, 0.55), 2.0, 45.0])
+	# The bend's chamber, round the joint: its floor level with the tunnel's,
+	# open on +Z (the way down from the mouth) and +X (on to the depths).
+	var bend: Vector3 = points[1]
+	_box_room(bend + Vector3.UP * 18.0, Vector3(52.0, 40.0, 52.0), "Outfall")
+	# The mouth: a retaining wall either side and a lintel over it, at ground level.
+	var mouth: Vector3 = points[0]
+	_add(mouth + Vector3(-34.0, 18.0, 0.0), Vector3(30.0, 36.0, 10.0), &"shell", "Outfall_Mouth", &"plain")
+	_add(mouth + Vector3(34.0, 18.0, 0.0), Vector3(30.0, 36.0, 10.0), &"shell", "Outfall_Mouth", &"plain")
+	_add(mouth + Vector3(0.0, 31.0, 0.0), Vector3(38.0, 10.0, 10.0), &"shell", "Outfall_Mouth", &"plain")
+	terrain_holes.append(AABB(mouth + Vector3(-20.0, -40.0, -80.0), Vector3(40.0, 80.0, 84.0)))
+	openings.append(mouth + Vector3(0.0, 12.0, 0.0))
+	entrance_spots.append(mouth + Vector3(0.0, 0.0, 14.0))
+	entrance_spots.append(mouth + Vector3(-22.0, 0.0, 20.0))
+
+
+## A joint's chamber: floor, ceiling, solid -X and -Z walls, and +Z and +X
+## walls each with a 36 x 30 hole where a tunnel comes in.
+func _box_room(centre: Vector3, size: Vector3, group: String) -> void:
+	var h := size * 0.5
+	_add(centre + Vector3(0.0, -h.y, 0.0), Vector3(size.x, 4.0, size.z), &"interior", group)
+	_add(centre + Vector3(0.0, h.y, 0.0), Vector3(size.x, 4.0, size.z), &"interior", group)
+	_add(centre + Vector3(-h.x, 0.0, 0.0), Vector3(4.0, size.y, size.z), &"interior", group)
+	_add(centre + Vector3(0.0, 0.0, -h.z), Vector3(size.x, size.y, 4.0), &"interior", group)
+	var hole := Vector2(36.0, 30.0)
+	var floor_y := centre.y - h.y + 2.0
+	for axis: Vector3 in [Vector3.BACK, Vector3.RIGHT]:
+		var cross := Vector3(axis.z, 0.0, axis.x).abs()
+		var wall := centre + axis * h.x
+		var side := (size.x - hole.x) * 0.5
+		var thin := Vector3(4.0, 0.0, 4.0) * axis.abs()
+		for s: float in [-1.0, 1.0]:
+			_add(wall + cross * s * (hole.x * 0.5 + side * 0.5), cross * side + Vector3.UP * size.y + thin, &"interior", group)
+		var over := size.y - hole.y - 2.0
+		_add(Vector3(wall.x, floor_y + hole.y + over * 0.5, wall.z), cross * hole.x + Vector3.UP * over + thin, &"interior", group)
+
+
+## The hive tunnel: a ledge jutting from the main tower's +Z side at the mid
+## hall's floor, hive spires sprouting on it, and a tunnel through the wall
+## lined in hive clay with glowing vents, into the hall.
+func _hive_tunnel() -> void:
+	var y: float = HALLS[0][0][0]
+	var mouth := _passage_out(0, _hall_box(0, y), 1, y, 30.0, 18.0, 16.0, 2.0)
+	_add(Vector3(mouth.x, y - 4.0, mouth.z + 22.0), Vector3(70.0, 8.0, 48.0), &"shell", "Hive", &"clay")
+	entrance_spots.append(mouth + Vector3(-14.0, 0.0, 14.0))
+	# Clay lumps lining the tunnel (and its mouth), glowing vents among them.
+	for i in 22:
+		var at := mouth + Vector3(random.randf_range(-12.0, 12.0), random.randf_range(0.0, 15.0), random.randf_range(-24.0, 6.0))
+		var lump := Basis.from_euler(Vector3(random.randf() * TAU, random.randf() * TAU, random.randf() * TAU))
+		_add(at, Vector3.ONE * random.randf_range(2.0, 5.0), &"interior", "Hive", &"clay", lump)
+	for i in 4:
+		lamps.append([mouth + Vector3(random.randf_range(-6.0, 6.0), random.randf_range(4.0, 12.0), random.randf_range(-20.0, 0.0)),
+				Color(1.0, 0.75, 0.2), 3.0, 22.0])
+
+
+## Above the clouds: the cable car from tower 1's high hall to the main
+## tower's, and the broken bridge between them -- a 30 m gap to grapple.
+func _high_crossings() -> void:
+	var t0_y: float = HALLS[0][1][0]
+	var t1_y: float = HALLS[1][1][0]
+	# The broken bridge, low in both halls -- at one height in both.
+	var deck := maxf(t0_y, t1_y) + 6.0
+	var a := _passage_out(1, _hall_box(1, deck), 2, deck, -10.0, 18.0, 16.0, 2.0)
+	var b := _passage_out(0, _hall_box(0, deck), 3, deck, 20.0, 18.0, 16.0, 2.0)
+	entrance_spots.append(a + Vector3(-6.0, 0.0, 0.0))
+	entrance_spots.append(b + Vector3(6.0, 0.0, 0.0))
+	var gap := 30.0
+	var middle := (a + b) * 0.5
+	var dir := (b - a).normalized()
+	var basis := Basis(Vector3.UP, atan2(dir.x, dir.z))
+	var half_gap := dir * gap * 0.5
+	for end in [[a, middle - half_gap], [middle + half_gap, b]]:
+		var from: Vector3 = end[0]
+		var to: Vector3 = end[1]
+		_add((from + to) * 0.5 + Vector3.UP * -3.0, Vector3(16.0, 6.0, from.distance_to(to)), &"shell", "Bridges", &"concrete", basis)
+	# The cable car, higher up in both halls.
+	var c := _passage_out(1, _hall_box(1, t1_y + 60.0), 2, t1_y + 60.0, 30.0, 22.0, 18.0, 2.0)
+	var d := _passage_out(0, _hall_box(0, t0_y + 40.0), 3, t0_y + 40.0, -30.0, 22.0, 18.0, 2.0)
+	var out_a := Vector3(-14.0, 0.0, 0.0)
+	var out_b := Vector3(14.0, 0.0, 0.0)
+	cable_stops.append(c + out_a + Vector3.UP * (t1_y + 60.0 - c.y))
+	cable_stops.append(d + out_b + Vector3.UP * (t0_y + 40.0 - d.y))
+	for stop in cable_stops:
+		_add(stop + Vector3.UP * -1.5, Vector3(26.0, 3.0, 26.0), &"shell", "Docks", &"metal")
+		entrance_spots.append(stop)
+
+
+## The crown's hangar: a great mouth in the main tower's +X side, open to
+## the sky, into the crown hall.
+func _crown_hangar() -> void:
+	var y: float = HALLS[0][2][0]
+	var mouth := _passage_out(0, _hall_box(0, y), 3, y, 0.0, 70.0, 46.0, 4.0)
+	entrance_spots.append(mouth + Vector3(-14.0, 0.0, 0.0))
+
+
+# ---- What's inside --------------------------------------------------------------------
+
+## A cavernous brutalist hall: mezzanines up walkable ramps, columns (some
+## leaning), a stepped pyramid hanging upside down from the ceiling, a slab
+## leaning on a wall, stairs that stop in mid-air -- and its lamps.
+func _hall_features(hall: Dictionary) -> void:
+	var box: AABB = hall.box
+	var group: String = hall.name
+	var floor_y := box.position.y
+	var tall := box.size.y
+	var main: bool = hall.tower == 0
+	var shaft := Rect2(-UPPER_SHAFT * 0.5 - 6.0, -UPPER_SHAFT * 0.5 - 6.0, UPPER_SHAFT + 12.0, UPPER_SHAFT + 12.0)
+	# Mezzanines, against a wall each, and switchback ramps up to them.
+	for level: float in [0.4, 0.7]:
+		if tall < 80.0 and level > 0.5:
+			continue
+		var side := random.randi() % 4
+		var out := _outward(side)
+		var cross := Vector3(out.z, 0.0, out.x).abs()
+		var along_len := box.size.x if side < 2 else box.size.z
+		var across_len := box.size.z if side < 2 else box.size.x
+		var depth := across_len * 0.25
+		var span := along_len * 0.8
+		var deck_y := floor_y + tall * level
+		var wall_mid := box.get_center() + out * (across_len * 0.5 - depth * 0.5)
+		_add(Vector3(wall_mid.x, deck_y - 2.0, wall_mid.z), cross * span + Vector3.UP * 4.0 + out.abs() * depth, &"interior", group)
+		_switchback(box, out, cross, across_len * 0.5 - depth, along_len - 24.0, floor_y, deck_y, group)	# Columns in a skewed grid, a few leaning.
+	for i in random.randi_range(4, 8):
+		var at := Vector3(random.randf_range(box.position.x + 8.0, box.end.x - 8.0), 0.0, random.randf_range(box.position.z + 8.0, box.end.z - 8.0))
+		if main and shaft.has_point(Vector2(at.x, at.z)):
+			continue
+		var lean := Basis.from_euler(Vector3(random.randf_range(-0.12, 0.12), random.randf() * 0.5, random.randf_range(-0.12, 0.12)))
+		var thick := random.randf_range(5.0, 9.0)
+		_add(Vector3(at.x, floor_y + tall * 0.5, at.z), Vector3(thick, tall + 2.0, thick), &"interior", group, &"plain", lean)
+	# A stepped pyramid hanging upside down from the ceiling.
+	var hang := Vector3(random.randf_range(box.position.x + 20.0, box.end.x - 20.0), box.end.y, random.randf_range(box.position.z + 20.0, box.end.z - 20.0))
+	if not (main and shaft.has_point(Vector2(hang.x, hang.z))):
+		var width := minf(box.size.x, box.size.z) * 0.35
 		for k in 4:
-			var out := half + WALL + 20.0 + k * 40.0
-			var centre := _on_wall(side, out, 0.0, DEPTHS_FLOOR)
-			var length := 40.0
-			var sx := Vector3(30.0, 4.0, length) if side < 2 else Vector3(length, 4.0, 30.0)
-			_box(centre + Vector3(0.0, -2.0, 0.0), sx, &"interior")
-			_box(centre + Vector3(0.0, 26.0, 0.0), sx, &"interior")
-			var wall_size := Vector3(4.0, 28.0, length) if side < 2 else Vector3(length, 28.0, 4.0)
-			var offset := Vector3(17.0, 12.0, 0.0) if side < 2 else Vector3(0.0, 12.0, 17.0)
-			_box(centre + offset, wall_size, &"interior")
-			_box(centre + Vector3(-offset.x, offset.y, -offset.z), wall_size, &"interior")
-		# Where the tunnel meets the hall: a hole in that wall (the wall
-		# stays solid for now -- the tunnel mouths are dark alcoves).
+			var step := width * (1.0 - k * 0.22)
+			_add(hang + Vector3.DOWN * (6.0 * k + 3.0), Vector3(step, 6.0, step), &"interior", group, &"plain")
+	# A slab leaning on a wall.
+	var lean_side := random.randi() % 4
+	var lean_out := _outward(lean_side)
+	var lean_at := box.get_center() + lean_out * ((box.size.x if lean_side >= 2 else box.size.z) * 0.5 - 10.0)
+	lean_at.y = floor_y + tall * 0.3
+	var lean_basis := Basis(Vector3(lean_out.z, 0.0, lean_out.x).abs().normalized(), 0.35 * (1.0 if lean_side % 2 == 0 else -1.0))
+	_add(lean_at, Vector3(30.0, tall * 0.6, 3.0) if lean_side < 2 else Vector3(3.0, tall * 0.6, 30.0), &"interior", group, &"plain", lean_basis)
+	# Stairs that stop in mid-air.
+	var stair_at := Vector3(random.randf_range(box.position.x + 15.0, box.end.x - 15.0), floor_y, random.randf_range(box.position.z + 15.0, box.end.z - 15.0))
+	if not (main and shaft.has_point(Vector2(stair_at.x, stair_at.z))):
+		var stair_turn := Basis(Vector3.UP, random.randf() * TAU)
+		for k in 7:
+			var step_at := stair_at + stair_turn * Vector3(0.0, 1.0 + k * 2.0, k * 4.0)
+			_add(step_at, Vector3(10.0, 2.0 + k * 4.0, 4.0) if k == 0 else Vector3(10.0, 2.0, 4.0), &"interior", group, &"plain", stair_turn)
+	# Its lamps: cold up high, warm low.
+	lamps.append([box.get_center() + Vector3.UP * tall * 0.35, Color(0.75, 0.85, 1.0), 4.0, maxf(box.size.x, box.size.z) * 0.8])
+	lamps.append([Vector3(box.get_center().x, floor_y + 8.0, box.get_center().z) + Vector3(box.size.x * 0.3, 0.0, 0.0), Color(1.0, 0.6, 0.3), 3.0, 50.0])
 
 
-# ---- The scene --------------------------------------------------------------
+## Ramps up from the floor to a deck's front edge (`edge`: its distance from
+## the hall's middle along `out`): zig-zagging along the wall in lanes, each
+## further out from the deck, a landing at every turn -- RAMP_SLOPE all the
+## way, however high it is.
+func _switchback(box: AABB, out: Vector3, cross: Vector3, edge: float, room: float, floor_y: float, deck_y: float, group: String) -> void:
+	var width := 10.0
+	var steepness := tan(deg_to_rad(RAMP_SLOPE))
+	var top_y := deck_y
+	var top_along := room * 0.5
+	var going := -1.0
+	var lane := 0
+	var centre := box.get_center()
+	while top_y - floor_y > 0.5 and lane < 8:
+		var lane_at := edge - width * (lane + 0.5)
+		var run := minf(room, (top_y - floor_y) / steepness)
+		var bottom_along := top_along + going * run
+		var bottom_y := top_y - run * steepness
+		var top := centre + out * lane_at + cross * top_along
+		top.y = top_y
+		var bottom := centre + out * lane_at + cross * bottom_along
+		bottom.y = bottom_y
+		var basis := Basis.looking_at((top - bottom).normalized(), Vector3.UP)
+		_add((top + bottom) * 0.5 + basis.y * -1.0, Vector3(width, 2.0, top.distance_to(bottom) + 1.0), &"interior", group, &"plain", basis)
+		if bottom_y - floor_y > 0.5:
+			# A landing across this lane and the next, where the ramp turns.
+			var landing := centre + out * (lane_at - width * 0.5) + cross * bottom_along
+			landing.y = bottom_y - 1.0
+			_add(landing, cross * width + Vector3.UP * 2.0 + out.abs() * width * 2.0, &"interior", group)
+		top_y = bottom_y
+		top_along = bottom_along
+		going = -going
+		lane += 1
+
+
+## Platforms across the main shaft every ~120 m (not inside the halls):## half the shaft each, alternating sides -- a slip down it is a drop onto
+## the next, not the bottom.
+func _shaft_platforms() -> void:
+	var y := INTERIOR_TOP + 120.0
+	var side := 0
+	while y < TOWERS[0][3] - 100.0:
+		var in_hall := false
+		for hall in halls:
+			var box: AABB = hall.box
+			if hall.tower == 0 and y > box.position.y - 20.0 and y < box.end.y + 20.0:
+				in_hall = true
+		if not in_hall:
+			var out := _outward(side % 4)
+			var size := Vector3(UPPER_SHAFT, 3.0, UPPER_SHAFT * 0.55) if side % 4 < 2 else Vector3(UPPER_SHAFT * 0.55, 3.0, UPPER_SHAFT)
+			_add(out * UPPER_SHAFT * 0.225 + Vector3.UP * y, size, &"interior", "Shaft_%d" % int(y / 1000.0))
+		y += random.randf_range(100.0, 140.0)
+		side += 1
+
+
+# ---- The scene ------------------------------------------------------------------------
 
 ## The whole Stack as a Megastructure scene (not yet saved).
-func build_scene(concrete: Texture2D, wind: AudioStream, drone: AudioStream) -> Megastructure:
+func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) -> Megastructure:
 	var root := Megastructure.new()
 	root.name = "TheStack"
-	root.inside = AABB(Vector3(-TOWERS[0][2] * 0.5 + WALL, 0.0, -TOWERS[0][2] * 0.5 + WALL),
-			Vector3(TOWERS[0][2] - WALL * 2.0, INTERIOR_TOP, TOWERS[0][2] - WALL * 2.0))
+	var zones: Array[AABB] = []
+	zones.append(AABB(Vector3(-TOWERS[0][2] * 0.5 + WALL, 0.0, -TOWERS[0][2] * 0.5 + WALL), Vector3(TOWERS[0][2] - WALL * 2.0, INTERIOR_TOP, TOWERS[0][2] - WALL * 2.0)))
+	for hall in halls:
+		zones.append(hall.box)
+	root.inside_zones = zones
+	root.inside = AABB(Vector3(-TOWERS[0][2] * 0.5, DEPTHS_FLOOR - 10.0, -TOWERS[0][2] * 0.5), Vector3(TOWERS[0][2], TOWERS[0][3] - DEPTHS_FLOOR, TOWERS[0][2]))
+	root.terrain_holes = terrain_holes
 	var shell := Node3D.new()
 	shell.name = "Shell"
 	_own(root, shell, root)
@@ -264,26 +826,26 @@ func build_scene(concrete: Texture2D, wind: AudioStream, drone: AudioStream) -> 
 	var decor := Node3D.new()
 	decor.name = "Decor"
 	_own(root, decor, root)
-	# Meshes: the shell per tower (so each can be culled), the bridges, the inside.
-	var shell_material := StandardMaterial3D.new()
-	shell_material.albedo_texture = concrete
-	shell_material.albedo_color = Color(0.82, 0.8, 0.78)
-	var inside_material := StandardMaterial3D.new()
-	inside_material.albedo_texture = concrete
-	inside_material.albedo_color = Color(0.62, 0.62, 0.58)
-	inside_material.roughness = 1.0
-	inside_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
-	inside_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
-	for t in range(-1, TOWERS.size()):
-		var picked := boxes.filter(func(b: Dictionary) -> bool: return b.part == &"shell" and b.tower == t)
-		_mesh_node(root, shell, "Tower_%d" % t if t >= 0 else "Bridges", picked, shell_material, true)
-	_mesh_node(root, interior, "Insides", boxes.filter(func(b: Dictionary) -> bool: return b.part == &"interior"), inside_material, false)
+	var materials := _materials(textures)
+	# Meshes: one per part, group and material.
+	var groups := {}
+	for b in boxes:
+		var key := "%s|%s|%s" % [b.part, b.group, b.mat]
+		if not groups.has(key):
+			groups[key] = []
+		(groups[key] as Array).append(b)
+	for key: String in groups:
+		var bits := key.split("|")
+		var parent: Node = shell if bits[0] == "shell" else interior
+		var material: Material = materials[StringName(bits[2])] if bits[0] == "interior" or bits[2] != "concrete" else materials[&"shell"]
+		_mesh_node(root, parent, "%s_%s" % [bits[1], bits[2]], groups[key], material, bits[0] == "shell")
 	_collision(root, shell, "ShellBody", &"shell")
 	_collision(root, interior, "InteriorBody", &"interior")
 	_occluders(root, shell)
 	_water(root, interior)
-	_depth_lights(root, interior)
+	_lamps(root, interior)
 	_windows(root, decor)
+	_window_glow(root, decor)
 	_growth(root, decor)
 	_swarms(root, decor)
 	var worm := CoilingWorm.new()
@@ -293,16 +855,27 @@ func build_scene(concrete: Texture2D, wind: AudioStream, drone: AudioStream) -> 
 	worm.bottom = 300.0
 	worm.top = 2500.0
 	_own(root, worm, decor)
-	_lift(root, decor)
+	_rides(root, decor)
+	# Eyes gather at the ways in: bigger clusters than out on the land.
+	var eyes := Node3D.new()
+	eyes.name = "EntranceEyes"
+	_own(root, eyes, decor)
+	for i in entrance_spots.size():
+		var cluster := EyeCluster.new()
+		cluster.name = "Eyes_%d" % i
+		cluster.look_seed = SEED + i
+		cluster.eye_count = random.randi_range(10, 20)
+		cluster.spread = 3.2
+		cluster.eye_size_max = 0.55
+		cluster.position = entrance_spots[i] + Vector3.UP
+		_own(root, cluster, eyes)
 	var sound := MegastructureSound.new()
 	sound.name = "Sound"
 	sound.wind_stream = wind
 	sound.drone_stream = drone
 	sound.openings = openings
-	sound.inside = AABB(Vector3(-TOWERS[0][2] * 0.5, DEPTHS_FLOOR - 10.0, -DEPTHS_SIZE * 0.5),
-			Vector3(TOWERS[0][2], INTERIOR_TOP - DEPTHS_FLOOR + 10.0, DEPTHS_SIZE))
+	sound.inside = root.inside
 	_own(root, sound, decor)
-	# The boss worm's lair: the main tower's foot (a shape in no body).
 	var lair := CollisionShape3D.new()
 	lair.name = "Lair"
 	var lair_box := BoxShape3D.new()
@@ -318,9 +891,42 @@ func _own(root: Node, node: Node, parent: Node) -> void:
 	node.owner = root
 
 
+func _materials(textures: Dictionary) -> Dictionary:
+	var made := {}
+	var shell := StandardMaterial3D.new()
+	shell.albedo_texture = textures.windows
+	shell.albedo_color = Color(0.82, 0.8, 0.78)
+	made[&"shell"] = shell
+	for key in [&"plain", &"rubble"]:
+		var m := StandardMaterial3D.new()
+		m.albedo_texture = textures.plain
+		m.albedo_color = Color(0.66, 0.65, 0.61) if key == &"plain" else Color(0.55, 0.53, 0.5)
+		m.roughness = 1.0
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+		made[key] = m
+	var clay := StandardMaterial3D.new()
+	clay.albedo_texture = textures.plain
+	clay.albedo_color = Color(0.45, 0.33, 0.18)
+	clay.roughness = 1.0
+	clay.emission_enabled = true
+	clay.emission = Color(0.12, 0.08, 0.0)
+	made[&"clay"] = clay
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.24, 0.18, 0.14)
+	metal.roughness = 0.7
+	metal.metallic = 0.5
+	made[&"metal"] = metal
+	var sludge := StandardMaterial3D.new()
+	sludge.albedo_color = Color(0.12, 0.13, 0.05)
+	sludge.roughness = 0.1
+	sludge.metallic_specular = 0.8
+	made[&"sludge"] = sludge
+	made[&"concrete"] = made[&"plain"] # concrete indoors (carved faces) reads as plain
+	return made
+
+
 func _mesh_node(root: Node, parent: Node, name: String, picked: Array, material: Material, shadows: bool) -> void:
-	if picked.is_empty():
-		return
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for b: Dictionary in picked:
@@ -334,15 +940,12 @@ func _mesh_node(root: Node, parent: Node, name: String, picked: Array, material:
 	_own(root, node, parent)
 
 
-## A box's six faces, its texture laid in metres (a tile every TEX_METRES)
-## along each face, upright on the walls.
+## A box's six faces, its texture laid in metres along each face (u x v =
+## -outward, so the corners run clockwise seen from outside: Godot's front).
 func _box_faces(st: SurfaceTool, b: Dictionary) -> void:
-	var basis := Basis(Vector3.UP, b.yaw)
-	var half: Vector3 = b.s * 0.5
+	var basis: Basis = b.b
+	var half: Vector3 = (b.s as Vector3) * 0.5
 	var centre: Vector3 = b.c
-	# Each face: its outward axis, and its two in-plane axes (u across, v up/along;
-	# u x v = -outward, so the corners below run clockwise seen from outside,
-	# Godot's front faces).
 	var faces := [
 		[Vector3.RIGHT, Vector3.BACK, Vector3.UP], [Vector3.LEFT, Vector3.FORWARD, Vector3.UP],
 		[Vector3.BACK, Vector3.LEFT, Vector3.UP], [Vector3.FORWARD, Vector3.RIGHT, Vector3.UP],
@@ -365,33 +968,34 @@ func _box_faces(st: SurfaceTool, b: Dictionary) -> void:
 			st.add_vertex(points[i])
 
 
-## Every box of `part` as a box shape on one static body.
 func _collision(root: Node, parent: Node, name: String, part: StringName) -> void:
 	var body := StaticBody3D.new()
 	body.name = name
 	_own(root, body, parent)
 	for b in boxes:
-		if b.part != part:
+		if b.part != part or b.mat == &"sludge":
 			continue
 		var shape := CollisionShape3D.new()
 		var box := BoxShape3D.new()
 		box.size = b.s
 		shape.shape = box
-		shape.transform = Transform3D(Basis(Vector3.UP, b.yaw), b.c)
+		shape.transform = Transform3D(b.b, b.c)
 		_own(root, shape, body)
 
 
-## The solid tower blocks block the view: what's behind them isn't drawn.
+## The big solid pieces of the towers block the view: what's behind them
+## isn't drawn.
 func _occluders(root: Node, parent: Node) -> void:
 	var holder := Node3D.new()
 	holder.name = "Occluders"
 	_own(root, holder, parent)
 	for b in boxes:
-		if not b.solid:
+		var s: Vector3 = b.s
+		if not b.solid or minf(s.x, minf(s.y, s.z)) < 12.0:
 			continue
 		var occluder := OccluderInstance3D.new()
 		var box := BoxOccluder3D.new()
-		box.size = (b.s as Vector3) * 0.96 # a touch inside, so it never hides its own faces
+		box.size = s * 0.96
 		occluder.occluder = box
 		occluder.position = b.c
 		_own(root, occluder, holder)
@@ -414,46 +1018,61 @@ func _water(root: Node, parent: Node) -> void:
 	_own(root, water, parent)
 
 
-## A few dim lamps still burning down in the depths.
-func _depth_lights(root: Node, parent: Node) -> void:
-	for i in 8:
+func _lamps(root: Node, parent: Node) -> void:
+	var holder := Node3D.new()
+	holder.name = "Lamps"
+	_own(root, holder, parent)
+	for i in lamps.size():
+		var spec: Array = lamps[i]
 		var lamp := OmniLight3D.new()
-		lamp.name = "DepthLamp_%d" % i
-		lamp.light_color = Color(1.0, 0.62, 0.3)
-		lamp.light_energy = 4.0
-		lamp.omni_range = 120.0
-		lamp.position = Vector3(random.randf_range(-130.0, 130.0), WATER_LEVEL + random.randf_range(15.0, 45.0), random.randf_range(-130.0, 130.0))
-		_own(root, lamp, parent)
+		lamp.name = "Lamp_%d" % i
+		lamp.position = spec[0]
+		lamp.light_color = spec[1]
+		lamp.light_energy = spec[2]
+		lamp.omni_range = spec[3]
+		lamp.distance_fade_enabled = true
+		lamp.distance_fade_begin = 400.0
+		lamp.distance_fade_length = 100.0
+		_own(root, lamp, holder)
 
 
-## Lit windows scattered over the towers' sides (one in twenty or so), and
-## red blinkers at block corners all the way up.
+## A point on the outside of the original blocks isn't somewhere carved out.
+func _outside(point: Vector3) -> bool:
+	for space in carved:
+		if space.grow(1.0).has_point(point):
+			return false
+	return true
+
+
+## Lit windows scattered over the towers' outsides, and red blinkers at the
+## blocks' corners all the way up.
 func _windows(root: Node, parent: Node) -> void:
-	var walls: Array[Dictionary] = []
 	var total := 0.0
-	for b in boxes:
-		if b.solid:
-			walls.append(b)
-			total += ((b.s as Vector3).x + (b.s as Vector3).z) * 2.0 * (b.s as Vector3).y
+	for b in blocks:
+		total += ((b.s as Vector3).x + (b.s as Vector3).z) * 2.0 * (b.s as Vector3).y
 	var windows: Array[Transform3D] = []
 	var window_colors: Array[Color] = []
 	var window_customs: Array[Color] = []
-	for i in 5200:
-		var b: Dictionary = walls[_weighted(walls, total)]
+	var tries := 0
+	while windows.size() < 5200 and tries < 20000:
+		tries += 1
+		var b: Dictionary = blocks[_weighted(blocks, total, true)]
 		var side := random.randi() % 4
 		var half: Vector3 = (b.s as Vector3) * 0.5
 		var along := random.randf_range(-1.0, 1.0) * (half.x if side < 2 else half.z) * 0.95
 		var y := (b.c as Vector3).y + random.randf_range(-1.0, 1.0) * half.y * 0.95
 		var out := (half.z if side < 2 else half.x) + 0.3
 		var at := _on_wall(side, out, along, 0.0) + Vector3((b.c as Vector3).x, y, (b.c as Vector3).z)
+		if not _outside(at):
+			continue
 		windows.append(Transform3D(Basis.IDENTITY, at))
-		window_colors.append(Color(1.0, randf_range(0.55, 0.75), randf_range(0.2, 0.35)) if random.randf() < 0.85 else Color(0.7, 0.85, 1.0))
+		window_colors.append(Color(1.0, random.randf_range(0.55, 0.75), random.randf_range(0.2, 0.35)) if random.randf() < 0.85 else Color(0.7, 0.85, 1.0))
 		window_customs.append(Color(random.randf(), 0.0, 1.0 if random.randf() < 0.1 else 0.0, 0.0))
 	_light_batch(root, parent, "Windows", Vector3(4.2, 5.6, 3.0), windows, window_colors, window_customs)
 	var blinkers: Array[Transform3D] = []
 	var blinker_colors: Array[Color] = []
 	var blinker_customs: Array[Color] = []
-	for b in walls:
+	for b in blocks:
 		var half: Vector3 = (b.s as Vector3) * 0.5
 		for corner in 4:
 			if random.randf() < 0.1:
@@ -466,6 +1085,8 @@ func _windows(root: Node, parent: Node) -> void:
 
 
 func _light_batch(root: Node, parent: Node, name: String, size: Vector3, places: Array[Transform3D], colors: Array[Color], customs: Array[Color]) -> void:
+	if places.is_empty():
+		return
 	var box := BoxMesh.new()
 	box.size = size
 	var multimesh := MultiMesh.new()
@@ -488,38 +1109,94 @@ func _light_batch(root: Node, parent: Node, name: String, size: Vector3, places:
 	_own(root, node, parent)
 
 
+## The lit apartment windows: a warm frame glowing round each, and a beam of
+## its light falling out into the air.
+func _window_glow(root: Node, parent: Node) -> void:
+	var frames: Array[Transform3D] = []
+	var colors: Array[Color] = []
+	var customs: Array[Color] = []
+	var beams := SurfaceTool.new()
+	beams.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for w in window_rooms:
+		var at: Vector3 = w.at
+		var out: Vector3 = w.normal
+		var size: Vector2 = w.size
+		var cross := Vector3(out.z, 0.0, out.x).abs()
+		# The frame: four glowing bars round the opening.
+		var thick := out.abs() * 1.2
+		for bar: Array in [[cross * (size.x * 0.5 + 0.6), cross * 1.2 + Vector3.UP * (size.y + 2.4)],
+				[-cross * (size.x * 0.5 + 0.6), cross * 1.2 + Vector3.UP * (size.y + 2.4)],
+				[Vector3.UP * (size.y * 0.5 + 0.6), cross * (size.x + 2.4) + Vector3.UP * 1.2],
+				[Vector3.DOWN * (size.y * 0.5 + 0.6), cross * (size.x + 2.4) + Vector3.UP * 1.2]]:
+			var offset: Vector3 = bar[0]
+			var extent: Vector3 = bar[1] + thick
+			frames.append(Transform3D(Basis.from_scale(extent), at + offset + out * 0.4))
+			colors.append(Color(1.0, 0.62, 0.25))
+			customs.append(Color(random.randf(), 0.0, 0.0, 0.0))
+		_beam(beams, at, out, cross, size)
+	_light_batch(root, parent, "WindowFrames", Vector3.ONE, frames, colors, customs)
+	var node := MeshInstance3D.new()
+	node.name = "WindowBeams"
+	node.mesh = beams.commit()
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://shaders/window_beam.gdshader")
+	node.material_override = material
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_own(root, node, parent)
+
+
+## A beam of light falling out of a window: the opening's rectangle
+## spreading and sinking as it goes out 28 m, fading (UV.y 0 at the window,
+## 1 at its end).
+func _beam(st: SurfaceTool, at: Vector3, out: Vector3, cross: Vector3, size: Vector2) -> void:
+	var near := [at - cross * size.x * 0.5 - Vector3.UP * size.y * 0.5, at + cross * size.x * 0.5 - Vector3.UP * size.y * 0.5,
+			at + cross * size.x * 0.5 + Vector3.UP * size.y * 0.5, at - cross * size.x * 0.5 + Vector3.UP * size.y * 0.5]
+	var far_centre := at + out * 28.0 + Vector3.DOWN * 9.0
+	var spread := 1.7
+	var far := [far_centre - cross * size.x * 0.5 * spread - Vector3.UP * size.y * 0.5 * spread,
+			far_centre + cross * size.x * 0.5 * spread - Vector3.UP * size.y * 0.5 * spread,
+			far_centre + cross * size.x * 0.5 * spread + Vector3.UP * size.y * 0.5 * spread,
+			far_centre - cross * size.x * 0.5 * spread + Vector3.UP * size.y * 0.5 * spread]
+	for i in 4:
+		var j := (i + 1) % 4
+		for p in [[near[i], 0.0], [near[j], 0.0], [far[j], 1.0], [near[i], 0.0], [far[j], 1.0], [far[i], 1.0]]:
+			st.set_uv(Vector2(0.0, p[1]))
+			st.add_vertex(p[0])
+
+
 ## Overgrown the whole way up (the sewer land's growths, made huge): black
 ## vines breathing over the walls, giant vine pillars climbing them,
 ## bracket fungus jutting from them, hive spires, egg sacs and mould on
-## every terrace.
+## every terrace. Never in a carved-out space.
 func _growth(root: Node, parent: Node) -> void:
-	var walls: Array[Dictionary] = []
-	var tops: Array[Dictionary] = []
 	var wall_total := 0.0
 	var top_total := 0.0
-	for b in boxes:
-		if b.part != &"shell" or not b.solid:
-			continue
+	for b in blocks:
 		var s: Vector3 = b.s
-		walls.append(b)
 		wall_total += (s.x + s.z) * 2.0 * s.y
-		tops.append(b)
 		top_total += s.x * s.z
-	_grow_on(root, parent, GrowthMeshes.Kind.BLACK_VINES, walls, wall_total, true, 420, 10.0, 22.0, 2500.0, 2.8)
-	_grow_on(root, parent, GrowthMeshes.Kind.VINE_PILLAR, walls, wall_total, true, 30, 3.0, 8.0, 9000.0, 2.0)
-	_grow_on(root, parent, GrowthMeshes.Kind.FUNGUS_TOWER, walls, wall_total, true, 70, 0.8, 2.0, 6000.0, 0.0)
-	_grow_on(root, parent, GrowthMeshes.Kind.HIVE_SPIRE, tops, top_total, false, 70, 1.2, 3.0, 9000.0, 0.0)
-	_grow_on(root, parent, GrowthMeshes.Kind.EGG_SACS, tops, top_total, false, 220, 10.0, 20.0, 2500.0, 0.0)
-	_grow_on(root, parent, GrowthMeshes.Kind.HAIR_MOLD, tops, top_total, false, 400, 14.0, 28.0, 2000.0, 0.0)
+	_grow_on(root, parent, GrowthMeshes.Kind.BLACK_VINES, wall_total, true, 420, 10.0, 22.0, 2500.0, 2.8)
+	_grow_on(root, parent, GrowthMeshes.Kind.VINE_PILLAR, wall_total, true, 30, 3.0, 8.0, 9000.0, 2.0)
+	_grow_on(root, parent, GrowthMeshes.Kind.FUNGUS_TOWER, wall_total, true, 70, 0.8, 2.0, 6000.0, 0.0)
+	_grow_on(root, parent, GrowthMeshes.Kind.HIVE_SPIRE, top_total, false, 70, 1.2, 3.0, 9000.0, 0.0)
+	_grow_on(root, parent, GrowthMeshes.Kind.EGG_SACS, top_total, false, 220, 10.0, 20.0, 2500.0, 0.0)
+	_grow_on(root, parent, GrowthMeshes.Kind.HAIR_MOLD, top_total, false, 400, 14.0, 28.0, 2000.0, 0.0)
+	# The hive tunnel's ledge: a crowd of hive spires.
+	var places: Array[Transform3D] = []
+	for i in 9:
+		var y: float = HALLS[0][0][0]
+		var at := Vector3(random.randf_range(0.0, 60.0), y, _face(0, y + 8.0, 1) + random.randf_range(8.0, 40.0))
+		places.append(Transform3D(Basis(Vector3.UP, random.randf() * TAU).scaled(Vector3.ONE * random.randf_range(0.6, 1.2)), at))
+	_growth_batch(root, parent, GrowthMeshes.Kind.HIVE_SPIRE, places, 6000.0, 0.0, "Growth_HiveLedge")
 
 
-## `count` of a growth kind on the blocks' walls (standing out of them) or
-## their tops, scale min..max, one MultiMesh, drawn to `distance`.
-func _grow_on(root: Node, parent: Node, kind: GrowthMeshes.Kind, blocks: Array[Dictionary], total: float, on_walls: bool,
+func _grow_on(root: Node, parent: Node, kind: GrowthMeshes.Kind, total: float, on_walls: bool,
 		count: int, scale_min: float, scale_max: float, distance: float, breathe: float) -> void:
 	var places: Array[Transform3D] = []
-	for i in count:
-		var b: Dictionary = blocks[_weighted_by(blocks, total, on_walls)]
+	var tries := 0
+	while places.size() < count and tries < count * 4:
+		tries += 1
+		var b: Dictionary = blocks[_weighted(blocks, total, on_walls)]
 		var s: Vector3 = b.s
 		var half := s * 0.5
 		var c: Vector3 = b.c
@@ -527,19 +1204,28 @@ func _grow_on(root: Node, parent: Node, kind: GrowthMeshes.Kind, blocks: Array[D
 		var spin := Basis(Vector3.UP, random.randf() * TAU)
 		if on_walls:
 			var side := random.randi() % 4
-			var normal := [Vector3.FORWARD, Vector3.BACK, Vector3.LEFT, Vector3.RIGHT][side] as Vector3
+			var normal := _outward(side)
 			var along := random.randf_range(-0.9, 0.9) * (half.x if side < 2 else half.z)
-			# Thickest low down, thinning up each block.
 			var y := c.y - half.y + s.y * pow(random.randf(), 1.4)
 			var at := _on_wall(side, (half.z if side < 2 else half.x) - 0.5, along, y) + Vector3(c.x, 0.0, c.z)
+			if not _outside(at + normal * 1.5):
+				continue
 			var lie := Basis(Quaternion(Vector3.UP, normal))
 			if kind == GrowthMeshes.Kind.VINE_PILLAR:
-				lie = Basis.IDENTITY # climbs straight up the wall
+				lie = Basis.IDENTITY
 				at += normal * 4.0 * size
 			places.append(Transform3D(lie * spin * Basis.from_scale(Vector3.ONE * size), at))
 		else:
 			var at := Vector3(c.x + random.randf_range(-0.9, 0.9) * half.x, c.y + half.y - 0.5, c.z + random.randf_range(-0.9, 0.9) * half.z)
+			if not _outside(at + Vector3.UP * 1.5):
+				continue
 			places.append(Transform3D(spin * Basis.from_scale(Vector3.ONE * size), at))
+	_growth_batch(root, parent, kind, places, distance, breathe, "Growth_%s" % GrowthMeshes.Kind.keys()[kind])
+
+
+func _growth_batch(root: Node, parent: Node, kind: GrowthMeshes.Kind, places: Array[Transform3D], distance: float, breathe: float, name: String) -> void:
+	if places.is_empty():
+		return
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_colors = true
@@ -551,7 +1237,7 @@ func _grow_on(root: Node, parent: Node, kind: GrowthMeshes.Kind, blocks: Array[D
 		multimesh.set_instance_color(i, Color(1.0, 1.0, 1.0))
 		multimesh.set_instance_custom_data(i, Color(random.randf(), random.randf(), 0.0, 0.0))
 	var node := MultiMeshInstance3D.new()
-	node.name = "Growth_%s" % GrowthMeshes.Kind.keys()[kind]
+	node.name = name
 	node.multimesh = multimesh
 	var material := ShaderMaterial.new()
 	material.shader = GrowthScatter.GROWTH_SHADER
@@ -595,45 +1281,50 @@ func _swarms(root: Node, parent: Node) -> void:
 		_own(root, node, parent)
 
 
-## The lift up the main tower's -Z face, from the bridge level up 1.4 km,
-## and its cable.
-func _lift(root: Node, parent: Node) -> void:
-	var face := -TOWERS[0][2] * 0.5 - 12.0
+## The express lift up the main tower's -Z side (and its cable), and the
+## cable car between the high halls (and its cable).
+func _rides(root: Node, parent: Node) -> void:
 	var lift := StackLift.new()
 	lift.name = "Lift"
-	lift.position = Vector3(0.0, 0.0, face)
-	lift.bottom = FLOOR
-	lift.top = 1400.0
+	lift.stops = lift_stops
 	_own(root, lift, parent)
+	_cable(root, parent, "LiftCable", Vector3(0.0, 0.0, lift_face), Vector3(0.0, LIFT_STOPS[LIFT_STOPS.size() - 1] + 80.0, lift_face))
+	if cable_stops.size() == 2:
+		var car := StackLift.new()
+		car.name = "CableCar"
+		car.hanging = true
+		car.speed = 12.0
+		car.stops = cable_stops
+		_own(root, car, parent)
+		_cable(root, parent, "CarCable", cable_stops[0] + Vector3.UP * 17.0, cable_stops[1] + Vector3.UP * 17.0)
+
+
+func _cable(root: Node, parent: Node, name: String, a: Vector3, b: Vector3) -> void:
 	var cable := MeshInstance3D.new()
-	cable.name = "LiftCable"
+	cable.name = name
 	var line := BoxMesh.new()
-	line.size = Vector3(0.8, 1500.0, 0.8)
+	line.size = Vector3(0.8, 0.8, a.distance_to(b))
 	cable.mesh = line
-	cable.position = Vector3(0.0, 750.0, face)
+	cable.transform = Transform3D(Basis.looking_at((b - a).normalized(), Vector3.UP if absf((b - a).normalized().y) < 0.99 else Vector3.BACK), (a + b) * 0.5)
 	_own(root, cable, parent)
 
 
-func _weighted(blocks: Array[Dictionary], total: float) -> int:
-	return _weighted_by(blocks, total, true)
-
-
 ## A block picked in proportion to its wall area (or its top's area).
-func _weighted_by(blocks: Array[Dictionary], total: float, by_walls: bool) -> int:
+func _weighted(list: Array[Dictionary], total: float, by_walls: bool) -> int:
 	var roll := random.randf() * total
-	for i in blocks.size():
-		var s: Vector3 = blocks[i].s
+	for i in list.size():
+		var s: Vector3 = list[i].s
 		roll -= (s.x + s.z) * 2.0 * s.y if by_walls else s.x * s.z
 		if roll <= 0.0:
 			return i
-	return blocks.size() - 1
+	return list.size() - 1
 
 
-# ---- The TrenchBroom map ------------------------------------------------------
+# ---- The TrenchBroom map ------------------------------------------------------------------
 
 ## Every box as a brush, in two layers (Shell, Interior), Valve 220 format,
 ## MAP_UNITS a metre (Quake's z-up: map = (godot.z, godot.x, godot.y)).
-func write_map(path: String, texture_name: String) -> Error:
+func write_map(path: String, textures: Dictionary) -> Error:
 	var lines := PackedStringArray()
 	lines.append("// Game: 2v-2\n// Format: Valve")
 	lines.append("// The Stack -- made by StackBuilder (tools/make_the_stack.gd); edit freely from here.")
@@ -644,7 +1335,7 @@ func write_map(path: String, texture_name: String) -> Error:
 				String(part).capitalize(), layer_ids[part]])
 		for b in boxes:
 			if b.part == part:
-				lines.append(_brush(b, texture_name))
+				lines.append(_brush(b, textures.get(b.mat, textures[&"plain"])))
 		lines.append("}")
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
@@ -654,25 +1345,24 @@ func write_map(path: String, texture_name: String) -> Error:
 
 
 func _brush(b: Dictionary, texture_name: String) -> String:
-	var basis := Basis(Vector3.UP, b.yaw)
-	var half: Vector3 = b.s * 0.5
-	var centre: Vector3 = b.c
-	# Godot's axes in map space: x -> map y, y -> map z, z -> map x.
-	var ax := _to_map(basis * Vector3(0.0, 0.0, 1.0)) # godot +Z = map +X
-	var ay := _to_map(basis * Vector3(1.0, 0.0, 0.0)) # godot +X = map +Y
-	var az := Vector3(0.0, 0.0, 1.0)
+	var basis: Basis = b.b
+	var half: Vector3 = (b.s as Vector3) * 0.5
+	# The box's own axes in map space (godot x -> map y, y -> map z, z -> map x).
+	var ax := _to_map(basis * Vector3(0.0, 0.0, 1.0))
+	var ay := _to_map(basis * Vector3(1.0, 0.0, 0.0))
+	var az := _to_map(basis * Vector3(0.0, 1.0, 0.0))
 	var extent := Vector3(half.z, half.x, half.y) * MAP_UNITS
-	var c := _to_map(centre) * MAP_UNITS
+	var c := _to_map(b.c) * MAP_UNITS
 	var low := c - ax * extent.x - ay * extent.y - az * extent.z
 	var high := c + ax * extent.x + ay * extent.y + az * extent.z
 	var step := 64.0
 	var planes := [
-		[low, low + ay * step, low + az * step, Vector3(0, 1, 0), Vector3(0, 0, -1)], # -X
-		[low, low + az * step, low + ax * step, Vector3(1, 0, 0), Vector3(0, 0, -1)], # -Y
-		[low, low + ax * step, low + ay * step, Vector3(1, 0, 0), Vector3(0, -1, 0)], # -Z
-		[high, high + ay * step, high + ax * step, Vector3(1, 0, 0), Vector3(0, -1, 0)], # +Z
-		[high, high + ax * step, high + az * step, Vector3(1, 0, 0), Vector3(0, 0, -1)], # +Y
-		[high, high + az * step, high + ay * step, Vector3(0, 1, 0), Vector3(0, 0, -1)], # +X
+		[low, low + ay * step, low + az * step, Vector3(0, 1, 0), Vector3(0, 0, -1)],
+		[low, low + az * step, low + ax * step, Vector3(1, 0, 0), Vector3(0, 0, -1)],
+		[low, low + ax * step, low + ay * step, Vector3(1, 0, 0), Vector3(0, -1, 0)],
+		[high, high + ay * step, high + ax * step, Vector3(1, 0, 0), Vector3(0, -1, 0)],
+		[high, high + ax * step, high + az * step, Vector3(1, 0, 0), Vector3(0, 0, -1)],
+		[high, high + az * step, high + ay * step, Vector3(0, 1, 0), Vector3(0, 0, -1)],
 	]
 	var out := PackedStringArray(["{"])
 	for p in planes:
@@ -694,26 +1384,31 @@ func _n(value: float) -> String:
 	return str(int(rounded)) if is_equal_approx(rounded, roundf(rounded)) else str(rounded)
 
 
-# ---- Generated assets ---------------------------------------------------------
+# ---- Generated assets ---------------------------------------------------------------------
 
-## Grey stained concrete, 64 px for 8 m, PS1-coarse: blotches, water streaks
-## running down, and one dark window a tile -- thousands of dark windows up
-## the towers for nothing.
-static func make_concrete() -> Image:
+## Grey stained concrete, 64 px for 8 m, PS1-coarse: blotches and water
+## streaks; `windowed`: one dark window a tile (the towers' outsides),
+## otherwise plain (insides, rubble -- no windows underfoot).
+static func make_concrete(windowed: bool = true) -> Image:
 	var image := Image.create_empty(64, 64, false, Image.FORMAT_RGB8)
 	var blotch := FastNoiseLite.new()
-	blotch.seed = 11
+	blotch.seed = 11 if windowed else 21
 	blotch.frequency = 0.08
 	var streak := FastNoiseLite.new()
 	streak.seed = 12
 	streak.frequency = 0.15
+	var crack := FastNoiseLite.new()
+	crack.seed = 13
+	crack.frequency = 0.2
+	crack.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	for y in 64:
 		for x in 64:
 			var shade := 0.42 + blotch.get_noise_2d(x, y) * 0.08
 			shade -= maxf(streak.get_noise_2d(x * 1.0, y * 0.12), 0.0) * 0.18 # streaks run down
+			if not windowed and crack.get_noise_2d(x, y) > 0.8:
+				shade *= 0.55 # cracks
 			var color := Color(shade, shade * 0.98, shade * 0.93)
-			# The window: dark glass in a lighter frame.
-			if x >= 20 and x < 44 and y >= 16 and y < 46:
+			if windowed and x >= 20 and x < 44 and y >= 16 and y < 46:
 				var frame := x < 22 or x >= 42 or y < 18 or y >= 44
 				color = Color(0.5, 0.49, 0.46) if frame else Color(0.05, 0.05, 0.06)
 			image.set_pixel(x, y, color)
@@ -727,19 +1422,18 @@ static func make_wind(seconds: float = 12.0) -> AudioStreamWAV:
 	var frames := int(seconds * rate)
 	var samples := PackedFloat32Array()
 	samples.resize(frames)
-	var random := RandomNumberGenerator.new()
-	random.seed = 3
+	var noise_random := RandomNumberGenerator.new()
+	noise_random.seed = 3
 	var low := 0.0
 	var band := 0.0
 	var high := 0.0
 	for i in frames:
 		var t := float(i) / rate
-		var phase := t / seconds * TAU # whole cycles over the loop: it joins up
+		var phase := t / seconds * TAU
 		var pitch := 380.0 + 220.0 * sin(phase * 2.0) + 90.0 * sin(phase * 5.0 + 1.0)
 		var gust := 0.45 + 0.35 * sin(phase * 3.0) + 0.2 * sin(phase * 7.0 + 2.0)
-		# State-variable filter: a resonant band round `pitch` -- the howl.
 		var f := 2.0 * sin(PI * pitch / rate)
-		var noise := random.randf_range(-1.0, 1.0)
+		var noise := noise_random.randf_range(-1.0, 1.0)
 		low += f * band
 		high = noise - low - 0.08 * band
 		band += f * high
@@ -747,27 +1441,25 @@ static func make_wind(seconds: float = 12.0) -> AudioStreamWAV:
 	return _wav(_crossfade_loop(samples, rate), rate)
 
 
-## The drone: low tones beating slowly against each other, a rumble under
-## them, swelling and ebbing (every tone whole cycles over the loop).
+## The drone: low tones beating slowly against each other, a rumble under them.
 static func make_drone(seconds: float = 16.0) -> AudioStreamWAV:
 	var rate := 22050
 	var frames := int(seconds * rate)
 	var samples := PackedFloat32Array()
 	samples.resize(frames)
-	var random := RandomNumberGenerator.new()
-	random.seed = 4
+	var noise_random := RandomNumberGenerator.new()
+	noise_random.seed = 4
 	var rumble := 0.0
 	for i in frames:
 		var t := float(i) / rate
 		var swell := 0.75 + 0.25 * sin(t / seconds * TAU * 2.0)
 		var tone := sin(TAU * 38.0 * t) * 0.45 + sin(TAU * 38.5 * t) * 0.35 + sin(TAU * 57.0 * t) * 0.2 \
 				+ sin(TAU * 76.0 * t) * 0.1 + sin(TAU * 113.0 * t) * 0.05
-		rumble += (random.randf_range(-1.0, 1.0) - rumble) * 0.01
+		rumble += (noise_random.randf_range(-1.0, 1.0) - rumble) * 0.01
 		samples[i] = (tone * 0.6 + rumble * 2.5) * swell * 0.7
 	return _wav(_crossfade_loop(samples, rate), rate)
 
 
-## The last second blended into the first, so the loop has no seam.
 static func _crossfade_loop(samples: PackedFloat32Array, rate: int) -> PackedFloat32Array:
 	var fade := rate
 	var out := samples.slice(0, samples.size() - fade)

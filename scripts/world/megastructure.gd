@@ -24,8 +24,13 @@ extends Node3D
 ## put the outside's scene under Shell and the inside's under Interior.
 
 @export var interior_distance: float = 600.0
-## Its insides (local space): where the inside nests go.
+## Its insides (local space): the whole of them (inside nests, the sound),
+## and its rooms and halls one by one (where the infestation lives).
 @export var inside := AABB()
+@export var inside_zones: Array[AABB] = []
+## Where the ground has to be holed for it (local space): its shafts and
+## tunnels going down. The world bake tool punches these into the terrain.
+@export var terrain_holes: Array[AABB] = []
 @export_group("Nests")
 @export var barnacle_nests: int = 20
 ## The outside nests grow up to this high (where players get to).
@@ -200,8 +205,9 @@ func _member(group: RoamingGroup, member: Node, index: int, lift: float = 0.0) -
 ## whatever's under it), or a non-finite vector if none turned up.
 func _inside_spot() -> Vector3:
 	var space := get_world_3d().direct_space_state
-	for attempt in 12:
-		var from := to_global(inside.position + Vector3(randf(), randf(), randf()) * inside.size)
+	for attempt in 30:
+		var zone := inside if inside_zones.is_empty() else inside_zones[randi() % inside_zones.size()]
+		var from := to_global(zone.position + Vector3(randf(), randf(), randf()) * zone.size)
 		var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 60.0)
 		query.collision_mask = 1
 		var hit := space.intersect_ray(query)

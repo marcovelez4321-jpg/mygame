@@ -183,25 +183,27 @@ func _bake() -> void:
 		return
 	var height_image := shape.make_height_image()
 	data.call("import_images", [height_image, null, null], shape.corner(), 0.0, shape.height)
-	# A hole in the ground where the Stack's shaft goes down to its depths.
+	# Holes in the ground where the Stack goes down (its shaft, its outfall):
+	# the list it carries (Megastructure.terrain_holes, its local space).
 	var stack_ground := shape.yard_level * shape.height
-	var hole := StackBuilder.SHAFT * 0.5 + StackBuilder.WALL
 	var holes := 0
+	var stack_probe := (load(STACK_SCENE) as PackedScene).instantiate() as Megastructure
 	if data.has_method("set_control_hole"):
-		var step := shape.vertex_spacing
-		var x := -hole
-		while x <= hole:
-			var z := -hole
-			while z <= hole:
-				data.call("set_control_hole", Vector3(STACK_AT.x + x, 0.0, STACK_AT.y + z), true)
-				holes += 1
-				z += step
-			x += step
+		for hole_box: AABB in stack_probe.terrain_holes:
+			var x := hole_box.position.x
+			while x <= hole_box.end.x:
+				var z := hole_box.position.z
+				while z <= hole_box.end.z:
+					data.call("set_control_hole", Vector3(STACK_AT.x + x, 0.0, STACK_AT.y + z), true)
+					holes += 1
+					z += shape.vertex_spacing
+				x += shape.vertex_spacing
 		if data.has_method("update_maps"):
 			data.call("update_maps")
 	else:
-		push_warning("Terrain3DData has no set_control_hole: no hole for the Stack's shaft")
-	print("the Stack's shaft: ", holes, " terrain vertices holed")
+		push_warning("Terrain3DData has no set_control_hole: no holes for the Stack")
+	stack_probe.free()
+	print("the Stack's holes: ", holes, " terrain vertices")
 	print("regions: ", data.call("get_region_count"), " size ", terrain.call("get_region_size"),
 			" height range: ", data.call("get_height_range"))
 	# Ground height under each test enemy (before the data's swapped for the
