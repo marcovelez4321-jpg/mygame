@@ -202,6 +202,11 @@ func _bake() -> void:
 	chunks.chunk_size = CHUNK_SIZE
 	root.add_child(chunks)
 	chunks.owner = root
+	# The ground shader, re-applied after Terrain3D's setup (see TerrainLook).
+	var look := TerrainLook.new()
+	look.name = "TerrainLook"
+	root.add_child(look)
+	look.owner = root
 	# The flora: grown into each chunk as it streams in.
 	var growth := GrowthScatter.new()
 	growth.name = "GrowthScatter"

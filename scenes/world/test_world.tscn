@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://bdy1lul7nr03o" path="res://scripts/world/world_navigation.gd" id="2_ew2ib"]
 [ext_resource type="Script" uid="uid://udb4fv61c1q5" path="res://scripts/world/world_chunks.gd" id="3_s4qyy"]
 [ext_resource type="Script" path="res://scripts/world/growth_scatter.gd" id="3_growth"]
+[ext_resource type="Script" path="res://scripts/world/terrain_look.gd" id="3_look"]
 [ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="4_tersh"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="11_63a70"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/zombie.tscn" id="13_k6tl3"]
@@ -63,6 +64,9 @@ chunks_dir = "res://worlds/test_world/chunks"
 
 [node name="GrowthScatter" type="Node" parent="."]
 script = ExtResource("3_growth")
+
+[node name="TerrainLook" type="Node" parent="."]
+script = ExtResource("3_look")
 
 [node name="HarvestmanLeech" parent="." unique_id=1040049696 instance=ExtResource("4_tersh")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 20.82164, 60)

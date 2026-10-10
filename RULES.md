@@ -830,3 +830,10 @@ them:
     - One MultiMesh per kind and variant per chunk, faded out past each kind's view distance. 3 kinds grown per frame, so chunks arrive without a hitch.
   - Test world: GrowthScatter added (bake tool and scene).
   - **Terrain fix:** the checkerboard was Terrain3D's `show_checkered` debug view, switched on (on the material and the node) for a terrain with no textures. It draws over any shader. Now off in the scene and in the bake tool, so the purple PS1 ground shader should show.
+
+- 2026-10-10: **Terrain checkerboard, the real fix: `scripts/world/terrain_look.gd` (TerrainLook).**
+  - A capture run showed the checkers stayed after turning `show_checkered` off. There were no shader errors, so Terrain3D was never using our shader.
+  - Cause: a saved scene lists "shader override enabled" before "which shader". On load Terrain3D turns the override on with no shader, builds its default (the no-texture checkerboard) and doesn't rebuild when ours arrives.
+  - TerrainLook re-applies the shader in the right order once Terrain3D has set up (two frames in) and calls `update()`. It's in the test world and the bake tool.
+  - The same run also showed the growth scripts' new class names weren't registered yet (no import had run since they were written); an `--import` fixed it.
+  - Not yet seen in game.
