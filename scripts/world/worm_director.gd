@@ -113,7 +113,8 @@ func _process(delta: float) -> void:
 			if lair.is_empty():
 				_hunger = maxf(_hunger - 0.5 / hunger_time, 0.0)
 				return
-			_hunger += 1.0 / hunger_time
+			# Its home (a megastructure's Lair) makes it hungrier, faster.
+			_hunger += float((lair.shape as Node).get_meta(&"hunger_scale", 1.0)) / hunger_time
 			if _hunger >= 1.0 and _cooldown <= 0.0:
 				_start(lair.chunk, lair.shape)
 		State.UP:
@@ -129,8 +130,15 @@ func _lair_near_players() -> Dictionary:
 	var now := Time.get_ticks_msec()
 	var best := {}
 	var best_distance := lair_reach
-	for chunk: Vector2i in _lairs:
-		var shape: CollisionShape3D = _lairs[chunk]
+	# Chunks' megastructures, and the walk-up megastructures (Megastructure's
+	# Lair: it lives there -- the key just has to be its own).
+	var lairs := _lairs.duplicate()
+	var index := 0
+	for node in get_tree().get_nodes_in_group(Megastructure.LAIR_GROUP):
+		lairs[Vector2i(1000000 + index, 0)] = node
+		index += 1
+	for chunk: Vector2i in lairs:
+		var shape: CollisionShape3D = lairs[chunk]
 		if not is_instance_valid(shape) or int(_resting.get(chunk, 0)) > now:
 			continue
 		for node in get_tree().get_nodes_in_group("player"):

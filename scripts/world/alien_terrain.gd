@@ -86,6 +86,10 @@ extends Resource
 @export var yard_radius: float = 45.0
 @export var yard_edge: float = 60.0
 @export_range(0.0, 1.0, 0.05) var yard_level: float = 0.45
+## More flat places (a megastructure's footing): each (x, z, radius, level
+## as a share of the height), easing out to the land over flat_edge metres.
+@export var flats: Array[Vector4] = []
+@export var flat_edge: float = 250.0
 
 
 ## The heightmap, 0..1 per pixel (Image.FORMAT_RF): height in metres is
@@ -142,6 +146,9 @@ func make_height_image() -> Image:
 			var value := heights[y * size + x] / height
 			var yard := smoothstep(yard_radius + yard_edge, yard_radius, world.length())
 			value = lerpf(value, yard_level, yard)
+			for flat in flats:
+				var near := smoothstep(flat.z + flat_edge, flat.z, world.distance_to(Vector2(flat.x, flat.y)))
+				value = lerpf(value, flat.w, near)
 			image.set_pixel(x, y, Color(clampf(value, 0.0, 1.0), 0.0, 0.0))
 	return image
 

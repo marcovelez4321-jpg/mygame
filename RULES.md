@@ -127,6 +127,25 @@ torn up later. In practice:
   between missions and is per-player data that co-op will need to sync or
   share (Rule 1).
 
+## Rule 9 — Spectacle, always
+- The game is a spectacle. Structures, growths and creatures are built to
+  make your jaw drop: unearthly, megalophobic scale that reaches past the
+  fog and past what you can see.
+- Size pushes the limits as far as the tech allows, every time. When
+  something big is made, ask "can it be bigger?" and find the technique
+  that makes the answer yes (the skyline layer, far shells, occluders,
+  silhouettes) rather than settling for smaller.
+- Scale has to READ: human-sized details (windows, stairs, lights) that
+  shrink to texture, things moving on it, fog that drowns the base while
+  the top looms, reveals over ridges, sound you feel.
+- Spectacle is never an excuse for a bad frame rate: it's done the cheap
+  way (HL2's 3D skybox, LOD shells, occlusion, no physics where nothing's
+  reachable). Spectacle AND optimized.
+- The user decides the details of each spectacle piece: offer ideas,
+  let them choose.
+- Reference (Rule 6): HL2's Citadel, Shadow of the Colossus, Blame!, Dark
+  Souls' Anor Londo, Destiny's skyboxes.
+
 ---
 
 ## Creative Direction — what the game IS
@@ -1001,3 +1020,30 @@ them:
     - The fog colour is the new global `world_fog_color` (project.godot shader_globals), set by `AlienAtmosphere.apply_blend` as the biomes crossfade.
   - **Giant growths rise out of the fog too:** `GrowthSpecies.rises_from_fog` (the giants) uses `GrowthScatter._tall_shader()`, the growth shader with the same hand-made fog (thick to 230 m at the ground, 1.4 km past 70 m up). View distance is 600 m, so their tops show past the world's fog.
   - In the bake tool and the test world.
+
+- 2026-10-10: **Rule 9 (Spectacle, always); the walk-up Megastructure template; the Stack.**
+  - **Rule 9 added** (the user's direction): spectacle at the limits of the tech, done the cheap way, with the user deciding each piece.
+  - **Megastructure (`scripts/world/megastructure.gd`):**
+    - Shell: always drawn with the skyline fog (materials converted, texture kept). Interior: drawn within 600 m. Decor. Lair: in the group `megastructure_lairs`, hunger ×2.
+    - Barnacle nests: 16, by rays against it.
+    - Pushes the camera's far plane to 16 km.
+  - **MegastructureSound:**
+    - Wind with height, silent below 60 m and full at 400 m.
+    - Three positional wind voices kept on the openings nearest you. The user asked for wind at the windows; HL2-style, few voices placed where they matter.
+    - The drone, full inside and fading in near the base.
+    - The sounds are generated: `StackBuilder.make_wind` (noise through a gliding resonant filter) and `make_drone` (beating low tones with a rumble), both seamless loops.
+  - **The Stack (StackBuilder, `tools/make_the_stack.gd`):** every detail the user's (see docs/WORLD.md).
+    - 374 shell and 212 interior boxes, merged into one mesh per tower plus the bridges and the insides, with box collision.
+    - Occluders: BoxOccluder3D per solid block; occlusion culling is turned on in project.godot.
+    - 2,600 lit windows and red blinkers (`stack_lights.gdshader`: unshaded, own fog, per-instance blink and flicker).
+    - Growth: GrowthMeshes kinds made huge with the tall-fog shader; vines breathe.
+    - Swarms (`swarm.gdshader`: 350 specks per tower, orbiting on the GPU).
+    - CoilingWorm: one MultiMesh of worm segments sliding along a spiral.
+    - StackLift (an AnimatableBody3D you can ride).
+    - Concrete texture generated with a window per 8 m tile.
+    - Also written as `maps/megastructures/the_stack.map` (Valve 220, game "2v-2", 8 units a metre, Shell and Interior layers) and `megastructure_map_settings.tres`.
+  - **In the world (bake tool):**
+    - Placed at (250, -1450) on a plateau (`AlienTerrain.flats`, 480 m, eased over 250 m).
+    - 361 terrain vertices holed for the shaft (Terrain3DData.set_control_hole).
+    - In the navmesh bake as statics; monoliths kept 650 m away.
+    - Shell blocks standing on the ground are sunk 3 m in.

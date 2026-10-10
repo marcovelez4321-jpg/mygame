@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://b1havdrbor51i"
+path="res://.godot/imported/the_stack.map-65c3afc13ddf8c0daa67c893ac858ae6.tres"
+
+[deps]
+
+source_file="res://maps/megastructures/the_stack.map"
+dest_files=["res://.godot/imported/the_stack.map-65c3afc13ddf8c0daa67c893ac858ae6.tres"]
+
+[params]
+

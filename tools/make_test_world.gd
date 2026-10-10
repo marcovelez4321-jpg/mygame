@@ -38,6 +38,13 @@ const NEAR_CHUNKS := {
 	Vector2i(2, 2): Vector2(12.0, 55.0),
 }
 const MORE_MONOLITHS := 40
+## The Stack (StackBuilder, tools/make_the_stack.gd): where it stands (x, z;
+## about 1.5 km from the yard, in view of it), the flat plateau its towers
+## stand on (radius, metres), and how far the stand-in monoliths keep away.
+const STACK_SCENE := "res://scenes/megastructures/the_stack.scn"
+const STACK_AT := Vector2(250.0, -1450.0)
+const STACK_PLATEAU := 480.0
+const STACK_CLEAR := 650.0
 
 var _test_chunks := {}
 const SCENE_PATH := "res://scenes/world/test_world.tscn"
@@ -121,6 +128,8 @@ func _pick_test_chunks(world_metres: float) -> void:
 		var chunk := Vector2i(random.randi_range(-half_chunks, half_chunks - 1), random.randi_range(-half_chunks, half_chunks - 1))
 		if chunk.length() < 4.0:
 			continue # keep the yard's surroundings as they are
+		if (Vector2(chunk) + Vector2(0.5, 0.5)).distance_to(STACK_AT / CHUNK_SIZE) * CHUNK_SIZE < STACK_CLEAR:
+			continue # the Stack's ground
 		_test_chunks[chunk] = Vector2(random.randf_range(10.0, 30.0), random.randf_range(40.0, 120.0))
 
 
@@ -141,6 +150,8 @@ func _chunk_path(chunk: Vector2i) -> String:
 func _bake() -> void:
 	var shape := AlienTerrain.new()
 	shape.size = _world_size()
+	# The Stack's plateau: as level as the yard.
+	shape.flats = [Vector4(STACK_AT.x, STACK_AT.y, STACK_PLATEAU, shape.yard_level)]
 	_pick_test_chunks(shape.size * shape.vertex_spacing)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DATA_DIR))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SCENE_PATH.get_base_dir()))
@@ -172,6 +183,25 @@ func _bake() -> void:
 		return
 	var height_image := shape.make_height_image()
 	data.call("import_images", [height_image, null, null], shape.corner(), 0.0, shape.height)
+	# A hole in the ground where the Stack's shaft goes down to its depths.
+	var stack_ground := shape.yard_level * shape.height
+	var hole := StackBuilder.SHAFT * 0.5 + StackBuilder.WALL
+	var holes := 0
+	if data.has_method("set_control_hole"):
+		var step := shape.vertex_spacing
+		var x := -hole
+		while x <= hole:
+			var z := -hole
+			while z <= hole:
+				data.call("set_control_hole", Vector3(STACK_AT.x + x, 0.0, STACK_AT.y + z), true)
+				holes += 1
+				z += step
+			x += step
+		if data.has_method("update_maps"):
+			data.call("update_maps")
+	else:
+		push_warning("Terrain3DData has no set_control_hole: no hole for the Stack's shaft")
+	print("the Stack's shaft: ", holes, " terrain vertices holed")
 	print("regions: ", data.call("get_region_count"), " size ", terrain.call("get_region_size"),
 			" height range: ", data.call("get_height_range"))
 	# Ground height under each test enemy (before the data's swapped for the
@@ -202,6 +232,11 @@ func _bake() -> void:
 		var placed := (load(_chunk_path(chunk)) as PackedScene).instantiate() as Node3D
 		placed.position = Vector3(chunk.x * CHUNK_SIZE, 0.0, chunk.y * CHUNK_SIZE)
 		statics.add_child(placed)
+	# The Stack, so the navmesh routes round its towers (and through its doors).
+	var stack_for_nav := (load(STACK_SCENE) as PackedScene).instantiate() as Node3D
+	stack_for_nav.position = Vector3(STACK_AT.x, stack_ground, STACK_AT.y)
+	stack_for_nav.set("barnacle_nests", 0) # only its shape's wanted here
+	statics.add_child(stack_for_nav)
 	var tiles := navigation.bake_tiles(Rect2(-half, -half, half * 2.0, half * 2.0), terrain, statics, heights)
 	statics.queue_free()
 	print("navmesh tiles baked: ", tiles, " into ", NAV_DIR)
@@ -265,6 +300,12 @@ func _bake() -> void:
 	encounters.biomes = biomes
 	root.add_child(encounters)
 	encounters.owner = root
+	# The Stack: five towers, the tallest 5 km, about 1.5 km from the yard.
+	var stack := (load(STACK_SCENE) as PackedScene).instantiate() as Node3D
+	stack.name = "TheStack"
+	stack.position = Vector3(STACK_AT.x, stack_ground, STACK_AT.y)
+	root.add_child(stack)
+	stack.owner = root
 	# The skyline: giants kilometres tall out past the world's edge, rising out
 	# of the murk (stand-ins until real ones go under it).
 	var skyline := SkylineLayer.new()
