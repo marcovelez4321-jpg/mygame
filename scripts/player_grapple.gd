@@ -49,7 +49,7 @@ enum Rope { NONE, LASH, PULL, RIDE, MISS }
 
 @export_group("Lash")
 ## Reach at full power, in meters.
-@export var max_range: float = 35.0
+@export var max_range: float = 56.0
 ## How fast the tentacle flies out, m/s (the pull starts when it lands).
 @export var lash_speed: float = 120.0
 ## How long a miss takes to whip out and snap back.
@@ -62,7 +62,7 @@ enum Rope { NONE, LASH, PULL, RIDE, MISS }
 ## (0.2) to scale the speed exactly like the range.
 @export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
 ## How hard it pulls you up to that speed, m/s per second.
-@export var pull_accel: float = 42.0
+@export var pull_accel: float = 54.6
 ## Gravity while pulled (0 = none, 1 = full).
 @export_range(0.0, 1.0, 0.05) var pull_gravity_scale: float = 0.0
 ## Upward speed added when you let go with Space.

@@ -1185,3 +1185,8 @@ them:
     - About half its energy is now above 120 Hz, against 12% before: roughly 9 dB more of it where ordinary speakers play.
   - **Where the sounds are** (unchanged): the drone is full inside and fades in within 500 m of the base. The wind rises with height (off below 60 m, full from 400 m), plus 3 voices on the nearest openings within 70 m.
   - To use your own recordings: set `wind_stream` and `drone_stream` on TheStack/Decor/Sound, or point `make_the_stack.gd`'s WIND/DRONE at them.
+
+- 2026-10-11: **Grapple: 60% more reach, 30% harder pull** (the user's call).
+  - `max_range` 35 -> 56 m: the reach at full charge. A short charge still scales it down from there, and the landing ring follows it.
+  - `pull_accel` 42 -> 54.6 m/s per second: you get up to speed 30% faster. The top speed (`pull_speed` 15.6) is unchanged.
+  - Every grapple value is an inspector setting on the Player's PlayerGrapple node, in groups: Charge, Lash, Pull, Big Enemies, Look.
