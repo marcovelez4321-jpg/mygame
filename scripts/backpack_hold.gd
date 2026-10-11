@@ -12,9 +12,9 @@ extends Resource
 ## Where the bag sits (camera space: x right, y up, -z ahead) and its turn.
 @export var bag_position: Vector3 = Vector3(-0.08, -0.42, -0.62)
 @export var bag_rotation_degrees: Vector3 = Vector3(-38.0, 12.0, 0.0)
-## The pack's model (0.8 m tall) brought to size: about 0.79 m (the user's:
-## 0.61 m, then 30% bigger; its middle stays where it is).
-@export var bag_scale: float = 0.988
+## The pack's model (0.8 m tall) brought to size: about 0.67 m (the user's:
+## 0.61 m, 30% bigger, then 15% smaller; its middle stays where it is).
+@export var bag_scale: float = 0.84
 ## How long it takes to swing round from your back, and to unzip.
 @export var swing_time: float = 0.35
 @export var unzip_time: float = 0.3
@@ -35,3 +35,9 @@ extends Resource
 ## Which way the elbow points (camera space), and its bend (degrees).
 @export var elbow_direction: Vector3 = Vector3(-0.7, -1.0, 0.3)
 @export_range(40.0, 170.0, 1.0) var elbow_degrees: float = 100.0
+
+@export_group("Items")
+## Each kind of item's own size in the bag, on top of its real one
+## (Backpack.Kind name -> scale; the user's). Tuned live: O with the bag out,
+## hold Left Alt over an item and scroll; F3 saves. Never bigger than fits.
+@export var item_scales: Dictionary = {}

@@ -118,6 +118,14 @@ var _grip_cup := 0.55
 ## index, middle, ring, pinky), and which finger each left-hand bone is.
 var _bag_fingers := PackedFloat32Array()
 var _finger_of := {}
+## The right hand's own grip for the gun in it (set_right_grip): on, how
+## cupped, each finger's own curl, the wrist's turn; and the closed fist it
+## cups toward (the grip pose's, before grip_room opens it).
+var _right_grip := false
+var _right_cup := 0.85
+var _right_curls := PackedFloat32Array()
+var _right_wrist := Basis.IDENTITY
+var _right_fist := {}
 var _grip_turn := Basis.IDENTITY
 var _grip_elbow := Vector3.LEFT
 var _grip_bend := PI * 0.5
@@ -287,10 +295,33 @@ func set_arm_offsets(right_move: Vector3, right_turn: Basis, left_move: Vector3,
 	tick(0.0, false, 0.0, false, false)
 
 
+## The right hand's own grip for this gun (WeaponData.right_grip*), or off.
+func set_right_grip(on: bool, cup: float = 0.85, curls: PackedFloat32Array = PackedFloat32Array(), wrist_degrees: Vector3 = Vector3.ZERO) -> void:
+	_right_grip = on
+	_right_cup = cup
+	_right_curls = curls
+	_right_wrist = Basis.from_euler(wrist_degrees * (PI / 180.0))
+	_pose_right()
+
+
 ## The right arm from scratch: the hold pose, the cant, then its nudge.
 func _pose_right() -> void:
 	for bone in _right_bones:
 		_current[bone] = _hold[bone]
+	if _right_grip:
+		# Its own grip: each finger cupped from flat toward the fist, and the
+		# hand turned at the wrist (the arm's where it was).
+		for bone in _right_fist:
+			var flat: Array = _rest[bone]
+			var closed: Array = _right_fist[bone]
+			var curl := _right_cup
+			var finger := _finger_index(bone)
+			if finger >= 0 and finger < _right_curls.size():
+				curl = clampf(curl + _right_curls[finger], 0.0, 1.0)
+			_current[bone] = [(flat[0] as Vector3).lerp(closed[0], curl), (flat[1] as Quaternion).slerp(closed[1], curl),
+					(flat[2] as Vector3).lerp(closed[2], curl)]
+		var hand: Array = _current[hand_bone]
+		_current[hand_bone] = [hand[0], (hand[1] as Quaternion) * _right_wrist.get_rotation_quaternion(), hand[2]]
 	if not is_zero_approx(_cant):
 		var forearm := skeleton.find_bone("forearm.R")
 		var elbow := _bone_in_skeleton(forearm)
@@ -351,6 +382,7 @@ func _close_hand(grip: Dictionary) -> void:
 	for bone in fingers:
 		var closed: Array = grip[bone]
 		var flat: Array = _rest[bone]
+		_right_fist[bone] = closed
 		_hold[bone] = [(closed[0] as Vector3).lerp(flat[0], grip_room),
 				(closed[1] as Quaternion).slerp(flat[1], grip_room),
 				(closed[2] as Vector3).lerp(flat[2], grip_room)]

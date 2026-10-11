@@ -185,6 +185,18 @@ enum ReloadStyle {
 ## the F2 viewmodel tool and saved with F3 like any weapon. -1 = not one.
 @export var heal_item: int = -1
 
+@export_group("Right hand grip")
+## The right hand's own grip for this gun (the user's: the sawed-off first):
+## its fingers cupped round the grip right_grip_cup of the way from flat to
+## a closed fist, each finger's own curl on top (thumb, index, middle, ring,
+## pinky; -1..1), and the hand turned at the wrist. The arm stays where it
+## is. Off: every gun's usual grip (FirstPersonArms.grip_room). Tuned live:
+## F2 then Y, F3 saves.
+@export var right_grip: bool = false
+@export_range(0.0, 1.0, 0.01) var right_grip_cup: float = 0.85
+@export var right_finger_curl: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 0.0])
+@export var right_wrist_degrees: Vector3 = Vector3.ZERO
+
 @export_group("Carrying")
 ## What it weighs in your backpack, kg (the user's: each gun its own --
 ## Backpack.weight(); a heavy pack slows you down).

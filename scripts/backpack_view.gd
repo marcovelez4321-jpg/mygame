@@ -11,8 +11,9 @@ extends Node3D
 ## on your back.
 ## Picking (the user's): you keep looking around with the mouse while it's
 ## open; hold Left Alt and looking stops, a small cursor appears over the
-## bag's opening and the mouse moves it to hover and click the items. Let go
-## and you're looking again.
+## bag's opening and the mouse moves it over the items. Hold left click on
+## one to grab it and move it about in the bag (it shoves the others aside);
+## double-click one to use it. Let go of Alt and you're looking again.
 ## How it's held -- the bag's place, the hand on it, the fist, the elbow,
 ## the unzip, each finger -- is BackpackHold (scenes/player/backpack_hold.tres),
 ## tuned in game with O while it's out (Viewmodel) and saved with F3.
@@ -40,8 +41,10 @@ const PROPS := {
 	Backpack.Kind.PILLS: MEGA + "Items & Weapons/pills_bottle_2.glb",
 	Backpack.Kind.BANDAGE: MEGA + "Items & Weapons/bandage_mp_1.glb",
 	Backpack.Kind.BULLETS: MEGA + "Items & Weapons/ammo_box_mp_1.glb",
-	Backpack.Kind.SHELLS: MEGA + "Items & Weapons/shotgun_ammo_1.glb",
-	Backpack.Kind.ROCKETS: MEGA + "Items & Weapons/ammo_box_1.glb",
+	# A box with its shells showing (the user's: not the "Big Chief" box).
+	Backpack.Kind.SHELLS: MEGA + "Items & Weapons/shotgun_ammo_2.glb",
+	# The RPG's own rocket (its loaded rocket is a part of its model).
+	Backpack.Kind.ROCKETS: ["res://art/weapons/NEWPSXWEAPONS/RPG/RPG.glb", "Rocket"],
 	Backpack.Kind.SCRAP: MEGA + "Small Props/tin_can_mp_1_rusty.glb",
 	Backpack.Kind.CAMP_KIT: [FOREST_SCENE, "Foam Sleeping Pad"],
 }
@@ -118,6 +121,7 @@ func update(delta: float) -> bool:
 		_have_last = false # a new frame of reference: no jolt from the switch
 		_cursor = Vector2.ZERO
 		_alt_held = false
+		_held = {}
 		if not out and _shuffle_left <= 0.0:
 			_freeze(true) # on your back: they stop
 	visible = out
@@ -140,6 +144,9 @@ func update(delta: float) -> bool:
 	var clip := _bag_box.end.y - _bag_box.size.y * hold.zipper_open_share * smoothstep(0.0, 1.0, unzip)
 	for material in _materials:
 		material.set_shader_parameter("clip_height", clip if unzip > 0.0 else _bag_box.end.y + 1.0)
+		# The straps (the -x side past the back) hidden while it's open: held
+		# up like this they lay across the opening (the user's).
+		material.set_shader_parameter("strap_x", _bag_box.position.x + _bag_box.size.x * STRAP_CUT if unzip > 0.0 else -1000.0)
 	_hold_with_left_hand()
 	_update_items(delta)
 	if _box_lines and _box_lines.visible:
@@ -161,7 +168,7 @@ func _update_items(delta: float) -> void:
 		var stacks := _player.backpack.stacks()
 		var key := ""
 		for stack in stacks:
-			key += "%d:%d:%s," % [stack.kind, mini(stack.count, 3), stack.weapon.resource_path if stack.weapon else ""]
+			key += "%d:%d:%s," % [stack.kind, mini(stack.count, MAX_COPIES), stack.weapon.resource_path if stack.weapon else ""]
 		if key != _shown_key:
 			_shown_key = key
 			_sync_bodies(stacks)
@@ -304,16 +311,22 @@ const SWIRL := 0.35
 ## How thick the pack's walls are (metres: a little thicker than they look,
 ## for the physics' few millimetres of give), and how far under the opening
 ## the items stop (bag units), so none pokes out of the top.
-const WALL := 0.035
+const WALL := 0.045
 const LID_GAP := 0.02
 ## The walls' slabs (metres thick).
 const SLAB := 0.3
-## The straps' share of the pack's width (its -x side), left out of the
-## container.
-const STRAP_CUT := 0.1
+## The straps' share of the pack's width (its -x side): left out of the hull,
+## and hidden while it's open.
+const STRAP_CUT := 0.13
+## The walls' own physics layer in the items' world (items collide with each
+## other on 1, and with the walls).
+const CONTAINER_LAYER := 2
+## At most this many of one kind shown (a crowded pack squeezes things
+## through its walls).
+const MAX_COPIES := 2
 ## Nothing's longer than this share of the inside's narrowest width (the
 ## user's: things shrink to fit the bag, never poke out of it).
-const FIT_SHARE := 0.85
+const FIT_SHARE := 0.8
 ## On your back: how often the jostling's added up (s), how much (metres
 ## moved + m/s of jolts) shuffles the items once, and how long they tumble.
 const RESTLESS_CHECK := 0.5
@@ -323,7 +336,7 @@ const SHUFFLE_TIME := 1.2
 ## gun is its own (WeaponData.backpack_length), or as long as fits.
 const REAL_SIZE := {
 	Backpack.Kind.PILLS: 0.09, Backpack.Kind.BANDAGE: 0.1, Backpack.Kind.BULLETS: 0.09,
-	Backpack.Kind.SHELLS: 0.11, Backpack.Kind.ROCKETS: 0.28, Backpack.Kind.GRENADES: 0.11,
+	Backpack.Kind.SHELLS: 0.11, Backpack.Kind.ROCKETS: 0.26, Backpack.Kind.GRENADES: 0.22,
 	Backpack.Kind.SCRAP: 0.11, Backpack.Kind.SILK: 0.12, Backpack.Kind.CAMP_KIT: 0.3,
 }
 
@@ -334,6 +347,8 @@ var _built_scale := 0.0
 ## The container, in metres: its walls (each normal . p <= d inside, the lid
 ## too), its middle, and how far across it is along x, y and z there.
 var _walls: Array[Plane] = []
+## The real walls: the pack's surface pushed in by WALL (triangles, metres).
+var _faces := PackedVector3Array()
 var _inner_center := Vector3.ZERO
 var _inner_size := Vector3.ONE
 var _last_axes := Basis.IDENTITY
@@ -349,6 +364,16 @@ var _shuffle_left := 0.0
 var _frozen := false
 var _hovered := -1
 var _outline: ShaderMaterial
+## Picking: the item held by left click (moved about by the cursor), the
+## plane it's moved on (through it, facing you), and the last click (a
+## second on the same item within DOUBLE_CLICK uses it).
+const DOUBLE_CLICK := 0.35
+const DRAG_FOLLOW := 0.06
+const DRAG_TOP_SPEED := 3.0
+var _held: Dictionary = {}
+var _held_plane := Plane()
+var _last_click_msec := -100000
+var _last_click_body: Object
 
 static var _item_material: PhysicsMaterial
 
@@ -388,29 +413,34 @@ func _ensure_world() -> void:
 		_build_container()
 
 
-## The bag's walls: a slab outside each side of its hull (brought in by
-## WALL), and one over the lid.
+## The bag's walls (the user's: true to the model, not a box or a hull): the
+## pack's own surface pushed in by WALL (_inset_faces), as collision; the lid
+## under the opening; and, outside it all, a slab past each side of its hull
+## as a backstop. The walls are on their own layer (CONTAINER_LAYER).
 func _build_container() -> void:
 	if _container:
 		_container.free()
 	_container = StaticBody3D.new()
+	_container.collision_layer = CONTAINER_LAYER
+	_container.collision_mask = 0
 	var material := PhysicsMaterial.new()
 	material.friction = 0.7
 	material.bounce = 0.1
 	_container.physics_material_override = material
 	var s := hold.bag_scale
+	_faces = _inset_faces(s)
+	var surface := CollisionShape3D.new()
+	var shell := ConcavePolygonShape3D.new()
+	shell.set_faces(_faces)
+	shell.backface_collision = true
+	surface.shape = shell
+	_container.add_child(surface)
 	var sides: Array[Plane] = []
 	for side: Plane in pack_hull().get("planes", []):
-		sides.append(Plane(side.normal, side.d * s - WALL))
-	if sides.is_empty(): # no hull: its box
-		var box := _bag_box.grow(-WALL / maxf(s, 0.01))
-		for axis in 3:
-			var n := Vector3.ZERO
-			n[axis] = 1.0
-			sides.append(Plane(n, box.end[axis] * s))
-			sides.append(Plane(-n, -box.position[axis] * s))
-	sides.append(Plane(Vector3.UP, _lid_height() * s))
-	_walls = sides
+		sides.append(Plane(side.normal, side.d * s))
+	var lid := Plane(Vector3.UP, _lid_height() * s)
+	sides.append(lid)
+	_walls = [lid]
 	_measure_inside(s)
 	for side in sides:
 		var shape := CollisionShape3D.new()
@@ -423,8 +453,33 @@ func _build_container() -> void:
 	_world.add_child(_container)
 
 
+## The pack's surface (triangles, metres) pushed WALL inward: each corner
+## moved in along the smoothed normal of the faces round it.
+func _inset_faces(s: float) -> PackedVector3Array:
+	var faces := pack_mesh().get_faces()
+	var middle: Vector3 = pack_hull().get("middle", _bag_box.get_center())
+	var normals := {}
+	for i in range(0, faces.size() - 2, 3):
+		var turn := (faces[i + 1] - faces[i]).cross(faces[i + 2] - faces[i])
+		for k in 3:
+			var key := faces[i + k].snapped(Vector3.ONE * 0.0005)
+			normals[key] = (normals.get(key, Vector3.ZERO) as Vector3) + turn
+	# Which way the faces wind: out is away from the middle, mostly.
+	var outward := 0.0
+	for key: Vector3 in normals:
+		outward += (normals[key] as Vector3).normalized().dot(key - middle)
+	var out_sign := 1.0 if outward >= 0.0 else -1.0
+	var inset := WALL / maxf(s, 0.01)
+	var result := PackedVector3Array()
+	result.resize(faces.size())
+	for i in faces.size():
+		var normal := (normals[faces[i].snapped(Vector3.ONE * 0.0005)] as Vector3).normalized() * out_sign
+		result[i] = (faces[i] - normal * inset) * s
+	return result
+
+
 ## The inside's middle (the hull's, kept under the lid) and how far across
-## it is through there, along x, y and z.
+## it is through there, along x, y and z -- to the real walls.
 func _measure_inside(s: float) -> void:
 	var middle: Vector3 = pack_hull().get("middle", _bag_box.get_center()) * s
 	middle.y = minf(middle.y, _lid_height() * s - 0.05)
@@ -435,9 +490,14 @@ func _measure_inside(s: float) -> void:
 		_inner_size[axis] = _reach(middle, along) + _reach(middle, -along)
 
 
-## How far from `from` the walls are along `direction`.
+## How far from `from` the walls (the real ones, and the lid) are along
+## `direction`.
 func _reach(from: Vector3, direction: Vector3) -> float:
 	var nearest := 10.0
+	for i in range(0, _faces.size() - 2, 3):
+		var hit: Variant = Geometry3D.ray_intersects_triangle(from, direction, _faces[i], _faces[i + 1], _faces[i + 2])
+		if hit != null:
+			nearest = minf(nearest, ((hit as Vector3) - from).length())
 	for wall in _walls:
 		var facing := wall.normal.dot(direction)
 		if facing > 0.0001:
@@ -445,12 +505,23 @@ func _reach(from: Vector3, direction: Vector3) -> float:
 	return maxf(nearest, 0.0)
 
 
-## Whether a ball of `radius` at `point` is wholly inside the walls.
+## Whether a ball of `radius` at `point` is inside the walls: nothing between
+## it (and `radius` beyond it) and the middle.
 func _inside_walls(point: Vector3, radius: float) -> bool:
-	for wall in _walls:
-		if wall.normal.dot(point) + radius > wall.d:
-			return false
-	return true
+	var offset := point - _inner_center
+	var distance := offset.length()
+	if distance < 0.001:
+		return true
+	return _reach(_inner_center, offset / distance) >= distance + radius
+
+
+## Whether a body's middle has got outside the real walls (a ray from the
+## inside's middle to it crosses them) -- quick, through the physics.
+func _escaped(at: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(_inner_center, at)
+	query.collision_mask = CONTAINER_LAYER
+	query.hit_back_faces = true
+	return not _container.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 
 ## Where a new item of `size` drops in: over the middle of the opening (a
@@ -458,15 +529,15 @@ func _inside_walls(point: Vector3, radius: float) -> bool:
 ## the walls, so it never starts outside them.
 func _drop_point(size: Vector3) -> Vector3:
 	var radius := size.length() * 0.5
+	var top := _inner_center.y + _reach(_inner_center, Vector3.UP) - radius
 	for attempt in 8:
 		var spread := 0.35 * (1.0 - attempt / 8.0)
 		var point := _inner_center + Vector3(randf_range(-0.5, 0.5) * _inner_size.x * spread, 0.0,
 				randf_range(-0.5, 0.5) * _inner_size.z * spread)
-		point.y = maxf(_inner_center.y + _reach(_inner_center, Vector3.UP) - radius, _inner_center.y)
+		point.y = maxf(top, _inner_center.y)
 		if _inside_walls(point, radius):
 			return point
 	return _inner_center
-
 
 func _clear_bodies() -> void:
 	for body in _bodies:
@@ -503,12 +574,16 @@ func _push_items(delta: float) -> void:
 	var wake := pull.distance_to(_last_pull) > 0.3 or kick.length() > 0.5
 	for body in _bodies:
 		var rigid := body.body as RigidBody3D
-		# Got outside somehow (squeezed through): dropped back in.
-		if not _inside_walls(rigid.global_position, -0.02):
+		# Got outside the real walls somehow (squeezed through): dropped back in.
+		if _escaped(rigid.global_position):
 			rigid.global_position = _drop_point(Vector3.ONE * 0.05)
 			rigid.linear_velocity = Vector3.ZERO
 			rigid.angular_velocity = Vector3.ZERO
 		rigid.constant_force = pull * rigid.mass
+		if not _held.is_empty() and _held.body == rigid:
+			_follow_cursor(rigid)
+			(body.node as Node3D).transform = rigid.global_transform
+			continue
 		if kick != Vector3.ZERO:
 			rigid.linear_velocity += kick.cross(rigid.global_position - middle).limit_length(2.0)
 		if wake:
@@ -521,6 +596,32 @@ func _push_items(delta: float) -> void:
 	if wake:
 		_last_pull = pull
 	_have_last = true
+
+
+## The held item pulled toward where the cursor points on its plane (kept
+## inside the walls), by its speed -- a real push, so it shoves the others.
+func _follow_cursor(rigid: RigidBody3D) -> void:
+	if not _picking():
+		_held = {}
+		return
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var at := _cursor_at()
+	var hit: Variant = _held_plane.intersects_ray(camera.project_ray_origin(at), camera.project_ray_normal(at))
+	if hit == null:
+		return
+	var target := _items.global_transform.affine_inverse() * (hit as Vector3)
+	# Kept inside the real walls: pulled back toward the middle till it is.
+	var offset := target - _inner_center
+	var distance := offset.length()
+	if distance > 0.001:
+		var room := _reach(_inner_center, offset / distance) - 0.04
+		if distance > room:
+			target = _inner_center + offset / distance * maxf(room, 0.0)
+	rigid.sleeping = false
+	rigid.linear_velocity = ((target - rigid.global_position) / DRAG_FOLLOW).limit_length(DRAG_TOP_SPEED)
+	rigid.angular_velocity *= 0.8
 
 
 ## Every item stopped (on your back) or let go again.
@@ -540,7 +641,7 @@ func _sync_bodies(stacks: Array[Dictionary]) -> void:
 	_hovered = -1
 	var wanted := {} # "kind:weapon" -> copies
 	for stack in stacks:
-		var copies := 1 if stack.kind in [Backpack.Kind.GUN, Backpack.Kind.CAMP_KIT] else mini(stack.count, 3)
+		var copies := 1 if stack.kind in [Backpack.Kind.GUN, Backpack.Kind.CAMP_KIT] else mini(stack.count, MAX_COPIES)
 		wanted["%d:%s" % [stack.kind, stack.weapon.resource_path if stack.weapon else ""]] = [stack, copies]
 	var kept: Array[Dictionary] = []
 	var have := {}
@@ -570,11 +671,39 @@ func _sync_bodies(stacks: Array[Dictionary]) -> void:
 ## user's: shrunk to fit, not poking out). A gun with no length of its own
 ## is as long as fits.
 func _real_size(stack: Dictionary) -> float:
-	var fits := minf(_inner_size.x, _inner_size.z) * FIT_SHARE
+	# Lying along the inside's longer way across (long things drop in that way).
+	var fits := maxf(_inner_size.x, _inner_size.z) * FIT_SHARE
+	var sized := item_scale(stack.kind)
 	if stack.kind == Backpack.Kind.GUN:
 		var weapon: WeaponData = stack.weapon
-		return minf(weapon.backpack_length, fits) if weapon and weapon.backpack_length > 0.0 else fits
-	return minf(float(REAL_SIZE.get(stack.kind, 0.1)), fits)
+		return minf(weapon.backpack_length * sized, fits) if weapon and weapon.backpack_length > 0.0 else fits * minf(sized, 1.0)
+	return minf(float(REAL_SIZE.get(stack.kind, 0.1)) * sized, fits)
+
+
+## A kind's own scale (BackpackHold.item_scales; 1 if not set).
+func item_scale(kind: int) -> float:
+	return float(hold.item_scales.get(Backpack.Kind.keys()[kind + 1], 1.0))
+
+
+## Tuning (the Viewmodel's O, while picking): scroll over an item to size
+## its kind; that kind's items are made again at the new size.
+var tuning := false
+
+
+func _resize_kind(kind: int, by: float) -> void:
+	var name: String = Backpack.Kind.keys()[kind + 1]
+	hold.item_scales[name] = clampf(item_scale(kind) * by, 0.2, 3.0)
+	var kept: Array[Dictionary] = []
+	for body in _bodies:
+		if body.kind == kind:
+			(body.node as Node).queue_free()
+			(body.body as Node).queue_free()
+		else:
+			kept.append(body)
+	_bodies = kept
+	_hovered = -1
+	_shown_key = "" # made again next look at the pack
+	_contents_left = 0.0
 
 
 ## A new item: its prop at about its real size, a click zone round it, and
@@ -613,11 +742,21 @@ func _new_body(stack: Dictionary, key: String, inside: AABB) -> Dictionary:
 	rigid.linear_damp = 0.3
 	rigid.angular_damp = 0.6
 	rigid.physics_material_override = _item_material
+	rigid.collision_layer = 1
+	rigid.collision_mask = 1 | CONTAINER_LAYER
 	var shape := CollisionShape3D.new()
 	shape.shape = _shape_of(holder, size)
 	rigid.add_child(shape)
 	_world.add_child(rigid)
-	rigid.global_transform = Transform3D(Basis.from_euler(Vector3(randf() * TAU, randf() * TAU, randf() * TAU)), _drop_point(size))
+	# Any way up -- but something too long to lie across the narrow way drops
+	# in lengthwise (its longest side along the inside's longer way).
+	var lay := Basis.from_euler(Vector3(randf() * TAU, randf() * TAU, randf() * TAU))
+	var long_side := maxf(size.x, maxf(size.y, size.z))
+	if long_side > minf(_inner_size.x, _inner_size.z) * FIT_SHARE:
+		var along := Vector3.RIGHT if size.x >= maxf(size.y, size.z) else (Vector3.UP if size.y >= size.z else Vector3.BACK)
+		var lengthwise := Vector3.RIGHT if _inner_size.x >= _inner_size.z else Vector3.BACK
+		lay = Basis(lengthwise, randf() * TAU) * Basis(Quaternion(along, lengthwise))
+	rigid.global_transform = Transform3D(lay, _drop_point(size))
 	rigid.freeze = _frozen
 	holder.transform = rigid.global_transform
 	return {key = key, kind = stack.kind, body = rigid, node = holder, area = pick}
@@ -719,12 +858,17 @@ func _model_for(stack: Dictionary) -> Node3D:
 		if pack == null:
 			return null
 		var whole := pack.instantiate() as Node3D
-		var part := whole.find_child(source[1], true, false) as MeshInstance3D
-		var copy: MeshInstance3D = null
-		if part:
-			copy = MeshInstance3D.new()
-			copy.mesh = part.mesh
-			textured(copy, part)
+		var part := whole.find_child(source[1], true, false) as Node3D
+		var copy: Node3D = null
+		if part is MeshInstance3D and (part as MeshInstance3D).mesh:
+			var mesh := MeshInstance3D.new()
+			mesh.mesh = (part as MeshInstance3D).mesh
+			textured(mesh, part as MeshInstance3D)
+			copy = mesh
+		elif part:
+			copy = part.duplicate() as Node3D # a part made of parts (the rocket)
+			copy.transform = Transform3D(part.basis, Vector3.ZERO)
+			copy.visible = true
 		whole.free()
 		return _wrapped(copy) if copy else null
 	var scene := _scene(source)
@@ -875,15 +1019,39 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _picking() or not (event is InputEventMouseButton):
 		return
 	var click := event as InputEventMouseButton
-	if click.button_index != MOUSE_BUTTON_LEFT or not click.pressed:
+	# Tuning: the wheel over an item sizes its kind.
+	if tuning and click.pressed and click.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		var over := _under_cursor(_cursor_at())
+		for body in _bodies:
+			if body.area == over:
+				_resize_kind(body.kind, 1.05 if click.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.05)
+				get_viewport().set_input_as_handled()
+				return
+	if click.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if not click.pressed:
+		_held = {} # let go: it drops
 		return
 	var hit := _under_cursor(_cursor_at())
 	if hit == null:
 		return
 	for body in _bodies:
 		if body.area == hit:
-			_player.request_use(body.kind)
 			get_viewport().set_input_as_handled()
+			var now := Time.get_ticks_msec()
+			if _last_click_body == hit and now - _last_click_msec <= DOUBLE_CLICK * 1000.0:
+				# Double-click: use it.
+				_last_click_msec = -100000
+				_held = {}
+				_player.request_use(body.kind)
+				return
+			_last_click_msec = now
+			_last_click_body = hit
+			# Held: it follows the cursor on a plane through it, facing you.
+			_held = body
+			var camera := get_viewport().get_camera_3d()
+			var where := (body.node as Node3D).global_position
+			_held_plane = Plane(-camera.global_basis.z if camera else Vector3.FORWARD, where)
 			return
 
 # ---- The bag itself ------------------------------------------------------------

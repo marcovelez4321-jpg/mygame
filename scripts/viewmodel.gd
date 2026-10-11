@@ -221,6 +221,10 @@ var _tuning_bag: bool = false
 var _bag_finger := -1
 ## Bag tuning, X: the items' container (the pack's own shape) shown.
 var _tuning_bag_box := false
+## Y: the right hand's own grip for the gun in it (WeaponData.right_grip*),
+## and which finger [ and ] curl (-1: the whole hand).
+var _tuning_right_grip := false
+var _grip_finger := -1
 ## The open backpack (your own view), and whether it was out last frame.
 var _bag_view: BackpackView
 var _bag_was_out := false
@@ -1114,6 +1118,7 @@ func _apply_arm_offsets(weapon: WeaponData) -> void:
 	var to_cam := _arms.transform.basis
 	var right_turn := (to_rig * Basis.from_euler(weapon.right_arm_rotation_degrees * (PI / 180.0)) * to_cam).orthonormalized()
 	var left_turn := (to_rig * Basis.from_euler(weapon.left_arm_rotation_degrees * (PI / 180.0)) * to_cam).orthonormalized()
+	_fp_arms.set_right_grip(weapon.right_grip, weapon.right_grip_cup, weapon.right_finger_curl, weapon.right_wrist_degrees)
 	_fp_arms.set_arm_offsets(to_rig * weapon.right_arm_offset, right_turn, to_rig * weapon.left_arm_offset, left_turn)
 	if _two_handed(weapon) and weapon.support_pose == WeaponData.SupportPose.BARREL_GRIP:
 		var from_camera := _arms.transform.affine_inverse()
@@ -1414,6 +1419,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning_bag = not _tuning_bag
 		_tuning = _tuning or _tuning_bag
 		_tune_label.visible = _tuning
+		_bag_view.tuning = _tuning_bag
 		_bag_finger = -1
 		_tuning_bag_box = false
 		_bag_view.show_container(false)
@@ -1430,6 +1436,24 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_update_label("")
 	elif _tuning_bag and key.keycode in [KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5]:
 		_bag_finger = int(key.keycode - KEY_1) if key.keycode != KEY_0 else -1
+		_update_label("")
+	elif key.keycode == KEY_Y and _tuning and _fp_arms and _shown_weapon and not _tuning_bag:
+		# Y: the right hand's own grip (turned on for this gun if it wasn't).
+		_tuning_right_grip = not _tuning_right_grip
+		_grip_finger = -1
+		if _tuning_right_grip:
+			_tuning_grip = false
+			_tuning_right_arm = false
+			_tuning_left_arm = false
+			_tuning_arms = false
+			_tuning_muzzle = false
+			_tuning_aim = false
+			if not _shown_weapon.right_grip:
+				_shown_weapon.right_grip = true
+				_apply_arm_offsets(_shown_weapon)
+		_update_label("")
+	elif _tuning_right_grip and key.keycode in [KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5]:
+		_grip_finger = int(key.keycode - KEY_1) if key.keycode != KEY_0 else -1
 		_update_label("")
 	elif key.keycode == KEY_B and _tuning and _tuning_left_arm and _fp_arms and _shown_weapon:
 		_shown_weapon.support_baked_pose = _fp_arms.bake_support_pose()
@@ -1571,6 +1595,10 @@ func _process(delta: float) -> void:
 	var fine := 0.1 if Input.is_key_pressed(KEY_CTRL) else 1.0
 
 
+	if _tuning_right_grip:
+		_tune_right_grip(weapon, x, y, z, fine, delta)
+		_update_label("")
+		return
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 		_update_muzzle_marker(weapon)
@@ -1680,6 +1708,27 @@ func _tune_bag(x: float, y: float, z: float, fine: float, delta: float) -> void:
 		hold.finger_curl = curls
 	var bend := float(Input.is_key_pressed(KEY_PERIOD)) - float(Input.is_key_pressed(KEY_COMMA))
 	hold.elbow_degrees = clampf(hold.elbow_degrees - bend * TUNE_ROTATE_SPEED * fine * delta, 40.0, 170.0)
+
+
+## Y: the right hand's own grip for the gun in it.
+##   [ / ]: a looser / tighter hand -- or, after 1-5, just that finger
+##   (thumb, index, middle, ring, pinky; 0 back to the whole hand).
+##   Shift + arrows / PageUp,Down: turn the hand at the wrist (the gun turns
+##   with it).   F3 saves it onto the gun.
+func _tune_right_grip(weapon: WeaponData, x: float, y: float, z: float, fine: float, delta: float) -> void:
+	var curl := float(Input.is_key_pressed(KEY_BRACKETRIGHT)) - float(Input.is_key_pressed(KEY_BRACKETLEFT))
+	if curl != 0.0:
+		if _grip_finger < 0:
+			weapon.right_grip_cup = clampf(weapon.right_grip_cup + curl * 0.6 * fine * delta, 0.0, 1.0)
+		else:
+			var curls := weapon.right_finger_curl
+			curls.resize(5)
+			curls[_grip_finger] = clampf(curls[_grip_finger] + curl * 0.6 * fine * delta, -1.0, 1.0)
+			weapon.right_finger_curl = curls
+	if Input.is_key_pressed(KEY_SHIFT):
+		weapon.right_wrist_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
+	if curl != 0.0 or (Input.is_key_pressed(KEY_SHIFT) and (x != 0.0 or y != 0.0 or z != 0.0)):
+		_apply_arm_offsets(weapon)
 
 
 ## K on a two-handed gun: the support hand (live IK, then baked).
@@ -1814,11 +1863,26 @@ func _make_tune_label() -> void:
 
 
 func _update_label(message: String) -> void:
+	if _tuning_right_grip and _shown_weapon and _tune_label:
+		var gun := _shown_weapon
+		var curls := gun.right_finger_curl
+		curls.resize(5)
+		_tune_label.text = ("TUNING THE RIGHT HAND'S GRIP (%s)\nhand %.2f   fingers: thumb %+.2f  index %+.2f  middle %+.2f  ring %+.2f  pinky %+.2f\n"
+				+ "wrist turned (%.1f, %.1f, %.1f)   [ ] now curls: %s\n\n"
+				+ "[ ] = curl   1-5 = pick a finger   0 = whole hand\nShift + arrows/PgUp,PgDn = turn the wrist (the gun turns with it)\n"
+				+ "Ctrl = finer   F3 = save onto the gun   Y = done\n%s") % [gun.weapon_name, gun.right_grip_cup,
+				curls[0], curls[1], curls[2], curls[3], curls[4], gun.right_wrist_degrees.x, gun.right_wrist_degrees.y,
+				gun.right_wrist_degrees.z, "whole hand" if _grip_finger < 0 else ["thumb", "index", "middle", "ring", "pinky"][_grip_finger], message]
+		return
 	if _tuning_bag and is_instance_valid(_bag_view) and _tune_label:
 		var hold := _bag_view.hold
 		var curls := hold.finger_curl
 		curls.resize(5)
 		var finger_names := ["thumb", "index", "middle", "ring", "pinky"]
+		var sizes := ""
+		for kind_name in hold.item_scales:
+			sizes += "%s %.2f  " % [String(kind_name).to_lower(), float(hold.item_scales[kind_name])]
+		message = ("item sizes: " + sizes + "\n" if not sizes.is_empty() else "") + "Hold Left Alt over an item + scroll = that kind's size\n" + message
 
 		_tune_label.text = ("TUNING THE BACKPACK HOLD (Tab to open it)\nbag at (%.3f, %.3f, %.3f)  turned (%.1f, %.1f, %.1f)  size %.3f\n"
 				+ "hand on bag (%.2f, %.2f, %.2f)  turned (%.1f, %.1f, %.1f)\n"

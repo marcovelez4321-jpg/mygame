@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1")
-bag_position = Vector3(-0.2267086, -0.38540676, -0.59219396)
+bag_position = Vector3(-0.19250798, -0.38538745, -0.59219396)
 bag_rotation_degrees = Vector3(9.552143, 86.83597, 46.936646)
 handle_point = Vector3(0.31722617, 0.24799174, -0.2794383)
 finger_curl = PackedFloat32Array(0, 0, 0, 0, 0)

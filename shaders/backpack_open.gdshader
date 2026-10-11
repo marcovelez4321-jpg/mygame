@@ -8,17 +8,22 @@ render_mode cull_disabled, vertex_lighting;
 uniform sampler2D albedo_texture : source_color, filter_nearest;
 uniform vec4 albedo_color : source_color = vec4(1.0);
 uniform float clip_height = 1000.0;
+// The straps (everything past this on its -x side, its own space) hidden
+// while it's held open: they lay across the opening.
+uniform float strap_x = -1000.0;
 // How dark the inside is.
 uniform float inside_shade = 0.38;
 
 varying float local_y;
+varying float local_x;
 
 void vertex() {
 	local_y = VERTEX.y;
+	local_x = VERTEX.x;
 }
 
 void fragment() {
-	if (local_y > clip_height) {
+	if (local_y > clip_height || local_x < strap_x) {
 		discard;
 	}
 	vec3 color = texture(albedo_texture, UV).rgb * albedo_color.rgb;
