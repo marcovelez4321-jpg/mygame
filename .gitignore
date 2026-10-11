@@ -5,3 +5,6 @@
 /build/
 # TrenchBroom's automatic backups (it makes an autosave folder next to any map you edit)
 autosave/
+
+# Windows' temporary copies of a DLL that's in use (the editor has Terrain3D loaded)
+addons/terrain_3d/bin/~*
