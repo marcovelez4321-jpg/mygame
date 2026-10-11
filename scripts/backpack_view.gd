@@ -166,13 +166,13 @@ func _shuffle() -> void:
 		p.y = inside.position.y + half.y + randf() * inside.size.y * 0.5
 		body.p = p
 		body.v = Vector3.ZERO
-		if body.kind != Backpack.Kind.GUN:
-			body.yaw = fmod(float(body.yaw) + randf_range(-0.8, 0.8), TAU)
-	for iteration in 6:
-		for i in _bodies.size():
-			_keep_inside(_bodies[i], inside)
-			for j in range(i + 1, _bodies.size()):
-				_separate(_bodies[i], _bodies[j])
+	# Dropped in from where they were, then settled: a few falls' worth.
+	for fall in 4:
+		for body in _bodies:
+			var p: Vector3 = body.p
+			p.y -= inside.size.y * 0.25
+			body.p = p
+		_settle(inside, SOLVER_PASSES)
 
 
 ## The left hand in a fist round the handle, the arm reaching it by IK.
@@ -212,6 +212,14 @@ func release_arm() -> void:
 const INERTIA := 0.6
 ## How much a turn of the bag swirls what's inside (0..1).
 const SWIRL := 0.35
+## Never through each other (the user's): the step is split so nothing
+## moves more than a ninetieth of a second at once, and each piece of it
+## pushes everything apart SOLVER_PASSES times.
+const MAX_STEP := 1.0 / 90.0
+const SOLVER_PASSES := 8
+## How far a sliding item leans (radians, at most): a little, so it never
+## leans out of its box into its neighbour.
+const MAX_LEAN := 0.08
 ## Bounce off walls and each other; slide damping (per second).
 const BOUNCE := 0.15
 const DAMPING := 2.5
@@ -260,19 +268,32 @@ func _simulate(frame: Transform3D, delta: float) -> void:
 	_have_last = true
 	var inside := _inside()
 	var middle := inside.get_center()
-	for body in _bodies:
-		var p: Vector3 = body.p
-		var v: Vector3 = body.v
-		p = middle + turn * (p - middle)
-		v = turn * v + push * delta
-		v *= maxf(1.0 - DAMPING * delta, 0.0)
-		body.p = p + v * delta
-		body.v = v
-	for iteration in 3:
+	var steps := clampi(ceili(delta / MAX_STEP), 1, 6)
+	var step := delta / steps
+	for s in steps:
+		for body in _bodies:
+			var p: Vector3 = body.p
+			var v: Vector3 = body.v
+			if s == 0:
+				p = middle + turn * (p - middle)
+				v = turn * v
+			v += push * step
+			v *= maxf(1.0 - DAMPING * step, 0.0)
+			body.p = p + v * step
+			body.v = v
+		_settle(inside, SOLVER_PASSES)
+
+
+## Everything pushed apart and back inside, `passes` times over; the walls
+## last, so nothing's ever left poking out of the bag.
+func _settle(inside: AABB, passes: int) -> void:
+	for iteration in passes:
 		for i in _bodies.size():
 			_keep_inside(_bodies[i], inside)
 			for j in range(i + 1, _bodies.size()):
 				_separate(_bodies[i], _bodies[j])
+	for body in _bodies:
+		_keep_inside(body, inside)
 
 
 ## Back inside the walls, floor and lid, losing speed into them.
@@ -338,7 +359,7 @@ func _place_props() -> void:
 		if node == null:
 			continue
 		var v: Vector3 = body.v
-		var lean := Basis.from_euler(Vector3(clampf(v.z * 0.6, -0.5, 0.5), 0.0, clampf(-v.x * 0.6, -0.5, 0.5)))
+		var lean := Basis.from_euler(Vector3(clampf(v.z * 0.3, -MAX_LEAN, MAX_LEAN), 0.0, clampf(-v.x * 0.3, -MAX_LEAN, MAX_LEAN)))
 		node.transform = Transform3D(lean * Basis(Vector3.UP, body.yaw), body.p)
 
 
@@ -393,20 +414,26 @@ func _new_body(stack: Dictionary, key: String, inside: AABB) -> Dictionary:
 	model.scale *= fit
 	model.position -= box.get_center() * fit
 	var half := (box.size * fit * 0.5).max(Vector3.ONE * 0.004 / units)
+	# Turned only in quarter turns, its box turned with it: what you see is
+	# exactly the box the physics keeps apart (a skewed turn would poke out
+	# of it into its neighbour).
+	var quarter := 0 if stack.kind == Backpack.Kind.GUN else randi() % 4
+	if quarter % 2 == 1:
+		half = Vector3(half.z, half.y, half.x)
 	var pick := Area3D.new()
 	pick.collision_layer = ITEM_LAYER
 	pick.collision_mask = 0
 	pick.monitoring = false
 	var shape := CollisionShape3D.new()
 	var pick_box := BoxShape3D.new()
-	pick_box.size = half * 2.0
+	pick_box.size = (box.size * fit).max(Vector3.ONE * 0.008 / units) # its own (unturned) size: it turns with it
 	shape.shape = pick_box
 	pick.add_child(shape)
 	holder.add_child(pick)
 	var drop := Vector3(randf_range(inside.position.x + half.x, inside.end.x - half.x), inside.end.y - half.y,
 			randf_range(inside.position.z + half.z, inside.end.z - half.z))
 	return {key = key, kind = stack.kind, half = half, p = drop, v = Vector3.ZERO, node = holder, area = pick,
-			yaw = 0.0 if stack.kind == Backpack.Kind.GUN else randf() * TAU}
+			yaw = quarter * PI * 0.5}
 
 
 ## The item under the cursor lit up with the interactables' outline.

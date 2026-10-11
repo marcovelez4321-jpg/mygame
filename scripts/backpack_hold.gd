@@ -13,8 +13,8 @@ extends Resource
 @export var bag_position: Vector3 = Vector3(-0.08, -0.42, -0.62)
 @export var bag_rotation_degrees: Vector3 = Vector3(-38.0, 12.0, 0.0)
 ## The pack's model is far too big (1.3 m tall): this brings it to size
-## (60% bigger than the first try: the user's).
-@export var bag_scale: float = 0.672
+## (the user's: 60% up from the first try, then 30% down from that).
+@export var bag_scale: float = 0.47
 ## How long it takes to swing round from your back, and to unzip.
 @export var swing_time: float = 0.35
 @export var unzip_time: float = 0.3
@@ -37,8 +37,11 @@ extends Resource
 @export_range(40.0, 170.0, 1.0) var elbow_degrees: float = 100.0
 
 @export_group("Items")
-## Where the items sit in the open top (bag space, shares of its size): a
-## box they're laid out in, a grid of them.
-@export var items_area: AABB = AABB(Vector3(-0.36, 0.18, -0.3), Vector3(0.72, 0.18, 0.6))
+## The space the items tumble about in (bag space, shares of the bag's size
+## from its middle): the main compartment, measured off the model -- inside
+## its walls (not the front pocket, at -x), from a false bottom at about
+## half height (so what's in there piles up to just under the opening and
+## you see it) up to just below where it's unzipped to.
+@export var items_area: AABB = AABB(Vector3(-0.17, -0.05, -0.44), Vector3(0.63, 0.31, 0.88))
 ## How big each item prop is drawn (metres, its longest side).
-@export var item_size: float = 0.12
+@export var item_size: float = 0.084

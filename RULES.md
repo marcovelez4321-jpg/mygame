@@ -1415,3 +1415,9 @@ them:
   - **Barnacles:** the burst at 4 m (was 5, the user's); the spitting over time is unchanged.
   - The Stack rebaked. Not compiled or run (asks first).
 - **Backpack picking with Left Alt; the crosshair is the same dot (2026-10-11).** The user's: instead of the free-aim box, the mouse looks around as normal with the bag open; hold Left Alt and looking stops, the cursor dot appears over the bag's opening and the mouse moves it (kept on screen) to hover and click items; let go and you're looking again (`BackpackView._picking`, `_free_aim`). The crosshair (`scenes/ui/hud.tscn`) is now that same dot -- 7 px, dark outline, pale middle -- and it's hidden while the bag's out. (Alt is also the bag-tuning modifier: holding it while tuning just stops looking.) Not compiled or run (asks first).
+- **Backpack items really inside it, never through each other; the bag 30% smaller (2026-10-11).** The user's: the items lay in one flat layer on top of the bag, clipping through each other.
+  - **Why:** their space was a thin slab poking above the opening, and wider than the main compartment (into the front pocket's side).
+  - **Now:** the space is the main compartment, measured off the model (82 vertices): inside its walls, from a false bottom at about half height up to just under the unzip (`BackpackHold.items_area`). Items fall into it and pile up under the opening, where you see them.
+  - **Never through each other:** items turn only in quarter turns, their boxes turned with them, so what you see is exactly what's kept apart; they lean only a little (`MAX_LEAN`); each frame is split into steps of 1/90 s (`MAX_STEP`), each pushing everything apart 8 times (`SOLVER_PASSES`) with the walls last. The shuffle on your back drops them in four falls, settled the same way.
+  - The bag 30% smaller (`bag_scale` 0.47), same place (its middle stays put); the items to match (`item_size` 0.084).
+  - Not compiled or run (asks first).
