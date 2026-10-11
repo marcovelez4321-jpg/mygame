@@ -43,8 +43,8 @@ const MORE_MONOLITHS := 40
 ## stand on (radius, metres), and how far the stand-in monoliths keep away.
 const STACK_SCENE := "res://scenes/megastructures/the_stack.scn"
 const STACK_AT := Vector2(250.0, -1450.0)
-const STACK_PLATEAU := 480.0
-const STACK_CLEAR := 650.0
+const STACK_PLATEAU := 560.0 # wide enough for the hive's far corner (~530 m out)
+const STACK_CLEAR := 720.0
 
 var _test_chunks := {}
 const SCENE_PATH := "res://scenes/world/test_world.tscn"

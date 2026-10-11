@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Builds the Stack (StackBuilder): its scene, its TrenchBroom map, and the
 ## things it's made with (its concrete -- windowed outside, plain inside and
-## for the rubble -- the wind and the drone).
+## for the rubble, stained for the hive -- the wind and the drone).
 ##   godot --headless --path <project> --script res://tools/make_the_stack.gd
 ## Re-running overwrites the scene and the map (so once the map's been
 ## edited by hand in TrenchBroom, build that with func_godot instead).
@@ -22,8 +22,8 @@ func _initialize() -> void:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
 	# What it's made of: the textures (PNGs for TrenchBroom, textures for the game).
 	var textures := {}
-	for kind in [["windows", "stack_concrete", true], ["plain", "stack_plain", false]]:
-		var image := StackBuilder.make_concrete(kind[2])
+	for kind in [["windows", "stack_concrete", true, false], ["plain", "stack_plain", false, false], ["stained", "stack_stained", true, true]]:
+		var image := StackBuilder.make_concrete(kind[2], kind[3])
 		image.save_png(ProjectSettings.globalize_path("%s/%s.png" % [TEXTURE_DIR, kind[1]]))
 		var path := "%s/%s.res" % [ART_DIR, kind[1]]
 		ResourceSaver.save(ImageTexture.create_from_image(image), path)
@@ -46,10 +46,12 @@ func _initialize() -> void:
 	stack.free()
 	# The same boxes for TrenchBroom, and the map settings megastructure maps use
 	# (8 units a metre, so kilometres stay workable).
-	var names := {&"concrete": "Megastructure/stack_concrete", &"plain": "Megastructure/stack_plain",
+	var names := {&"concrete": "Megastructure/stack_concrete", &"plain": "Megastructure/stack_plain", &"stained": "Megastructure/stack_stained",
 			&"rubble": "Megastructure/stack_plain", &"clay": "Megastructure/stack_plain",
 			&"metal": "Megastructure/stack_plain", &"sludge": "Megastructure/stack_plain"}
 	print("skybridges: ", builder.bridge_report)
+	print("hive: ", builder.hive_holes.size(), " holes; panic stairs: ", builder.panic_report)
+	print("cobwebs: ", builder.web_quads.size(), " (", builder.web_quads.filter(func(w: Dictionary) -> bool: return w.indoors).size(), " inside)")
 	print("map: ", MAP, " (error ", builder.write_map(ProjectSettings.globalize_path(MAP), names), ")")
 	var settings := (load("res://addons/func_godot/func_godot_default_map_settings.tres") as Resource).duplicate()
 	settings.set("inverse_scale_factor", StackBuilder.MAP_UNITS)

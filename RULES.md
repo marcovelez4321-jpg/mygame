@@ -1215,3 +1215,23 @@ them:
   - **Grapple on right mouse** (the user's call). Only the sniper aims down the sights (`can_aim`), and it's two-handed, so right mouse aims the sniper and throws the grapple with anything else out (`PlayerMovement` input). E still grapples too, so you can grapple with the sniper out (switching to your one-handed gun, as before).
 
 - 2026-10-11: **Rule 10 added: the user chooses every creative detail** (the user's ask). Claude offers options in rounds and never fills in a creative detail itself.
+
+- 2026-10-11: **Two new towers -- the hive and the stump -- and cobwebs with spiders.** Every detail the user's (Rule 10).
+  - **The hive** (tower 5, `StackBuilder.HIVE`): 4,500 m tall and 180 m wide, packed into the cluster's southeast gap between towers 1 and 3 (320, -240). Same stepped blocks as the rest.
+    - Worn down: chunks bitten out of its blocks' corners and top edges, and 3 ragged holes a hall punched through its walls (24 in all; `_hive_bites`, never through a window room). Stained concrete (`make_concrete(stained)`: darker, black runs, green-black moss).
+    - Growth bursting out: on top of the Stack's usual outside growth, its own pass about as big as the whole Stack's (vines, pillars, fungus, spires, eggs, mould), and black vines spilling out of every hole.
+    - Dark: no lit windows, no blinkers. Its only light is the growth's sickly glow in its holes (`_hive_glow`).
+    - 8 halls, choked with growth (3x: `HIVE_GROWTH`, on the floors, landings and ramps; `growth_floors` can now be tilted, with `xform`).
+    - Instead of mezzanines, **panic stairs** (`_panic_stairs`): landings at any angle and stair flights (`RAMP_SLOPE` at most, walkable), tangled up through the lower 60% of the hall, so the air above stays open for the grapple. It's grown from the floor; every leaf then gets a second flight or is removed, and loops are added. So it all connects with **no dead ends** (checked: 0 in every hall). About 30 flights a hall; the narrow top three fit 18, 15 and 6.
+    - Ways in: the skybridges (like any tower), plus its only 2 windows, dark, into its two lowest halls (`HIVE_WINDOWS`). No other windows.
+  - **The stump** (tower 6, `STUMP`): 600 m tall and 120 m wide, fused to the main tower's -X side (`_stump_blocks`: two stepped blocks, each sunk 3 m into the main tower's wall, never into its insides; checked).
+    - Its hall (440-600 m) is open to the sky. Its walls are broken off partway down on its three open sides, and rubble is heaped on its floor (`_stump_top`).
+    - It breaks through, 70 m wide and 90 m tall, into a **new main-tower hall at 440-600 m** (`HALLS[0][4]`; checked open).
+    - No window rooms on the fused walls (`_fused`).
+  - **Cobwebs** (`_cobwebs`, `shaders/cobweb.gdshader`, the PSX Mega Pack's 4 web decals).
+    - Inside: about 1 for every 3 halls (8), across a corner of a hall or a window room. Most are 2-6 m; 15% of the hall ones are 15-30 m.
+    - Outside: 2 a tower, huge (15-30 m), across the corner where a block's top meets the wall above it.
+    - Pale with a glint, completely still: a quad each with alpha scissor (the strands are 10-25% alpha, strengthened 4x). No vertex work, nothing run per frame (the user's).
+    - **Spiders at every web** (`Megastructure.webs`, `_update_webs`, host only): a SpiderPack in a RoamingGroup patrolling round the web. 4-8 spiders for a 2 m web, up to 20-30 for a 30 m one. Patrol radius 20-50 m by size (outside, kept within the ledge). Magnified indoors like the rest of the infestation. Each horde is there while a player is within 120 m of its patrol and gone once everyone has left, like the floor nests.
+  - Test world: the Stack's plateau widened to 560 m (`STACK_PLATEAU`; the hive's far corner is ~530 m out). It takes effect on the next test-world bake.
+  - Counts: 25 halls, 36 window rooms, 28 skybridges (19 as drawn, 9 moved, 6 left out), 3,387 indoor growths in 189 batches.

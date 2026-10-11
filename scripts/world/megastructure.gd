@@ -55,6 +55,15 @@ extends Node3D
 ## stays the same) -- a place not built for people breeds things to match.
 ## Only its own hordes: a Rat Bender's keep their size.
 @export var infest_magnify: float = 2.0
+@export_group("Webs")
+## Cobwebs with a spider horde each (the builder's: {at: the floor by the
+## web, local; size: the web's width, m; indoors; radius: how far its
+## spiders patrol round it}). A web's horde is there while a player's within
+## web_reach of its patrol, gone once everyone's left (like the floor nests):
+## a 2 m web 4-8 spiders, a 30 m one 20-30; indoors magnified like the rest
+## of the infestation.
+@export var webs: Array[Dictionary] = []
+@export var web_reach: float = 120.0
 ## How far the camera sees (metres): enough for its top from anywhere.
 @export var view_distance: float = 16000.0
 
@@ -69,6 +78,8 @@ var _camera_check := 0.0
 var _infestation: Array[RoamingGroup] = []
 ## floor_nests index -> its nest, while it's grown.
 var _floor_nests := {}
+## webs index -> its spiders' group, while they're there.
+var _web_hordes := {}
 
 
 func _ready() -> void:
@@ -137,6 +148,7 @@ func _process(delta: float) -> void:
 		_update_infestation()
 	if multiplayer.is_server():
 		_update_floor_nests()
+		_update_webs()
 
 
 ## The floor nests near a player grown; the ones nobody's near any more gone.
@@ -159,6 +171,46 @@ func _update_floor_nests() -> void:
 		elif nest != null and nearest > floor_nest_reach + 50.0:
 			nest.queue_free()
 			_floor_nests.erase(i)
+
+
+## The webs near a player with their spiders; the ones nobody's near cleared.
+func _update_webs() -> void:
+	var players := get_tree().get_nodes_in_group("player")
+	for i in webs.size():
+		var web: Dictionary = webs[i]
+		var at := to_global(web.at)
+		var nearest := INF
+		for node in players:
+			nearest = minf(nearest, (node as Node3D).global_position.distance_to(at))
+		var horde = _web_hordes.get(i) # untyped: it may have been freed
+		if horde != null and not is_instance_valid(horde):
+			_web_hordes.erase(i)
+			horde = null
+		var reach := web_reach + float(web.radius)
+		if horde == null and nearest < reach:
+			_web_hordes[i] = _web_horde(web)
+		elif horde != null and nearest > reach + 60.0:
+			(horde as RoamingGroup).disband()
+			_web_hordes.erase(i)
+
+
+## A web's spiders: a pack staying on its patch round the web, more of them
+## the bigger it is.
+func _web_horde(web: Dictionary) -> RoamingGroup:
+	var big := clampf(inverse_lerp(2.0, 30.0, float(web.size)), 0.0, 1.0)
+	var group := RoamingGroup.new()
+	group.name = "WebSpiders"
+	group.use_navmesh = false
+	group.anchor = to_global(web.at)
+	group.anchor_radius = float(web.radius)
+	group.drift_speed = 0.8
+	add_child(group)
+	group.global_position = group.anchor
+	var pack := SPIDER_PACK.instantiate() as SpiderPack
+	pack.start_count = randi_range(roundi(lerpf(4.0, 20.0, big)), roundi(lerpf(8.0, 30.0, big)))
+	pack.spider_scale = infest_magnify if web.indoors else 1.0
+	_member(group, pack, 0)
+	return group
 
 
 ## Infested while someone's near; cleared once everyone's well away.
