@@ -125,31 +125,27 @@ func _wear_backpack(skeleton: Skeleton3D) -> void:
 		if skeleton.find_bone(name) != -1:
 			bone = name
 			break
-	var pack := load(BackpackView.BAG_SCENE) as PackedScene if ResourceLoader.exists(BackpackView.BAG_SCENE) else null
-	if bone.is_empty() or pack == null:
-		return
-	var whole := pack.instantiate() as Node3D
-	var source := whole.find_child("Backpack", true, false) as MeshInstance3D
-	if source == null:
-		whole.free()
+	var mesh := BackpackView.pack_mesh()
+	if bone.is_empty() or mesh == null:
 		return
 	var attachment := BoneAttachment3D.new()
 	attachment.bone_name = bone
 	skeleton.add_child(attachment)
 	var bag := MeshInstance3D.new()
 	bag.name = "Backpack"
-	bag.mesh = source.mesh
-	BackpackView.textured(bag, source)
-	whole.free()
+	bag.mesh = mesh
+	bag.material_override = BackpackView.pack_material()
 	attachment.add_child(bag)
 	# Sized and placed in the body's own terms: on the back (+Z: the player
-	# faces -Z), a little below the bone, upright, whatever the bone's turn.
-	var box := bag.mesh.get_aabb()
+	# faces -Z), its straps (the pack's +x) against it, a little below the
+	# bone, upright, whatever the bone's turn.
+	var box := mesh.get_aabb()
 	var size := BACKPACK_HEIGHT / maxf(box.size.y, 0.001)
 	var body := _player.global_transform
+	var facing := body.basis.orthonormalized() * Basis(Vector3.UP, PI * 0.5) # pack +x -> body -Z (toward the back)
 	var chest := skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin
-	var place := chest + body.basis.z.normalized() * (0.12 + box.size.z * size * 0.5) - body.basis.y.normalized() * 0.08
-	bag.global_transform = Transform3D(body.basis.orthonormalized().scaled(Vector3.ONE * size), place - body.basis.orthonormalized() * (box.get_center() * size))
+	var place := chest + body.basis.z.normalized() * (0.12 + box.size.x * size * 0.5) - body.basis.y.normalized() * 0.08
+	bag.global_transform = Transform3D(facing.scaled(Vector3.ONE * size), place - facing * (box.get_center() * size))
 	bag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	_backpack_on_back = bag
 

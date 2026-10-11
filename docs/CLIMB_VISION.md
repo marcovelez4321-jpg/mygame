@@ -86,7 +86,16 @@ still to be chosen are asked before each is built.
 - Camps left too long get reclaimed by nests; abandoned climbers' camps hold
   supplies and their story; resting passes time, heals, recovers.
 - Out: camps linked by ziplines/fast travel.
-
+- **Split in two (the user's, 2026-10-11; for the camps step):** the
+  **tent saves the game** (it's where you respawn) and the **bedroll lets
+  you sleep** (till dawn, healing). Each is crafted on its own, with
+  different amounts of scrap and silk (amounts to ask at that step). The
+  bedroll is the survival pack's sleeping bag (`art/survival`:
+  `sleeping_bag` laid out). The tent is to be "the new pack's" -- but the
+  survival pack has no tent (only the forest props' Large / Simple Large
+  Tents): ask which at that step. In the backpack, both the tent and the
+  bedroll show as the survival pack's rolled sleeping bag
+  (`sleeping_bag_01`) for now.
 ## Day and night
 - A day/night cycle. At night creatures climb the outside walls.
 

@@ -20,8 +20,16 @@ extends Node3D
 ## them). Your own view only: nothing here is simulation.
 
 const HOLD_PATH := "res://scenes/player/backpack_hold.tres"
-const BAG_SCENE := "res://art/PSX Forest Props.fbx"
-## The forest props' texture (the model doesn't point at it itself).
+## The pack (the user's: the survival pack's second backpack, its straps
+## close in so they don't clip into anything) and its texture (loaded
+## ourselves: the model's own link to it has the folder's name in the wrong
+## case, which an exported game's file system wouldn't find).
+const BAG_SCENE := "res://art/survival/Models/Survival.fbx"
+const BAG_NODE := "Backpack_001"
+const BAG_TEXTURE := "res://art/survival/Textures/Backpack.png"
+## The forest props (the camp kit's sleeping pad) and their texture (the
+## model doesn't point at it itself).
+const FOREST_SCENE := "res://art/PSX Forest Props.fbx"
 const FOREST_TEXTURE := "res://art/Texture/Texture Forest.png"
 
 const MEGA := "res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/"
@@ -36,7 +44,7 @@ const PROPS := {
 	Backpack.Kind.SHELLS: MEGA + "Items & Weapons/shotgun_ammo_1.glb",
 	Backpack.Kind.ROCKETS: MEGA + "Items & Weapons/ammo_box_1.glb",
 	Backpack.Kind.SCRAP: MEGA + "Small Props/tin_can_mp_1_rusty.glb",
-	Backpack.Kind.CAMP_KIT: [BAG_SCENE, "Foam Sleeping Pad"],
+	Backpack.Kind.CAMP_KIT: [FOREST_SCENE, "Foam Sleeping Pad"],
 }
 
 var hold: BackpackHold
@@ -66,6 +74,8 @@ var _weight_label: Label3D
 
 static var _scenes := {}
 static var _forest: StandardMaterial3D
+static var _pack: ArrayMesh
+static var _pack_look: StandardMaterial3D
 
 
 func setup(player: PlayerMovement, arms: FirstPersonArms) -> void:
@@ -740,34 +750,68 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ---- The bag itself ------------------------------------------------------------
 
-## The pack's backpack model, its materials swapped for one that can cut its
-## top away (the unzip) and shows its insides darker.
+## The pack's model upright and in metres (it's stored lying down at 1/170),
+## turned so its straps are toward +x (the way the first pack faced, so a
+## saved hold still fits). Made once, shared by every view and body.
+static func pack_mesh() -> ArrayMesh:
+	if _pack:
+		return _pack
+	var scene := _scene(BAG_SCENE)
+	if scene == null:
+		return null
+	var whole := scene.instantiate()
+	var source := whole.find_child(BAG_NODE, true, false) as MeshInstance3D
+	if source and source.mesh:
+		var turn := Basis(Vector3.UP, PI) * source.transform.basis
+		var rotation := turn.orthonormalized()
+		_pack = ArrayMesh.new()
+		for surface in source.mesh.get_surface_count():
+			var arrays := source.mesh.surface_get_arrays(surface)
+			var vertices := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+			for i in vertices.size():
+				vertices[i] = turn * vertices[i]
+			arrays[Mesh.ARRAY_VERTEX] = vertices
+			if arrays[Mesh.ARRAY_NORMAL] != null:
+				var normals := arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array
+				for i in normals.size():
+					normals[i] = (rotation * normals[i]).normalized()
+				arrays[Mesh.ARRAY_NORMAL] = normals
+			arrays[Mesh.ARRAY_TANGENT] = null
+			_pack.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	whole.free()
+	return _pack
+
+
+## The pack's texture as a plain PS1-looking material (the one on your back).
+static func pack_material() -> StandardMaterial3D:
+	if _pack_look == null:
+		_pack_look = StandardMaterial3D.new()
+		_pack_look.albedo_texture = load(BAG_TEXTURE) as Texture2D if ResourceLoader.exists(BAG_TEXTURE) else null
+		_pack_look.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+		_pack_look.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+		_pack_look.roughness = 1.0
+	return _pack_look
+
+
+## The pack in your hand: its material swapped for one that can cut its top
+## away (the unzip) and shows its insides darker.
 func _build_bag() -> void:
-	var pack := _scene(BAG_SCENE)
-	if pack == null:
-		return
-	var whole := pack.instantiate() as Node3D
-	var source := whole.find_child("Backpack", true, false) as MeshInstance3D
-	if source == null:
-		whole.free()
+	var mesh := pack_mesh()
+	if mesh == null:
 		return
 	_bag = MeshInstance3D.new()
 	_bag.name = "Bag"
-	_bag.mesh = source.mesh
+	_bag.mesh = mesh
 	_bag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_bag_box = source.mesh.get_aabb()
+	_bag_box = mesh.get_aabb()
 	var shader := preload("res://shaders/backpack_open.gdshader")
-	for surface in source.mesh.get_surface_count():
-		var original := source.get_active_material(surface) as BaseMaterial3D
+	for surface in mesh.get_surface_count():
 		var material := ShaderMaterial.new()
 		material.shader = shader
-		# Its own texture, or the forest props' one (the model doesn't link it).
-		var texture: Texture2D = original.albedo_texture if original and original.albedo_texture else forest_material().albedo_texture
-		material.set_shader_parameter("albedo_texture", texture)
-		material.set_shader_parameter("albedo_color", original.albedo_color if original and original.albedo_texture else Color.WHITE)
+		material.set_shader_parameter("albedo_texture", pack_material().albedo_texture)
+		material.set_shader_parameter("albedo_color", Color.WHITE)
 		_bag.set_surface_override_material(surface, material)
 		_materials.append(material)
-	whole.free()
 	# Centred on its own middle, so placing it places the middle.
 	_bag.position = -_bag_box.get_center() * hold.bag_scale
 	add_child(_bag)

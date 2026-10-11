@@ -1433,3 +1433,12 @@ them:
   - **What it does at the worst** (all exports on Backpack): stamina refills at 45% (`slowest_refill`, as before), walking/running at 80% (`slowest_move`), jumps and wall jumps 85% as high (`lowest_jump`), the grapple pulls at 80% and builds up as slowly (`slowest_pull`), and holding on drains stamina 1.5x as fast (`heaviest_drain`). The 85% / 80% / 1.5x numbers are mine (the user picked which effects; only the 80% walk was in the question) -- change on Backpack.
   - Weight counts what's in the pack, not the gun in your hand.
   - Not compiled or run (asks first).
+- **The backpack is the survival pack's (2026-10-11).** The user's: use the backpack from `art/survival` whose straps sit close, so they don't clip.
+  - `Survival.fbx` has two: `Backpack` (straps sticking out 0.56 m to one side) and `Backpack_001` (straps in at 0.29 m). It's `Backpack_001` (`BackpackView.BAG_NODE`).
+  - It's stored lying down at 1/170 scale: `BackpackView.pack_mesh()` makes an upright, metric copy once (shared by the bag in your hand and the one on your back), turned so its straps face +x like the first pack -- so the saved hold still roughly fits.
+  - Its texture is loaded directly (`BAG_TEXTURE`: `art/survival/Textures/Backpack.png`): the model links it as `art/Survival/...` (capital S), which an exported game's case-sensitive file system wouldn't find.
+  - Same size as before: 0.8 m model x `bag_scale` 0.76 = 0.61 m. The items' box refitted to its main compartment (measured off the model): `items_area` (-0.40, -0.32, -0.40) size (0.69, 0.57, 0.79).
+  - On your back: straps against you (`PlayerModel._wear_backpack`).
+  - The camp kit's sleeping pad still comes from the forest props (`FOREST_SCENE`).
+  - Also noted for the camps step (docs/CLIMB_VISION.md): the tent saves, the bedroll sleeps, each its own recipe; in the backpack both show as the rolled sleeping bag. The survival pack has no tent -- to ask then.
+  - Not compiled or run (asks first).

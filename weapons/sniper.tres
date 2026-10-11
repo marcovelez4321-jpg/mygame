@@ -13,7 +13,6 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Sniper Rifle"
-carry_weight = 5.5
 damage = 80.0
 fire_interval = 1.2
 max_range = 300.0
@@ -35,6 +34,7 @@ aim_move_speed_scale = 0.5
 scope_overlay = ExtResource("7_scope")
 aim_in_sound = ExtResource("8_in")
 aim_out_sound = ExtResource("9_out")
+carry_weight = 5.5
 draw_time = 0.7
 arms_fitted = true
 right_arm_offset = Vector3(-0.019886365, 0.04513617, -0.042825967)
