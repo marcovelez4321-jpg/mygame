@@ -36,7 +36,8 @@ const ITEM_LAYER := 1 << 19
 ## The look of each kind: a model (a scene path, or [scene, node name] in a
 ## pack), or empty for one made in code.
 const PROPS := {
-	Backpack.Kind.PILLS: MEGA + "Items & Weapons/pills_packet_1.glb",
+	# The bottle you hold when you take them (weapons/pills.tres), the user's.
+	Backpack.Kind.PILLS: MEGA + "Items & Weapons/pills_bottle_2.glb",
 	Backpack.Kind.BANDAGE: MEGA + "Items & Weapons/bandage_mp_1.glb",
 	Backpack.Kind.BULLETS: MEGA + "Items & Weapons/ammo_box_mp_1.glb",
 	Backpack.Kind.SHELLS: MEGA + "Items & Weapons/shotgun_ammo_1.glb",

@@ -244,11 +244,28 @@ var _next_flash_time := 0.0
 
 
 func _ready() -> void:
+	_animation_player = _enemy.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	# The bones are only built when it dies (the user's: for the frame rate --
+	# a living enemy carried 18 of them around for nothing).
+	_enemy.state_changed.connect(_on_state_changed)
+	_enemy.mutation_stopped.connect(_on_mutation_stopped)
+	set_physics_process(false) # nothing to do till it's a body
+	# A model that ships its own ragdoll already has the bones: set them up
+	# now (no collision while alive), as before.
+	var skeletons := _enemy.find_children("*", "Skeleton3D", true, false)
+	if not skeletons.is_empty():
+		for child in (skeletons[0] as Skeleton3D).get_children():
+			if child is PhysicalBoneSimulator3D:
+				_build_bones()
+				break
+
+
+## Its ragdoll: found or built (at death), each bone set up. False if the
+## model has none to make.
+func _build_bones() -> bool:
 	_simulator = _find_or_build_simulator()
 	if _simulator == null:
-		return
-	_animation_player = _enemy.find_child("AnimationPlayer", true, false) as AnimationPlayer
-
+		return false
 	for child in _simulator.get_children():
 		var bone := child as PhysicalBone3D
 		if bone:
@@ -271,10 +288,8 @@ func _ready() -> void:
 
 	if _bones.is_empty():
 		push_warning("EnemyRagdoll: the model on %s has no humanoid bones -- was it imported with art/animations/mixamo_bonemap.tres? No ragdoll." % _enemy.name)
-		return
-	_enemy.state_changed.connect(_on_state_changed)
-	_enemy.mutation_stopped.connect(_on_mutation_stopped)
-	print("EnemyRagdoll: %s ready with %d ragdoll bones" % [_enemy.name, _bones.size()]) # TEMPORARY diagnostic
+		return false
+	return true
 
 
 ## A model can still ship its own hand-made ragdoll (Skeleton3D > "Create
@@ -318,7 +333,9 @@ func _on_state_changed(state: Enemy.State) -> void:
 
 
 func _start_ragdoll() -> void:
-	print("EnemyRagdoll: %s died, starting ragdoll (animation player found: %s)" % [_enemy.name, _animation_player != null]) # TEMPORARY diagnostic
+	if _bones.is_empty() and not _build_bones():
+		return
+	set_physics_process(true)
 	# Stop the animation so it doesn't fight the physics for control of the bones.
 	if _animation_player:
 		_animation_player.stop(true)

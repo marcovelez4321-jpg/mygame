@@ -148,6 +148,12 @@ var spiders: Array[Spider] = []
 
 var _time := 0.0
 var _lookout := 0.0
+## Steering's own clock (see _physics_process).
+const THINK_INTERVAL := 0.1
+const FAR_THINK_INTERVAL := 0.5
+const FAR_DISTANCE := 40.0
+var _steer_left := 0.0
+var _steer_time := 0.0
 var _roam_left := 0.0
 var _wander_to := Vector3.ZERO
 var _had_spiders := false
@@ -271,9 +277,20 @@ func _physics_process(delta: float) -> void:
 	_time += delta
 	_look_out(delta)
 	var center := pack_center()
+	_update_haul(delta, center) # every tick: it pulls on a body
+	# Steering (the user's: simpler, for the frame rate): each spider's way
+	# worked out THINK_INTERVAL apart (FAR_THINK_INTERVAL past FAR_DISTANCE
+	# from every player), not every tick -- they keep walking it between.
+	_steer_time += delta
+	_steer_left -= delta
+	if _steer_left > 0.0:
+		return
+	delta = _steer_time
+	_steer_time = 0.0
+	var far := _nearest_player(center) > FAR_DISTANCE
+	_steer_left = (FAR_THINK_INTERVAL if far else THINK_INTERVAL) * randf_range(0.8, 1.2)
 	if order == Order.ROAM:
 		_roam(delta, center)
-	_update_haul(delta, center)
 	var speed := spider_speed
 	if order == Order.HUNT and target and center.distance_to(target.global_position) > charge_range:
 		speed *= creep_pace
@@ -287,6 +304,13 @@ func _physics_process(delta: float) -> void:
 			spider.desired_velocity = _steer_hauler(spider, i)
 		else:
 			spider.desired_velocity = _steer(spider, i, speed, delta)
+
+
+func _nearest_player(point: Vector3) -> float:
+	var nearest := INF
+	for node in get_tree().get_nodes_in_group("player"):
+		nearest = minf(nearest, (node as Node3D).global_position.distance_to(point))
+	return nearest
 
 
 ## Every half second: keep after the target unless it's dead or every spider

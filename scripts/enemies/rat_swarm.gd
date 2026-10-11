@@ -225,6 +225,14 @@ var rats: Array[Rat] = []
 
 var _frenzy_left := 0.0
 var _time := 0.0
+## Steering's own clock (see _physics_process).
+const THINK_INTERVAL := 0.1
+const FAR_THINK_INTERVAL := 0.5
+const FAR_DISTANCE := 40.0
+var _think_left := 0.0
+var _think_time := 0.0
+var _last_center := Vector3.ZERO
+var _any_moving := false
 ## This tick's rat positions and velocities (read once, used many times),
 ## and a grid of which rats are in which square -- so each rat only checks
 ## the rats in its own and the 8 surrounding squares for crowding, not the
@@ -388,12 +396,25 @@ func _physics_process(delta: float) -> void:
 	if bender == null:
 		_look_out(delta)
 	_frenzy_left = maxf(_frenzy_left - delta, 0.0)
+	_time += delta
 
+	# Steering (the user's: simpler, for the frame rate): the pack's way and
+	# each rat's worked out THINK_INTERVAL apart (FAR_THINK_INTERVAL past
+	# FAR_DISTANCE from every player), not every tick -- they keep running it
+	# between. Hauling a body it's every tick (it pulls on the body).
+	_think_time += delta
+	_think_left -= delta
+	if _think_left > 0.0 and _drag_phase == DragPhase.NONE:
+		_update_scurry(_last_center, _any_moving)
+		return
+	delta = _think_time
+	_think_time = 0.0
 	_build_grid()
 	var center := Vector3.ZERO
 	for p in _pos:
 		center += p
 	center /= rats.size()
+	_think_left = (FAR_THINK_INTERVAL if _nearest_player(center) > FAR_DISTANCE else THINK_INTERVAL) * randf_range(0.8, 1.2)
 	_update_drag(delta, center)
 	if bender == null and order == Order.FOLLOW:
 		_roam(delta, center)
@@ -409,7 +430,6 @@ func _physics_process(delta: float) -> void:
 		var corpse_ragdoll := _corpse.get_node_or_null("EnemyRagdoll") as EnemyRagdoll
 		_corpse_pos = corpse_ragdoll.body_position() if corpse_ragdoll else _corpse.global_position
 
-	_time += delta
 	var speed := rat_speed * lerpf(1.0, frenzy_speed, _frenzy())
 	# A leaderless pack creeps up on a player it's noticed, then charges.
 	if bender == null and target and center.distance_to(target.global_position) > charge_range:
@@ -419,7 +439,16 @@ func _physics_process(delta: float) -> void:
 		var rat := rats[i]
 		rat.desired_velocity = _steer(rat, i, goal, speed, delta)
 		any_moving = any_moving or rat.desired_velocity.length_squared() > 1.0
+	_last_center = center
+	_any_moving = any_moving
 	_update_scurry(center, any_moving)
+
+
+func _nearest_player(point: Vector3) -> float:
+	var nearest := INF
+	for node in get_tree().get_nodes_in_group("player"):
+		nearest = minf(nearest, (node as Node3D).global_position.distance_to(point))
+	return nearest
 
 
 ## No Bender to follow orders from: every half second, see if any rat has

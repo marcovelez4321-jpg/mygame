@@ -99,10 +99,34 @@ func _ready() -> void:
 	for state in Enemy.State.values():
 		_chosen[state] = _pick(_animations_for(state))
 
+	set_process(false) # only while far (set_far)
+	_normal_mode = _player.callback_mode_process
 	_enemy.state_changed.connect(_on_state_changed)
 	_enemy.attack_started.connect(_on_attack_started)
 	_player.animation_finished.connect(_on_animation_finished)
 	_on_state_changed(Enemy.State.IDLE)
+
+
+## Far from every player (Enemy.far_distance): its animation steps at 10
+## frames a second instead of every frame (the user's: for the frame rate).
+func set_far(far: bool) -> void:
+	if _player == null:
+		return
+	_player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL if far else _normal_mode
+	_far_time = 0.0
+	set_process(far)
+
+
+const FAR_FRAME := 0.1
+var _far_time := 0.0
+var _normal_mode := AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
+
+
+func _process(delta: float) -> void:
+	_far_time += delta
+	if _far_time >= FAR_FRAME:
+		_player.advance(_far_time)
+		_far_time = 0.0
 
 
 func _on_state_changed(state: Enemy.State) -> void:

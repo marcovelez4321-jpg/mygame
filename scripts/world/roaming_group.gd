@@ -60,7 +60,12 @@ func _physics_process(delta: float) -> void:
 	home = _on_walkable(home)
 	var members := members()
 	if members.is_empty():
-		queue_free() # all dead
+		# All dead. Its bodies are its children: it waits till the last has
+		# faded out on its own (Enemy.corpse_time) -- freeing it now took the
+		# bodies with it a moment after the fight (the user's bug: gone in
+		# about 5 s, before the hordes could get at them).
+		if get_child_count() == 0:
+			queue_free()
 		return
 	for member in members:
 		if member.has_method("set_home"):

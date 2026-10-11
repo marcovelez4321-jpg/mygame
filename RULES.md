@@ -1455,3 +1455,12 @@ them:
   - Its two-handed settings (support hand, baked pose, arm nudges) are gone. Stats unchanged (one shell, 8 pellets); weight 2.5 kg, 50 cm in the backpack.
   - The folder's `.blend` files are the model's sources; Godot only imports them if Blender's set up.
   - Not compiled or run (asks first).
+- **Simpler AI for the frame rate; bodies stay their 120 s and fade out (2026-10-11).** The user's picks.
+  - **Human enemies think 10 times a second** (`Enemy.think_interval` 0.1, the HL2 way): target, gang, aim and state decisions every think, working in the time since the last (`_dt`); moving, gravity and turning stay every tick (turning toward `_want_yaw` in `_turn()`, so it's smooth). A swing or lunge in progress thinks every tick (timed).
+  - **Far ones go simple** (past `far_distance` 30 m from every player): thinking every 0.4 s, no aiming (an attacking gunner keeps its aim), and their animation stepped at 10 frames a second (`EnemyAnimator.set_far`, the AnimationPlayer in manual mode).
+  - **Ragdoll made at death:** `EnemyRagdoll` builds its 18 bones when the enemy dies, not at spawn (a model that ships its own ragdoll -- the mutant -- still sets it up at spawn); its physics tick is off till then.
+  - **Hordes think 10 times a second:** spider packs' and rat packs' steering (each creature's way, roaming, the rats' grid and path) every 0.1 s, every 0.5 s past 40 m from every player; their body hauling and dragging still every tick (it pulls on the body). Roaches unchanged (their every-tick steering is their flight; their target picking was already timed).
+  - **Bodies vanishing in ~5 s (the user's bug):** a group's members are its children, and the group freed itself the moment none was alive -- taking the bodies with it. Now it waits till its last body has gone (`RoamingGroup`).
+  - **Bodies fade out** at the end of `corpse_time` (120 s, the user's) over `corpse_fade_time` 2.5 s, instead of vanishing.
+  - **Pills in the backpack** are the bottle you hold (`pills_bottle_2.glb`), the user's.
+  - Not compiled or run (asks first).

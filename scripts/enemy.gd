@@ -55,6 +55,17 @@ signal attack_started
 ## in co-op the host sends it so every screen sees and hears the same shots.
 signal shot_fired(end_point: Vector3)
 
+@export_group("Thinking")
+## HL2-style (the user's: simpler AI, for the frame rate): its decisions --
+## who to go for, where to walk, what to do -- this often, not every physics
+## tick; moving and turning stay smooth every tick. A swing or a lunge in
+## progress thinks every tick (they're timed).
+@export var think_interval: float = 0.1
+## Past far_distance from every player it goes simple: thinking only every
+## far_think_interval, no aiming, its animation at 10 frames a second.
+@export var far_distance: float = 30.0
+@export var far_think_interval: float = 0.4
+
 @export_group("Movement")
 @export var move_speed: float = 4.0
 ## How fast it turns to face where it's going or what it's fighting, degrees a
@@ -133,8 +144,11 @@ signal shot_fired(end_point: Vector3)
 ## a second kept it stunned until it died without ever hitting back. A
 ## player's hits still stagger it every time.
 @export var creature_pain_cooldown: float = 1.5
-## Seconds the body stays after death before it's removed.
+## Seconds the body stays after death before it fades away (the user's:
+## 120 s -- long enough for the hordes to drag, haul and eat it).
 @export var corpse_time: float = 120.0
+## How long it takes to fade out at the end (the user's: not gone in a blink).
+@export var corpse_fade_time: float = 2.5
 
 @export_group("Lunge (rusher)")
 ## Turns on the dash-in burst below. Off by default -- the base enemy just
@@ -247,6 +261,16 @@ var _gang: Array = []
 var _gang_leader = null
 var _gang_index := 0
 var _gang_timer := 0.0
+## Thinking (think_interval): seconds till the next think, the time gathered
+## since the last (what that think works in: _dt), and whether it's far.
+var _think_left := 0.0
+var _think_time := 0.0
+var _dt := 0.0
+var _far := false
+## Where it wants to face (turned toward every tick, at turn_speed).
+var _want_yaw := 0.0
+var _has_want_yaw := false
+var _animator: EnemyAnimator
 var _home := Vector3.ZERO
 var _patrol_to := Vector3.ZERO
 var _patrol_timer := 0.0
@@ -400,28 +424,19 @@ func _physics_process(delta: float) -> void:
 	_attack_cooldown = maxf(_attack_cooldown - delta, 0.0)
 	_lunge_cooldown_left = maxf(_lunge_cooldown_left - delta, 0.0)
 	_creature_pain_left = maxf(_creature_pain_left - delta, 0.0)
-	_retarget_timer -= delta
-	if _retarget_timer <= 0.0:
-		_retarget_timer = retarget_interval
-		_update_memory(_find_nearest_hostile())
-	_gang_timer -= delta
-	if _gang_timer <= 0.0:
-		_gang_timer = 0.5
-		_refresh_gang()
-	if can_shoot:
-		_track_aim(delta)
+	_turn(delta)
 
-	match _state:
-		State.IDLE, State.PATROL:
-			_think_idle(delta)
-		State.CHASE:
-			_think_chase()
-		State.LUNGE:
-			_think_lunge(delta)
-		State.ATTACK:
-			_think_attack()
-		State.PAIN:
-			_think_pain(delta)
+	# Thinking: every think_interval (far: far_think_interval), or every tick
+	# mid-swing or mid-lunge. It works in the time since the last think.
+	_think_time += delta
+	_think_left -= delta
+	var timed := _state == State.ATTACK or _state == State.LUNGE
+	if timed or _think_left <= 0.0:
+		_dt = _think_time
+		_think_time = 0.0
+		_update_far()
+		_think_left = (far_think_interval if _far else think_interval) * randf_range(0.8, 1.2)
+		_think()
 
 	# Thrown (shove()): the throw overrules its own walking until it slows.
 	if _shove.length_squared() > 0.04:
@@ -431,6 +446,63 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	move_and_slide()
+
+
+## One think: who it's after, its gang, its aim, and what it does now.
+func _think() -> void:
+	_retarget_timer -= _dt
+	if _retarget_timer <= 0.0:
+		_retarget_timer = retarget_interval
+		_update_memory(_find_nearest_hostile())
+	_gang_timer -= _dt
+	if _gang_timer <= 0.0:
+		_gang_timer = 0.5
+		_refresh_gang()
+	if can_shoot:
+		if _far and _state != State.ATTACK:
+			_has_aim_point = false # far: no aiming (snaps on again up close)
+		else:
+			_track_aim(_dt)
+	match _state:
+		State.IDLE, State.PATROL:
+			_think_idle(_dt)
+		State.CHASE:
+			_think_chase()
+		State.LUNGE:
+			_think_lunge(_dt)
+		State.ATTACK:
+			_think_attack()
+		State.PAIN:
+			_think_pain(_dt)
+
+
+## Far from every player (far_distance) or not; the animation told so.
+func _update_far() -> void:
+	var nearest := INF
+	for node in get_tree().get_nodes_in_group("player"):
+		nearest = minf(nearest, (node as Node3D).global_position.distance_to(global_position))
+	var far := nearest > far_distance
+	if far == _far:
+		return
+	_far = far
+	if _animator == null:
+		for child in get_children():
+			if child is EnemyAnimator:
+				_animator = child
+				break
+	if _animator:
+		_animator.set_far(far)
+
+
+## Turns toward where it wants to face, every tick (smooth between thinks).
+func _turn(delta: float) -> void:
+	if not _has_want_yaw:
+		return
+	if turn_speed <= 0.0:
+		global_rotation.y = _want_yaw
+		_has_want_yaw = false
+		return
+	global_rotation.y = rotate_toward(global_rotation.y, _want_yaw, deg_to_rad(turn_speed) * delta)
 
 
 ## Thrown by something (a worm's landing shockwave): flies back along `push`
@@ -710,13 +782,13 @@ func _think_lunge(delta: float) -> void:
 func _think_attack() -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
-	_time_aiming += get_physics_process_delta_time()
+	_time_aiming += _dt
 
 	# Committed to a swing/shot: it plays out completely, even if the target
 	# steps away. The hit only lands if they're still in range (melee) or in
 	# sight (ranged) at the moment of impact.
 	if _swing_time >= 0.0:
-		_run_swing(get_physics_process_delta_time())
+		_run_swing(_dt)
 		return
 
 	if _target == null:
@@ -738,7 +810,7 @@ func _think_attack() -> void:
 		return
 
 	if _sidestep_time > 0.0:
-		_sidestep_time -= get_physics_process_delta_time()
+		_sidestep_time -= _dt
 		velocity.x = _sidestep.x * move_speed
 		velocity.z = _sidestep.z * move_speed
 		return
@@ -949,7 +1021,7 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 	# mutation sequence frees it itself once the explosion spawns the mutant
 	# (see spawn_mutant() below), whenever that ends up being.
 	if not will_mutate:
-		get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+		get_tree().create_timer(corpse_time).timeout.connect(_fade_away)
 
 
 ## A shot landing on this corpse while it's mutating (weapon_controller.gd's
@@ -964,8 +1036,18 @@ func damage_mutation(amount: float) -> bool:
 		return false
 	will_mutate = false
 	mutation_stopped.emit()
-	get_tree().create_timer(corpse_time).timeout.connect(queue_free)
+	get_tree().create_timer(corpse_time).timeout.connect(_fade_away)
 	return true
+
+
+## The body's time is up: it fades out over corpse_fade_time, then it's gone.
+func _fade_away() -> void:
+	var fade := create_tween().set_parallel(true)
+	for node in find_children("*", "GeometryInstance3D", true, false):
+		var shape := node as GeometryInstance3D
+		shape.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fade.tween_property(shape, "transparency", 1.0, corpse_fade_time)
+	fade.chain().tween_callback(queue_free)
 
 
 ## Called by EnemyRagdoll once its twitch/enlarge/explode sequence finishes
@@ -1051,7 +1133,7 @@ func _nav_direction_to(destination: Vector3) -> Vector3:
 	# A new route only once the destination's moved a step or the route's
 	# getting old -- not every frame the player shifts (the queue serves a few
 	# routes a frame for everyone, see PathRequests).
-	_path_age += get_physics_process_delta_time()
+	_path_age += _dt
 	if destination.distance_squared_to(_path_goal) > REPATH_DISTANCE * REPATH_DISTANCE or _path_age > REPATH_TIME:
 		_path_goal = destination
 		_path_age = 0.0
@@ -1115,8 +1197,6 @@ func _face_position(pos: Vector3) -> void:
 	# direction -- turning toward it would spin it in place every tick.
 	if offset.length() <= 0.3:
 		return
-	var yaw := atan2(-offset.x, -offset.z) # facing -Z, same as look_at()
-	if turn_speed <= 0.0:
-		global_rotation.y = yaw
-	else:
-		global_rotation.y = rotate_toward(global_rotation.y, yaw, deg_to_rad(turn_speed) * get_physics_process_delta_time())
+	# Turned toward every tick by _turn() (smooth between thinks).
+	_want_yaw = atan2(-offset.x, -offset.z) # facing -Z, same as look_at()
+	_has_want_yaw = true
