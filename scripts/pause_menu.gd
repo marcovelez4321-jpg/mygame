@@ -459,6 +459,41 @@ func _build_coop_panel() -> void:
 	host.custom_minimum_size = Vector2(0, 36)
 	host.pressed.connect(func() -> void: Network.host())
 	vbox.add_child(host)
+	var your_address := Label.new()
+	your_address.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	your_address.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(your_address)
+	var show_address := func() -> void:
+		var addresses := Network.lan_addresses()
+		your_address.text = "Your address on this network: %s" % ", ".join(addresses) if not addresses.is_empty() else ""
+	show_address.call()
+	Network.status_changed.connect(func(_text: String) -> void: show_address.call())
+	# Games on the local network: one click to join.
+	var lan_title := Label.new()
+	lan_title.text = "Games on your network:"
+	vbox.add_child(lan_title)
+	var lan_list := VBoxContainer.new()
+	vbox.add_child(lan_list)
+	var none := Label.new()
+	none.text = "  (none yet -- the host presses Host)"
+	lan_list.add_child(none)
+	Network.lan_games_changed.connect(func(games: Array) -> void:
+		for child in lan_list.get_children():
+			child.queue_free()
+		if games.is_empty():
+			var empty := Label.new()
+			empty.text = "  (none yet -- the host presses Host)"
+			lan_list.add_child(empty)
+		for game: Dictionary in games:
+			var button := Button.new()
+			button.text = "Join %s's game (%s, %d in)" % [game.name, game.address, game.players]
+			button.custom_minimum_size = Vector2(0, 32)
+			button.pressed.connect(func() -> void:
+				Network.join(game.address)
+				close()
+			)
+			lan_list.add_child(button)
+	)
 	var row := HBoxContainer.new()
 	var address := LineEdit.new()
 	address.text = "127.0.0.1"
@@ -480,7 +515,11 @@ func _build_coop_panel() -> void:
 	leave.pressed.connect(func() -> void: Network.leave())
 	vbox.add_child(leave)
 	var help := Label.new()
-	help.text = "Playing alone? Run two copies of the game: Host in one, Join 127.0.0.1 in the other.\nOver the internet the host forwards UDP port %d on their router." % Network.PORT
+	help.text = ("Same house / same Wi-Fi: the host presses Host, the game shows up above for the other -- click it. "
+			+ "If it doesn't, type the host's address (shown on their screen) and Join. "
+			+ "The first time, Windows asks to let the game through its firewall: allow it on private networks.\n"
+			+ "Playing alone? Run two copies: Host in one, Join 127.0.0.1 in the other.\n"
+			+ "Over the internet the host forwards UDP port %d on their router.") % Network.PORT
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.add_theme_font_size_override("font_size", 13)
 	vbox.add_child(help)
@@ -493,6 +532,7 @@ func _build_coop_panel() -> void:
 	coop_button.pressed.connect(func() -> void:
 		menu_panel.visible = false
 		_coop_panel.visible = true
+		Network.start_lan_search()
 	)
 
 

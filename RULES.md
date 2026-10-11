@@ -1270,3 +1270,9 @@ them:
   - **Still to do in step 1** (the user's call: synced, not switched off): the boss worm and the barnacles. Then a test run.
   - **To test alone:** run two copies (Godot: Debug > Customize Run Instances > 2). Host in one, Join 127.0.0.1 in the other.
   - **Full compile check** (scratchpad `full_check.gd`): every script under scripts/ and tools/, with the autoloads stood in as engine singletons. It caught a deliberately broken script. 133 scripts, 0 failures.
+
+- 2026-10-11: **Co-op on a LAN: games found automatically** (the user's ask: same house, same Wi-Fi).
+  - While hosting, Network broadcasts a small UDP announcement on the local network once a second (port 7778, tagged so nothing else's broadcasts count; `LAN_*`).
+  - The Co-op panel listens while it's open and lists every game it hears: "Join <name>'s game (address, N in)", one click. Games drop off 4 s after their last announcement.
+  - The panel also shows this machine's LAN address (`Network.lan_addresses()`), for typing it in if the list doesn't show the game (e.g. Wi-Fi with client isolation).
+  - Windows asks to let the game through its firewall the first time: allow it on private networks.

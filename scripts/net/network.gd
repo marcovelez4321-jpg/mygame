@@ -14,6 +14,12 @@ extends Node
 ## Offline none of this runs: multiplayer.is_server() is true, there's one
 ## player, and the game plays exactly as it did before.
 ##
+## On a LAN (same house, same Wi-Fi): while hosting, the game announces itself
+## on the local network once a second (a UDP broadcast on LAN_PORT); the
+## Co-op panel listens and lists the games it hears, so joining is one click
+## -- no addresses to type. (Windows asks to let the game through its
+## firewall the first time: allow it on private networks.)
+##
 ## Joining: the client connects, the host tells it which scene it's in, the
 ## client loads it fresh (so nothing it made while offline is left over) and
 ## says it's ready, with its character. The host then makes its body
@@ -21,17 +27,32 @@ extends Node
 ## newcomer everyone who's already there.
 
 signal status_changed(text: String)
+## The games heard on the local network changed: [{address, name, players}].
+signal lan_games_changed(games: Array)
 
 const PORT := 7777
 const MAX_CLIENTS := 3
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 ## How far from the player they appear next to a newcomer spawns (metres).
 const SPAWN_SPREAD := 3.0
+## LAN discovery: the port the announcements go out on, what they start with
+## (so nothing else's broadcasts are mistaken for a game), how often they go
+## out, and how long a game stays listed after its last one.
+const LAN_PORT := 7778
+const LAN_TAG := "MYGAME_COOP"
+const LAN_EVERY := 1.0
+const LAN_FORGET_MSEC := 4000
 
 var status := "Offline"
 var entities: NetEntities
 ## Host: peer id -> the character it picked (its body's look on every machine).
 var _characters := {}
+## LAN: the host's announcer, the listener, and what it's heard
+## (address -> {address, name, players, heard: msec}).
+var _announcer: PacketPeerUDP
+var _announce_left := 0.0
+var _listener: PacketPeerUDP
+var _lan_games := {}
 
 
 func _ready() -> void:
@@ -62,7 +83,84 @@ func host(port: int = PORT) -> void:
 		return
 	multiplayer.multiplayer_peer = peer
 	_characters = {1: GameSettings.player_character}
+	_start_announcing()
 	_set_status("Hosting on port %d -- waiting for someone to join" % port)
+
+
+## This machine's addresses on the local network (what a buddy in the same
+## house types to join, if the list doesn't show the game).
+func lan_addresses() -> PackedStringArray:
+	var found := PackedStringArray()
+	for address in IP.get_local_addresses():
+		if address.begins_with("192.168.") or address.begins_with("10.") or _is_172_private(address):
+			found.append(address)
+	return found
+
+
+static func _is_172_private(address: String) -> bool:
+	if not address.begins_with("172."):
+		return false
+	var second := address.get_slice(".", 1).to_int()
+	return second >= 16 and second <= 31
+
+
+## Starts (or keeps) listening for games on the local network.
+func start_lan_search() -> void:
+	if _listener:
+		return
+	_listener = PacketPeerUDP.new()
+	if _listener.bind(LAN_PORT) != OK:
+		_listener = null # another copy on this PC is already listening: fine, it's for testing
+		return
+
+
+func stop_lan_search() -> void:
+	if _listener:
+		_listener.close()
+		_listener = null
+	_lan_games.clear()
+	lan_games_changed.emit([])
+
+
+func _start_announcing() -> void:
+	_announcer = PacketPeerUDP.new()
+	_announcer.set_broadcast_enabled(true)
+	_announcer.set_dest_address("255.255.255.255", LAN_PORT)
+	_announce_left = 0.0
+
+
+func _process(delta: float) -> void:
+	if _announcer and multiplayer.is_server():
+		_announce_left -= delta
+		if _announce_left <= 0.0:
+			_announce_left = LAN_EVERY
+			var who := OS.get_environment("USERNAME")
+			if who.is_empty():
+				who = "Someone"
+			var text := "%s|%s|%d|%d" % [LAN_TAG, who, PORT, multiplayer.get_peers().size() + 1]
+			_announcer.put_packet(text.to_utf8_buffer())
+	if _listener:
+		_listen()
+
+
+func _listen() -> void:
+	var changed := false
+	while _listener.get_available_packet_count() > 0:
+		var text := _listener.get_packet().get_string_from_utf8()
+		var address := _listener.get_packet_ip()
+		var parts := text.split("|")
+		if parts.size() < 4 or parts[0] != LAN_TAG:
+			continue
+		if _announcer and lan_addresses().has(address):
+			continue # our own game
+		changed = changed or not _lan_games.has(address)
+		_lan_games[address] = {address = address, name = parts[1], players = parts[3].to_int(), heard = Time.get_ticks_msec()}
+	for address: String in _lan_games.keys():
+		if Time.get_ticks_msec() - int(_lan_games[address].heard) > LAN_FORGET_MSEC:
+			_lan_games.erase(address)
+			changed = true
+	if changed:
+		lan_games_changed.emit(_lan_games.values())
 
 
 func join(address: String, port: int = PORT) -> void:
@@ -135,6 +233,9 @@ func half_ping() -> float:
 
 
 func _close() -> void:
+	if _announcer:
+		_announcer.close()
+		_announcer = null
 	if multiplayer.multiplayer_peer and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
