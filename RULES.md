@@ -1450,3 +1450,8 @@ them:
   - **On your back:** frozen; the shuffle now wakes them with a knock and lets them tumble 1.2 s, then freezes them.
   - The texture paths use `art/Survival` (the folder's real name; my earlier "wrong case" note was wrong).
   - Not compiled or run (asks first).
+- **The shotgun is the sawed-off double barrel, one-handed (2026-10-11).** The user's: the new `art/Sawed Off Double Barrel` model replaces the old shotgun, held in one hand, starting from the pistol's pose.
+  - `weapons/shotgun.tres`: `Double_Barrel_glb.glb` (its barrels along +z: `model_facing_degrees` (0, 180, 0)), `one_handed`, the pistol's hold animation, and `arms_fitted` off so the Viewmodel fits it from the pistol (`one_handed_arms_template`: the same arms and held angle, its grip seated in the hand) the first time it's shown. Starting numbers measured off the model (4.9 units long): `viewmodel_scale` 0.112 (about 0.55 m), `grip_point` (0, -0.3, -1.6) just behind the trigger, `muzzle_offset` (0, 0.35, 2.43) at the barrels' mouths. Tune in game with F2 (G grip, M muzzle, +/- size), F3 saves.
+  - Its two-handed settings (support hand, baked pose, arm nudges) are gone. Stats unchanged (one shell, 8 pellets); weight 2.5 kg, 50 cm in the backpack.
+  - The folder's `.blend` files are the model's sources; Godot only imports them if Blender's set up.
+  - Not compiled or run (asks first).
