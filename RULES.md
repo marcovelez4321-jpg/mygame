@@ -1300,3 +1300,15 @@ them:
   - **A skybridge blocked a lift landing** (the user's report). The lift's keep-clear column was sized from the main tower's widest block. Higher up the tower is narrower, so the walkway from the lift to the tower's opening runs further in than the column reached. Now every landing is its own keep-clear zone (`lift_landings`: from beyond the car to inside the opening, 40 m wide, up to 40 m over the floor). Checked: none touched.
   - **Window rooms +30%** (the user's): each hall gets 2 and a third in 60% of halls (`WINDOW_THIRD_CHANCE`, 2.6 on average), still only on painted windows, each with its room and corridor into the hall. The hive keeps its own 2. This build: 49 (was 36).
   - **Bug fixed along the way:** `StackLift` used the `Network` autoload, which doesn't exist in bake tools, so a rebuild would have left the Stack with no lift or cable car. New `scripts/net/net.gd` (**Net**: `is_online(node)`, `half_ping(node)`) asks the node's own multiplayer instead. World scripts use Net; `Network.is_online()` now just calls it. Checked: the rebuilt Stack has both (3 and 2 stops) and its 3 call buttons.
+
+- 2026-10-11: **Radios in the window rooms** (`scripts/world/radio.gd`, Radio; every detail the user's).
+  - Half the window rooms have an old radio on the floor (`StackBuilder.RADIO_CHANCE` 0.5; this build has 26 in 45 rooms). Each is any of the entertainment pack's 4 radios (`art/Entertainment`), chosen at build time.
+  - A physics prop (RigidBody3D, 4 kg, a box fitted to its model, the PS1 look): pick it up with F and toss it on release like any prop. It keeps playing wherever it lands.
+  - **Music:** every .ogg/.mp3/.wav in `audio/music/radio/` (the user fills it; add or remove songs any time, no rebake). Each radio picks one, seeded from its place, so co-op players hear the same song.
+  - **Sound** ("both", the user's choice): two voices play the song in step.
+    - The radio's own **voice** (bus RadioVoice: 380 Hz to 3.6 kHz, a little lo-fi grit, like an old speaker) reaches 45 m.
+    - The hall's **echo** (bus RadioEcho: muffled to 1.8 kHz, delays at 340 and 610 ms with feedback, a vast reverb, nearly all wet) reaches 220 m, muffled further with distance.
+    - The echo fades as you close in (+2 dB from 70 m out, down to -14 dB at the radio), so far off it's a smeared echo rolling through the halls, and up close it's the tinny radio itself.
+    - Both buses feed Ambience (its volume slider).
+  - **Cheap:** a radio only plays within 220 m (checked twice a second). Coming back, it picks the song up where it would be by now, as if it never stopped.
+  - Checked headless: all 4 models build with collision, both voices play a song from the folder, and the buses are made.

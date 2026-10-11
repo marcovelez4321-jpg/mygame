@@ -117,6 +117,8 @@ const LIFT_STOPS := [40.0, 900.0, 3000.0]
 ## Each hall's window rooms: two, and a third this often (2.6 a hall on
 ## average: 30% more than two, the user's). The hive keeps its own two.
 const WINDOW_THIRD_CHANCE := 0.6
+## How often a window room has an old radio left playing in it (the user's).
+const RADIO_CHANCE := 0.5
 ## Skybridges keep this far off anything carved, the windows' fronts, the
 ## lift's way and the high crossings.
 const BRIDGE_MARGIN := 4.0
@@ -158,6 +160,8 @@ var growth_floors: Array[Dictionary] = []
 var sky_bridges: Array[Dictionary] = []
 ## Round the broken bridge and the cable car: no skybridge through them.
 var crossing_clear := AABB()
+## The radios left in window rooms: [place on its floor, facing].
+var radio_spots: Array = []
 ## Each lift landing: the walkway from the lift to the tower's opening and
 ## the air over it -- no skybridge across them.
 var lift_landings: Array[AABB] = []
@@ -805,6 +809,11 @@ func _window_room(hall: Dictionary, side: int, lit: bool = true) -> bool:
 	openings.append(at)
 	if lit and random.randf() < 0.5:
 		lamps.append([room.get_center(), Color(1.0, 0.68, 0.32), 5.0, 32.0])
+	if random.randf() < RADIO_CHANCE:
+		# Somewhere on its floor, clear of the walls (it drops onto it).
+		var spot := Vector3(random.randf_range(room.position.x + 2.5, room.end.x - 2.5), y + 0.8,
+				random.randf_range(room.position.z + 2.5, room.end.z - 2.5))
+		radio_spots.append([spot, random.randf() * TAU])
 	if random.randf() < 0.5:
 		entrance_spots.append(Vector3(room.get_center().x, room.position.y, room.get_center().z))
 	return true
@@ -1652,6 +1661,7 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	_growth(root, decor)
 	_indoor_growth(root, decor)
 	_cobweb_nodes(root, decor)
+	_radios(root, interior)
 	_swarms(root, decor)
 	var worm := CoilingWorm.new()
 	worm.name = "CoilingWorm"
@@ -2126,6 +2136,23 @@ func _growth_batch(root: Node, parent: Node, kind: GrowthMeshes.Kind, places: Ar
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.visibility_range_end = distance
 	_own(root, node, parent)
+
+
+## The window rooms' radios (Radio: a physics prop playing a song from
+## audio/music/radio); each picks its model and song when the game runs.
+func _radios(root: Node, parent: Node) -> void:
+	if radio_spots.is_empty():
+		return
+	var holder := Node3D.new()
+	holder.name = "Radios"
+	_own(root, holder, parent)
+	for i in radio_spots.size():
+		var radio := Radio.new()
+		radio.name = "Radio_%d" % i
+		radio.model_index = random.randi() % Radio.MODELS.size()
+		radio.position = radio_spots[i][0]
+		radio.rotation.y = radio_spots[i][1]
+		_own(root, radio, holder)
 
 
 ## The cobwebs: a quad each, a still, pale web (shaders/cobweb.gdshader:
