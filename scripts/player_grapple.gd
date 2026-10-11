@@ -5,23 +5,26 @@ extends Node3D
 ## (WeaponData.one_handed): the right hand keeps the gun, the left throws the
 ## tentacle. With anything else out, it switches to the last one-handed gun.
 ##
-## Set it, then launch (the user's: HL2-style, not a swing -- docs/CLIMB_VISION.md):
+## Charge it, then it pulls you (docs/CLIMB_VISION.md):
 ##   CHARGE: hold right mouse; the ring shows where it'll bite. It only fires
 ##   once held at least min_charge_share of charge_time (no spamming), and
 ##   costs one bar of the player's stamina -- the same bars dashes use.
 ##   Let go right as it fills (good_window): a tiny extra boost, and a sound.
-##   LAUNCH: the moment it bites you're thrown straight at the spot, no
-##   gravity, no steering -- like Spider-Man's zip. Press right mouse again in
-##   the last moments of the flight (perfect_window): let go at speed with
-##   another tiny boost and a second sound, flying on past.
-##   PERCH: arriving, you stick to the wall at the spot.
+##   PULL (the user's: back to the original, Titanfall 2 style -- the straight
+##   launch didn't feel natural): once it bites it hauls you toward the spot,
+##   building up to pull_speed, no gravity; you can still steer, and you keep
+##   your speed when you let go. Press right mouse again in the last moments
+##   before you arrive (perfect_window): let go at speed with another tiny
+##   boost and a second sound, flying on past.
+##   PERCH: arriving (or pressed against something on the way, getting no
+##   closer), you stick to the wall there.
 ##   RAPPEL (back, S) lets line out and down -- you hang on it under the spot
 ##   and can sway; REEL (forward, W) climbs back up it to the spot.
 ##   Space lets go (with a hop). One grapple at a time: a new one only once
 ##   this one's let go.
-##   While it holds you (launching, perched, hanging, riding) your stamina
+##   While it holds you (pulling, perched, hanging, riding) your stamina
 ##   drains (drain_per_second: a bar every 4 s); empty, it lets go and you fall.
-## Big enemies (BIG_GROUP: the Harvestman, the worm) you launch at: kick them
+## Big enemies (BIG_GROUP: the Harvestman, the worm) pull you to them: kick them
 ## on arrival and bounce off, or press again during the flight to latch on
 ## and ride them until you jump. Small enemies are a miss.
 ##
@@ -49,7 +52,7 @@ signal launch_timed
 ## is a big enemy you zip to. Small enemies are a miss.
 const BIG_GROUP := "grapple_big"
 
-enum Rope { NONE, LASH, LAUNCH, PERCH, HANG, RIDE, MISS }
+enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS }
 
 @export_group("Charge")
 ## Seconds of holding for a full-power grapple.
@@ -59,22 +62,27 @@ enum Rope { NONE, LASH, LAUNCH, PERCH, HANG, RIDE, MISS }
 @export_range(0.0, 1.0, 0.05) var min_charge_share: float = 0.5
 ## Let go within this many seconds of it filling: the charge reward.
 @export var good_window: float = 0.15
-## How much faster the launch is for it.
+## How much faster the pull is for it.
 @export var charge_boost: float = 1.12
 
 @export_group("Lash")
 ## Reach at full power, in meters (half at the least charge).
 @export var max_range: float = 56.0
-## How fast the tentacle flies out, m/s (the launch starts when it bites).
+## How fast the tentacle flies out, m/s (the pull starts when it bites).
 @export var lash_speed: float = 120.0
 ## How long a miss takes to whip out and snap back.
 @export var miss_time: float = 0.45
 
-@export_group("Launch")
-## Launch speed at full power, m/s; at the least charge, this share of it.
-@export var launch_speed: float = 32.0
-@export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.75
-## The last seconds of the flight in which a press lets go perfectly, and
+@export_group("Pull")
+## Pull speed at full power, m/s; at the least charge, this share of it.
+@export var pull_speed: float = 15.6
+@export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
+## How hard it pulls you up to that speed, m/s per second.
+@export var pull_accel: float = 54.6
+## Slows the pull near the spot so you settle onto it (speed is capped at
+## distance x this).
+@export var arrive_slowdown: float = 5.0
+## The last seconds before arriving in which a press lets go perfectly, and
 ## how much faster you fly on for it.
 @export var perfect_window: float = 0.3
 @export var perfect_boost: float = 1.15
@@ -94,7 +102,7 @@ enum Rope { NONE, LASH, LAUNCH, PERCH, HANG, RIDE, MISS }
 @export_group("Big Enemies")
 ## How close (to the grabbed spot) counts as arriving: kick or latch on.
 @export var kick_reach: float = 2.2
-## Kick damage per m/s you were going when you hit (32 m/s x 4 = 128).
+## Kick damage per m/s you were going when you hit (15.6 m/s x 4 = 62).
 @export var kick_damage_per_speed: float = 4.0
 ## How hard you bounce back off after a kick, and up.
 @export var kick_bounce: float = 9.0
@@ -129,10 +137,10 @@ var _held_prev := false
 var _coiling := false
 var _hold := 0.0
 var _power := 0.0
-## This launch got the charge reward (and so goes charge_boost faster).
+## This pull got the charge reward (and so goes charge_boost faster).
 var _charge_bonus := false
-var _launch_speed := 0.0
-## How long the launch has made no headway (stuck on something: perch there).
+var _pull_speed := 0.0
+## How long the pull has made no headway against something (perch there).
 var _stalled := 0.0
 var _last_distance := INF
 ## The line's length while hanging.
@@ -213,15 +221,15 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			release()
 			return false
 
-	# Flying at a big enemy, a press means "ride it" (held till you arrive);
+	# Pulled at a big enemy, a press means "ride it" (held till you arrive);
 	# at a wall, a press in the last moments means let go at speed.
-	if _rope == Rope.LASH or _rope == Rope.LAUNCH:
+	if _rope == Rope.LASH or _rope == Rope.PULL:
 		if _to_enemy:
 			if pressed:
 				_ride_wanted = true
 			elif not held:
 				_ride_wanted = false
-		elif pressed and _rope == Rope.LAUNCH and _time_to_arrive() <= perfect_window:
+		elif pressed and _rope == Rope.PULL and _time_to_arrive() <= perfect_window:
 			_perfect_release()
 		return false
 
@@ -256,17 +264,18 @@ func is_out() -> bool:
 
 ## True while the line is holding you (gravity and ground movement change).
 func is_pulling() -> bool:
-	return _rope == Rope.LAUNCH or _rope == Rope.PERCH or _rope == Rope.HANG or _rope == Rope.RIDE
+	return _rope == Rope.PULL or _rope == Rope.PERCH or _rope == Rope.HANG or _rope == Rope.RIDE
 
 
-## True while it moves you entirely itself (launching, perched, riding): no
-## steering in the air then. Hanging on the line you can still sway.
+## True while it moves you entirely itself (perched, riding): no steering in
+## the air then. Pulled, or hanging on the line, you can still steer and sway.
 func holds_still() -> bool:
-	return _rope == Rope.LAUNCH or _rope == Rope.PERCH or _rope == Rope.RIDE
+	return _rope == Rope.PERCH or _rope == Rope.RIDE
 
 
+## No gravity while it pulls or holds you; hanging on the line, full.
 func gravity_scale() -> float:
-	return 0.0 if holds_still() else 1.0
+	return 0.0 if holds_still() or _rope == Rope.PULL else 1.0
 
 
 ## Called by PlayerMovement just before move_and_slide().
@@ -274,8 +283,8 @@ func apply_pull(delta: float) -> void:
 	match _rope:
 		Rope.RIDE:
 			_ride(delta)
-		Rope.LAUNCH:
-			_fly(delta)
+		Rope.PULL:
+			_pull(delta)
 		Rope.PERCH:
 			_perch(delta)
 		Rope.HANG:
@@ -328,26 +337,27 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 	_rope = Rope.LASH
 
 
-## It bit: launched straight at the spot.
+## It bit: the pull starts.
 func _land() -> void:
 	if not is_instance_valid(_anchor):
 		_rope = Rope.NONE
 		return
 	var power_t := inverse_lerp(min_charge_share, 1.0, _power) if min_charge_share < 1.0 else 1.0
-	_launch_speed = launch_speed * lerpf(min_speed_scale, 1.0, clampf(power_t, 0.0, 1.0))
+	_pull_speed = pull_speed * lerpf(min_speed_scale, 1.0, clampf(power_t, 0.0, 1.0))
 	if _charge_bonus:
-		_launch_speed *= charge_boost
-	_rope = Rope.LAUNCH
+		_pull_speed *= charge_boost
+	_rope = Rope.PULL
 	_stalled = 0.0
 	_last_distance = INF
-	_player.velocity = _to_spot().normalized() * _launch_speed
 	attached.emit(_to_enemy)
 
 
-## The flight: straight at the spot at launch speed (it follows a moving
-## spot). Arriving -- or stopped short by something in the way -- you perch;
-## at a big enemy, you kick it or latch on.
-func _fly(delta: float) -> void:
+## The pull (the original, Titanfall 2 style): you're hauled toward the spot
+## (it follows a moving one), building up to the pull speed and easing off
+## as you get there; your own steering adds to it. Arriving -- or pressed
+## against something on the way and getting no closer -- you perch; at a big
+## enemy, you kick it or latch on.
+func _pull(delta: float) -> void:
 	var to := _to_spot()
 	var distance := to.length()
 	var reach := kick_reach if _to_enemy else arrive_distance
@@ -360,20 +370,27 @@ func _fly(delta: float) -> void:
 		else:
 			_start_perch()
 		return
-	# Making no headway (a ledge or a beam in the way): perch where you are.
-	_stalled = _stalled + delta if distance > _last_distance - _launch_speed * delta * 0.25 else 0.0
+	# Up against a ledge or a beam, no closer: perch where you are.
+	var blocked := _player.get_slide_collision_count() > 0 and distance > _last_distance - 0.5 * delta
+	_stalled = _stalled + delta if blocked else 0.0
 	_last_distance = distance
-	if _stalled > 0.25:
+	if _stalled > 0.3 and not _to_enemy:
 		_start_perch()
 		return
-	_player.velocity = to / distance * _launch_speed
+	var direction := to / distance
+	var speed := minf(_pull_speed, distance * arrive_slowdown)
+	var along := _player.velocity.dot(direction)
+	if along < speed:
+		_player.velocity += direction * minf(pull_accel * delta, speed - along)
 
 
-## Seconds of the flight left (INF if not launching).
+## Seconds left till you arrive (INF if not pulled).
 func _time_to_arrive() -> float:
-	if _rope != Rope.LAUNCH or _launch_speed <= 0.0:
+	if _rope != Rope.PULL or _pull_speed <= 0.0:
 		return INF
-	return maxf(_to_spot().length() - arrive_distance, 0.0) / _launch_speed
+	var to := _to_spot()
+	var closing := maxf(_player.velocity.dot(to.normalized()), _pull_speed * 0.5)
+	return maxf(to.length() - arrive_distance, 0.0) / closing
 
 
 ## Let go at just the right moment in the flight: on past it, faster.
@@ -560,7 +577,7 @@ func rope_tip() -> Vector3:
 		Rope.MISS:
 			var t := clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0)
 			return _start_point().lerp(_lash_end, sin(t * PI)) # out and snaps back
-		Rope.LAUNCH, Rope.PERCH, Rope.HANG, Rope.RIDE:
+		Rope.PULL, Rope.PERCH, Rope.HANG, Rope.RIDE:
 			if is_instance_valid(_anchor):
 				return _anchor_point()
 	return Vector3.INF

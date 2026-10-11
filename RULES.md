@@ -1421,3 +1421,7 @@ them:
   - **Never through each other:** items turn only in quarter turns, their boxes turned with them, so what you see is exactly what's kept apart; they lean only a little (`MAX_LEAN`); each frame is split into steps of 1/90 s (`MAX_STEP`), each pushing everything apart 8 times (`SOLVER_PASSES`) with the walls last. The shuffle on your back drops them in four falls, settled the same way.
   - The bag 30% smaller (`bag_scale` 0.47), same place (its middle stays put); the items to match (`item_size` 0.084).
   - Not compiled or run (asks first).
+- **The grapple's pull back to the original (2026-10-11).** The user's: the straight launch didn't feel as natural as the old grapple. Their pick: the old pull, keeping the newer extras.
+  - **Back:** the Titanfall 2 pull (`PlayerGrapple._pull`): once it bites it hauls you toward the spot, building up at `pull_accel` 54.6 m/s^2 to `pull_speed` 15.6 m/s (60% of that at the least charge), easing off near it (`arrive_slowdown` 5), no gravity; you can steer (air movement stays on), and you keep your speed when you let go.
+  - **Kept:** the charge (half minimum, the good-timing chime and boost), the 4 shared stamina bars (a bar to fire, draining while it holds you), perching on arrival (and now when pressed against something on the way, getting no closer), rappel/reel, the perfect let-go near the end (`_time_to_arrive` now from your real closing speed), kick/ride for big enemies.
+  - Not compiled or run (asks first).
