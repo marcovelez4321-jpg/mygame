@@ -12,9 +12,9 @@ extends Resource
 ## Where the bag sits (camera space: x right, y up, -z ahead) and its turn.
 @export var bag_position: Vector3 = Vector3(-0.08, -0.42, -0.62)
 @export var bag_rotation_degrees: Vector3 = Vector3(-38.0, 12.0, 0.0)
-## The pack's model (0.8 m tall) brought to size: about 0.61 m, as the user
-## settled on (60% up from the first try, then 30% down from that).
-@export var bag_scale: float = 0.76
+## The pack's model (0.8 m tall) brought to size: about 0.79 m (the user's:
+## 0.61 m, then 30% bigger; its middle stays where it is).
+@export var bag_scale: float = 0.988
 ## How long it takes to swing round from your back, and to unzip.
 @export var swing_time: float = 0.35
 @export var unzip_time: float = 0.3
