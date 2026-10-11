@@ -9,9 +9,10 @@ extends Node3D
 ## under the cursor outlined like anything you can use. Click a prop to use
 ## it (Backpack.use() through the input packet). Tab again and it goes back
 ## on your back.
-## Free aim (the user's): you keep looking around with the mouse. It moves a
-## small cursor over the bag first; pushed past the edge of a box round the
-## bag, the rest turns your view (like a free-aim deadzone).
+## Picking (the user's): you keep looking around with the mouse while it's
+## open; hold Left Alt and looking stops, a small cursor appears over the
+## bag's opening and the mouse moves it to hover and click the items. Let go
+## and you're looking again.
 ## How it's held -- the bag's place, the hand on it, the fist, the elbow,
 ## the unzip, each finger -- is BackpackHold (scenes/player/backpack_hold.tres),
 ## tuned in game with O while it's out (Viewmodel) and saved with F3.
@@ -22,9 +23,7 @@ const HOLD_PATH := "res://scenes/player/backpack_hold.tres"
 const BAG_SCENE := "res://art/PSX Forest Props.fbx"
 ## The forest props' texture (the model doesn't point at it itself).
 const FOREST_TEXTURE := "res://art/Texture/Texture Forest.png"
-## Free aim: half the box the cursor moves in round the bag (shares of the
-## screen's height).
-const AIM_BOX := Vector2(0.22, 0.18)
+
 const MEGA := "res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/"
 ## Clicks only ever hit the item props (their own physics layer).
 const ITEM_LAYER := 1 << 19
@@ -54,7 +53,9 @@ var _items: Node3D
 var _shown_key := ""
 var _contents_left := 0.0
 var _time := 0.0
-## Free aim: the cursor (pixels from the box's middle) and its dot.
+## Picking: Left Alt held; the cursor (pixels from the bag's opening on
+## screen) and its dot.
+var _alt_held := false
 var _cursor := Vector2.ZERO
 var _dot: Control
 
@@ -88,6 +89,7 @@ func update(delta: float) -> bool:
 	if out != visible:
 		_have_last = false # a new frame of reference: no jolt from the switch
 		_cursor = Vector2.ZERO
+		_alt_held = false
 	visible = out
 	if not visible:
 		_dot.visible = false
@@ -108,7 +110,7 @@ func update(delta: float) -> bool:
 		material.set_shader_parameter("clip_height", clip if unzip > 0.0 else _bag_box.end.y + 1.0)
 	_hold_with_left_hand()
 	_update_items(delta)
-	_dot.visible = unzip >= 1.0
+	_dot.visible = _picking()
 	_dot.position = _cursor_at() - _dot.size * 0.5
 	return true
 
@@ -410,7 +412,7 @@ func _new_body(stack: Dictionary, key: String, inside: AABB) -> Dictionary:
 ## The item under the cursor lit up with the interactables' outline.
 func _update_hover() -> void:
 	var index := -1
-	if unzip >= 1.0:
+	if _picking():
 		var hit := _under_cursor(_cursor_at())
 		for i in _bodies.size():
 			if _bodies[i].area == hit:
@@ -562,22 +564,27 @@ static func forest_material() -> StandardMaterial3D:
 	return _forest
 
 
-# ---- Free aim and clicking -----------------------------------------------------
+# ---- Picking and clicking ------------------------------------------------------
 
-## The mouse while the bag's out (PlayerMovement.look_filter): it moves the
-## cursor first; past the edge of the box round the bag, what's left over
-## turns your view. Before it's open, all of it looks.
+## Whether you're picking: the bag open and Left Alt held.
+func _picking() -> bool:
+	return visible and unzip >= 1.0 and _alt_held
+
+
+## The mouse while the bag's out (PlayerMovement.look_filter): picking, it
+## all moves the cursor (kept on screen) and none of it looks; otherwise it
+## all looks.
 func _free_aim(motion: Vector2) -> Vector2:
-	if not visible or unzip < 1.0:
+	if not _picking():
 		return motion
-	var half := AIM_BOX * get_viewport().get_visible_rect().size.y
-	var wanted := _cursor + motion
-	_cursor = wanted.clamp(-half, half)
-	return wanted - _cursor
+	var opening := _cursor_at() - _cursor
+	var at := (opening + _cursor + motion).clamp(Vector2.ZERO, get_viewport().get_visible_rect().size)
+	_cursor = at - opening
+	return Vector2.ZERO
 
 
-## Where the cursor is on screen: the box's middle (the open top of the
-## bag, on screen) plus the cursor.
+## Where the cursor is on screen: the bag's opening on screen plus the
+## cursor.
 func _cursor_at() -> Vector2:
 	var middle := get_viewport().get_visible_rect().size * 0.5
 	var camera := get_viewport().get_camera_3d()
@@ -607,8 +614,20 @@ func _make_dot() -> void:
 	layer.add_child(_dot)
 
 
+## Left Alt, held or let go (watched before anything else can take it).
+func _input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key and key.keycode == KEY_ALT and not key.echo and key.location != KEY_LOCATION_RIGHT:
+		_alt_held = key.pressed and visible
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_alt_held = false # alt-tabbed away: the release never comes
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if unzip < 1.0 or not (event is InputEventMouseButton):
+	if not _picking() or not (event is InputEventMouseButton):
 		return
 	var click := event as InputEventMouseButton
 	if click.button_index != MOUSE_BUTTON_LEFT or not click.pressed:

@@ -127,7 +127,8 @@ func _process(_delta: float) -> void:
 		ammo_label.text += "   [B] Bandages: %d" % player.weapons.bandages
 	health_label.text = "Health: %d" % ceili(_player_health.current_health)
 	# Aiming down the sights: the sights (or scope) are the crosshair now.
-	$Crosshair.visible = player.weapons.aim_amount() <= 0.0
+	# The backpack out: no shooting, and its own cursor (the same dot) picks.
+	$Crosshair.visible = player.weapons.aim_amount() <= 0.0 and not player.bag_open
 	_update_stamina_bar()
 	_update_use_prompt()
 
