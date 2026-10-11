@@ -22,3 +22,24 @@ static func half_ping(node: Node) -> float:
 	if host == null:
 		return 0.0
 	return host.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME) / 2000.0
+
+
+## Host: the round trip to client `peer`, in milliseconds (0 if unknown).
+static func round_trip_msec(node: Node, peer: int) -> float:
+	var enet := node.multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet == null:
+		return 0.0
+	var connection := enet.get_peer(peer)
+	if connection == null:
+		return 0.0
+	return connection.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME)
+
+
+## The body owned by peer `id` (the host's is the scene's own Player), or null.
+## (A plain Node3D: naming PlayerMovement here would tie Net to the player's
+## script, which needs the game's autoloads -- and Net must load in bakes.)
+static func body_of(node: Node, id: int) -> Node3D:
+	for player in node.get_tree().get_nodes_in_group("player"):
+		if player.get_multiplayer_authority() == id:
+			return player as Node3D
+	return null

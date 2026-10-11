@@ -1121,7 +1121,8 @@ func _net_input(recent: Array) -> void:
 		return
 	for entry: Array in recent:
 		if int(entry[0]) > _net_last_tick and (_net_inputs.is_empty() or int(entry[0]) > int(_net_inputs.back()[0])):
-			_net_inputs.append(entry)
+			# When it got here: lag compensation works back from this.
+			_net_inputs.append([entry[0], entry[1], Time.get_ticks_msec()])
 
 
 ## Host: runs their packets in order, exactly the moves they made (the way
@@ -1138,7 +1139,10 @@ func _run_their_inputs(delta: float) -> void:
 		rotation.y = look.x
 		_pitch = look.y
 		head.rotation.x = _pitch
+		# Its shots are judged where they saw things (lag compensation).
+		weapons.lag_arrival_msec = entry[2]
 		_simulate_movement(_unpack(entry[1]), delta)
+		weapons.lag_arrival_msec = -1
 		runs += 1
 
 

@@ -187,10 +187,7 @@ func leave() -> void:
 
 ## The body owned by peer `id` (the host's is the scene's own Player), or null.
 func body_of(id: int) -> PlayerMovement:
-	for node in get_tree().get_nodes_in_group("player"):
-		if node.get_multiplayer_authority() == id:
-			return node as PlayerMovement
-	return null
+	return Net.body_of(self, id) as PlayerMovement
 
 
 ## Host: where a dead player comes back -- beside someone still alive, or

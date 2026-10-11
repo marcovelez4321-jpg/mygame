@@ -20,6 +20,14 @@ extends Node
 ## own reactions, exactly as offline.
 ## Relevance (only what's near you is sent) is what keeps the bandwidth down,
 ## the way Source's PVS does.
+##
+## LAG COMPENSATION (Source's, from Half-Life on): the host keeps where every
+## creature was over the last HISTORY_MSEC. A client sees them in the past --
+## its ping, plus INTERP_DELAY -- so when the host runs that client's shot it
+## first moves every creature back to where the client saw it (rewind_for()),
+## casts the shot, and puts them all back (restore()), in the same instant.
+## Aim where they are on YOUR screen and it hits. Hitscan only: rockets and
+## grenades fly in real time on the host (Source does the same).
 
 ## Not enemies, but seen in co-op: anything in this group is replicated too.
 const GROUP := "net_entities"
@@ -29,6 +37,8 @@ const BIG_RANGE := 900.0
 const SEND_INTERVAL := 0.05
 const INTERP_DELAY_MSEC := 100
 const PUPPET_HOLDER := "NetPuppets"
+## How far back the host can rewind (Source's sv_maxunlag is 1 s).
+const HISTORY_MSEC := 1000
 
 var _next_id := 1
 var _send_left := 0.0
@@ -38,6 +48,9 @@ var _known := {}
 var _tracked := {}
 ## Client: entity id -> {node, snaps: [[msec, position, rotation]]}.
 var _puppets := {}
+## Host: creature -> [[msec, global transform], ...] over the last
+## HISTORY_MSEC (lag compensation).
+var _history := {}
 
 
 ## Everything forgotten (going offline).
@@ -45,6 +58,7 @@ func reset() -> void:
 	_known.clear()
 	_tracked.clear()
 	_puppets.clear()
+	_history.clear()
 	_next_id = 1
 
 
@@ -59,34 +73,30 @@ static func is_puppet(node: Node) -> bool:
 
 
 func _physics_process(delta: float) -> void:
-	if not Network.is_online():
+	if not Net.is_online(self):
 		return
 	if multiplayer.is_server():
 		_host_tick(delta)
 
 
 func _process(_delta: float) -> void:
-	if Network.is_online() and not multiplayer.is_server():
+	if Net.is_online(self) and not multiplayer.is_server():
 		_show_puppets()
 
 
 # ---- Host -----------------------------------------------------------------------
 
 func _host_tick(delta: float) -> void:
+	var creatures := _creatures()
+	_record_history(creatures)
 	_send_left -= delta
 	if _send_left > 0.0:
 		return
 	_send_left = SEND_INTERVAL
-	var creatures: Array[Node3D] = []
-	for group in ["enemies", GROUP]:
-		for node in get_tree().get_nodes_in_group(group):
-			var creature := node as Node3D
-			if creature and creature.is_inside_tree() and not creatures.has(creature):
-				creatures.append(creature)
 	for creature in creatures:
 		_tracked[_id_of(creature)] = creature
 	for peer in multiplayer.get_peers():
-		var body := Network.body_of(peer)
+		var body := Net.body_of(self, peer)
 		if body == null:
 			continue
 		if not _known.has(peer):
@@ -121,6 +131,107 @@ func _host_tick(delta: float) -> void:
 		if not is_instance_valid(_tracked[id]):
 			_tracked.erase(id)
 
+
+func _creatures() -> Array[Node3D]:
+	var creatures: Array[Node3D] = []
+	var seen := {}
+	for group in ["enemies", GROUP]:
+		for node in get_tree().get_nodes_in_group(group):
+			var creature := node as Node3D
+			if creature and creature.is_inside_tree() and not seen.has(creature):
+				seen[creature] = true
+				creatures.append(creature)
+	return creatures
+
+
+## Host, every physics frame: where each creature is now, kept HISTORY_MSEC.
+func _record_history(creatures: Array[Node3D]) -> void:
+	var now := Time.get_ticks_msec()
+	for creature in creatures:
+		if not _history.has(creature):
+			_history[creature] = []
+		var samples: Array = _history[creature]
+		samples.append([now, creature.global_transform])
+		while samples.size() > 2 and now - int(samples[0][0]) > HISTORY_MSEC:
+			samples.pop_front()
+	for creature: Variant in _history.keys():
+		if not is_instance_valid(creature):
+			_history.erase(creature)
+
+
+## Host: every living creature within `reach` of `near` moved back to where
+## client `peer` saw it when it sent the input that arrived at
+## `arrival_msec`: that's its ping (the input's trip here and the creatures'
+## news's trip to it) plus how far behind the newest news it shows them
+## (INTERP_DELAY). The whole creature moves (its skeleton too, so head and
+## artery hits are judged where they were), and its bodies are made static
+## for the instant -- in Jolt a moving (kinematic) body only goes where it's
+## put at the next physics step, a static one at once. Returns what to give
+## restore(). Nothing's moved for the host itself, or offline.
+func rewind_for(peer: int, arrival_msec: int, near: Vector3, reach: float) -> Array:
+	var moved: Array = []
+	if peer == multiplayer.get_unique_id() or not Net.is_online(self):
+		return moved
+	var now := Time.get_ticks_msec()
+	var seen_at := arrival_msec - int(Net.round_trip_msec(self, peer)) - INTERP_DELAY_MSEC
+	seen_at = clampi(seen_at, now - HISTORY_MSEC, now)
+	for creature: Variant in _history:
+		if not is_instance_valid(creature):
+			continue
+		var node := creature as Node3D
+		if node.global_position.distance_to(near) > reach + 10.0:
+			continue
+		var health := node.get_node_or_null(^"Health") as Health
+		if health and health.is_dead:
+			continue
+		var bodies: Array = []
+		var modes: Array = []
+		var all := node.find_children("*", "CollisionObject3D", true, false)
+		if node is CollisionObject3D:
+			all.push_front(node)
+		var now_at := node.global_transform
+		node.global_transform = _transform_at(_history[creature], seen_at)
+		for body: Node in all:
+			var rid := (body as CollisionObject3D).get_rid()
+			var mode := PhysicsServer3D.body_get_mode(rid)
+			if mode == PhysicsServer3D.BODY_MODE_KINEMATIC:
+				PhysicsServer3D.body_set_mode(rid, PhysicsServer3D.BODY_MODE_STATIC)
+				bodies.append(body)
+				modes.append(mode)
+			PhysicsServer3D.body_set_state(rid, PhysicsServer3D.BODY_STATE_TRANSFORM, (body as Node3D).global_transform)
+		moved.append([node, now_at, all, bodies, modes])
+	return moved
+
+
+## Puts every creature rewind_for() moved back where it really is, its
+## bodies as they were.
+func restore(moved: Array) -> void:
+	for entry: Array in moved:
+		var node: Variant = entry[0]
+		if not is_instance_valid(node):
+			continue
+		(node as Node3D).global_transform = entry[1]
+		for body: Variant in entry[2]:
+			if is_instance_valid(body):
+				PhysicsServer3D.body_set_state((body as CollisionObject3D).get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, (body as Node3D).global_transform)
+		var bodies: Array = entry[3]
+		var modes: Array = entry[4]
+		for i in bodies.size():
+			if is_instance_valid(bodies[i]):
+				PhysicsServer3D.body_set_mode((bodies[i] as CollisionObject3D).get_rid(), modes[i])
+
+
+## Where a creature was at `msec`, between the samples either side of it.
+static func _transform_at(samples: Array, msec: int) -> Transform3D:
+	var a: Array = samples[0]
+	for i in samples.size():
+		var b: Array = samples[i]
+		if int(b[0]) >= msec:
+			var span := float(int(b[0]) - int(a[0]))
+			var t := clampf(float(msec - int(a[0])) / span, 0.0, 1.0) if span > 0.0 else 1.0
+			return (a[1] as Transform3D).interpolate_with(b[1], t)
+		a = b
+	return a[1]
 
 func _id_of(node: Node) -> int:
 	if not node.has_meta(&"net_id"):

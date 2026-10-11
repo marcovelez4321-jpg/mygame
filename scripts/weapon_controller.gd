@@ -228,6 +228,9 @@ var _pending_recoil := Vector2.ZERO
 ## (WeaponData's Aim Down Sights). Part of the simulation, not just the look,
 ## because it decides each shot's spread -- in co-op the host needs it too.
 var _aim := 0.0
+## Host, running a client's input: when that input arrived (msec), so its
+## hitscan shots are lag-compensated (resolve_shot). -1: not a client's.
+var lag_arrival_msec := -1
 ## Seconds until a thrown grenade leaves the hand; below 0 = not throwing.
 var _throw_left := -1.0
 ## The grenade weapon being thrown (the equipped one, or a Q quick throw's).
@@ -852,6 +855,22 @@ func _finish_reload(weapon: WeaponData) -> void:
 ## penetrating shot draws a continuous tracer through both bodies and flashes
 ## the hit marker for each one.
 func resolve_shot(shot: Shot) -> void:
+	# Lag compensation (Source's): a client's shot, run here on the host, is
+	# judged where that client saw everything -- every creature moved back to
+	# then for the instant of the shot, and straight back after.
+	var entities: Object = null
+	var moved: Array = []
+	if lag_arrival_msec >= 0 and _body.multiplayer.is_server():
+		var network := _body.get_node_or_null(^"/root/Network")
+		entities = network.get("entities") if network else null
+		if entities:
+			moved = entities.call(&"rewind_for", shot.attacker_id, lag_arrival_msec, shot.origin, shot.weapon.max_range)
+	_cast_shot(shot)
+	if entities and not moved.is_empty():
+		entities.call(&"restore", moved)
+
+
+func _cast_shot(shot: Shot) -> void:
 	var space := _body.get_world_3d().direct_space_state
 	var real := _body.multiplayer.is_server()
 	for pellet in shot.weapon.pellets:

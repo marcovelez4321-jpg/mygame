@@ -1325,3 +1325,14 @@ them:
     - Co-op: the host also sends the shove to the player's own game (`PlayerMovement._net_shove`), so they're thrown, not dragged back by corrections.
   - **Inside cobwebs 50% more common** (the user's): about one for every two halls (13 inside this build, was 8).
   - **Music has its own slider** (the user's): a Music bus (`default_bus_layout.tres`, `GameSettings.AUDIO_BUSES`). The radios feed it instead of Ambience, so the ambient stings and the music are set separately. It goes through the SFX bus's PS1 crunch like everything else (the user's).
+
+- 2026-10-11: **Play works again; lag compensation (Source's).**
+  - **"Couldn't detect whether to run the editor..." on Play** (the user's report): the project's main scene points at `test_world.tscn` by uid (`uid://8csi35th24b5`). The test-world re-bake saved the scene with no uid (a `--script` save doesn't write one), and the editor then gave it a new one, so Play couldn't find the main scene. Fixed: the scene has its uid back, and `make_test_world.gd` now reads the uid from the scene's header before saving and puts it back after (`_uid_in_header`; `ResourceLoader.get_resource_uid` needs the editor's cache, which a `--script` run doesn't have).
+  - **Lag compensation** (the user's ask, "however AAA games or Valve do it": Source's, since Half-Life):
+    - The host keeps every creature's transform over the last second (`NetEntities._record_history`, every physics frame).
+    - A client sees creatures in the past: its round trip plus the 100 ms interpolation. When the host runs that client's input (`PlayerMovement._run_their_inputs` passes when it arrived), its hitscan shot first moves every living creature within the gun's range back to then (`rewind_for`), casts, and puts them back (`restore`), all in the same instant. Aim where they are on your screen and it hits.
+    - The whole creature moves, skeleton included, so head and artery hits are judged where they were.
+    - Its bodies are made static for that instant: in Jolt a kinematic body only goes where it's put at the next physics step, a static one at once. They go back to kinematic after.
+    - Checked headless end to end: rewound, a ray at the old spot hits and the real spot misses; restored, the reverse, and the body's mode is back.
+    - Hitscan only: rockets and grenades fly in real time on the host, as in Source. The known trade-off (Source's too): a target can be hit just after ducking behind cover, because on the shooter's screen they hadn't yet.
+  - `Net` (`scripts/net/net.gd`) gained `round_trip_msec(node, peer)` and `body_of(node, id)` (returns Node3D: naming PlayerMovement would tie Net to the player's script, which needs the game's autoloads, and Net has to load in bakes). NetEntities uses Net, not the Network autoload, for the same reason.
