@@ -3,14 +3,14 @@
 The game is becoming a hardcore climbing open world: the Stack and the
 megastructures are climbed higher and higher (White Knuckle's pull upward --
 not its pitons or movement), with survival, camps and mutations. Every item
-here was the user's call (RULES.md Rules 10-11); anything offered and not
-turned down is in. Details still to be chosen are asked before each is built.
+here was the user's call (RULES.md Rules 10-11): for this list, anything
+offered and not turned down was in (that applied to this list only). Details
+still to be chosen are asked before each is built.
 
 ## Rules this rests on
 - **Rule 11, hardcore:** extremely challenging and unforgiving. Death sends
   you back to the last camp you set up (for now). Dangers are brutal but
   always readable.
-- **Default yes:** ideas the user doesn't decline are wanted.
 
 ## Stamina (replaces any grip stamina)
 - One shared stamina: the bars under the crosshair. **4 bars** (was 2).
