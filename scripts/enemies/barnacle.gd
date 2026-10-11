@@ -60,9 +60,10 @@ enum Brood { ROACHES, SPIDERS }
 ## world's many nests don't fill the game's creature caps from miles off).
 @export var wake_range: float = 40.0
 @export var max_brood: int = 4
-## Too close (the user's: 5 m): it throbs and spits at once, whatever its
+## Too close (the user's: 4 m): it throbs and spits at once, whatever its
 ## timer says -- then not again for burst_cooldown. The throb is its warning.
-@export var burst_range: float = 5.0
+## (Its spitting over time, below, goes on as before.)
+@export var burst_range: float = 4.0
 @export var burst_cooldown: float = 6.0
 
 @export_group("Look")

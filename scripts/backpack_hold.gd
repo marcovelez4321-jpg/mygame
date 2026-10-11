@@ -12,8 +12,9 @@ extends Resource
 ## Where the bag sits (camera space: x right, y up, -z ahead) and its turn.
 @export var bag_position: Vector3 = Vector3(-0.08, -0.42, -0.62)
 @export var bag_rotation_degrees: Vector3 = Vector3(-38.0, 12.0, 0.0)
-## The pack's model is far too big (1.3 m tall): this brings it to size.
-@export var bag_scale: float = 0.42
+## The pack's model is far too big (1.3 m tall): this brings it to size
+## (60% bigger than the first try: the user's).
+@export var bag_scale: float = 0.672
 ## How long it takes to swing round from your back, and to unzip.
 @export var swing_time: float = 0.35
 @export var unzip_time: float = 0.3
@@ -28,6 +29,9 @@ extends Resource
 @export var hand_rotation_degrees: Vector3 = Vector3.ZERO
 ## How tight the fist is (0 open .. 1 closed).
 @export_range(0.0, 1.0, 0.05) var fist: float = 0.9
+## Each finger's own curl on top of the fist (thumb, index, middle, ring,
+## pinky; -1 .. 1, added to `fist`).
+@export var finger_curl: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 0.0])
 ## Which way the elbow points (camera space), and its bend (degrees).
 @export var elbow_direction: Vector3 = Vector3(-0.7, -1.0, 0.3)
 @export_range(40.0, 170.0, 1.0) var elbow_degrees: float = 100.0
@@ -37,4 +41,4 @@ extends Resource
 ## box they're laid out in, a grid of them.
 @export var items_area: AABB = AABB(Vector3(-0.36, 0.18, -0.3), Vector3(0.72, 0.18, 0.6))
 ## How big each item prop is drawn (metres, its longest side).
-@export var item_size: float = 0.075
+@export var item_size: float = 0.12

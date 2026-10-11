@@ -67,7 +67,12 @@ extends Node3D
 ## of it and gone once everyone's left, like the floor nests. Each spot:
 ## x, y, z (local, on the floor), w = how far round it they wander.
 @export var gang_spots := PackedVector4Array()
-@export var gang_reach: float = 160.0
+## (Kept short: each gang is 6-12 people with ragdolls; only the ones round
+## you are there.)
+@export var gang_reach: float = 100.0
+## A gang's people stand still (asleep: no AI, no physics) until a player's
+## this close -- the halls above and below you cost nothing.
+@export var gang_wake: float = 70.0
 @export var gang_min: int = 6
 @export var gang_max: int = 12
 @export_group("Webs")
@@ -229,14 +234,24 @@ func _update_gangs() -> void:
 			group.anchor = at
 			group.anchor_radius = spot.w
 			group.drift_speed = 1.0
+			group.sleep_distance = gang_wake
 			add_child(group)
 			group.global_position = at
-			for member in randi_range(gang_min, gang_max):
-				_member(group, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), member)
+			_fill_gang(group, randi_range(gang_min, gang_max))
 			_gangs[i] = group
-		elif gang != null and nearest > gang_reach + 80.0:
+		elif gang != null and nearest > gang_reach + 60.0:
 			(gang as RoamingGroup).disband()
 			_gangs.erase(i)
+
+
+## A gang's people added one a frame (each is a body, a ragdoll and a gun:
+## all at once is a hitch).
+func _fill_gang(group: RoamingGroup, count: int) -> void:
+	for member in count:
+		if not is_instance_valid(group) or not group.is_inside_tree():
+			return
+		_member(group, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), member)
+		await get_tree().process_frame
 
 
 ## The webs near a player with their spiders; the ones nobody's near cleared.

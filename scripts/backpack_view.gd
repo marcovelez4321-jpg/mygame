@@ -5,17 +5,26 @@ extends Node3D
 ## and your left arm swings the pack round off your back and holds it up by
 ## its top handle in a fist; the top unzips and you see inside -- every kind
 ## thing you carry as a small 3D prop, really tumbling and sliding about in it as
-## you move (and still shifting on your back as you climb), the one under the
-## cursor outlined like anything you can use. Click a prop to use it (Backpack.use() through the input
-## packet). Tab again and it goes back on your back.
+## you move (and shuffled now and then on your back as you climb), the one
+## under the cursor outlined like anything you can use. Click a prop to use
+## it (Backpack.use() through the input packet). Tab again and it goes back
+## on your back.
+## Free aim (the user's): you keep looking around with the mouse. It moves a
+## small cursor over the bag first; pushed past the edge of a box round the
+## bag, the rest turns your view (like a free-aim deadzone).
 ## How it's held -- the bag's place, the hand on it, the fist, the elbow,
-## the unzip -- is BackpackHold (scenes/player/backpack_hold.tres), tuned in
-## game with F2 then O (Viewmodel) and saved with F3.
+## the unzip, each finger -- is BackpackHold (scenes/player/backpack_hold.tres),
+## tuned in game with O while it's out (Viewmodel) and saved with F3.
 ## Lives with the first-person arms (same space, so it sways and kicks with
 ## them). Your own view only: nothing here is simulation.
 
 const HOLD_PATH := "res://scenes/player/backpack_hold.tres"
 const BAG_SCENE := "res://art/PSX Forest Props.fbx"
+## The forest props' texture (the model doesn't point at it itself).
+const FOREST_TEXTURE := "res://art/Texture/Texture Forest.png"
+## Free aim: half the box the cursor moves in round the bag (shares of the
+## screen's height).
+const AIM_BOX := Vector2(0.22, 0.18)
 const MEGA := "res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/"
 ## Clicks only ever hit the item props (their own physics layer).
 const ITEM_LAYER := 1 << 19
@@ -43,9 +52,14 @@ var _bag_box := AABB()
 var _materials: Array[ShaderMaterial] = []
 var _items: Node3D
 var _shown_key := ""
+var _contents_left := 0.0
 var _time := 0.0
+## Free aim: the cursor (pixels from the box's middle) and its dot.
+var _cursor := Vector2.ZERO
+var _dot: Control
 
 static var _scenes := {}
+static var _forest: StandardMaterial3D
 
 
 func setup(player: PlayerMovement, arms: FirstPersonArms) -> void:
@@ -57,6 +71,8 @@ func setup(player: PlayerMovement, arms: FirstPersonArms) -> void:
 	_items.name = "Items"
 	_bag.add_child(_items)
 	visible = false
+	player.look_filter = _free_aim
+	_make_dot()
 
 
 ## Every frame from the Viewmodel, before the arms: the swing and the unzip,
@@ -71,9 +87,10 @@ func update(delta: float) -> bool:
 	var out := swing > 0.0
 	if out != visible:
 		_have_last = false # a new frame of reference: no jolt from the switch
+		_cursor = Vector2.ZERO
 	visible = out
 	if not visible:
-		_set_cursor(false)
+		_dot.visible = false
 		_on_your_back(delta)
 		return false
 	_time += delta
@@ -91,34 +108,69 @@ func update(delta: float) -> bool:
 		material.set_shader_parameter("clip_height", clip if unzip > 0.0 else _bag_box.end.y + 1.0)
 	_hold_with_left_hand()
 	_update_items(delta)
-	_set_cursor(unzip >= 1.0)
+	_dot.visible = unzip >= 1.0
+	_dot.position = _cursor_at() - _dot.size * 0.5
 	return true
 
 
 ## The items while it's open: in step with what's in the pack, simulated in
 ## the bag as it's held, drawn, the one under the cursor outlined.
 func _update_items(delta: float) -> void:
-	var stacks := _player.backpack.stacks()
-	var key := ""
-	for stack in stacks:
-		key += "%d:%d:%s," % [stack.kind, mini(stack.count, 3), stack.weapon.resource_path if stack.weapon else ""]
-	if key != _shown_key:
-		_shown_key = key
-		_sync_bodies(stacks)
-	_items.visible = unzip > 0.6
-	_simulate(_bag.global_transform, delta, true)
+	# What's in the pack, looked at four times a second (not every frame).
+	_contents_left -= delta
+	if _contents_left <= 0.0 or _bodies.is_empty():
+		_contents_left = 0.25
+		var stacks := _player.backpack.stacks()
+		var key := ""
+		for stack in stacks:
+			key += "%d:%d:%s," % [stack.kind, mini(stack.count, 3), stack.weapon.resource_path if stack.weapon else ""]
+		if key != _shown_key:
+			_shown_key = key
+			_sync_bodies(stacks)
+	_items.visible = unzip > 0.3
+	_simulate(_bag.global_transform, delta)
 	_place_props()
 	_update_hover()
 
 
-## Away on your back: the items still shift as you climb, ten times a
-## second, from your body's movement (positions only, nothing drawn).
+## Away on your back (the user's: nearly free, just vaguely rearranged after
+## you've moved a while): twice a second, how much you've been thrown about
+## (distance, and jolts: landings, launches) is added up; once it's enough
+## the items shuffle once and settle. Nothing's simulated in between.
 func _on_your_back(delta: float) -> void:
+	if _bodies.is_empty():
+		return
 	_on_back_left -= delta
 	if _on_back_left > 0.0:
 		return
-	_on_back_left = ON_BACK_STEP
-	_simulate(_player.global_transform, ON_BACK_STEP, false)
+	_on_back_left = RESTLESS_CHECK
+	var velocity := _player.velocity
+	_restless += velocity.length() * RESTLESS_CHECK + (velocity - _back_velocity).length()
+	_back_velocity = velocity
+	if _restless >= RESTLESS_SHUFFLE:
+		_restless = 0.0
+		_shuffle()
+
+
+## One rough rearrangement: everything nudged about, dropped to the bottom
+## and pushed apart.
+func _shuffle() -> void:
+	var inside := _inside()
+	var nudge := inside.size * 0.3
+	for body in _bodies:
+		var half: Vector3 = body.half
+		var p: Vector3 = body.p
+		p += Vector3(randf_range(-nudge.x, nudge.x), 0.0, randf_range(-nudge.z, nudge.z))
+		p.y = inside.position.y + half.y + randf() * inside.size.y * 0.5
+		body.p = p
+		body.v = Vector3.ZERO
+		if body.kind != Backpack.Kind.GUN:
+			body.yaw = fmod(float(body.yaw) + randf_range(-0.8, 0.8), TAU)
+	for iteration in 6:
+		for i in _bodies.size():
+			_keep_inside(_bodies[i], inside)
+			for j in range(i + 1, _bodies.size()):
+				_separate(_bodies[i], _bodies[j])
 
 
 ## The left hand in a fist round the handle, the arm reaching it by IK.
@@ -129,6 +181,7 @@ func _hold_with_left_hand() -> void:
 	var grip := transform.basis.orthonormalized() * Basis(Vector3.RIGHT, PI)
 	var to_rig := _arms.transform.affine_inverse()
 	_arms.set_bag(true)
+	_arms.set_bag_fingers(hold.finger_curl)
 	_arms.set_support_grip(to_rig * handle, to_rig.basis * grip, hold.fist, hold.hand_rotation_degrees,
 			to_rig.basis * hold.elbow_direction, hold.elbow_degrees)
 
@@ -138,7 +191,8 @@ func _hold_with_left_hand() -> void:
 func release_arm() -> void:
 	if _arms:
 		_arms.set_bag(false)
-	_set_cursor(false)
+	if _dot:
+		_dot.visible = false
 
 
 # ---- The items: a small physics world inside the bag -----------------------------
@@ -148,9 +202,9 @@ func release_arm() -> void:
 # apart -- pushed by gravity (tilted the way the bag's held) and by the bag's
 # own movement: swing your view, jump, land, get launched, and they slosh.
 # Simulated in the bag's own space, so nothing can fly out through its
-# walls. Held out: every frame, leaning as they slide. On your back: ten
-# times a second, positions only, from your body's movement -- so climbing
-# rearranges them, and you find them moved when you next look.
+# walls. Held out: every frame, leaning as they slide. On your back: not
+# simulated -- after a while of moving they're shuffled once (_shuffle), so
+# you find them moved when you next look.
 
 ## Strength of the push from the bag's own movement (1 = fully real).
 const INERTIA := 0.6
@@ -159,13 +213,18 @@ const SWIRL := 0.35
 ## Bounce off walls and each other; slide damping (per second).
 const BOUNCE := 0.15
 const DAMPING := 2.5
-const ON_BACK_STEP := 0.1
+## On your back: how often the jostling's added up (s), and how much
+## (metres moved + m/s of jolts) shuffles the items once.
+const RESTLESS_CHECK := 0.5
+const RESTLESS_SHUFFLE := 40.0
 
 var _bodies: Array[Dictionary] = [] # {kind, half: Vector3, p, v, node, area, tilt}
 var _last_frame := Transform3D.IDENTITY
 var _last_velocity := Vector3.ZERO
 var _have_last := false
 var _on_back_left := 0.0
+var _restless := 0.0
+var _back_velocity := Vector3.ZERO
 var _hovered := -1
 var _outline: ShaderMaterial
 
@@ -176,25 +235,25 @@ func _inside() -> AABB:
 	return AABB(_bag_box.get_center() + _bag_box.size * area.position, _bag_box.size * area.size)
 
 
-## Steps the items: held out (`frame` = the bag's world transform) every
-## frame; on your back (the body's) ten times a second, positions only.
-func _simulate(frame: Transform3D, delta: float, held: bool) -> void:
+## Steps the items, held out (`frame` = the bag's world transform), every
+## frame.
+func _simulate(frame: Transform3D, delta: float) -> void:
 	if _bodies.is_empty():
 		_have_last = false
 		return
-	var basis := frame.basis.orthonormalized()
+	var axes := frame.basis.orthonormalized()
 	var units := maxf(hold.bag_scale, 0.01) # world metres per bag unit
 	# The bag's own acceleration (world), from how it's been moving.
 	var velocity := (frame.origin - _last_frame.origin) / maxf(delta, 0.0001) if _have_last else Vector3.ZERO
 	var accel := (velocity - _last_velocity) / maxf(delta, 0.0001) if _have_last else Vector3.ZERO
 	accel = accel.limit_length(60.0)
-	var push := basis.inverse() * (Vector3(0.0, -9.8, 0.0) - accel * INERTIA) / units
+	var push := axes.inverse() * (Vector3(0.0, -9.8, 0.0) - accel * INERTIA) / units
 	# A turn of the bag: what's inside lags behind it, swirling.
 	var turn := Basis.IDENTITY
-	if _have_last and held:
-		var change := (basis.inverse() * _last_frame.basis.orthonormalized()).get_rotation_quaternion()
+	if _have_last:
+		var change := (axes.inverse() * _last_frame.basis.orthonormalized()).get_rotation_quaternion()
 		turn = Basis(Quaternion.IDENTITY.slerp(change, SWIRL))
-	_last_frame = Transform3D(basis, frame.origin)
+	_last_frame = Transform3D(axes, frame.origin)
 	_last_velocity = velocity
 	_have_last = true
 	var inside := _inside()
@@ -249,23 +308,23 @@ func _separate(a: Dictionary, b: Dictionary) -> void:
 		axis = 1
 	if depth.z < depth[axis]:
 		axis = 2
-	var sign := 1.0 if gap[axis] >= 0.0 else -1.0
+	var side := 1.0 if gap[axis] >= 0.0 else -1.0
 	var mass_a := ha.x * ha.y * ha.z
 	var mass_b := hb.x * hb.y * hb.z
 	var share_a := mass_b / maxf(mass_a + mass_b, 0.000001)
 	var pa: Vector3 = a.p
 	var pb: Vector3 = b.p
-	pa[axis] -= sign * depth[axis] * share_a
-	pb[axis] += sign * depth[axis] * (1.0 - share_a)
+	pa[axis] -= side * depth[axis] * share_a
+	pb[axis] += side * depth[axis] * (1.0 - share_a)
 	a.p = pa
 	b.p = pb
 	var va: Vector3 = a.v
 	var vb: Vector3 = b.v
-	var closing := (vb[axis] - va[axis]) * sign # below 0: moving into each other
+	var closing := (vb[axis] - va[axis]) * side # below 0: moving into each other
 	if closing < 0.0:
 		var change := -closing * (1.0 + BOUNCE)
-		va[axis] -= sign * change * share_a
-		vb[axis] += sign * change * (1.0 - share_a)
+		va[axis] -= side * change * share_a
+		vb[axis] += side * change * (1.0 - share_a)
 		a.v = va
 		b.v = vb
 
@@ -352,7 +411,7 @@ func _new_body(stack: Dictionary, key: String, inside: AABB) -> Dictionary:
 func _update_hover() -> void:
 	var index := -1
 	if unzip >= 1.0:
-		var hit := _under_cursor(get_viewport().get_mouse_position())
+		var hit := _under_cursor(_cursor_at())
 		for i in _bodies.size():
 			if _bodies[i].area == hit:
 				index = i
@@ -418,8 +477,7 @@ func _model_for(stack: Dictionary) -> Node3D:
 		if part:
 			copy = MeshInstance3D.new()
 			copy.mesh = part.mesh
-			for surface in part.get_surface_override_material_count():
-				copy.set_surface_override_material(surface, part.get_surface_override_material(surface))
+			textured(copy, part)
 		whole.free()
 		return _wrapped(copy) if copy else null
 	var scene := _scene(source)
@@ -485,17 +543,68 @@ static func _bounds(root: Node3D) -> AABB:
 	return total
 
 
-# ---- Clicking ------------------------------------------------------------------
+## A forest prop's mesh copied with its look: its own textured materials, or
+## the forest props' texture where the model has none (it doesn't link it).
+static func textured(copy: MeshInstance3D, source: MeshInstance3D) -> void:
+	for surface in source.mesh.get_surface_count():
+		var original := source.get_active_material(surface) as BaseMaterial3D
+		copy.set_surface_override_material(surface, original if original and original.albedo_texture else forest_material())
 
-## While it's open, the mouse is a cursor (looking stops; walking doesn't).
-func _set_cursor(on: bool) -> void:
-	if not _player or not _player.is_multiplayer_authority():
-		return
-	if on and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif not on and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and _player.bag_open == false and not get_tree().paused \
-			and swing <= 0.0:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+## The forest props' texture as a plain PS1-looking material (shared).
+static func forest_material() -> StandardMaterial3D:
+	if _forest == null:
+		_forest = StandardMaterial3D.new()
+		_forest.albedo_texture = load(FOREST_TEXTURE) as Texture2D if ResourceLoader.exists(FOREST_TEXTURE) else null
+		_forest.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+		_forest.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+		_forest.roughness = 1.0
+	return _forest
+
+
+# ---- Free aim and clicking -----------------------------------------------------
+
+## The mouse while the bag's out (PlayerMovement.look_filter): it moves the
+## cursor first; past the edge of the box round the bag, what's left over
+## turns your view. Before it's open, all of it looks.
+func _free_aim(motion: Vector2) -> Vector2:
+	if not visible or unzip < 1.0:
+		return motion
+	var half := AIM_BOX * get_viewport().get_visible_rect().size.y
+	var wanted := _cursor + motion
+	_cursor = wanted.clamp(-half, half)
+	return wanted - _cursor
+
+
+## Where the cursor is on screen: the box's middle (the open top of the
+## bag, on screen) plus the cursor.
+func _cursor_at() -> Vector2:
+	var middle := get_viewport().get_visible_rect().size * 0.5
+	var camera := get_viewport().get_camera_3d()
+	if camera and _bag:
+		var opening := _bag.global_transform * _inside().get_center()
+		if not camera.is_position_behind(opening):
+			middle = camera.unproject_position(opening)
+	return middle + _cursor
+
+
+## The cursor's dot: small and pale, outlined dark.
+func _make_dot() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 15
+	add_child(layer)
+	_dot = ColorRect.new()
+	_dot.color = Color(0.0, 0.0, 0.0, 0.8)
+	_dot.size = Vector2(7.0, 7.0)
+	_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var middle := ColorRect.new()
+	middle.color = Color(0.95, 0.92, 0.8)
+	middle.position = Vector2(2.0, 2.0)
+	middle.size = Vector2(3.0, 3.0)
+	middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dot.add_child(middle)
+	_dot.visible = false
+	layer.add_child(_dot)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -504,7 +613,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var click := event as InputEventMouseButton
 	if click.button_index != MOUSE_BUTTON_LEFT or not click.pressed:
 		return
-	var hit := _under_cursor(click.position)
+	var hit := _under_cursor(_cursor_at())
 	if hit == null:
 		return
 	for body in _bodies:
@@ -536,9 +645,10 @@ func _build_bag() -> void:
 		var original := source.get_active_material(surface) as BaseMaterial3D
 		var material := ShaderMaterial.new()
 		material.shader = shader
-		if original:
-			material.set_shader_parameter("albedo_texture", original.albedo_texture)
-			material.set_shader_parameter("albedo_color", original.albedo_color)
+		# Its own texture, or the forest props' one (the model doesn't link it).
+		var texture: Texture2D = original.albedo_texture if original and original.albedo_texture else forest_material().albedo_texture
+		material.set_shader_parameter("albedo_texture", texture)
+		material.set_shader_parameter("albedo_color", original.albedo_color if original and original.albedo_texture else Color.WHITE)
 		_bag.set_surface_override_material(surface, material)
 		_materials.append(material)
 	whole.free()

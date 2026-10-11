@@ -9,7 +9,7 @@ uniform sampler2D albedo_texture : source_color, filter_nearest;
 uniform vec4 albedo_color : source_color = vec4(1.0);
 uniform float clip_height = 1000.0;
 // How dark the inside is.
-uniform float inside_shade = 0.22;
+uniform float inside_shade = 0.38;
 
 varying float local_y;
 

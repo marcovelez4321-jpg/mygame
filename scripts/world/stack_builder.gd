@@ -103,8 +103,9 @@ const HALLS := [
 ## every tower.
 const NEST_TOP_DENSITY := 3.0
 const OUTSIDE_NESTS := 30
-## Human gangs camped in the towers (the user's): on the floor of about one
-## hall in three, and up on some mezzanines.
+## Human gangs camped in the main tower (the user's; the other towers, for
+## now, have none): on the floor of about one hall in three, and up on some
+## mezzanines.
 const GANG_HALL_CHANCE := 1.0 / 3.0
 const GANG_DECK_CHANCE := 0.15
 const FLOOR := 40.0 # the base's storeys
@@ -1111,8 +1112,8 @@ func _hall_features(hall: Dictionary) -> void:
 		_add(Vector3(wall_mid.x, deck_y - 2.0, wall_mid.z), cross * span + Vector3.UP * 4.0 + out.abs() * depth, &"interior", group)
 		for n in _nests_at(0.45, deck_y):
 			nest_spots.append(Vector3(wall_mid.x, deck_y, wall_mid.z) + cross * random.randf_range(-span * 0.3, span * 0.3))
-		# Now and then a gang camped up on it.
-		if random.randf() < GANG_DECK_CHANCE:
+		# Now and then a gang camped up on it (the main tower only, for now).
+		if main and random.randf() < GANG_DECK_CHANCE:
 			gang_spots.append(Vector4(wall_mid.x, deck_y, wall_mid.z, minf(depth, span) * 0.35))
 		var deck_size := cross * span + out.abs() * depth
 		growth_floors.append({rect = Rect2(wall_mid.x - deck_size.x * 0.5, wall_mid.z - deck_size.z * 0.5, deck_size.x, deck_size.z),
@@ -1125,8 +1126,9 @@ func _hall_features(hall: Dictionary) -> void:
 		var spot := Vector3(random.randf_range(box.position.x + 12.0, box.end.x - 12.0), floor_y, random.randf_range(box.position.z + 12.0, box.end.z - 12.0))
 		if not (main and shaft.has_point(Vector2(spot.x, spot.z))):
 			nest_spots.append(spot)
-	# A gang camped on the floor of about one hall in three (the user's).
-	if random.randf() < GANG_HALL_CHANCE:
+	# A gang camped on the floor of about one hall in three (the user's: the
+	# main tower only, for now).
+	if main and random.randf() < GANG_HALL_CHANCE:
 		for attempt in 10:
 			var spot := Vector3(random.randf_range(box.position.x + 20.0, box.end.x - 20.0), floor_y, random.randf_range(box.position.z + 20.0, box.end.z - 20.0))
 			if main and shaft.grow(20.0).has_point(Vector2(spot.x, spot.z)):

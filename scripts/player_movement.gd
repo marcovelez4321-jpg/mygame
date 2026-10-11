@@ -238,6 +238,9 @@ var _pitch: float = 0.0
 var _jump_held_prev: bool = false
 var _dash_held_prev: bool = false
 var _pending_look_delta: Vector2 = Vector2.ZERO
+## While the backpack's out its view takes the mouse first (BackpackView's
+## free aim: a cursor over the bag) and hands on what's left to look with.
+var look_filter: Callable
 ## Weapon picked on the wheel since the last tick. The wheel is local UI; this
 ## hand-off is what turns the pick into part of the input packet.
 var _pending_weapon_select: int = -1
@@ -391,7 +394,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	# physics tick, so all rotation still happens inside the deterministic
 	# simulation step.
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_pending_look_delta += event.relative
+		var motion: Vector2 = event.relative
+		if bag_open and look_filter.is_valid():
+			motion = look_filter.call(motion)
+		_pending_look_delta += motion
 
 
 ## Called by the weapon wheel (HUD) when the player picks a weapon.

@@ -139,8 +139,7 @@ func _wear_backpack(skeleton: Skeleton3D) -> void:
 	var bag := MeshInstance3D.new()
 	bag.name = "Backpack"
 	bag.mesh = source.mesh
-	for surface in source.get_surface_override_material_count():
-		bag.set_surface_override_material(surface, source.get_surface_override_material(surface))
+	BackpackView.textured(bag, source)
 	whole.free()
 	attachment.add_child(bag)
 	# Sized and placed in the body's own terms: on the back (+Z: the player

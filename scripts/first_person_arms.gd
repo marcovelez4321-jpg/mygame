@@ -114,6 +114,10 @@ var _upper_l := -1
 var _grip_at := Vector3.ZERO
 var _grip_frame := Basis.IDENTITY
 var _grip_cup := 0.55
+## Holding the bag: each finger's own curl on top of _grip_cup (thumb,
+## index, middle, ring, pinky), and which finger each left-hand bone is.
+var _bag_fingers := PackedFloat32Array()
+var _finger_of := {}
 var _grip_turn := Basis.IDENTITY
 var _grip_elbow := Vector3.LEFT
 var _grip_bend := PI * 0.5
@@ -519,6 +523,24 @@ func left_grip_socket_in_rig() -> Vector3:
 	return (palm + knuckle + tip) / 3.0
 
 
+## Holding the bag: each finger's own extra curl (BackpackHold.finger_curl).
+func set_bag_fingers(curls: PackedFloat32Array) -> void:
+	_bag_fingers = curls
+
+
+## Which finger a left-hand bone belongs to (0 thumb .. 4 pinky), -1 none.
+func _finger_index(bone: int) -> int:
+	if not _finger_of.has(bone):
+		var name := skeleton.get_bone_name(bone).to_lower()
+		var found := -1
+		for i in 5:
+			if name.contains(["thumb", "index", "middle", "ring", "pinky"][i]):
+				found = i
+				break
+		_finger_of[bone] = found
+	return _finger_of[bone]
+
+
 ## Called every frame by the Viewmodel with the grapple's state.
 func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_allowed: bool) -> void:
 	if _dual or _support or _bag:
@@ -541,9 +563,14 @@ func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_
 			for bone in _left_fist:
 				var flat: Array = _rest[bone]
 				var closed: Array = _left_fist[bone]
-				_current[bone] = [(flat[0] as Vector3).lerp(closed[0], _grip_cup),
-						(flat[1] as Quaternion).slerp(closed[1], _grip_cup),
-						(flat[2] as Vector3).lerp(closed[2], _grip_cup)]
+				var curl := _grip_cup
+				if _bag and not _bag_fingers.is_empty():
+					var finger := _finger_index(bone)
+					if finger >= 0 and finger < _bag_fingers.size():
+						curl = clampf(curl + _bag_fingers[finger], 0.0, 1.0)
+				_current[bone] = [(flat[0] as Vector3).lerp(closed[0], curl),
+						(flat[1] as Quaternion).slerp(closed[1], curl),
+						(flat[2] as Vector3).lerp(closed[2], curl)]
 			_solve_support_arm() # placed exactly: no nudge after
 			_write()
 			return

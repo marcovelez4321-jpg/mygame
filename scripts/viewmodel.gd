@@ -217,6 +217,8 @@ var _tuning_right_arm: bool = false
 var _tuning_left_arm: bool = false
 ## F2 then O, with the backpack open: tune how it's held (BackpackHold).
 var _tuning_bag: bool = false
+## Bag tuning: which finger [ and ] curl (-1: the whole fist; 0 thumb .. 4 pinky).
+var _bag_finger := -1
 ## The open backpack (your own view), and whether it was out last frame.
 var _bag_view: BackpackView
 var _bag_was_out := false
@@ -1405,8 +1407,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_update_label("SAVED the backpack hold" if error == OK else "Couldn't save the backpack hold (error %d)" % error)
 	elif key.keycode == KEY_F3 and _tuning:
 		_save_weapon()
-	elif key.keycode == KEY_O and _tuning and is_instance_valid(_bag_view):
+	elif key.keycode == KEY_O and is_instance_valid(_bag_view):
+		# O on its own (F2 not needed): the backpack hold's tuning.
 		_tuning_bag = not _tuning_bag
+		_tuning = _tuning or _tuning_bag
+		_tune_label.visible = _tuning
+		_bag_finger = -1
 		_tuning_grip = false
 		_tuning_right_arm = false
 		_tuning_left_arm = false
@@ -1414,6 +1420,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning_muzzle = false
 		_tuning_aim = false
 		_update_label("open the backpack (Tab) to see it" if _tuning_bag else "")
+	elif _tuning_bag and key.keycode in [KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5]:
+		_bag_finger = int(key.keycode - KEY_1) if key.keycode != KEY_0 else -1
+		_update_label("")
 	elif key.keycode == KEY_B and _tuning and _tuning_left_arm and _fp_arms and _shown_weapon:
 		_shown_weapon.support_baked_pose = _fp_arms.bake_support_pose()
 		_apply_arm_offsets(_shown_weapon)
@@ -1529,6 +1538,14 @@ func _process(delta: float) -> void:
 	_update_held_grenade()
 	_keep_in_step()
 	_tick_left_arm(delta)
+	if _tuning and _tuning_bag and is_instance_valid(_bag_view):
+		# The bag's tuning needs no gun in hand.
+		var bag_x := float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT))
+		var bag_y := float(Input.is_key_pressed(KEY_UP)) - float(Input.is_key_pressed(KEY_DOWN))
+		var bag_z := float(Input.is_key_pressed(KEY_PAGEDOWN)) - float(Input.is_key_pressed(KEY_PAGEUP))
+		_tune_bag(bag_x, bag_y, bag_z, 0.1 if Input.is_key_pressed(KEY_CTRL) else 1.0, delta)
+		_update_label("")
+		return
 	if not _tuning or _model == null:
 		return
 	if _switch_tween and _switch_tween.is_running():
@@ -1545,10 +1562,6 @@ func _process(delta: float) -> void:
 	var z := float(Input.is_key_pressed(KEY_PAGEDOWN)) - float(Input.is_key_pressed(KEY_PAGEUP))
 	var fine := 0.1 if Input.is_key_pressed(KEY_CTRL) else 1.0
 
-	if _tuning_bag and is_instance_valid(_bag_view):
-		_tune_bag(x, y, z, fine, delta)
-		_update_label("")
-		return
 
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
@@ -1622,16 +1635,21 @@ func _process(delta: float) -> void:
 	_update_label("")
 
 
-## O (with the backpack open): how it's held (BackpackHold).
+## O (with the backpack open; no F2 needed): how it's held (BackpackHold).
 ##   Arrows / PageUp,Down: move the bag.  Shift: turn it.  +/-: its size.
 ##   Alt + those: move the hand on the bag.  Alt + Shift: turn the hand.
-##   [ / ]: a looser / tighter fist.  , / .: the elbow straighter / bent.
+##   Ctrl + Alt + arrows / PageUp,Down: point the elbow.
+##   [ / ]: a looser / tighter fist -- or, after 1-5, just that finger
+##   (thumb, index, middle, ring, pinky; 0 back to the whole fist).
+##   , / .: the elbow straighter / bent.
 ##   F3 saves it (scenes/player/backpack_hold.tres).
 func _tune_bag(x: float, y: float, z: float, fine: float, delta: float) -> void:
 	var hold := _bag_view.hold
 	var alt := Input.is_key_pressed(KEY_ALT)
 	var shift := Input.is_key_pressed(KEY_SHIFT)
-	if alt and shift:
+	if alt and Input.is_key_pressed(KEY_CTRL):
+		hold.elbow_direction = (hold.elbow_direction.normalized() + Vector3(x, y, -z) * 1.2 * delta).normalized()
+	elif alt and shift:
 		hold.hand_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
 	elif alt:
 		hold.handle_point += Vector3(x, y, z) * 0.5 * fine * delta
@@ -1642,7 +1660,13 @@ func _tune_bag(x: float, y: float, z: float, fine: float, delta: float) -> void:
 		var grow := float(Input.is_key_pressed(KEY_EQUAL)) - float(Input.is_key_pressed(KEY_MINUS))
 		hold.bag_scale = maxf(hold.bag_scale * (1.0 + grow * TUNE_SCALE_SPEED * fine * delta), 0.01)
 	var fist := float(Input.is_key_pressed(KEY_BRACKETRIGHT)) - float(Input.is_key_pressed(KEY_BRACKETLEFT))
-	hold.fist = clampf(hold.fist + fist * 0.6 * fine * delta, 0.0, 1.0)
+	if _bag_finger < 0:
+		hold.fist = clampf(hold.fist + fist * 0.6 * fine * delta, 0.0, 1.0)
+	elif fist != 0.0:
+		var curls := hold.finger_curl
+		curls.resize(5)
+		curls[_bag_finger] = clampf(curls[_bag_finger] + fist * 0.6 * fine * delta, -1.0, 1.0)
+		hold.finger_curl = curls
 	var bend := float(Input.is_key_pressed(KEY_PERIOD)) - float(Input.is_key_pressed(KEY_COMMA))
 	hold.elbow_degrees = clampf(hold.elbow_degrees - bend * TUNE_ROTATE_SPEED * fine * delta, 40.0, 170.0)
 
@@ -1781,15 +1805,23 @@ func _make_tune_label() -> void:
 func _update_label(message: String) -> void:
 	if _tuning_bag and is_instance_valid(_bag_view) and _tune_label:
 		var hold := _bag_view.hold
+		var curls := hold.finger_curl
+		curls.resize(5)
+		var finger_names := ["thumb", "index", "middle", "ring", "pinky"]
 		_tune_label.text = ("TUNING THE BACKPACK HOLD (Tab to open it)\nbag at (%.3f, %.3f, %.3f)  turned (%.1f, %.1f, %.1f)  size %.3f\n"
-				+ "hand on bag (%.2f, %.2f, %.2f)  turned (%.1f, %.1f, %.1f)  fist %.2f  elbow %.0f\n\n"
+				+ "hand on bag (%.2f, %.2f, %.2f)  turned (%.1f, %.1f, %.1f)\n"
+				+ "elbow points (%.2f, %.2f, %.2f)  bend %.0f\n"
+				+ "fist %.2f   fingers: thumb %+.2f  index %+.2f  middle %+.2f  ring %+.2f  pinky %+.2f   [ ] now curls: %s\n\n"
 				+ "Arrows/PgUp,PgDn = move bag   Shift = turn bag   +/- = size\nAlt = move hand on it   Alt+Shift = turn hand\n"
-				+ "[ ] = fist   , . = elbow   Ctrl = finer   F3 = save   O = done\n%s") % [
+				+ "Ctrl+Alt = point the elbow   , . = elbow bend\n"
+				+ "[ ] = curl   1-5 = pick a finger   0 = whole fist\nCtrl = finer   F3 = save   O = done\n%s") % [
 				hold.bag_position.x, hold.bag_position.y, hold.bag_position.z,
 				hold.bag_rotation_degrees.x, hold.bag_rotation_degrees.y, hold.bag_rotation_degrees.z, hold.bag_scale,
 				hold.handle_point.x, hold.handle_point.y, hold.handle_point.z,
 				hold.hand_rotation_degrees.x, hold.hand_rotation_degrees.y, hold.hand_rotation_degrees.z,
-				hold.fist, hold.elbow_degrees, message]
+				hold.elbow_direction.x, hold.elbow_direction.y, hold.elbow_direction.z, hold.elbow_degrees,
+				hold.fist, curls[0], curls[1], curls[2], curls[3], curls[4],
+				"whole fist" if _bag_finger < 0 else finger_names[_bag_finger], message]
 		return
 	var weapon := _shown_weapon
 	if weapon == null:
