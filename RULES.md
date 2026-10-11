@@ -158,6 +158,19 @@ torn up later. In practice:
   optimized or batched) stay Claude's, following Rule 6 (the HL2 way).
 - This widens Rule 9's "the user decides the details of each spectacle
   piece" to everything creative.
+- Ideas Claude offers that the user doesn't turn down count as wanted: the
+  user says what they DON'T want, and everything else on the list goes on
+  the plan (2026-10-11).
+
+## Rule 11 — Hardcore: a serious, unforgiving challenge
+- The game is hardcore: extremely challenging and unforgiving. Climbing is
+  dangerous, mistakes are costly, resources are scarce. Systems are tuned
+  toward punishing rather than forgiving -- no hand-holding, no free saves.
+- Death sends you back to the last camp you set up (for now -- this will
+  change later). Nothing else saves your progress through a climb.
+- When a choice is between "easier" and "harder but fair", pick harder but
+  fair: a danger is always readable (telegraphed, heard, seen) before it
+  kills you, even when it's brutal.
 
 ---
 
@@ -1350,3 +1363,5 @@ them:
     - A third voice, CLEAR (bus RadioClear: only the lowest rumble cut), takes over within a few metres. The tinny AM voice covers the middle distance, and the echo is for far off, falling to -30 dB right by the radio.
     - Only the nearest radio in earshot plays. Another takes over when it's clearly nearer (within 80% of the distance), the old one fading out as the new one fades in. Radios not playing stop their players.
     - Checked headless: 2 m from A, clear +2 dB, echo -30, B silent; 25 m, the tinny voice; 90 m, the echo at full; 2 m from B, A silent and B clear.
+
+- 2026-10-11: **Rule 11 (hardcore) and the default-yes rule added; the climbing vision written up** (`docs/CLIMB_VISION.md`: everything decided for the climbing direction, what's out for now, and the build order).
