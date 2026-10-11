@@ -36,6 +36,8 @@ const SCREEN_BLOOD_FADE_TIME := 0.7
 ## max_stamina_charges (_build_stamina_pips: 4 now), centred under the
 ## crosshair, styled like the scene's own first pip.
 var stamina_pips: Array[ColorRect] = []
+## The weapon wheel (middle mouse): off -- guns go through the backpack.
+const WEAPON_WHEEL_ENABLED := false
 const PIP_WIDTH := 14.0
 const PIP_GAP := 3.0
 
@@ -80,8 +82,10 @@ func _find_player() -> void:
 	player.weapons.gory_kill_nearby.connect(_on_gory_kill_nearby)
 
 	# The wheel is local UI: it reports a pick, and the player turns that into
-	# part of its input packet.
+	# part of its input packet. Off for now (the user's: everything diegetic --
+	# guns are swapped through the backpack); kept as a future option.
 	weapon_wheel.weapon_chosen.connect(player.request_weapon)
+	weapon_wheel.set_process_input(WEAPON_WHEEL_ENABLED)
 	_refresh_wheel()
 	_player_health = player.get_node("Health") as Health
 	_player_health.damaged.connect(_on_player_damaged)

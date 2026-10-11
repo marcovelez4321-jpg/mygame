@@ -1,0 +1,89 @@
+---License---
+
+Creator: [Ignacia Lobos / GodNacha]
+Asset Pack: [PSX Forest Props Pack]
+
+By purchasing, downloading, or using this asset pack, you are granted a non-exclusive, worldwide, perpetual license to use the included assets, subject to the terms and conditions below.
+
+1. Permitted Uses
+
+The purchaser may:
+
+- Use the assets in commercial and non-commercial video games.
+- Modify, edit, adapt, or transform the assets to fit their project.
+- Include the assets in projects that are published or commercially distributed on platforms such as Steam, itch.io, Epic Games Store, or similar platforms.
+- Incorporate the assets into a finished project and distribute or sell that project.
+- Use the assets in promotional materials, screenshots, trailers, videos, and other media directly related to a project containing the assets.
+
+2. Restrictions
+
+The purchaser may not:
+
+- Resell, sublicense, give away, or redistribute the original assets as a standalone product.
+- Redistribute the original asset files, including but not limited to .fbx, .blend, .obj, texture files, materials, source files, or other files included in the asset pack.
+- Upload, share, or make the original asset files available through asset libraries, marketplaces, repositories, file-sharing services, websites, or any other platform where third parties can obtain them independently.
+- Claim the original assets as their own work or present them as if they were created by the purchaser.
+- Use the assets to create or distribute another asset pack, template, library, or similar product that primarily consists of or provides access to the original assets.
+- Redistribute the original asset files as part of a project in a way that allows users to access, extract, reuse, or download the assets independently from the finished project.
+- Distribution in Finished Projects
+
+The assets may be included in the files of a finished game or project when necessary for that project to function.
+
+However, the purchaser must not intentionally distribute the original asset files separately or provide users with direct access to the source assets.
+
+For example, including a model within a compiled or packaged video game is permitted. Uploading the original .fbx, .blend, .obj, texture files, or other source assets separately for users to download is not permitted.
+
+3. Attribution
+
+The purchaser must provide appropriate credit to the creator when the assets are used in a publicly released project.
+
+The credit should clearly identify the creator and, when reasonably possible, include a link to the asset pack or the creator's page.
+
+Example:
+
+3D PSX Forest Props Pack created by [Ignacia Lobos / GodNacha].
+Available on itch.io: [https://godnacha0.itch.io/psx-forest-camping-props-pack]
+
+The credit may be included in the game's credits, project documentation, website, store page, description, or another appropriate location.
+
+4. Intellectual Property
+
+All original assets and all associated intellectual property rights remain the property of [Ignacia Lobos / GodNacha].
+
+Purchasing this asset pack does not transfer ownership or copyright of the original assets to the purchaser. The purchaser is only granted the rights explicitly described in this license.
+
+5. Finished Projects
+
+Projects that incorporate these assets may be freely published, distributed, and sold by the purchaser, provided that the original assets are not redistributed as standalone files or made available for independent extraction, download, or reuse.
+
+The purchaser retains ownership of their original creative work and any original content they create independently of these assets.
+
+6. License Transfer and Sharing
+
+This license is granted to the purchaser and may not be transferred, sublicensed, or shared with third parties.
+
+If multiple individuals or entities need access to the original asset files for development purposes, each party must obtain the appropriate authorization or license from the creator, unless otherwise agreed in writing.
+
+7. Prohibited Uses
+
+The assets may not be used in any project or context that violates applicable laws or regulations.
+
+The creator reserves the right to prohibit specific uses that are unlawful or infringe upon the creator's intellectual property rights.
+
+8. License Termination
+
+If the purchaser violates any of the terms of this license, the rights granted under this license may be terminated.
+
+Upon termination, the purchaser must cease using and distributing the assets and, where applicable, remove unauthorized copies from their possession or distribution channels.
+
+9. No Warranty
+
+The assets are provided "as is", without warranties of any kind, express or implied.
+
+The creator is not responsible for any damages, losses, or issues arising from the use or inability to use the assets.
+
+10. Copyright
+
+Copyright © [2026] [Ignacia Lobos/ GodNacha]. All rights reserved.
+
+This license does not constitute a transfer of copyright or ownership of the original assets.

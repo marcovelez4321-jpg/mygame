@@ -72,6 +72,10 @@ signal item_used(item: int, weapon: WeaponData, use_time: float, lower_time: flo
 signal items_changed
 
 enum Item { PILLS, BANDAGE }
+## Guns you can carry: one in your hands, one in the backpack (the user's).
+## A third one picked up takes the place of the one in your hands, which
+## drops at your feet.
+const MAX_GUNS := 2
 ## Bandages are switched off for now (pills are the only healing): you can't
 ## pick any up, bandage pickups don't appear in levels (ItemPickup), so B
 ## does nothing. Set true to bring them all back.
@@ -250,6 +254,9 @@ var _leeches: Array = []
 ## The weapon held before this one -- where you go back to when you run out
 ## of grenades.
 var _previous: int = 0
+## The gun last in your hands (what a third gun replaces, even while you're
+## holding pills or a grenade).
+var _last_gun: WeaponData
 ## The one-handed gun you had out last -- what E switches to (PlayerGrapple).
 var _last_one_handed: WeaponData
 ## Weapons you've found a second of (WeaponData.dual_version): V can go dual.
@@ -282,6 +289,16 @@ func _ready() -> void:
 			var loaded := load(path) as WeaponData
 			if loaded:
 				_owned.append(loaded)
+	# Two guns at most (MAX_GUNS): the first two kept, the rest left behind.
+	var guns := 0
+	var kept: Array[WeaponData] = []
+	for weapon in _owned:
+		if is_gun(weapon):
+			guns += 1
+			if guns > MAX_GUNS:
+				continue
+		kept.append(weapon)
+	_owned = kept
 
 	inventory_changed.emit()
 	if current_weapon():
@@ -359,6 +376,20 @@ func pickup_weapon(weapon: WeaponData, ammo_amount: int) -> void:
 		picked_up.emit(weapon, weapon.ammo_type, ammo_amount)
 		return
 	var already_owned := _owned.has(weapon) or held_as_pair
+	if not already_owned and is_gun(weapon) and gun_count() >= MAX_GUNS:
+		# Hands full and the backpack's spare slot taken: this one takes the
+		# place of the gun in your hands, which drops at your feet.
+		var hand := _hand_gun_index()
+		var dropped := _owned[hand]
+		_owned[hand] = weapon
+		_magazine.erase(weapon)
+		inventory_changed.emit()
+		WeaponPickup.drop(dropped, _body as Node3D)
+		add_ammo(weapon.ammo_type, ammo_amount, false)
+		picked_up.emit(weapon, weapon.ammo_type, ammo_amount)
+		_current = -1 # so _select() treats it as a fresh draw
+		_select(hand)
+		return
 	if not already_owned:
 		_owned.append(weapon)
 		inventory_changed.emit()
@@ -390,6 +421,62 @@ func add_item(item: int, amount: int) -> int:
 	items_changed.emit()
 	_sync_item_slots()
 	return taken
+
+
+## A real gun (not a grenade, not pills or a bandage).
+func is_gun(weapon: WeaponData) -> bool:
+	return weapon != null and not weapon.throws_grenade and weapon.heal_item < 0
+
+
+func gun_count() -> int:
+	var count := 0
+	for weapon in _owned:
+		if is_gun(weapon):
+			count += 1
+	return count
+
+
+## Reserve rounds of one ammo type (the backpack shows them).
+func ammo_of(type: WeaponData.AmmoType) -> int:
+	return _ammo.get(type, 0)
+
+
+## The slot of the gun in your hands (or the one you last had in them).
+func _hand_gun_index() -> int:
+	var current := current_weapon()
+	if is_gun(current):
+		return _current
+	if _last_gun and _owned.has(_last_gun):
+		return _owned.find(_last_gun)
+	for i in _owned.size():
+		if is_gun(_owned[i]):
+			return i
+	return 0
+
+
+## The backpack's spare gun into your hands (the one in them goes in the bag).
+func swap_to_spare_gun() -> void:
+	if is_busy():
+		return
+	var held := current_weapon() if is_gun(current_weapon()) else _last_gun
+	for i in _owned.size():
+		if is_gun(_owned[i]) and _owned[i] != held:
+			_select(i)
+			return
+
+
+## Grenades out of the backpack into your hand.
+func equip_grenades() -> void:
+	var grenade := grenade_weapon()
+	if grenade and not is_busy():
+		_select(_owned.find(grenade))
+
+
+## Pills or a bandage used from the backpack (as T / B do).
+func use_item(item: int) -> void:
+	if _item_using >= 0 or has_leech() or _throw_left >= 0.0 or heal_count(item) <= 0:
+		return
+	_start_item(item)
 
 
 func heal_weapon_for(item: int) -> WeaponData:
@@ -693,11 +780,13 @@ func _select(index: int) -> void:
 	if _throw_left >= 0.0:
 		_throw_left = -1.0
 		_ammo[_throw_weapon.ammo_type] = _ammo.get(_throw_weapon.ammo_type, 0) + 1
-	_previous = _current
+	_previous = _current if _current >= 0 else index
 	_current = index
 	var new_weapon := _owned[_current]
 	if new_weapon.one_handed:
 		_last_one_handed = new_weapon
+	if is_gun(new_weapon):
+		_last_gun = new_weapon
 	# Can't fire until it's up, and any cooldown from the old weapon still
 	# counts, so switching never lets you fire faster.
 	_cooldown = maxf(_cooldown, new_weapon.draw_time)

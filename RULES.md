@@ -1378,3 +1378,24 @@ them:
     - The chimes are generated placeholders (`charge_timed_sound`/`launch_timed_sound` take the user's sounds), local to your own game.
   - Checked by driving the real player with input packets, as the host does: under half a charge, nothing fires or is spent; a timed full charge gives the reward and launches to a wall 30 m off and perches; a press while perched starts nothing; rappel and reel work; Space lets go; a perfect mid-flight press gives the second reward (28.6 to 32.9 m/s).
   - (From now on no test or check runs without the user's yes.)
+
+- 2026-10-11: **The diegetic backpack (stage 1 of camps and death).** Every rule the user's (docs/CLIMB_VISION.md).
+  - **Backpack** (`scripts/backpack.gd`, a node made on every Player): everything but the gun in your hands -- the second gun, ammo, grenades, pills, bandages, and its own scrap, silk and camp kits (one at most; you start with one).
+    - 12 stacks (one a kind).
+    - Weight (kg a unit, `WEIGHTS`) slows stamina refill past 6 kg, down to 45% at 22 kg (`refill_scale()`, recounted twice a second).
+    - `use()` from a click: pills/bandage taken, the spare gun swapped into your hands, grenades taken out, a camp kit brought out to place (`placing_camp`, for stage 3).
+    - The WeaponController still counts guns, ammo, pills and bandages; the backpack is the view and the rules.
+  - **Two guns** (`WeaponController.MAX_GUNS`): one in hand, one in the bag. A third picked up takes the hand's place, and the old one drops at your feet as a real pickup (`WeaponPickup.drop()`, ignoring you until you step off it). Starting weapons are capped too. The test Loadout gives the pistol, the shotgun and grenades.
+  - **The weapon wheel is off** (`hud.gd` `WEAPON_WHEEL_ENABLED`), kept as a future option: guns are swapped through the backpack.
+  - **Tab** (`PlayerMovement.bag_open`, in the input packet) brings the bag out.
+    - Your left arm swings it off your back and holds it up by the top handle in a fist (the support-arm IK: `FirstPersonArms.set_bag`).
+    - Its top unzips (`shaders/backpack_open.gdshader`: the top cut away, the inside darker).
+    - A cursor appears (looking stops, walking doesn't: it's real time). No shooting, aiming, throwing or grappling while it's out.
+    - Tab puts it back.
+  - **Inside** (`scripts/backpack_view.gd`): every item a prop -- a pills packet, bandage, ammo box, shells, tin can (scrap), silk cocoon, rolled sleeping pad (kit), the spare gun shrunk to fit inside (the user's: never through the bag) -- in a small physics world in the bag's own space.
+    - The items are boxes that fall, slide, pile up and knock apart, pushed by gravity (tilted with the bag) and the bag's own movement; they lean as they slide.
+    - On your back the same world steps ten times a second, positions only, from your body's movement, so climbing rearranges them.
+    - The item under the cursor gets the interactables' yellow outline; click it to use it.
+  - **How it's held** is `BackpackHold` (`scenes/player/backpack_hold.tres`): the bag's place, turn and size; the hand's place on it, its turn and fist; the elbow; the unzip; the items' space. Tuned in game with F2 then O (bag open), F3 saves.
+  - **On your back:** the pack rides the character's upper chest bone (`PlayerModel._wear_backpack`), gone while you hold it out.
+  - Compiled (with the user's yes): 138 scripts, 0 failures. Not yet seen in game.

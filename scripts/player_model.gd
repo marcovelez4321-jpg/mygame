@@ -109,7 +109,50 @@ func set_character(path: String) -> void:
 		var hider := HideBonesModifier.new()
 		hider.bone_names = hidden_bones_local
 		skeleton.add_child(hider)
+	_wear_backpack(skeleton)
 	character_changed.emit()
+
+
+## The backpack (PSX Forest Props' pack) on the character's back, riding the
+## upper chest bone, BACKPACK_HEIGHT tall -- always there (the user's), but
+## gone from your own back while you hold it out in front of you.
+const BACKPACK_HEIGHT := 0.55
+var _backpack_on_back: Node3D
+
+func _wear_backpack(skeleton: Skeleton3D) -> void:
+	var bone := ""
+	for name in ["UpperChest", "Chest", "Spine"]:
+		if skeleton.find_bone(name) != -1:
+			bone = name
+			break
+	var pack := load(BackpackView.BAG_SCENE) as PackedScene if ResourceLoader.exists(BackpackView.BAG_SCENE) else null
+	if bone.is_empty() or pack == null:
+		return
+	var whole := pack.instantiate() as Node3D
+	var source := whole.find_child("Backpack", true, false) as MeshInstance3D
+	if source == null:
+		whole.free()
+		return
+	var attachment := BoneAttachment3D.new()
+	attachment.bone_name = bone
+	skeleton.add_child(attachment)
+	var bag := MeshInstance3D.new()
+	bag.name = "Backpack"
+	bag.mesh = source.mesh
+	for surface in source.get_surface_override_material_count():
+		bag.set_surface_override_material(surface, source.get_surface_override_material(surface))
+	whole.free()
+	attachment.add_child(bag)
+	# Sized and placed in the body's own terms: on the back (+Z: the player
+	# faces -Z), a little below the bone, upright, whatever the bone's turn.
+	var box := bag.mesh.get_aabb()
+	var size := BACKPACK_HEIGHT / maxf(box.size.y, 0.001)
+	var body := _player.global_transform
+	var chest := skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin
+	var place := chest + body.basis.z.normalized() * (0.12 + box.size.z * size * 0.5) - body.basis.y.normalized() * 0.08
+	bag.global_transform = Transform3D(body.basis.orthonormalized().scaled(Vector3.ONE * size), place - body.basis.orthonormalized() * (box.get_center() * size))
+	bag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	_backpack_on_back = bag
 
 
 func _find_skeleton() -> Skeleton3D:
@@ -167,6 +210,8 @@ func _setup_animation() -> void:
 ## real speed so feet don't slide. Reads only velocity, so in co-op it works
 ## the same for a remote player from their replicated movement.
 func _process(_delta: float) -> void:
+	if _backpack_on_back:
+		_backpack_on_back.visible = not _player.bag_open
 	if _model and _player.is_multiplayer_authority():
 		_slide_back_when_looking_down()
 	if _animation_player == null:

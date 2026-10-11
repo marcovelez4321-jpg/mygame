@@ -118,6 +118,9 @@ var _grip_turn := Basis.IDENTITY
 var _grip_elbow := Vector3.LEFT
 var _grip_bend := PI * 0.5
 var _grip_twist_share := 0.5
+## Holding the backpack out (BackpackView): the left arm grips its handle by
+## the same IK, whatever gun's in the right hand.
+var _bag := false
 ## A baked support pose (bone name -> [position, rotation]); empty: IK.
 var _grip_baked := {}
 ## The left hand's own axes (hand.L space): the way the fingers point, and
@@ -223,6 +226,12 @@ func set_support(on: bool, barrel_grip: bool = false) -> void:
 		raise = 0.0
 		reach = 0.0
 	tick(0.0, false, 0.0, false, false)
+
+
+## The left hand on the backpack's handle (BackpackView sets the grip with
+## set_support_grip() every frame while it's out).
+func set_bag(on: bool) -> void:
+	_bag = on
 
 
 ## The support arm's pose right now, to bake (bone name -> [position,
@@ -512,14 +521,14 @@ func left_grip_socket_in_rig() -> Vector3:
 
 ## Called every frame by the Viewmodel with the grapple's state.
 func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_allowed: bool) -> void:
-	if _dual or _support:
+	if _dual or _support or _bag:
 		raise = 1.0
 		reach = 0.0
 		coil = 0.0
 		var pose: Dictionary = _left_hold if _dual else _support_pose
 		for bone in _left_bones:
 			_current[bone] = pose[bone]
-		if _support and _barrel_grip and not _grip_baked.is_empty():
+		if _support and _barrel_grip and not _grip_baked.is_empty() and not _bag:
 			# Baked: the pose as it was tuned, no IK.
 			for bone in _left_bones:
 				var saved: Variant = _grip_baked.get(skeleton.get_bone_name(bone))
@@ -527,7 +536,7 @@ func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_
 					_current[bone] = [saved[0], saved[1], (_current[bone] as Array)[2]]
 			_write()
 			return
-		if _support and _barrel_grip:
+		if (_support and _barrel_grip) or _bag:
 			# Cupped: the flat hand closed _grip_cup of the way to the fist.
 			for bone in _left_fist:
 				var flat: Array = _rest[bone]

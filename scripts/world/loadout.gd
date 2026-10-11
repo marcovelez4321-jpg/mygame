@@ -1,23 +1,19 @@
 class_name Loadout
 extends Node
 
-## Hands the player(s) a full loadout as a scene starts (the open-world
-## test: every weapon, grenades, plenty of ammo, full heals) -- through the
+## Hands the player(s) a loadout as a scene starts (the open-world test: two
+## guns, grenades, plenty of ammo, full heals -- all but the gun in hand go in
+## the backpack) -- through the
 ## same calls pickups use (WeaponController.pickup_weapon / add_ammo /
 ## add_item), so nothing about it is special-cased. Then back to the first
 ## weapon in hand.
 
+## Two guns (the most you can carry: one in hand, one in the backpack --
+## WeaponController.MAX_GUNS) and grenades. The pistol first: it's one-handed,
+## so the grapple works with it out.
 @export var weapons: Array[WeaponData] = [
 	preload("res://weapons/starter_gun.tres"),
-	preload("res://weapons/revolver.tres"),
-	preload("res://weapons/uzi.tres"),
-	preload("res://weapons/uzi.tres"), # the second: dual Uzis
-	preload("res://weapons/ppsh.tres"),
 	preload("res://weapons/shotgun.tres"),
-	preload("res://weapons/machine_gun.tres"),
-	preload("res://weapons/pkm.tres"),
-	preload("res://weapons/sniper.tres"),
-	preload("res://weapons/rpg.tres"),
 	preload("res://weapons/grenade.tres"),
 ]
 ## Ammo on top: bullets, shells, rockets, grenades.

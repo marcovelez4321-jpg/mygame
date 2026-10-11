@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://c3hfffp5kpcc0"
+path="res://.godot/imported/Cyberpunk Edgerunners “I Really Want to Stay At Your House” by Rosa Walton Music Video.mp3-f543c6230d8d6993d3421bd67725ef61.mp3str"
+
+[deps]
+
+source_file="res://audio/music/radio/Cyberpunk Edgerunners “I Really Want to Stay At Your House” by Rosa Walton Music Video.mp3"
+dest_files=["res://.godot/imported/Cyberpunk Edgerunners “I Really Want to Stay At Your House” by Rosa Walton Music Video.mp3-f543c6230d8d6993d3421bd67725ef61.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

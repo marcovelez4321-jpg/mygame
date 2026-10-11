@@ -191,6 +191,8 @@ class PlayerInput:
 	var grapple: bool = false # right mouse (or E): coil the tentacle grapple, release to lash it (PlayerGrapple)
 	var toggle_dual: bool = false # V: one gun <-> two (WeaponController.tick_dual())
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
+	var bag_open: bool = false # Tab: the backpack held out (no shooting or grappling: one hand's on it)
+	var use_item: int = -1 # a Backpack.Kind clicked in the open backpack, -1 = none
 
 ## Result of _find_mantle_ledge(): whether a valid ledge was found, and where
 ## its landing spot is. A plain bool return can't also carry a position
@@ -216,6 +218,13 @@ const USABLE_GROUP := "usable"
 @onready var grabber: PhysicsGrabber = $PhysicsGrabber
 @onready var grapple: PlayerGrapple = $PlayerGrapple
 @onready var health: Health = $Health
+## Everything but the gun in your hands (Backpack): made in _ready().
+var backpack: Backpack
+## The backpack held out (Tab). Yours: your own toggle; someone else's (on
+## the host): from their input packet.
+var bag_open := false
+## An item clicked in the open backpack, for the next input packet.
+var _pending_use := -1
 
 ## How far ahead we look when deciding whether a ledge is a walkable step.
 const STEP_PROBE_DISTANCE := 0.1
@@ -341,6 +350,9 @@ static func local_player(tree: SceneTree) -> PlayerMovement:
 func _ready() -> void:
 	add_to_group("player")
 	spawn_position = global_position
+	backpack = Backpack.new()
+	backpack.name = "Backpack"
+	add_child(backpack)
 	# Your own body looks through its camera; everyone else's is just seen.
 	if is_multiplayer_authority():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -362,7 +374,18 @@ func _ready() -> void:
 	weapons.hit_confirmed.connect(_on_hit_confirmed)
 
 
+## A backpack item clicked (BackpackView): used in the next simulation tick.
+func request_use(kind: int) -> void:
+	_pending_use = kind
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	# Tab: the backpack off your back and open, or back on (your own body).
+	if event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).physical_keycode == KEY_TAB \
+			and is_multiplayer_authority() and not _is_dead and not controls_locked and not get_tree().paused:
+		bag_open = not bag_open
+		get_viewport().set_input_as_handled()
+		return
 	# Mouse capture/recapture is owned entirely by PauseMenu -- this stays
 	# local presentation only, buffering raw look motion for the next
 	# physics tick, so all rotation still happens inside the deterministic
@@ -447,6 +470,7 @@ func respawn(at: Vector3) -> void:
 	health.current_health = health.max_health
 	stamina = float(max_stamina_charges)
 	_sync_stamina()
+	bag_open = false
 	velocity = Vector3.ZERO
 	global_position = at
 	_net_correction = Vector3.ZERO
@@ -463,7 +487,9 @@ func _restart_level() -> void:
 ## downstream works from the PlayerInput it returns.
 func _gather_input() -> PlayerInput:
 	var input := PlayerInput.new()
-	if controls_locked or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	# A menu has the mouse: no input. The open backpack has it as a cursor:
+	# you can still walk (it's real time), just not look or shoot.
+	if controls_locked or (Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not bag_open):
 		# An empty input: you stand still (gravity and friction still apply)
 		# and nothing buffered from before leaks through afterward.
 		_pending_look_delta = Vector2.ZERO
@@ -511,6 +537,9 @@ func _gather_input() -> PlayerInput:
 
 	input.select_weapon = _pending_weapon_select
 	_pending_weapon_select = -1
+	input.bag_open = bag_open
+	input.use_item = _pending_use
+	_pending_use = -1
 
 	# Zoomed in (aiming), the mouse turns slower to match, so the same hand
 	# movement still covers the same part of the screen.
@@ -585,7 +614,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_start_dash(wishdir)
 
 	# The tentacle grapple (E). Space used to let go of it isn't also a wall jump.
-	if grapple.tick(input.grapple, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority(), input.wishdir):
+	if grapple.tick(input.grapple and not input.bag_open, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority(), input.wishdir):
 		fresh_jump = false
 
 	var was_airborne := not is_on_floor()
@@ -655,7 +684,14 @@ func _finish_tick(input: PlayerInput, delta: float) -> void:
 	# Aim comes from the player's own state (head position and facing), not
 	# from the camera, so a server can rebuild the same shot (Rule 1). The
 	# shooter is whoever owns this body (1 offline, and for the host).
-	weapons.tick(input.fire, input.reload, input.aim, input.quick_throw, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority())
+	# One hand's on the open backpack: no shooting, aiming or throwing.
+	var hands_free := not input.bag_open
+	weapons.tick(input.fire and hands_free, input.reload, input.aim and hands_free, input.quick_throw and hands_free,
+			input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority())
+	if input.use_item >= 0:
+		backpack.use(input.use_item as Backpack.Kind)
+	if not is_multiplayer_authority():
+		bag_open = input.bag_open
 	weapons.tick_items(input.use_pills, input.use_bandage, delta)
 	weapons.tick_dual(input.toggle_dual)
 	_update_view_recoil(delta)
@@ -790,7 +826,8 @@ func _update_stamina(delta: float) -> void:
 		return
 	if stamina >= max_stamina_charges:
 		return
-	stamina = minf(stamina + delta / stamina_recharge_time, float(max_stamina_charges))
+	# A heavy backpack refills it slower (Backpack.refill_scale()).
+	stamina = minf(stamina + delta / stamina_recharge_time * backpack.refill_scale(), float(max_stamina_charges))
 	_sync_stamina()
 
 
@@ -1127,11 +1164,11 @@ func _pack(input: PlayerInput) -> Array:
 	for i in NET_BUTTONS.size():
 		if input.get(NET_BUTTONS[i]):
 			buttons |= 1 << i
-	return [input.wishdir, _net_look, buttons, input.select_weapon]
+	return [input.wishdir, _net_look, buttons, input.select_weapon, input.use_item]
 
 
 const NET_BUTTONS: Array[StringName] = [&"want_jump", &"want_dash", &"fire", &"aim", &"quick_throw", &"use_pills",
-		&"use_bandage", &"reload", &"grab", &"grapple", &"toggle_dual"]
+		&"use_bandage", &"reload", &"grab", &"grapple", &"toggle_dual", &"bag_open"]
 
 
 func _unpack(packed: Array) -> PlayerInput:
@@ -1141,6 +1178,7 @@ func _unpack(packed: Array) -> PlayerInput:
 	for i in NET_BUTTONS.size():
 		input.set(NET_BUTTONS[i], buttons & (1 << i) != 0)
 	input.select_weapon = packed[3]
+	input.use_item = packed[4] if packed.size() > 4 else -1
 	return input
 
 

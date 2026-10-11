@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="BackpackHold" format=3]
+
+[ext_resource type="Script" path="res://scripts/backpack_hold.gd" id="1"]
+
+[resource]
+script = ExtResource("1")

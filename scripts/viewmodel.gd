@@ -215,6 +215,11 @@ var _tuning_grip: bool = false
 ## F2 then J / K: the arrows move just the right / left arm (the gun stays put).
 var _tuning_right_arm: bool = false
 var _tuning_left_arm: bool = false
+## F2 then O, with the backpack open: tune how it's held (BackpackHold).
+var _tuning_bag: bool = false
+## The open backpack (your own view), and whether it was out last frame.
+var _bag_view: BackpackView
+var _bag_was_out := false
 var _grip_marker: MeshInstance3D
 var _tune_label: Label
 ## A small green marker at the weapon's current muzzle_offset, visible only
@@ -1017,6 +1022,13 @@ func _ensure_new_arms() -> bool:
 	_hand_bone = _fp_arms.hand_bone
 	_hand_attachment = _fp_arms.hand_attachment
 	_arms_fit_scale = 1.0
+	# The backpack, held out in the left hand when you open it (Tab).
+	var body := _weapons.get_parent() as PlayerMovement if _weapons else null
+	if body and body.is_multiplayer_authority():
+		_bag_view = BackpackView.new()
+		_bag_view.name = "Backpack"
+		_kick_pivot.add_child(_bag_view)
+		_bag_view.setup(body, _fp_arms)
 	if _grapple:
 		_grapple.arms = _fp_arms
 	for model in _gun_models.values():
@@ -1388,8 +1400,20 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_show_use_pose(null)
 		_update_label("")
 		_update_label("")
+	elif key.keycode == KEY_F3 and _tuning and _tuning_bag and is_instance_valid(_bag_view):
+		var error := ResourceSaver.save(_bag_view.hold, BackpackView.HOLD_PATH)
+		_update_label("SAVED the backpack hold" if error == OK else "Couldn't save the backpack hold (error %d)" % error)
 	elif key.keycode == KEY_F3 and _tuning:
 		_save_weapon()
+	elif key.keycode == KEY_O and _tuning and is_instance_valid(_bag_view):
+		_tuning_bag = not _tuning_bag
+		_tuning_grip = false
+		_tuning_right_arm = false
+		_tuning_left_arm = false
+		_tuning_arms = false
+		_tuning_muzzle = false
+		_tuning_aim = false
+		_update_label("open the backpack (Tab) to see it" if _tuning_bag else "")
 	elif key.keycode == KEY_B and _tuning and _tuning_left_arm and _fp_arms and _shown_weapon:
 		_shown_weapon.support_baked_pose = _fp_arms.bake_support_pose()
 		_apply_arm_offsets(_shown_weapon)
@@ -1521,6 +1545,11 @@ func _process(delta: float) -> void:
 	var z := float(Input.is_key_pressed(KEY_PAGEDOWN)) - float(Input.is_key_pressed(KEY_PAGEUP))
 	var fine := 0.1 if Input.is_key_pressed(KEY_CTRL) else 1.0
 
+	if _tuning_bag and is_instance_valid(_bag_view):
+		_tune_bag(x, y, z, fine, delta)
+		_update_label("")
+		return
+
 	if _tuning_muzzle:
 		weapon.muzzle_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 		_update_muzzle_marker(weapon)
@@ -1593,6 +1622,31 @@ func _process(delta: float) -> void:
 	_update_label("")
 
 
+## O (with the backpack open): how it's held (BackpackHold).
+##   Arrows / PageUp,Down: move the bag.  Shift: turn it.  +/-: its size.
+##   Alt + those: move the hand on the bag.  Alt + Shift: turn the hand.
+##   [ / ]: a looser / tighter fist.  , / .: the elbow straighter / bent.
+##   F3 saves it (scenes/player/backpack_hold.tres).
+func _tune_bag(x: float, y: float, z: float, fine: float, delta: float) -> void:
+	var hold := _bag_view.hold
+	var alt := Input.is_key_pressed(KEY_ALT)
+	var shift := Input.is_key_pressed(KEY_SHIFT)
+	if alt and shift:
+		hold.hand_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
+	elif alt:
+		hold.handle_point += Vector3(x, y, z) * 0.5 * fine * delta
+	elif shift:
+		hold.bag_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
+	else:
+		hold.bag_position += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
+		var grow := float(Input.is_key_pressed(KEY_EQUAL)) - float(Input.is_key_pressed(KEY_MINUS))
+		hold.bag_scale = maxf(hold.bag_scale * (1.0 + grow * TUNE_SCALE_SPEED * fine * delta), 0.01)
+	var fist := float(Input.is_key_pressed(KEY_BRACKETRIGHT)) - float(Input.is_key_pressed(KEY_BRACKETLEFT))
+	hold.fist = clampf(hold.fist + fist * 0.6 * fine * delta, 0.0, 1.0)
+	var bend := float(Input.is_key_pressed(KEY_PERIOD)) - float(Input.is_key_pressed(KEY_COMMA))
+	hold.elbow_degrees = clampf(hold.elbow_degrees - bend * TUNE_ROTATE_SPEED * fine * delta, 40.0, 170.0)
+
+
 ## K on a two-handed gun: the support hand (live IK, then baked).
 ##   Arrows / PageUp,Down: where the hand grips (the gun's support_point).
 ##   Shift + those: turn the hand.   Alt + arrows: which way the elbow points.
@@ -1627,6 +1681,15 @@ func _tune_support(weapon: WeaponData, x: float, y: float, z: float, fine: float
 func _tick_left_arm(delta: float) -> void:
 	if _fp_arms == null or _grapple == null:
 		return
+	# The backpack out: it puts the left hand on its handle first. Put away:
+	# the arm goes back to what the gun wants.
+	if is_instance_valid(_bag_view):
+		var out := _bag_view.update(delta)
+		if _bag_was_out and not out:
+			_bag_view.release_arm()
+			if _shown_weapon:
+				_apply_arm_offsets(_shown_weapon)
+		_bag_was_out = out
 	var free_hand := _shown_weapon != null and _shown_weapon.one_handed and _arms.visible
 	_fp_arms.tick(delta, _grapple.is_coiling(), _grapple.coil, _grapple.is_out(), free_hand)
 
@@ -1716,6 +1779,18 @@ func _make_tune_label() -> void:
 
 
 func _update_label(message: String) -> void:
+	if _tuning_bag and is_instance_valid(_bag_view) and _tune_label:
+		var hold := _bag_view.hold
+		_tune_label.text = ("TUNING THE BACKPACK HOLD (Tab to open it)\nbag at (%.3f, %.3f, %.3f)  turned (%.1f, %.1f, %.1f)  size %.3f\n"
+				+ "hand on bag (%.2f, %.2f, %.2f)  turned (%.1f, %.1f, %.1f)  fist %.2f  elbow %.0f\n\n"
+				+ "Arrows/PgUp,PgDn = move bag   Shift = turn bag   +/- = size\nAlt = move hand on it   Alt+Shift = turn hand\n"
+				+ "[ ] = fist   , . = elbow   Ctrl = finer   F3 = save   O = done\n%s") % [
+				hold.bag_position.x, hold.bag_position.y, hold.bag_position.z,
+				hold.bag_rotation_degrees.x, hold.bag_rotation_degrees.y, hold.bag_rotation_degrees.z, hold.bag_scale,
+				hold.handle_point.x, hold.handle_point.y, hold.handle_point.z,
+				hold.hand_rotation_degrees.x, hold.hand_rotation_degrees.y, hold.hand_rotation_degrees.z,
+				hold.fist, hold.elbow_degrees, message]
+		return
 	var weapon := _shown_weapon
 	if weapon == null:
 		return
