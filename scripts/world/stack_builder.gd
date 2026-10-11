@@ -53,10 +53,11 @@ const TOWERS := [ # x, z, footprint (m), height (m)
 ## The user likes the halls best: they take up much of every tower. The
 ## first two of each are the ones things join onto (the main tower's: mid,
 ## high, crown; towers 1 and 3's mid halls share its floor, 900 m, for the
-## hollow bridges; tower 1's high hall shares its floor, 3300 m, for the
-## broken bridge and the cable car).
+## hollow bridges; the main tower's high hall (3000 m, where the lift tops out)
+## and tower 1's (3300 m) are both open at 3306 m, for the broken bridge and
+## the cable car).
 const HALLS := [
-	[[900.0, 1400.0], [3300.0, 3700.0], [4650.0, 4960.0], [1900.0, 2400.0]],
+	[[900.0, 1400.0], [3000.0, 3400.0], [4650.0, 4960.0], [1900.0, 2400.0]],
 	[[900.0, 1350.0], [3300.0, 3560.0], [1950.0, 2400.0]],
 	[[950.0, 1400.0], [2350.0, 2720.0], [1650.0, 2000.0]],
 	[[900.0, 1350.0], [1650.0, 1930.0], [300.0, 600.0]],
@@ -75,8 +76,13 @@ const DEPTHS_SIZE := 320.0
 const WATER_LEVEL := -290.0
 const ENTRANCE_UNDERSIDE := 28.0 # within the grapple's 35 m from the ground
 const RAMP_SLOPE := 28.0 # degrees: every ramp you walk up
-## The lift's stops: the base (its -Z storey-1 dock), the mid hall, the crown.
-const LIFT_STOPS := [40.0, 900.0, 4650.0]
+## The lift's stops: the base (its -Z storey-1 dock), the mid hall, and the
+## high hall, 60% of the way up the main tower (the user's call). The crown
+## is beyond it: on foot and by grapple.
+const LIFT_STOPS := [40.0, 900.0, 3000.0]
+## Skybridges keep this far off anything carved, the windows' fronts, the
+## lift's way and the high crossings.
+const BRIDGE_MARGIN := 4.0
 
 ## Every box: {c: centre, s: size, b: Basis, part: &"shell" or &"interior",
 ## solid: a tower block (carved, an occluder), tower: index or -1,
@@ -111,6 +117,12 @@ var nest_spots := PackedVector3Array()
 ## Floors the sewer growths grow on inside: {rect (x/z), y, zone, kinds
 ## (Kind -> weight), density, shaft (keep its middle clear)}.
 var growth_floors: Array[Dictionary] = []
+## Skybridges waiting to be placed once everything else is (_place_sky_bridges).
+var sky_bridges: Array[Dictionary] = []
+## Round the broken bridge and the cable car: no skybridge through them.
+var crossing_clear := AABB()
+## What happened to the skybridges: placed where drawn, moved, or dropped.
+var bridge_report := {placed = 0, moved = 0, dropped = 0}
 ## What grows indoors: the sewer kinds that would, by where they are.
 const HALL_GROWTH := {
 	GrowthMeshes.Kind.HAIR_MOLD: 3.0, GrowthMeshes.Kind.EGG_SACS: 2.0, GrowthMeshes.Kind.FUNGUS_SHELF: 2.0,
@@ -157,6 +169,8 @@ func _init() -> void:
 	for hall in halls:
 		_hall_features(hall)
 	_shaft_platforms()
+	# Last, round everything else: the skybridges.
+	_place_sky_bridges()
 
 
 # ---- Boxes and carving --------------------------------------------------------
@@ -439,7 +453,7 @@ func _bridges() -> void:
 	var start := Vector3(TOWERS[1][0] - TOWERS[1][2] * 0.5 + 4.0, 0.0, 30.0)
 	var finish := Vector3(TOWERS[0][2] * 0.5 + WALL, 0.0, 30.0)
 	var thick := FLOOR - ENTRANCE_UNDERSIDE
-	_add(Vector3((start.x + finish.x) * 0.5, FLOOR - thick * 0.5, 30.0), Vector3(start.x - finish.x, thick, 26.0), &"shell", "Bridges", &"concrete")
+	_add(Vector3((start.x + finish.x) * 0.5, FLOOR - thick * 0.5, 30.0), Vector3(start.x - finish.x, thick, 26.0), &"shell", "Bridges", &"plain")
 	openings.append(Vector3((start.x + finish.x) * 0.5, FLOOR + 8.0, 30.0))
 	entrance_spots.append(Vector3(finish.x + 12.0, FLOOR, 30.0))
 	entrance_spots.append(Vector3(finish.x - 20.0, FLOOR, 40.0)) # just inside
@@ -451,9 +465,130 @@ func _bridges() -> void:
 		var from := Vector3(TOWERS[a][0], y, TOWERS[a][1])
 		var to := Vector3(TOWERS[b][0], y, TOWERS[b][1])
 		var across := Vector2(to.x - from.x, to.z - from.z)
-		var size := Vector3(random.randf_range(14.0, 40.0), random.randf_range(8.0, 26.0), across.length())
-		_add((from + to) * 0.5, size, &"shell", "Bridges", &"concrete", Basis(Vector3.UP, atan2(across.x, across.y)))
-		openings.append((from + to) * 0.5 + Vector3.UP * (size.y * 0.5 + 6.0))
+		sky_bridges.append({a = a, b = b, y = y, top = top, width = random.randf_range(14.0, 40.0), tall = random.randf_range(8.0, 26.0),
+				basis = Basis(Vector3.UP, atan2(across.x, across.y))})
+
+
+## The skybridges, placed once everything else is: each runs from one tower's
+## face to the other's (not through the towers' insides), and keeps clear of
+## every window and its room, the halls, the lift's way and the high
+## crossings (the user's ask: none blocking a window or the lift). One that
+## would touch any of them moves up or down 8 m at a time until it doesn't,
+## or is left out.
+func _place_sky_bridges() -> void:
+	var keep_clear: Array[AABB] = []
+	for space in carved:
+		keep_clear.append(space.grow(BRIDGE_MARGIN))
+	for window in window_rooms:
+		var at: Vector3 = window.at
+		var normal: Vector3 = window.normal
+		var size: Vector2 = window.size
+		var cross := Vector3(normal.z, 0.0, normal.x).abs()
+		keep_clear.append(_span(at - normal, at + normal * 25.0, cross, size.x + 16.0, at.y - size.y * 0.5 - 10.0, size.y + 20.0))
+	# The lift's way up, the car (StackLift's 18 m) and its docks.
+	var lift_top: float = LIFT_STOPS[LIFT_STOPS.size() - 1] + 100.0
+	var wall := -TOWERS[0][2] * 0.5 + 5.0
+	keep_clear.append(AABB(Vector3(-16.0, 0.0, lift_face - 15.0), Vector3(32.0, lift_top, wall - (lift_face - 15.0))))
+	if crossing_clear.size != Vector3.ZERO:
+		keep_clear.append(crossing_clear)
+	for bridge in sky_bridges:
+		var placed := false
+		for k in 61:
+			var y: float = bridge.y + ceilf(k * 0.5) * 8.0 * (1.0 if k % 2 == 1 else -1.0)
+			if y < 140.0 or y > bridge.top:
+				continue
+			var span := _sky_bridge_span(bridge, y)
+			if span.is_empty():
+				continue
+			var hits := false
+			for space in keep_clear:
+				if _bridge_hits(span.c, span.s * 0.5, bridge.basis, space):
+					hits = true
+					break
+			if hits:
+				continue
+			_add(span.c, span.s, &"shell", "Bridges", &"plain", bridge.basis)
+			openings.append((span.c as Vector3) + Vector3.UP * ((span.s as Vector3).y * 0.5 + 6.0))
+			if k == 0:
+				bridge_report.placed += 1
+			else:
+				bridge_report.moved += 1
+			placed = true
+			break
+		if not placed:
+			bridge_report.dropped += 1
+
+
+## Where a skybridge between its towers goes at height y: {c, s}, from one
+## tower's face to the other's (sunk into each just enough that no corner
+## shows a gap), or {} if they're too close there.
+func _sky_bridge_span(bridge: Dictionary, y: float) -> Dictionary:
+	var a: int = bridge.a
+	var b: int = bridge.b
+	var from := Vector2(TOWERS[a][0], TOWERS[a][1])
+	var to := Vector2(TOWERS[b][0], TOWERS[b][1])
+	var dir := (to - from).normalized()
+	var half_wide: float = bridge.width * 0.5
+	var bottom: float = y - bridge.tall * 0.5
+	var top: float = y + bridge.tall * 0.5
+	var out_a := _exit_face(a, bottom, top, dir)
+	var out_b := _exit_face(b, bottom, top, -dir)
+	var start := out_a.x - (half_wide * out_a.y + 1.0)
+	var finish := from.distance_to(to) - (out_b.x - (half_wide * out_b.y + 1.0))
+	if finish - start < 10.0:
+		return {}
+	var middle := from + dir * (start + finish) * 0.5
+	return {c = Vector3(middle.x, y, middle.y), s = Vector3(bridge.width, bridge.tall, finish - start)}
+
+
+## How far from tower t's middle, going `dir` (flat), its outside is between
+## two heights (its innermost face there), and the tan of the angle the way
+## out meets that face at (capped at 1): Vector2(distance, tan).
+func _exit_face(t: int, bottom: float, top: float, dir: Vector2) -> Vector2:
+	var centre := Vector2(TOWERS[t][0], TOWERS[t][1])
+	var best := INF
+	var slant := 0.0
+	for b in blocks:
+		if b.tower != t:
+			continue
+		var c: Vector3 = b.c
+		var s: Vector3 = b.s
+		if c.y + s.y * 0.5 < bottom or c.y - s.y * 0.5 > top:
+			continue
+		var tx := INF
+		var tz := INF
+		if absf(dir.x) > 0.0001:
+			tx = ((c.x + s.x * 0.5 if dir.x > 0.0 else c.x - s.x * 0.5) - centre.x) / dir.x
+		if absf(dir.y) > 0.0001:
+			tz = ((c.z + s.z * 0.5 if dir.y > 0.0 else c.z - s.z * 0.5) - centre.y) / dir.y
+		var d := minf(tx, tz)
+		if d < best:
+			best = d
+			slant = absf(dir.y) / absf(dir.x) if tx < tz else absf(dir.x) / absf(dir.y)
+	if best == INF:
+		return Vector2(TOWERS[t][2] * 0.5, 0.0)
+	return Vector2(best, minf(slant, 1.0))
+
+
+## Whether a box turned only about Y (centre, half size, basis) touches `box`
+## (separating axes, flat, plus the heights).
+static func _bridge_hits(c: Vector3, half: Vector3, basis: Basis, box: AABB) -> bool:
+	if c.y + half.y <= box.position.y or c.y - half.y >= box.end.y:
+		return false
+	var e := box.size * 0.5
+	var mid := box.get_center()
+	var d := Vector2(c.x - mid.x, c.z - mid.z)
+	var u := Vector2(basis.x.x, basis.x.z)
+	var v := Vector2(basis.z.x, basis.z.z)
+	if absf(d.x) > e.x + half.x * absf(u.x) + half.z * absf(v.x):
+		return false
+	if absf(d.y) > e.z + half.x * absf(u.y) + half.z * absf(v.y):
+		return false
+	if absf(d.dot(u)) > half.x + e.x * absf(u.x) + e.z * absf(u.y):
+		return false
+	if absf(d.dot(v)) > half.z + e.x * absf(v.x) + e.z * absf(v.y):
+		return false
+	return true
 
 
 # ---- Carved spaces ------------------------------------------------------------------
@@ -763,7 +898,7 @@ func _high_crossings() -> void:
 	for end in [[a, middle - half_gap], [middle + half_gap, b]]:
 		var from: Vector3 = end[0]
 		var to: Vector3 = end[1]
-		_add((from + to) * 0.5 + Vector3.UP * -3.0, Vector3(16.0, 6.0, from.distance_to(to)), &"shell", "Bridges", &"concrete", basis)
+		_add((from + to) * 0.5 + Vector3.UP * -3.0, Vector3(16.0, 6.0, from.distance_to(to)), &"shell", "Bridges", &"plain", basis)
 	# The cable car: at the same floor, alongside the bridge but clear of it
 	# (its line never crosses the bridge's).
 	var c := _passage_out(1, _hall_box(1, deck), 2, deck, 15.0, 22.0, 18.0, 2.0)
@@ -773,6 +908,9 @@ func _high_crossings() -> void:
 	for stop in cable_stops:
 		_add(stop + Vector3.UP * -1.5, Vector3(26.0, 3.0, 26.0), &"shell", "Docks", &"metal")
 		entrance_spots.append(stop)
+	crossing_clear = AABB(a, Vector3.ZERO).expand(b).expand(c).expand(d).grow(20.0)
+	crossing_clear.position.y = deck - 20.0
+	crossing_clear.size.y = 60.0
 
 
 ## The crown's hangar: a great mouth in the main tower's +X side, open to

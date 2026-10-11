@@ -49,6 +49,7 @@ func _initialize() -> void:
 	var names := {&"concrete": "Megastructure/stack_concrete", &"plain": "Megastructure/stack_plain",
 			&"rubble": "Megastructure/stack_plain", &"clay": "Megastructure/stack_plain",
 			&"metal": "Megastructure/stack_plain", &"sludge": "Megastructure/stack_plain"}
+	print("skybridges: ", builder.bridge_report)
 	print("map: ", MAP, " (error ", builder.write_map(ProjectSettings.globalize_path(MAP), names), ")")
 	var settings := (load("res://addons/func_godot/func_godot_default_map_settings.tres") as Resource).duplicate()
 	settings.set("inverse_scale_factor", StackBuilder.MAP_UNITS)

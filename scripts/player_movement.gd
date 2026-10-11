@@ -179,13 +179,13 @@ class PlayerInput:
 	var want_jump: bool = false
 	var want_dash: bool = false
 	var fire: bool = false
-	var aim: bool = false # right mouse: aim down the sights
+	var aim: bool = false # right mouse, with a gun that aims (the sniper): aim down the sights
 	var quick_throw: bool = false # Q: throw a grenade without switching to it
 	var use_pills: bool = false # T: pop pills (H is the viewmodel tool's arms key)
 	var use_bandage: bool = false # B: wrap a bandage
 	var reload: bool = false
 	var grab: bool = false
-	var grapple: bool = false # E: coil the tentacle grapple, release to lash it (PlayerGrapple)
+	var grapple: bool = false # right mouse (or E): coil the tentacle grapple, release to lash it (PlayerGrapple)
 	var toggle_dual: bool = false # V: one gun <-> two (WeaponController.tick_dual())
 	var select_weapon: int = -1 # inventory index chosen on the weapon wheel, -1 = no change
 
@@ -382,8 +382,13 @@ func _gather_input() -> PlayerInput:
 	# never fires the gun.
 	input.fire = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-	input.aim = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+	# Right mouse: aims a gun that can (the sniper), and throws the grapple with
+	# anything else out. E grapples too, so the sniper can still grapple.
+	var right := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	var held := weapons.current_weapon()
+	var right_aims := held != null and held.can_aim
+	input.aim = right and right_aims
 	input.quick_throw = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_Q)
 	input.reload = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
@@ -394,8 +399,8 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_B)
 	input.grab = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_F)
-	input.grapple = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
-			and Input.is_physical_key_pressed(KEY_E)
+	input.grapple = (right and not right_aims) or (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+			and Input.is_physical_key_pressed(KEY_E))
 	input.toggle_dual = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_V)
 

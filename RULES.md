@@ -1190,3 +1190,13 @@ them:
   - `max_range` 35 -> 56 m: the reach at full charge. A short charge still scales it down from there, and the landing ring follows it.
   - `pull_accel` 42 -> 54.6 m/s per second: you get up to speed 30% faster. The top speed (`pull_speed` 15.6) is unchanged.
   - Every grapple value is an inspector setting on the Player's PlayerGrapple node, in groups: Charge, Lash, Pull, Big Enemies, Look.
+
+- 2026-10-11: **Skybridges clear of windows and the lift; lift to 60%; plain bridges; grapple on right mouse.**
+  - **Skybridges blocked window rooms and the lift (the user's report).** They ran from tower middle to tower middle, straight through the towers' insides and in front of whatever was on the way.
+    - Now they're placed last (`_place_sky_bridges`). Each runs only from one tower's face to the other's: `_exit_face` finds the face, and the bridge is sunk in just enough that no corner leaves a gap.
+    - Each keeps 4 m clear (`BRIDGE_MARGIN`) of every carved space (halls, window rooms and their corridors, the shaft, every passage), of a box 25 m out in front of every window, of the lift's way up (car, docks and cable), and of the broken bridge and cable car.
+    - One that would touch any of them moves up or down 8 m at a time until it's clear, or is left out. 22 stay where they were drawn, 3 moved and 9 were left out: 25 of the 34.
+    - Checked: none touches a window's front, a carved space or the lift's way.
+  - **The lift tops out 60% of the way up** (the user's call): stops at 40, 900 and 3000 m of the main tower's 5000. The main tower's high hall moved down to 3000-3400 m to take the top stop. It and tower 1's high hall are still both open at 3306 m, for the broken bridge and the cable car. The crown (4650 m) is now reached on foot and by grapple.
+  - **Bridges are plain concrete** (the user's call): the skybridges, the entrance bridge and the broken bridge no longer use the windowed texture.
+  - **Grapple on right mouse** (the user's call). Only the sniper aims down the sights (`can_aim`), and it's two-handed, so right mouse aims the sniper and throws the grapple with anything else out (`PlayerMovement` input). E still grapples too, so you can grapple with the sniper out (switching to your one-handed gun, as before).

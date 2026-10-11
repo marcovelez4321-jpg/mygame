@@ -1,7 +1,7 @@
 class_name PlayerGrapple
 extends Node3D
 
-## The tentacle grapple (E). Only with a one-handed gun out (WeaponData.
+## The tentacle grapple (right mouse, or E). Only with a one-handed gun out (WeaponData.
 ## one_handed): the right hand keeps the gun, the left throws the tentacle.
 ## With anything else out, E switches to the last one-handed gun first.
 ##
