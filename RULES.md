@@ -1338,3 +1338,15 @@ them:
   - `Net` (`scripts/net/net.gd`) gained `round_trip_msec(node, peer)` and `body_of(node, id)` (returns Node3D: naming PlayerMovement would tie Net to the player's script, which needs the game's autoloads, and Net has to load in bakes). NetEntities uses Net, not the Network autoload, for the same reason.
 
 - 2026-10-11: **The Stack's original low drone is back, subtle** (the user's: the buzzing hum near the Stack was far too loud -- they'd had their audio off before). `make_drone` is the original again: 38-113 Hz tones beating against each other and a sub-40 Hz rumble, a bassy hum felt more than heard (checked: it measures the same as the original). The Stack plays it at `drone_volume_db` -8 dB (was +2), a setting on TheStack/Decor/Sound.
+
+- 2026-10-11: **The Stack's wind like a real building; the radios clearer up close, one song at a time.**
+  - **Wind** (the user's: far too loud; only right by windows, or high up by the clouds outside; inside it should come only from the windows and outside):
+    - The open-sky wind plays only OUTSIDE (in none of the sound's `inside_zones`: every hall, the base and every window room) and up by the clouds. It fades in from 300 m under the cloud deck (its height read from the scene's CloudDeck, 1300 m in the test world) and is full 60 m over it. Inside, none at all (it was a quarter).
+    - The window and opening voices are heard only right by them (`opening_reach` 18 m, was 70; `unit_size` 2.5, was 12), so inside, the wind you hear comes from the windows and holes.
+    - Quieter: `wind_volume_db` -12 (was 0).
+    - Checked headless: by the clouds outside, -12 dB; in a hall at that height, on the ground, or 30 m from a window inside, silent; 4 m from a window, its voice there.
+    - (Found on the way: `Rp`, the edit helper I'd named, is PowerShell's alias for Remove-ItemProperty, and an alias wins over a function. The edits hadn't applied; nothing was removed. Helpers are now `Swap-Text`.)
+  - **Radios** (the user's: drowned out and tiny up close; clearer and less echo the closer you are; never two songs at once):
+    - A third voice, CLEAR (bus RadioClear: only the lowest rumble cut), takes over within a few metres. The tinny AM voice covers the middle distance, and the echo is for far off, falling to -30 dB right by the radio.
+    - Only the nearest radio in earshot plays. Another takes over when it's clearly nearer (within 80% of the distance), the old one fading out as the new one fades in. Radios not playing stop their players.
+    - Checked headless: 2 m from A, clear +2 dB, echo -30, B silent; 25 m, the tinny voice; 90 m, the echo at full; 2 m from B, A silent and B clear.

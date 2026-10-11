@@ -1692,6 +1692,11 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	sound.drone_volume_db = -8.0 # subtle: felt more than heard (the user's)
 	sound.openings = openings
 	sound.inside = root.inside
+	# The wind's inside: every hall, the base, and every window room.
+	var rooms: Array[AABB] = zones.duplicate()
+	for w in window_rooms:
+		rooms.append(w.room)
+	sound.inside_zones = rooms
 	_own(root, sound, decor)
 	var lair := CollisionShape3D.new()
 	lair.name = "Lair"
