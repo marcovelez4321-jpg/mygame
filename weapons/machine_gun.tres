@@ -10,6 +10,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Submachine Gun"
+carry_weight = 3.0
 damage = 7.0
 fire_interval = 0.0667
 max_range = 40.0

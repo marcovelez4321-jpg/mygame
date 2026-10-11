@@ -60,6 +60,9 @@ var _cursor := Vector2.ZERO
 var _dot: Control
 ## Tuning: the items' box drawn as a yellow wireframe, seen through the bag.
 var _box_lines: MeshInstance3D
+## The weight over the bag (the user's): only once you're overweight; red
+## once it's too heavy.
+var _weight_label: Label3D
 
 static var _scenes := {}
 static var _forest: StandardMaterial3D
@@ -76,6 +79,17 @@ func setup(player: PlayerMovement, arms: FirstPersonArms) -> void:
 	visible = false
 	player.look_filter = _free_aim
 	_make_dot()
+	_weight_label = Label3D.new()
+	_weight_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_weight_label.no_depth_test = true
+	_weight_label.shaded = false
+	_weight_label.render_priority = 10
+	_weight_label.font_size = 40
+	_weight_label.outline_size = 10
+	_weight_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.85)
+	_weight_label.pixel_size = 0.0005
+	_weight_label.visible = false
+	add_child(_weight_label)
 
 
 ## Every frame from the Viewmodel, before the arms: the swing and the unzip,
@@ -95,6 +109,7 @@ func update(delta: float) -> bool:
 	visible = out
 	if not visible:
 		_dot.visible = false
+		_weight_label.visible = false
 		_on_your_back(delta)
 		return false
 	_time += delta
@@ -114,6 +129,7 @@ func update(delta: float) -> bool:
 	_update_items(delta)
 	if _box_lines and _box_lines.visible:
 		_draw_box()
+	_show_weight()
 	_dot.visible = _picking()
 	_dot.position = _cursor_at() - _dot.size * 0.5
 	return true
@@ -156,6 +172,21 @@ func _on_your_back(delta: float) -> void:
 	if _restless >= RESTLESS_SHUFFLE:
 		_restless = 0.0
 		_shuffle()
+
+
+## The pack's weight just above the bag (straight up on screen, however it's
+## turned): only while you're overweight, white, then red once too heavy.
+func _show_weight() -> void:
+	var pack := _player.backpack
+	_weight_label.visible = pack.is_overweight() and unzip > 0.5
+	if not _weight_label.visible:
+		return
+	_weight_label.text = "%.1f kg" % pack.current_weight()
+	_weight_label.modulate = Color(0.9, 0.12, 0.08) if pack.is_too_heavy() else Color(0.95, 0.93, 0.86)
+	var camera := get_viewport().get_camera_3d()
+	var up := camera.global_basis.y if camera else Vector3.UP
+	var reach := _bag_box.size.length() * 0.5 * hold.bag_scale * 0.75
+	_weight_label.global_position = global_position + up * (reach + 0.03)
 
 
 ## Tuning (Viewmodel, O then X): the items' box shown as a yellow wireframe,

@@ -27,18 +27,28 @@ enum Kind { NONE = -1, GUN, BULLETS, SHELLS, ROCKETS, GRENADES, PILLS, BANDAGE, 
 const MAX_STACKS := 12
 ## Camp kits: only one on you at a time (the user's).
 const MAX_CAMP_KITS := 1
-## Weight (kg) of one of each kind; a gun's own weight is GUN_WEIGHT.
+## Weight (kg) of one of each kind; a gun weighs its own (WeaponData.carry_weight).
 const WEIGHTS := {
 	Kind.BULLETS: 0.012, Kind.SHELLS: 0.04, Kind.ROCKETS: 2.0, Kind.GRENADES: 0.4,
 	Kind.PILLS: 0.05, Kind.BANDAGE: 0.08, Kind.SCRAP: 0.6, Kind.SILK: 0.15, Kind.CAMP_KIT: 3.0,
 }
-const GUN_WEIGHT := 3.5
 
-## Up to this weight (kg) the pack costs nothing; from there to heavy_at the
-## stamina refill slows down to slowest_refill of its normal speed.
+## Up to free_weight (kg) the pack costs nothing ("overweight" past it: the
+## weight shows over the open bag); from there to heavy_at ("too heavy": the
+## number goes red) it drags on you more and more, worst at heavy_at (the
+## user's: all of these):
 @export var free_weight: float = 6.0
 @export var heavy_at: float = 22.0
+## Stamina refills this much as fast at the worst...
 @export_range(0.1, 1.0, 0.05) var slowest_refill: float = 0.45
+## ... you walk and run this much as fast...
+@export_range(0.1, 1.0, 0.05) var slowest_move: float = 0.8
+## ... you jump (and wall jump) this much as high...
+@export_range(0.1, 1.0, 0.05) var lowest_jump: float = 0.85
+## ... the grapple pulls you this much as fast (and builds up as slowly)...
+@export_range(0.1, 1.0, 0.05) var slowest_pull: float = 0.8
+## ... and holding on drains stamina this many times as fast.
+@export_range(1.0, 3.0, 0.05) var heaviest_drain: float = 1.5
 
 ## The climb's materials and camp kits (the rest is the WeaponController's).
 var scrap := 0
@@ -49,10 +59,10 @@ var camp_kits := 0
 var placing_camp := false
 
 var _player: PlayerMovement
-## refill_scale() worked out at most this often (it counts the whole pack).
-const REFILL_EVERY_MSEC := 500
-var _refill := 1.0
-var _refill_msec := -100000
+## How heavy it is worked out at most this often (it counts the whole pack).
+const WEIGH_EVERY_MSEC := 500
+var _weight := 0.0
+var _weighed_msec := -100000
 
 
 func _ready() -> void:
@@ -138,19 +148,56 @@ func take(kind: Kind, amount: int) -> bool:
 func weight() -> float:
 	var total := 0.0
 	for stack in stacks():
-		total += GUN_WEIGHT if stack.kind == Kind.GUN else float(WEIGHTS.get(stack.kind, 0.0)) * stack.count
+		if stack.kind == Kind.GUN:
+			total += (stack.weapon as WeaponData).carry_weight if stack.weapon else 3.5
+		else:
+			total += float(WEIGHTS.get(stack.kind, 0.0)) * stack.count
 	return total
 
 
-## How fast stamina refills for this weight (1 = normal; recounted twice a
-## second, not every tick).
-func refill_scale() -> float:
+## The pack's weight as of the last weighing (twice a second).
+func current_weight() -> float:
 	var now := Time.get_ticks_msec()
-	if now - _refill_msec >= REFILL_EVERY_MSEC:
-		_refill_msec = now
-		var heavy := clampf(inverse_lerp(free_weight, heavy_at, weight()), 0.0, 1.0)
-		_refill = lerpf(1.0, slowest_refill, heavy)
-	return _refill
+	if now - _weighed_msec >= WEIGH_EVERY_MSEC:
+		_weighed_msec = now
+		_weight = weight()
+	return _weight
+
+
+## How far into overweight it is: 0 up to free_weight, 1 at heavy_at and past.
+func heaviness() -> float:
+	return clampf(inverse_lerp(free_weight, heavy_at, current_weight()), 0.0, 1.0)
+
+
+func is_overweight() -> bool:
+	return current_weight() > free_weight
+
+
+func is_too_heavy() -> bool:
+	return current_weight() >= heavy_at
+
+
+## What the weight does (1 = nothing): stamina refill, walking and running,
+## jump height, the grapple's pull, and its stamina drain while holding on.
+func refill_scale() -> float:
+	return lerpf(1.0, slowest_refill, heaviness())
+
+
+func move_scale() -> float:
+	return lerpf(1.0, slowest_move, heaviness())
+
+
+## For a jump's speed: the height goes with its square.
+func jump_scale() -> float:
+	return sqrt(lerpf(1.0, lowest_jump, heaviness()))
+
+
+func pull_scale() -> float:
+	return lerpf(1.0, slowest_pull, heaviness())
+
+
+func drain_scale() -> float:
+	return lerpf(1.0, heaviest_drain, heaviness())
 
 
 ## Uses a stack (a click in the open backpack, from the input packet).

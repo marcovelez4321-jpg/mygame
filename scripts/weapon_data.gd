@@ -185,6 +185,11 @@ enum ReloadStyle {
 ## the F2 viewmodel tool and saved with F3 like any weapon. -1 = not one.
 @export var heal_item: int = -1
 
+@export_group("Carrying")
+## What it weighs in your backpack, kg (the user's: each gun its own --
+## Backpack.weight(); a heavy pack slows you down).
+@export var carry_weight: float = 3.5
+
 @export_group("Switching")
 ## Seconds to bring this weapon up after choosing it. You can't fire during
 ## it, and any cooldown left from the previous weapon carries over, so

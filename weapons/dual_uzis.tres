@@ -9,6 +9,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Dual MP5s"
+carry_weight = 5.0
 damage = 9.0
 fire_interval = 0.06
 max_range = 40.0

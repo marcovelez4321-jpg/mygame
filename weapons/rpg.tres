@@ -10,6 +10,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "RPG"
+carry_weight = 6.5
 fire_interval = 1.0
 ammo_type = 2
 magazine_size = 1

@@ -9,6 +9,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Revolver"
+carry_weight = 1.3
 damage = 50.0
 fire_interval = 0.6
 impact_force = 4.0

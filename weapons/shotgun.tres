@@ -10,6 +10,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Shotgun"
+carry_weight = 3.5
 damage = 5.0
 fire_interval = 0.9
 ammo_type = 1

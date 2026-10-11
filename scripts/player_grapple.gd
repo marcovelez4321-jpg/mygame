@@ -217,7 +217,8 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 
 	# Holding on costs stamina; out of it, you fall.
 	if is_pulling() and not infinite_charges:
-		if not _player.drain_stamina(drain_per_second * delta):
+		# (A heavy pack drains it faster: Backpack.drain_scale().)
+		if not _player.drain_stamina(drain_per_second * delta * _player.backpack.drain_scale()):
 			release()
 			return false
 
@@ -378,10 +379,12 @@ func _pull(delta: float) -> void:
 		_start_perch()
 		return
 	var direction := to / distance
-	var speed := minf(_pull_speed, distance * arrive_slowdown)
+	# A heavy pack: pulled slower, and building up slower (Backpack.pull_scale()).
+	var heavy := _player.backpack.pull_scale()
+	var speed := minf(_pull_speed * heavy, distance * arrive_slowdown)
 	var along := _player.velocity.dot(direction)
 	if along < speed:
-		_player.velocity += direction * minf(pull_accel * delta, speed - along)
+		_player.velocity += direction * minf(pull_accel * heavy * delta, speed - along)
 
 
 ## Seconds left till you arrive (INF if not pulled).

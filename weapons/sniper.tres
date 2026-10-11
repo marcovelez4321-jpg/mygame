@@ -13,6 +13,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "Sniper Rifle"
+carry_weight = 5.5
 damage = 80.0
 fire_interval = 1.2
 max_range = 300.0

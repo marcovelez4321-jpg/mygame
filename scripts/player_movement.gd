@@ -631,7 +631,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_ground_move(wishdir, delta)
 		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
 		if do_jump:
-			velocity.y = jump_velocity
+			velocity.y = jump_velocity * backpack.jump_scale() # a heavy pack: lower
 			jumped.emit()
 		_try_step_up(delta)
 	else:
@@ -907,7 +907,7 @@ func _wall_jump(wall_normal: Vector3) -> void:
 	var launch := wall_normal * wall_jump_push + look_dir * wall_jump_look_speed
 	velocity.x = launch.x
 	velocity.z = launch.z
-	velocity.y = wall_jump_up_velocity
+	velocity.y = wall_jump_up_velocity * backpack.jump_scale() # a heavy pack: lower
 	_wall_jumped_since_reset = true
 	camera.shake(3.0)
 	camera.kick_fov(6.0)
@@ -1418,7 +1418,8 @@ func _ground_move(wishdir: Vector3, delta: float) -> void:
 		velocity.x *= scale
 		velocity.z *= scale
 
-	_accelerate(wishdir, ground_max_speed * _aim_speed_scale(), ground_accel, delta)
+	# A heavy pack slows you down too (Backpack.move_scale()).
+	_accelerate(wishdir, ground_max_speed * _aim_speed_scale() * backpack.move_scale(), ground_accel, delta)
 
 
 ## Walking slows while aiming down the sights (WeaponData.aim_move_speed_scale),

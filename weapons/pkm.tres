@@ -10,6 +10,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "PKM"
+carry_weight = 7.5
 damage = 10.0
 fire_interval = 0.055
 max_range = 60.0

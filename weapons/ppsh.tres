@@ -10,6 +10,7 @@
 [resource]
 script = ExtResource("1")
 weapon_name = "PPSh"
+carry_weight = 3.6
 damage = 8.0
 fire_interval = 0.11
 max_range = 80.0
