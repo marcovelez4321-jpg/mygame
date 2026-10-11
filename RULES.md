@@ -146,6 +146,19 @@ torn up later. In practice:
 - Reference (Rule 6): HL2's Citadel, Shadow of the Colossus, Blame!, Dark
   Souls' Anor Londo, Destiny's skyboxes.
 
+## Rule 10 — The user chooses every creative detail
+- Whenever something creative is being decided -- how a thing looks,
+  sounds, behaves or is laid out; what's in a place; its size, shape,
+  colour, mood, story; a creature, a weapon, a growth, a room, a sound --
+  the user chooses every detail. Claude offers the options (with the
+  trade-offs, and a recommendation where it has one) and waits for the
+  choice; it never fills in a creative detail on its own.
+- Ask in rounds until nothing creative is left open, rather than deciding
+  the rest. Technical choices with no creative side (how a thing is coded,
+  optimized or batched) stay Claude's, following Rule 6 (the HL2 way).
+- This widens Rule 9's "the user decides the details of each spectacle
+  piece" to everything creative.
+
 ---
 
 ## Creative Direction — what the game IS
@@ -1200,3 +1213,5 @@ them:
   - **The lift tops out 60% of the way up** (the user's call): stops at 40, 900 and 3000 m of the main tower's 5000. The main tower's high hall moved down to 3000-3400 m to take the top stop. It and tower 1's high hall are still both open at 3306 m, for the broken bridge and the cable car. The crown (4650 m) is now reached on foot and by grapple.
   - **Bridges are plain concrete** (the user's call): the skybridges, the entrance bridge and the broken bridge no longer use the windowed texture.
   - **Grapple on right mouse** (the user's call). Only the sniper aims down the sights (`can_aim`), and it's two-handed, so right mouse aims the sniper and throws the grapple with anything else out (`PlayerMovement` input). E still grapples too, so you can grapple with the sniper out (switching to your one-handed gun, as before).
+
+- 2026-10-11: **Rule 10 added: the user chooses every creative detail** (the user's ask). Claude offers options in rounds and never fills in a creative detail itself.
