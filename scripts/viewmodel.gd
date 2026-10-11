@@ -1088,8 +1088,9 @@ func _gun_basis(weapon: WeaponData) -> Basis:
 
 
 ## Hands the weapon's per-arm nudges (camera space) to the new arms, turned
-## into the arms' own space. A barrel-gripping support hand is then moved
-## onto the gun's support point (left_arm_offset nudging it from there).
+## into the arms' own space. A barrel-gripping support hand gets the gun's
+## grip instead: its support point, the gun's cant, and its support_*
+## settings, all in the arms' space -- the arms reach it by IK.
 func _apply_arm_offsets(weapon: WeaponData) -> void:
 	if _fp_arms == null:
 		return
@@ -1099,10 +1100,10 @@ func _apply_arm_offsets(weapon: WeaponData) -> void:
 	var left_turn := (to_rig * Basis.from_euler(weapon.left_arm_rotation_degrees * (PI / 180.0)) * to_cam).orthonormalized()
 	_fp_arms.set_arm_offsets(to_rig * weapon.right_arm_offset, right_turn, to_rig * weapon.left_arm_offset, left_turn)
 	if _two_handed(weapon) and weapon.support_pose == WeaponData.SupportPose.BARREL_GRIP:
-		var hand := _arms.transform * _fp_arms.left_grip_socket_in_rig()
-		var onto_barrel := _support_point_on_screen(weapon) - hand
-		_fp_arms.set_arm_offsets(to_rig * weapon.right_arm_offset, right_turn,
-				to_rig * (weapon.left_arm_offset + onto_barrel), left_turn)
+		var from_camera := _arms.transform.affine_inverse()
+		_fp_arms.set_support_grip(from_camera * _support_point_on_screen(weapon), to_rig * _cant_basis(weapon),
+				weapon.support_cup, weapon.support_hand_rotation_degrees, to_rig * weapon.support_elbow_direction,
+				weapon.support_elbow_degrees, weapon.support_twist_share, weapon.support_baked_pose)
 
 
 ## A gun held in both hands (the left one supporting it), not a one-handed
@@ -1389,6 +1390,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_update_label("")
 	elif key.keycode == KEY_F3 and _tuning:
 		_save_weapon()
+	elif key.keycode == KEY_B and _tuning and _tuning_left_arm and _fp_arms and _shown_weapon:
+		_shown_weapon.support_baked_pose = _fp_arms.bake_support_pose()
+		_apply_arm_offsets(_shown_weapon)
+		_update_label("BAKED -- F3 to save it into the weapon")
+	elif key.keycode == KEY_N and _tuning and _tuning_left_arm and _shown_weapon:
+		_shown_weapon.support_baked_pose = {}
+		_apply_arm_offsets(_shown_weapon)
+		_update_label("UNBAKED -- live IK again")
 	elif key.keycode == KEY_I and _tuning:
 		_tuning_aim = not _tuning_aim
 		_tuning_arms = false
@@ -1518,6 +1527,8 @@ func _process(delta: float) -> void:
 	elif _tuning_light:
 		weapon.muzzle_light_offset += Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta
 		_flash_for(false).preview(_model, weapon.muzzle_offset, weapon.muzzle_light_offset)
+	elif _tuning_left_arm and _two_handed(weapon) and weapon.support_pose == WeaponData.SupportPose.BARREL_GRIP:
+		_tune_support(weapon, x, y, z, fine, delta)
 	elif _tuning_right_arm or _tuning_left_arm:
 		# One arm on its own; the gun keeps its place on screen
 		# (_apply_transform() below re-hangs it off the moved hand).
@@ -1580,6 +1591,34 @@ func _process(delta: float) -> void:
 	# U: a healing item held up at your mouth, as when it's used.
 	_show_use_pose(weapon if _use_pose_shown and weapon.heal_item >= 0 else null)
 	_update_label("")
+
+
+## K on a two-handed gun: the support hand (live IK, then baked).
+##   Arrows / PageUp,Down: where the hand grips (the gun's support_point).
+##   Shift + those: turn the hand.   Alt + arrows: which way the elbow points.
+##   Alt + PageUp/Down: the elbow's bend (90 = an L).
+##   [ / ]: less / more cup.   , / .: the forearm's share of the palm's turn.
+##   B: bake the pose onto the gun (no IK after; F3 saves it).  N: unbake.
+func _tune_support(weapon: WeaponData, x: float, y: float, z: float, fine: float, delta: float) -> void:
+	if not weapon.support_baked_pose.is_empty():
+		return # baked: N to unbake and tune again
+	if weapon.support_point == Vector3.ZERO:
+		# Not set yet: start from the worked-out spot it's been using.
+		weapon.support_point = weapon.grip_point.lerp(weapon.muzzle_offset, 0.35)
+	if Input.is_key_pressed(KEY_ALT):
+		var elbow := (weapon.support_elbow_direction.normalized() + Vector3(x, y, 0.0) * fine * delta * 1.5).normalized()
+		weapon.support_elbow_direction = elbow
+		weapon.support_elbow_degrees = clampf(weapon.support_elbow_degrees - z * TUNE_ROTATE_SPEED * fine * delta, 40.0, 170.0)
+	elif Input.is_key_pressed(KEY_SHIFT):
+		weapon.support_hand_rotation_degrees += Vector3(y, -x, z) * TUNE_ROTATE_SPEED * fine * delta
+	else:
+		# Moved in meters on screen, stored in the gun's own space.
+		weapon.support_point += _gun_basis(weapon).inverse() * (Vector3(x, y, z) * TUNE_MOVE_SPEED * fine * delta)
+	var cup := float(Input.is_key_pressed(KEY_BRACKETRIGHT)) - float(Input.is_key_pressed(KEY_BRACKETLEFT))
+	weapon.support_cup = clampf(weapon.support_cup + cup * 0.6 * fine * delta, 0.0, 1.0)
+	var share := float(Input.is_key_pressed(KEY_PERIOD)) - float(Input.is_key_pressed(KEY_COMMA))
+	weapon.support_twist_share = clampf(weapon.support_twist_share + share * 0.6 * fine * delta, 0.0, 1.0)
+	_apply_arm_offsets(weapon)
 
 
 ## The new arms' left arm follows the grapple: up and reaching while you
@@ -1702,6 +1741,14 @@ func _update_label(message: String) -> void:
 		target = "RIGHT ARM only (gun stays put)"
 		p = weapon.right_arm_offset
 		r = weapon.right_arm_rotation_degrees
+	elif _tuning_left_arm and _two_handed(weapon) and weapon.support_pose == WeaponData.SupportPose.BARREL_GRIP:
+		target = ("SUPPORT HAND (%s)  cup %.2f  elbow bend %.0f  forearm twist %.2f\n"
+				+ "arrows/PgUp,PgDn = grip spot   Shift = turn hand   Alt + arrows = elbow direction   Alt + PgUp,PgDn = bend\n"
+				+ "[ ] = cup   , . = forearm twist share   B = bake pose   N = unbake") % [
+				"BAKED" if not weapon.support_baked_pose.is_empty() else "live IK", weapon.support_cup,
+				weapon.support_elbow_degrees, weapon.support_twist_share]
+		p = weapon.support_point
+		r = weapon.support_hand_rotation_degrees
 	elif _tuning_left_arm:
 		target = "LEFT ARM only (gun stays put)"
 		p = weapon.left_arm_offset

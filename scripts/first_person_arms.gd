@@ -41,21 +41,14 @@ const LEFT_ROOT := "shoulder.L"
 ## at support_time of the way through: reaching forward under the gun).
 @export var support_animation: StringName = &"grab_L"
 @export_range(0.0, 1.0, 0.05) var support_time: float = 0.5
-## The barrel grip's arm, aimed directly (camera space: x = right, y = up,
-## -z = ahead): the upper arm out to the left and down toward the elbow,
-## the forearm across the bottom of the view into the gun -- held sideways,
-## like a rifle's support arm -- and the closed hand straight off it, its
-## grip running along the barrel. Roll turns the hand round the forearm
-## (palm down over the handguard <-> palm up under it).
-## (The upper arm comes up from below and behind, so its cut-off shoulder end
-## stays under the bottom of the screen.)
-@export var support_upper_arm_direction: Vector3 = Vector3(-0.2, 0.3, -0.9)
-@export var support_forearm_direction: Vector3 = Vector3(1.0, 0.08, -0.35)
-@export_range(-180.0, 180.0, 5.0) var support_hand_roll_degrees: float = 0.0
-## How open the support hand is: 0 = closed fist round the barrel, 1 = the
-## open reaching hand. Part-open cups the barrel so it rests in the middle
-## of the hand without the fingers going through it.
-@export_range(0.0, 1.0, 0.05) var support_hand_open: float = 0.5
+## The barrel grip's arm is solved by IK (_solve_support_arm, the gun's own
+## support_* settings): the cupped hand on the gun's support point, the arm
+## bent to reach it -- upper arm and forearm on one hinge, so the elbow never
+## twists. A palm turned from where the forearm would leave it is rolled
+## the gun's support_twist_share by the forearm and the rest by the wrist
+## (the rig has no forearm twist bones; split, neither joint wrings).
+## Once tuned, the pose is baked onto the gun (support_baked_pose) and just
+## played back -- the IK is the posing tool, not a runtime system.
 ## How far below its pose the left arm hides (meters), and how fast it comes
 ## up / goes back down (per second, 0..1).
 @export var hide_drop: float = 0.55
@@ -114,6 +107,23 @@ var _reach := {}
 var _current := {}
 var _forearm_l := -1
 var _hand_l := -1
+var _upper_l := -1
+## The barrel grip (set_support_grip): where the cupped hand's middle goes
+## and the grip's frame (rig space), how cupped, the hand's turn, which way
+## the elbow points (rig space), its bend (radians).
+var _grip_at := Vector3.ZERO
+var _grip_frame := Basis.IDENTITY
+var _grip_cup := 0.55
+var _grip_turn := Basis.IDENTITY
+var _grip_elbow := Vector3.LEFT
+var _grip_bend := PI * 0.5
+var _grip_twist_share := 0.5
+## A baked support pose (bone name -> [position, rotation]); empty: IK.
+var _grip_baked := {}
+## The left hand's own axes (hand.L space): the way the fingers point, and
+## the palm's face (the way they curl to).
+var _fingers_local := Vector3.UP
+var _palm_local := Vector3.FORWARD
 var _palm_l := -1
 var _finger_l := -1
 
@@ -135,6 +145,7 @@ func _ready() -> void:
 	_left_root = skeleton.find_bone(LEFT_ROOT)
 	_forearm_l = skeleton.find_bone("forearm.L")
 	_hand_l = skeleton.find_bone("hand.L")
+	_upper_l = skeleton.find_bone("upper_arm.L")
 	_palm_l = skeleton.find_bone("palm.02.L")
 	_finger_l = skeleton.find_bone("f_middle.01.L")
 	_collect(skeleton.find_bone(RIGHT_ROOT), _right_bones)
@@ -160,6 +171,7 @@ func _ready() -> void:
 		_collect(child, fist_bones)
 	for bone in fist_bones:
 		_left_fist[bone] = mirrored[bone]
+	_learn_left_hand(fist_bones)
 
 	hand_attachment = BoneAttachment3D.new()
 	hand_attachment.bone_name = "hand.R"
@@ -211,6 +223,32 @@ func set_support(on: bool, barrel_grip: bool = false) -> void:
 		raise = 0.0
 		reach = 0.0
 	tick(0.0, false, 0.0, false, false)
+
+
+## The support arm's pose right now, to bake (bone name -> [position,
+## rotation], local): every bone of the left arm, fingers included.
+func bake_support_pose() -> Dictionary:
+	var baked := {}
+	for bone in _left_bones:
+		var pose: Array = _current[bone]
+		baked[skeleton.get_bone_name(bone)] = [pose[0], pose[1]]
+	return baked
+
+
+## The barrel grip, from the Viewmodel (rig space): where the middle of the
+## cupped hand goes, the grip's frame (the gun's cant: x right, y up, -z
+## along the barrel), how cupped (0 flat .. 1 closed), the hand's turn from
+## cupped-under, which way the elbow points, and its bend (degrees, 90 = L).
+func set_support_grip(at: Vector3, frame: Basis, cup: float, turn_degrees: Vector3, elbow: Vector3, bend_degrees: float,
+		twist_share: float = 0.5, baked: Dictionary = {}) -> void:
+	_grip_twist_share = twist_share
+	_grip_baked = baked
+	_grip_at = at
+	_grip_frame = frame.orthonormalized()
+	_grip_cup = cup
+	_grip_turn = Basis.from_euler(turn_degrees * (PI / 180.0))
+	_grip_elbow = elbow.normalized() if elbow != Vector3.ZERO else Vector3.LEFT
+	_grip_bend = deg_to_rad(bend_degrees)
 
 
 ## Turns the right forearm over by `degrees` round its own length (90 = the
@@ -305,29 +343,108 @@ func _close_hand(grip: Dictionary) -> void:
 				(closed[2] as Vector3).lerp(flat[2], grip_room)]
 
 
-## The barrel grip's sideways support arm: the upper arm, forearm and hand
-## aimed along support_*_direction (camera space, turned into the skeleton's)
-## with their twist matched so the wrist doesn't wring. Each bone's length
-## runs along its own +Y. The hand's grip (its local Z, thumb side) runs
-## along the barrel; support_hand_roll_degrees turns it round the forearm.
-func _aim_support_arm() -> void:
-	var to_skeleton := _skeleton_in_self.basis.orthonormalized().inverse() \
-			* camera_transform().basis.inverse()
-	var upper := (to_skeleton * support_upper_arm_direction).normalized()
-	var fore := (to_skeleton * support_forearm_direction).normalized()
-	var barrel := (to_skeleton * Vector3.FORWARD)
-	# The forearm and hand share one frame (a straight wrist): Y along the
-	# forearm, Z (the grip) along the barrel as near as it can be.
-	var grip := (barrel - fore * barrel.dot(fore)).normalized()
-	var fore_frame := Basis(fore.cross(grip), fore, grip)
-	fore_frame = Basis(fore, deg_to_rad(support_hand_roll_degrees)) * fore_frame
-	# The upper arm: Y along it, its twist as close to the forearm's as fits.
-	var upper_z := (fore_frame.z - upper * fore_frame.z.dot(upper)).normalized()
-	var upper_frame := Basis(upper.cross(upper_z), upper, upper_z)
-	_aim_bone(skeleton.find_bone("upper_arm.L"), upper_frame)
+## The barrel grip's arm, by IK (the user's: an L, elbow out to the side,
+## the hand cupped under the handguard):
+##   1. The hand: cupped (the flat hand closed _grip_cup of the way to the
+##      fist), its fingers running across under the gun and its palm up
+##      against it, turned by the gun's own setting.
+##   2. The wrist goes where that puts the cupped hand's middle on the grip.
+##   3. The shoulder sits where an arm bent _grip_bend reaches the wrist from
+##      (its end is cut off below the screen, so it's free to).
+##   4. The elbow: the two bones' lengths (law of cosines), out along
+##      _grip_elbow.
+##   5. Upper arm and forearm turned onto that one hinge (the rig's elbows
+##      bend round their bones' X), so nothing twists at the elbow; the palm's
+##      remaining roll shared between forearm and wrist.
+func _solve_support_arm() -> void:
+	var to_skeleton := _skeleton_in_self.affine_inverse()
+	var rig_to_skeleton := to_skeleton.basis.orthonormalized()
+	# 1. The hand's frame (skeleton space).
+	var grip := rig_to_skeleton * _grip_frame * _grip_turn
+	var hand_frame := _hand_frame(grip * Vector3.RIGHT, grip * Vector3.UP)
+	# 2. The wrist.
+	var hand_now := _bone_in_skeleton(_hand_l)
+	var socket_local := hand_now.affine_inverse() * (to_skeleton * left_grip_socket_in_rig())
+	var wrist := to_skeleton * _grip_at - hand_frame * socket_local
+	# 3. The shoulder, where the bend puts it.
+	var shoulder := _bone_in_skeleton(_upper_l).origin
+	var upper_length := _rest_length(_upper_l, _forearm_l)
+	var fore_length := _rest_length(_forearm_l, _hand_l)
+	var reach := sqrt(maxf(upper_length * upper_length + fore_length * fore_length
+			- 2.0 * upper_length * fore_length * cos(_grip_bend), 0.0001))
+	var back := shoulder - wrist
+	if back.length() < 0.001:
+		back = rig_to_skeleton * Vector3.BACK
+	shoulder = wrist + back.normalized() * reach
+	_place_bone(_upper_l, shoulder)
+	# 4. The elbow.
+	var along := (wrist - shoulder).normalized()
+	var out := rig_to_skeleton * _grip_elbow
+	var pole := out - along * out.dot(along)
+	if pole.length() < 0.001:
+		pole = (rig_to_skeleton * Vector3.DOWN) - along * (rig_to_skeleton * Vector3.DOWN).dot(along)
+	pole = pole.normalized()
+	var cos_a := clampf((upper_length * upper_length + reach * reach - fore_length * fore_length) / (2.0 * upper_length * reach), -1.0, 1.0)
+	var elbow := shoulder + along * upper_length * cos_a + pole * upper_length * sqrt(1.0 - cos_a * cos_a)
+	# 5. One hinge for both bones; the palm's roll shared.
+	var upper_y := (elbow - shoulder).normalized()
+	var fore_y := (wrist - elbow).normalized()
+	var hinge := upper_y.cross(fore_y)
+	hinge = hinge.normalized() if hinge.length() > 0.0001 else pole.cross(along).normalized()
+	var upper_frame := Basis(hinge, upper_y, hinge.cross(upper_y))
+	var fore_frame := Basis(hinge, fore_y, hinge.cross(fore_y))
+	var relative := (fore_frame.inverse() * hand_frame).get_rotation_quaternion()
+	var roll := 2.0 * atan2(relative.y, relative.w) # its twist round the forearm's length
+	roll = wrapf(roll, -PI, PI)
+	fore_frame = fore_frame * Basis(Vector3.UP, roll * _grip_twist_share)
+	_aim_bone(_upper_l, upper_frame)
 	_aim_bone(_forearm_l, fore_frame)
-	_aim_bone(_hand_l, fore_frame)
+	_aim_bone(_hand_l, hand_frame)
 
+
+## The left hand's frame (skeleton space) with its fingers pointing along
+## `fingers` and its palm facing `palm` (as near as it can).
+func _hand_frame(fingers: Vector3, palm: Vector3) -> Basis:
+	return _frame(fingers, palm) * _frame(_fingers_local, _palm_local).inverse()
+
+
+## A turn whose Y is `y` and whose Z is as near `z` as it can be.
+static func _frame(y: Vector3, z: Vector3) -> Basis:
+	var along := y.normalized()
+	var face := (z - along * z.dot(along)).normalized()
+	return Basis(along.cross(face), along, face)
+
+
+## The left hand's own axes, learned from the rig: the fingers point from
+## the wrist to the middle knuckle; the palm faces the way the fingertips go
+## as the hand closes (flat -> fist).
+func _learn_left_hand(fist_bones: PackedInt32Array) -> void:
+	var tip := skeleton.find_bone("f_middle.03.L")
+	var hand := _bone_in_skeleton(_hand_l)
+	var flat_tip := hand.affine_inverse() * _bone_in_skeleton(tip).origin
+	var knuckle := hand.affine_inverse() * _bone_in_skeleton(skeleton.find_bone("f_middle.01.L")).origin
+	var saved := {}
+	for bone in fist_bones:
+		saved[bone] = _current[bone]
+		_current[bone] = _left_fist[bone]
+	var fist_tip := hand.affine_inverse() * _bone_in_skeleton(tip).origin
+	for bone in fist_bones:
+		_current[bone] = saved[bone]
+	_fingers_local = knuckle.normalized()
+	_palm_local = (fist_tip - flat_tip).normalized()
+
+
+## A bone's rest length: from its head to its child's.
+func _rest_length(bone: int, child: int) -> float:
+	return skeleton.get_bone_global_rest(child).origin.distance_to(skeleton.get_bone_global_rest(bone).origin)
+
+
+## Moves `bone` (its head) to `at`, skeleton space.
+func _place_bone(bone: int, at: Vector3) -> void:
+	var parent := skeleton.get_bone_parent(bone)
+	var parent_place := _bone_in_skeleton(parent) if parent != -1 else Transform3D.IDENTITY
+	var pose: Array = _current[bone]
+	_current[bone] = [parent_place.affine_inverse() * at, pose[1], pose[2]]
 
 ## Turns `bone` so its place (skeleton space) has the basis `frame`.
 func _aim_bone(bone: int, frame: Basis) -> void:
@@ -402,15 +519,26 @@ func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_
 		var pose: Dictionary = _left_hold if _dual else _support_pose
 		for bone in _left_bones:
 			_current[bone] = pose[bone]
+		if _support and _barrel_grip and not _grip_baked.is_empty():
+			# Baked: the pose as it was tuned, no IK.
+			for bone in _left_bones:
+				var saved: Variant = _grip_baked.get(skeleton.get_bone_name(bone))
+				if saved is Array and (saved as Array).size() >= 2:
+					_current[bone] = [saved[0], saved[1], (_current[bone] as Array)[2]]
+			_write()
+			return
 		if _support and _barrel_grip:
+			# Cupped: the flat hand closed _grip_cup of the way to the fist.
 			for bone in _left_fist:
+				var flat: Array = _rest[bone]
 				var closed: Array = _left_fist[bone]
-				var open: Array = _support_pose[bone]
-				_current[bone] = [(closed[0] as Vector3).lerp(open[0], support_hand_open),
-						(closed[1] as Quaternion).slerp(open[1], support_hand_open),
-						(closed[2] as Vector3).lerp(open[2], support_hand_open)]
-			_aim_support_arm()
-		elif _support:
+				_current[bone] = [(flat[0] as Vector3).lerp(closed[0], _grip_cup),
+						(flat[1] as Quaternion).slerp(closed[1], _grip_cup),
+						(flat[2] as Vector3).lerp(closed[2], _grip_cup)]
+			_solve_support_arm() # placed exactly: no nudge after
+			_write()
+			return
+		if _support:
 			# (Dual's mirrored grip is already straightened, from the right.)
 			_straighten(_left_root, _forearm_l, _hand_l)
 		_nudge(_left_root, _left_move, _left_turn)

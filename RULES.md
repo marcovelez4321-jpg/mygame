@@ -1276,3 +1276,22 @@ them:
   - The Co-op panel listens while it's open and lists every game it hears: "Join <name>'s game (address, N in)", one click. Games drop off 4 s after their last announcement.
   - The panel also shows this machine's LAN address (`Network.lan_addresses()`), for typing it in if the list doesn't show the game (e.g. Wi-Fi with client isolation).
   - Windows asks to let the game through its firewall the first time: allow it on private networks.
+
+- 2026-10-11: **Support arm: IK as the posing tool, baked per gun** (the user's: "IK + per-gun hand poses", elbow out to the side in an L, hand cupped under, a cup setting, and bake the pose rather than run IK).
+  - `FirstPersonArms._solve_support_arm`, step by step:
+    - the hand is cupped (`support_cup`: 0 flat .. 1 fist) and turned so its fingers run across under the gun and its palm faces up;
+    - the wrist goes where that puts the hand's middle exactly on `support_point`;
+    - the shoulder moves to where an arm bent `support_elbow_degrees` (90 = an L) reaches it from (its end is off screen);
+    - the elbow comes from the bones' lengths (law of cosines), out along `support_elbow_direction`;
+    - upper arm and forearm sit on **one hinge** (the rig's elbows bend round their bones' X), so nothing twists at the elbow;
+    - the palm's remaining roll is split between forearm and wrist (`support_twist_share`), since the rig has no forearm twist bones.
+  - Checked headless: the hand lands 0 mm off its target, the bend comes out exactly as set, and the elbow points where it's told.
+  - **Found:** the twisting the user kept seeing is anatomical. In this rig a zero-twist hand faces along the elbow's hinge, so with the elbow out to the side, palm-up needs ~170 degrees of forearm roll (~130 even with the elbow down). Whatever the split, something has to turn a lot, so it's tuned by eye and baked.
+  - **Tuning (F2, then K on a two-handed gun):**
+    - arrows / PgUp, PgDn: the grip spot;
+    - Shift: turn the hand;
+    - Alt + arrows: the elbow's direction; Alt + PgUp, PgDn: its bend;
+    - `[` `]`: cup; `,` `.`: the forearm's twist share;
+    - **B bakes** the pose onto the gun (`support_baked_pose`, every left-arm bone, fingers included), and F3 saves it; N unbakes.
+  - Baked guns just play the pose back: no IK at runtime.
+  - Replaced: the old aimed-direction exports (`support_upper_arm_direction`, `support_forearm_direction`, `support_hand_roll_degrees`, `support_hand_open`) and the nudge onto the barrel.

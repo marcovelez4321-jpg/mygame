@@ -215,14 +215,35 @@ enum ReloadStyle {
 ## stays where it is on screen. Left = the dual-wield / support arm only.
 ## F2 then J (right arm) or K (left arm), F3 to save.
 ## Two-handed guns: how the left (support) hand holds it.
-##   BARREL_GRIP: closed round the barrel/handguard (like the right hand's
-##     grip, mirrored), placed on support_point automatically.
+##   BARREL_GRIP: the arm reaches the gun by IK (FirstPersonArms), the hand
+##     cupped under the handguard at support_point, the elbow out to the side
+##     in an L (the user's) -- see the support_* settings below.
 ##   OPEN_HAND: the open reaching pose, placed only by left_arm_offset (the
 ##     PKM's).
 @export var support_pose: SupportPose = SupportPose.BARREL_GRIP
 ## Where the left hand grips, in the gun's own space like grip_point.
 ## Zero = worked out: partway from the gun's middle toward its muzzle.
 @export var support_point: Vector3 = Vector3.ZERO
+## How cupped the support hand is round the handguard: 0 = flat open, 1 =
+## closed tight. Less cup leaves more room round a thick handguard.
+@export_range(0.0, 1.0, 0.05) var support_cup: float = 0.55
+## The support hand turned from its cupped-under hold (degrees, camera
+## space): x tips the fingers up or down, y swings them along the barrel,
+## z rolls the palm.
+@export var support_hand_rotation_degrees: Vector3 = Vector3.ZERO
+## Which way the support elbow points (camera space: -x left, -y down, +z
+## back toward you). Out to the side by default (the user's).
+@export var support_elbow_direction: Vector3 = Vector3(-1.0, -0.3, 0.3)
+## The support elbow's bend: 90 = an L (the user's), more = straighter.
+@export_range(40.0, 170.0, 1.0) var support_elbow_degrees: float = 90.0
+## How much of the palm's turn the forearm takes (the rest is the wrist's):
+## the rig has no forearm twist bones, so splitting it keeps either joint
+## from wringing.
+@export_range(0.0, 1.0, 0.05) var support_twist_share: float = 0.5
+## The support arm's pose, baked (F2 > K > B, then F3): every left-arm bone's
+## local [position, rotation], by bone name. Once baked the arm just takes
+## this pose -- no IK at runtime (the user's). Empty: solved live by IK.
+@export var support_baked_pose: Dictionary = {}
 @export var right_arm_offset: Vector3 = Vector3.ZERO
 @export var right_arm_rotation_degrees: Vector3 = Vector3.ZERO
 @export var left_arm_offset: Vector3 = Vector3.ZERO
