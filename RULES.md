@@ -1295,3 +1295,8 @@ them:
     - **B bakes** the pose onto the gun (`support_baked_pose`, every left-arm bone, fingers included), and F3 saves it; N unbakes.
   - Baked guns just play the pose back: no IK at runtime.
   - Replaced: the old aimed-direction exports (`support_upper_arm_direction`, `support_forearm_direction`, `support_hand_roll_degrees`, `support_hand_open`) and the nudge onto the barrel.
+
+- 2026-10-11: **Lift landings clear of skybridges; window rooms +30%; `Net` helper.**
+  - **A skybridge blocked a lift landing** (the user's report). The lift's keep-clear column was sized from the main tower's widest block. Higher up the tower is narrower, so the walkway from the lift to the tower's opening runs further in than the column reached. Now every landing is its own keep-clear zone (`lift_landings`: from beyond the car to inside the opening, 40 m wide, up to 40 m over the floor). Checked: none touched.
+  - **Window rooms +30%** (the user's): each hall gets 2 and a third in 60% of halls (`WINDOW_THIRD_CHANCE`, 2.6 on average), still only on painted windows, each with its room and corridor into the hall. The hive keeps its own 2. This build: 49 (was 36).
+  - **Bug fixed along the way:** `StackLift` used the `Network` autoload, which doesn't exist in bake tools, so a rebuild would have left the Stack with no lift or cable car. New `scripts/net/net.gd` (**Net**: `is_online(node)`, `half_ping(node)`) asks the node's own multiplayer instead. World scripts use Net; `Network.is_online()` now just calls it. Checked: the rebuilt Stack has both (3 and 2 stops) and its 3 call buttons.

@@ -114,6 +114,9 @@ const RAMP_SLOPE := 28.0 # degrees: every ramp you walk up
 ## high hall, 60% of the way up the main tower (the user's call). The crown
 ## is beyond it: on foot and by grapple.
 const LIFT_STOPS := [40.0, 900.0, 3000.0]
+## Each hall's window rooms: two, and a third this often (2.6 a hall on
+## average: 30% more than two, the user's). The hive keeps its own two.
+const WINDOW_THIRD_CHANCE := 0.6
 ## Skybridges keep this far off anything carved, the windows' fronts, the
 ## lift's way and the high crossings.
 const BRIDGE_MARGIN := 4.0
@@ -155,6 +158,9 @@ var growth_floors: Array[Dictionary] = []
 var sky_bridges: Array[Dictionary] = []
 ## Round the broken bridge and the cable car: no skybridge through them.
 var crossing_clear := AABB()
+## Each lift landing: the walkway from the lift to the tower's opening and
+## the air over it -- no skybridge across them.
+var lift_landings: Array[AABB] = []
 ## What happened to the skybridges: placed where drawn, moved, or dropped.
 var bridge_report := {placed = 0, moved = 0, dropped = 0}
 ## The holes punched through the hive's walls: {at (on the face), normal, size}.
@@ -593,6 +599,8 @@ func _place_sky_bridges() -> void:
 	keep_clear.append(AABB(Vector3(-16.0, 0.0, lift_face - 15.0), Vector3(32.0, lift_top, wall - (lift_face - 15.0))))
 	if crossing_clear.size != Vector3.ZERO:
 		keep_clear.append(crossing_clear)
+	for landing in lift_landings:
+		keep_clear.append(landing.grow(BRIDGE_MARGIN))
 	for bridge in sky_bridges:
 		var placed := false
 		for k in 61:
@@ -719,9 +727,11 @@ func _window_rooms() -> void:
 		if t == HIVE:
 			continue # its own two, below
 		var floor_y: float = (hall.box as AABB).position.y
+		# Two a hall, and a third in 60% of them: 30% more (the user's).
+		var wanted_rooms := 2 + (1 if random.randf() < WINDOW_THIRD_CHANCE else 0)
 		var placed := 0
-		for attempt in 16:
-			if placed >= 2:
+		for attempt in 20:
+			if placed >= wanted_rooms:
 				break
 			var wanted: Array[int] = []
 			for side in 4:
@@ -882,6 +892,8 @@ func _lift() -> void:
 			continue
 		var mouth := _passage_out(0, _hall_box(0, stop), 0, stop, 0.0, 24.0, 22.0, 2.0)
 		_add(Vector3(0.0, stop - 1.5, (lift_face + mouth.z) * 0.5 + 4.0), Vector3(24.0, 3.0, mouth.z - lift_face - 4.0), &"shell", "Docks", &"metal")
+		# From beyond the car to inside the opening, and well over head height.
+		lift_landings.append(AABB(Vector3(-20.0, stop - 8.0, lift_face - 15.0), Vector3(40.0, 48.0, mouth.z - lift_face + 25.0)))
 		lift_buttons.append(Vector3(-9.0, stop, mouth.z - 3.0))
 		entrance_spots.append(Vector3(0.0, stop, mouth.z - 8.0))
 		if stop < 2000.0:

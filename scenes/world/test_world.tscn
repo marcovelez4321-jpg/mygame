@@ -1,91 +1,45 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://c2jn1gw6was7e"]
 
-[ext_resource type="Shader" path="res://shaders/alien_terrain.gdshader" id="1_k6tl3"]
-[ext_resource type="Script" path="res://scripts/world/world_navigation.gd" id="2_5vhu7"]
-[ext_resource type="Script" path="res://scripts/world/world_chunks.gd" id="3_lludv"]
-[ext_resource type="Script" path="res://scripts/world/terrain_look.gd" id="4_y826p"]
+[ext_resource type="Shader" uid="uid://dkm5q24etjal" path="res://shaders/alien_terrain.gdshader" id="1_k6tl3"]
+[ext_resource type="Script" uid="uid://bdy1lul7nr03o" path="res://scripts/world/world_navigation.gd" id="2_5vhu7"]
+[ext_resource type="Script" uid="uid://udb4fv61c1q5" path="res://scripts/world/world_chunks.gd" id="3_lludv"]
+[ext_resource type="Script" uid="uid://b5kdycf53rthc" path="res://scripts/world/terrain_look.gd" id="4_y826p"]
 [ext_resource type="Resource" path="res://worlds/test_world/biomes.res" id="5_u65ls"]
-[ext_resource type="Script" path="res://scripts/world/growth_scatter.gd" id="6_rsl8k"]
-[ext_resource type="Script" path="res://scripts/world/chunk_barnacles.gd" id="7_6n4eo"]
-[ext_resource type="Script" path="res://scripts/world/eye_scatter.gd" id="8_22031"]
-[ext_resource type="Script" path="res://scripts/world/worm_director.gd" id="9_wnu4w"]
-[ext_resource type="Script" path="res://scripts/world/encounter_director.gd" id="10_v085t"]
+[ext_resource type="Script" uid="uid://cd6q03pxw5dko" path="res://scripts/world/growth_scatter.gd" id="6_rsl8k"]
+[ext_resource type="Script" uid="uid://c5mvcdsfkfeog" path="res://scripts/world/chunk_barnacles.gd" id="7_6n4eo"]
+[ext_resource type="Script" uid="uid://blpts7jbv0f5n" path="res://scripts/world/eye_scatter.gd" id="8_22031"]
+[ext_resource type="Script" uid="uid://b1vfe5trujhmp" path="res://scripts/world/worm_director.gd" id="9_wnu4w"]
+[ext_resource type="Script" uid="uid://k5ol8htogvp2" path="res://scripts/world/encounter_director.gd" id="10_v085t"]
 [ext_resource type="PackedScene" path="res://scenes/megastructures/the_stack.scn" id="11_ykgsn"]
-[ext_resource type="Script" path="res://scripts/world/megastructure.gd" id="12_1ow1t"]
-[ext_resource type="Script" path="res://scripts/world/cloud_deck.gd" id="13_c2v4b"]
-[ext_resource type="Script" path="res://scripts/world/skyline_layer.gd" id="14_oysqe"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="15_25kst"]
-[ext_resource type="Script" path="res://scripts/enemies/harvestman.gd" id="16_irhx2"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/harvestman/models/harvestman_leech_model.tscn" id="17_77f8d"]
-[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_horn.tres" id="18_oce4k"]
-[ext_resource type="Resource" path="res://audio/events/enemy/harvestman_step.tres" id="19_oh41w"]
-[ext_resource type="Resource" path="res://audio/events/enemy_hurt.tres" id="20_3m1go"]
-[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="21_hshco"]
+[ext_resource type="Script" uid="uid://cku7pyx3p03gi" path="res://scripts/world/cloud_deck.gd" id="13_c2v4b"]
+[ext_resource type="Script" uid="uid://8l5laalbjcbl" path="res://scripts/world/skyline_layer.gd" id="14_oysqe"]
+[ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="15_25kst"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="22_3nfe5"]
-[ext_resource type="Script" path="res://scripts/enemies/spider_pack.gd" id="23_tmsu7"]
 [ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="24_prvl0"]
-[ext_resource type="Script" path="res://scripts/enemies/rat.gd" id="25_8keqq"]
 [ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="26_8sgms"]
-[ext_resource type="Script" path="res://scripts/world/biome_atmosphere.gd" id="27_0bcx0"]
-[ext_resource type="Script" path="res://scripts/world/alien_atmosphere.gd" id="28_h1i0h"]
-[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="29_fyxt2"]
+[ext_resource type="Script" uid="uid://dyxx8s0555h3a" path="res://scripts/world/biome_atmosphere.gd" id="27_0bcx0"]
+[ext_resource type="Script" uid="uid://g1ouk8chgse1" path="res://scripts/world/alien_atmosphere.gd" id="28_h1i0h"]
+[ext_resource type="PackedScene" uid="uid://djmeis3phxch8" path="res://scenes/player/player.tscn" id="29_fyxt2"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="30_0goju"]
-[ext_resource type="Script" path="res://scripts/hud.gd" id="31_sul5t"]
-[ext_resource type="Script" path="res://scripts/world/loadout.gd" id="32_ldemw"]
-
-[sub_resource type="Gradient" id="Gradient_u4erp"]
-offsets = PackedFloat32Array(0.2, 1)
-colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
-
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_rymxa"]
-noise_type = 2
-frequency = 0.03
-cellular_jitter = 3.0
-cellular_return_type = 0
-domain_warp_enabled = true
-domain_warp_type = 1
-domain_warp_amplitude = 50.0
-domain_warp_fractal_type = 2
-domain_warp_fractal_lacunarity = 1.5
-domain_warp_fractal_gain = 1.0
-
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_3rjvg"]
-noise = SubResource("FastNoiseLite_rymxa")
-color_ramp = SubResource("Gradient_u4erp")
-seamless = true
+[ext_resource type="Script" uid="uid://b6c6fwaffk3y6" path="res://scripts/world/loadout.gd" id="32_ldemw"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
 _shader_parameters = {
-&"bias_distance": null,
 &"biome_area": null,
 &"biome_map": null,
-&"blend_sharpness": null,
 &"blotch_size": null,
 &"blotches": null,
 &"color_steps": null,
-&"depth_blur": null,
-&"enable_macro_variation": null,
-&"enable_projection": null,
 &"flat_terrain_normals": null,
 &"height_gradient": null,
 &"high_color": null,
 &"high_height": null,
 &"low_color": null,
 &"low_height": null,
-&"macro_variation1": null,
-&"macro_variation2": null,
-&"macro_variation_slope": null,
-&"mipmap_bias": null,
 &"moss_amount": null,
 &"moss_color": null,
-&"noise1_angle": null,
-&"noise1_offset": null,
-&"noise1_scale": null,
-&"noise2_scale": null,
-&"noise_texture": SubResource("NoiseTexture2D_3rjvg"),
 &"paint": null,
 &"paint_strength": null,
-&"projection_threshold": null,
 &"ps1": null,
 &"ridge_color": null,
 &"rust_amount": null,
@@ -139,9 +93,6 @@ friction = 0.3
 
 [sub_resource type="Resource" id="Resource_axar3"]
 script = ExtResource("28_h1i0h")
-fog_curve = 1.2
-haze_density = 0.054
-ambient_energy = 0.45
 
 [sub_resource type="Resource" id="Resource_sshxm"]
 script = ExtResource("28_h1i0h")
@@ -174,8 +125,9 @@ tiles_dir = "res://worlds/test_world/navigation"
 script = ExtResource("3_lludv")
 chunks_dir = "res://worlds/test_world/chunks"
 
-[node name="TerrainLook" type="Node" parent="." unique_id=1309111274]
+[node name="TerrainLook" type="Node" parent="." unique_id=1309111274 node_paths=PackedStringArray("terrain")]
 script = ExtResource("4_y826p")
+terrain = NodePath("../Terrain3D")
 biomes = ExtResource("5_u65ls")
 
 [node name="GrowthScatter" type="Node" parent="." unique_id=372329832]
@@ -197,18 +149,12 @@ script = ExtResource("9_wnu4w")
 script = ExtResource("10_v085t")
 biomes = ExtResource("5_u65ls")
 
-[node name="TheStack" type="Node3D" parent="." unique_id=1618061883 instance=ExtResource("11_ykgsn")]
+[node name="TheStack" parent="." unique_id=1618061883 instance=ExtResource("11_ykgsn")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 250, 31.5, -1450)
-script = ExtResource("12_1ow1t")
-inside = AABB(-100, -303, -100, 200, 5293, 200)
-inside_zones = Array[AABB]([AABB(-94, 0, -94, 188, 400, 188), AABB(-69.56953, 900, -67.35257, 139.13905, 500, 134.70514), AABB(-40.41888, 3000, -46.235783, 80.83776, 400, 92.471565), AABB(-28.713057, 4650, -28.32765, 57.426113, 310, 56.6553), AABB(-56.5233, 1900, -47.76266, 113.0466, 500, 95.52532), AABB(-96.75485, 440, -74.77099, 193.5097, 160, 149.54198), AABB(224.98645, 900, 27.312569, 70.02711, 450, 65.37486), AABB(244.81259, 3300, 40.143044, 30.37482, 260, 39.713913), AABB(234.19724, 1950, 29.973625, 51.605545, 450, 60.05275), AABB(-233.38727, 950, 146.23848, 66.774536, 450, 87.52304), AABB(-223.42537, 2350, 166.88422, 46.85074, 370, 46.231552), AABB(-227.4989, 1650, 165.38214, 54.997818, 350, 49.235703), AABB(59.461105, 900, -295.3295, 41.07779, 450, 50.658974), AABB(67.10171, 1650, -285.7641, 25.796589, 280, 31.528229), AABB(43.603153, 300, -311.14005, 72.79369, 300, 82.28011), AABB(-281.01202, 200, -200.24886, 62.024025, 360, 60.49772), AABB(-266.35474, 950, -184.92545, 32.709484, 390, 29.850906), AABB(243.79974, 250, -296.0376, 152.4005, 310, 112.07521), AABB(264.87442, 780, -306.43594, 110.251175, 320, 132.87187), AABB(273.9403, 1320, -290.20264, 92.11936, 320, 100.40526), AABB(273.71942, 1860, -285.26505, 92.56116, 320, 90.53008), AABB(282.8883, 2400, -285.26505, 74.22341, 320, 90.53008), AABB(286.5342, 2940, -276.15338, 66.93157, 320, 72.30677), AABB(288.9611, 3480, -272.81863, 62.077805, 320, 65.63728), AABB(291.4362, 4000, -273.1493, 57.127617, 300, 66.29859), AABB(-202.03784, 440, -42.2, 84.07567, 160, 84.4)])
-terrain_holes = Array[AABB]([AABB(-36, -20, -36, 72, 40, 72), AABB(-420, -40, 100, 40, 80, 84)])
-barnacle_nests = 10
-floor_nests = PackedVector3Array(46.851704, 40, -46.80737, 32.539474, 160, -51.61978, 18.156006, 240, 47.88225, 12.230072, 1025, -50.514427, 9.41835, 1275, -50.514427, 6.2748775, 3200, 34.676838, 30.31416, 3300, -16.678438, 1.6752739, 4727.5, -21.245737, 42.392475, 2150, -22.590643, 72.56614, 552, 18.527756, 286.26016, 1125, 46.166344, 271.39056, 3365, 68.073456, 248.60944, 3430, 56.62967, 261.02808, 3300, 59.956417, 259.54428, 2175, 82.51978, 260.25204, 1950, 60.061794, -217.56903, 2627.5, 195.88948, -194.70349, 2350, 181.6902, -179.37582, 1912.5, 182.9666, -207.02171, 1650, 186.99469, 79.22922, 900, -272.90112, 80.47939, 450, -300.85504, -240.79536, 380, -192.68665, -244.02042, 200, -187.32288, -237.73395, 1047.5, -174.26297, -250.06651, 950, -171.41031, 256.6391, 250, -264.5068, 302.18616, 780, -275.7436, 303.34198, 1860, -255.03159, 312.0406, 2940, -262.32385, 305.9702, 4000, -245.47832, -144.47826, 504, 31.650002, -128.47162, 552, 7.9830914)
 webs = Array[Dictionary]([{
 &"at": Vector3(104.48445, 1010.25, -253.94556),
 &"indoors": true,
-&"radius": 20.722243274961198,
+&"radius": 20.7222432749612,
 &"size": 2.6740937
 }, {
 &"at": Vector3(-25.073263, 3378.25, -57.44142),
@@ -309,54 +255,20 @@ webs = Array[Dictionary]([{
 
 [node name="CloudDeck" type="MeshInstance3D" parent="." unique_id=433324838]
 script = ExtResource("13_c2v4b")
+height = 1300.0
 
 [node name="SkylineLayer" type="Node3D" parent="." unique_id=2100368034]
 script = ExtResource("14_oysqe")
 
-[node name="HarvestmanLeech" type="Node3D" parent="." unique_id=1040049696 instance=ExtResource("15_25kst")]
+[node name="HarvestmanLeech" parent="." unique_id=1040049696 instance=ExtResource("15_25kst")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 18.25733, 60)
-script = ExtResource("16_irhx2")
-model_scene = ExtResource("17_77f8d")
-proboscis_length = 15.0
-proboscis_extend_speed = 3.0
-proboscis_retract_speed = 3.0
-walk_speed = 2.1
-hunt_speed = 4.0
-turn_speed = 0.8
-slip_chance = 0.0
-squash_damage = 50.0
-sight_range = 50.0
-sight_cone_degrees = 80.0
-attack_cooldown = 1.5
-slam_range = 6.0
-hose_time = 2.5
-hose_globs = 40
-hose_chance = 0.3
-hose_damage = 15.0
-hose_speed = 15.0
-puddle_time = 20.0
-brood_count = 35
-brood_windup = 3.5
-rush_chance = 0.25
-rush_speed = 10.0
-stun_time = 13.0
-feed_heal = 100.0
-feed_time = 15.0
-horn_sound = ExtResource("18_oce4k")
-step_sound = ExtResource("19_oh41w")
-hurt_sound = ExtResource("20_3m1go")
-death_sound = ExtResource("21_hshco")
-horror_range = 14.0
 
-[node name="SpiderPack" type="Node3D" parent="." unique_id=1532828836 instance=ExtResource("22_3nfe5")]
+[node name="SpiderPack" parent="." unique_id=1532828836 instance=ExtResource("22_3nfe5")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 22.390194, 50)
-script = ExtResource("23_tmsu7")
 
-[node name="Rat" type="RigidBody3D" parent="." unique_id=1837523022 instance=ExtResource("24_prvl0")]
+[node name="Rat" parent="." unique_id=1837523022 instance=ExtResource("24_prvl0")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.045486, -70)
-mass = 1.27
 physics_material_override = SubResource("RatFeet")
-script = ExtResource("25_8keqq")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=112085740]
 environment = ExtResource("26_8sgms")
@@ -375,11 +287,10 @@ shadow_enabled = true
 directional_shadow_mode = 1
 directional_shadow_max_distance = 90.0
 
-[node name="Player" type="CharacterBody3D" parent="." unique_id=1710340998 instance=ExtResource("29_fyxt2")]
+[node name="Player" parent="." unique_id=1710340998 instance=ExtResource("29_fyxt2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
 
-[node name="HUD" type="CanvasLayer" parent="." unique_id=1218208162 instance=ExtResource("30_0goju")]
-script = ExtResource("31_sul5t")
+[node name="HUD" parent="." unique_id=1218208162 instance=ExtResource("30_0goju")]
 
 [node name="Loadout" type="Node" parent="." unique_id=904333592]
 script = ExtResource("32_ldemw")

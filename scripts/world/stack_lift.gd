@@ -104,10 +104,10 @@ func _piece(at: Vector3, piece_size: Vector3, material: Material) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not multiplayer.is_server() and not Network.is_online():
+	if not multiplayer.is_server() and not Net.is_online(self):
 		return
 	_advance(delta)
-	if multiplayer.is_server() and Network.is_online():
+	if multiplayer.is_server() and Net.is_online(self):
 		_sync_left -= delta
 		if _sync_left <= 0.0:
 			_sync_left = SYNC_EVERY
@@ -125,7 +125,7 @@ func _sync(at: Vector3, speed_now: float, target: int, step: int, stop: int, cal
 	_at = stop
 	_called = called
 	_wait = wait
-	var behind := minf(Network.half_ping(), 0.5)
+	var behind := minf(Net.half_ping(self), 0.5)
 	while behind > 0.0:
 		_advance(minf(behind, STEP))
 		behind -= STEP

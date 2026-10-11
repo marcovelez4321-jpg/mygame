@@ -69,9 +69,7 @@ func _ready() -> void:
 
 ## Connected to someone (hosting with a peer, or joined). Offline: false.
 func is_online() -> bool:
-	var peer := multiplayer.multiplayer_peer
-	return peer != null and not (peer is OfflineMultiplayerPeer) \
-			and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
+	return Net.is_online(self)
 
 
 func host(port: int = PORT) -> void:
@@ -220,16 +218,9 @@ func _explosion(center: Vector3, radius: float, knockback: float) -> void:
 		Explosion.play_effects(scene, center, radius, knockback)
 
 
-## Client: half the round trip to the host, in seconds -- how stale the
-## host's news is when it gets here (0 on the host or offline).
+## Client: half the round trip to the host, in seconds (0 on the host or offline).
 func half_ping() -> float:
-	var peer := multiplayer.multiplayer_peer as ENetMultiplayerPeer
-	if peer == null or multiplayer.is_server():
-		return 0.0
-	var host := peer.get_peer(1)
-	if host == null:
-		return 0.0
-	return host.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME) / 2000.0
+	return Net.half_ping(self)
 
 
 func _close() -> void:
