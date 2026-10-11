@@ -127,6 +127,9 @@ var _line: MeshInstance3D
 var _tentacle: GrappleTentacle
 ## Your own view: the landing ring while you hold the grapple.
 var _indicator: GrappleIndicator
+## Co-op, someone else's grapple on a client: where its tip is, from the host
+## (INF: not out). Their grapple isn't run here, just drawn.
+var _remote_tip := Vector3.INF
 ## Your first-person arms (set by the Viewmodel): the tentacle coils round
 ## the left forearm and lashes out of that palm.
 var arms: FirstPersonArms
@@ -395,20 +398,33 @@ func _update_indicator(delta: float) -> void:
 	var grabs := target != null and (_big_enemy(target) != null or not _is_small_enemy(target))
 	_indicator.show_at(hit.position, hit.normal, grabs, fill, origin, delta)
 
-func _process(delta: float) -> void:
-	var showing := _rope != Rope.NONE
-	var tip := Vector3.ZERO
+## Where the tentacle's tip is right now, or INF while it isn't out (the host
+## sends this with each player's update).
+func rope_tip() -> Vector3:
 	match _rope:
 		Rope.LASH:
-			tip = _start_point().lerp(_lash_end, clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0))
+			return _start_point().lerp(_lash_end, clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0))
 		Rope.MISS:
 			var t := clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0)
-			tip = _start_point().lerp(_lash_end, sin(t * PI)) # out and snaps back
+			return _start_point().lerp(_lash_end, sin(t * PI)) # out and snaps back
 		Rope.PULL, Rope.RIDE:
 			if is_instance_valid(_anchor):
-				tip = _anchor_point()
-			else:
-				showing = false
+				return _anchor_point()
+	return Vector3.INF
+
+
+## Co-op: someone else's grapple, drawn from the host's word (INF: not out).
+func show_remote(tip: Vector3) -> void:
+	_remote_tip = tip
+
+
+func _process(delta: float) -> void:
+	var tip := rope_tip()
+	if not tip.is_finite() and _rope == Rope.NONE:
+		tip = _remote_tip
+	var showing := tip.is_finite()
+	if not showing:
+		tip = Vector3.ZERO
 	var mine := _player.is_multiplayer_authority()
 	if mine:
 		_ensure_tentacle()

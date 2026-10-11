@@ -1237,3 +1237,36 @@ them:
   - Counts: 25 halls, 36 window rooms, 28 skybridges (19 as drawn, 9 moved, 6 left out), 3,387 indoor growths in 189 batches.
 
 - 2026-10-11: **Human gangs roam the whole map** (the user's ask; every number the user's). The EncounterDirector's bands can now be a gang of tweakers (`Band.TWEAKERS`): `gang_min`..`gang_max` = 6-12, weight 1.5 in both biomes (about 1 band in 7: 14% in the sewer, 16% in the reef). The megastructure camps stay as they were.
+
+- 2026-10-11: **Co-op step 1, the core (not run yet).** Host and join by IP, the Half-Life 2 / Source model (Rule 1). Compiles; untested until the user says yes to a run.
+  - `scripts/net/network.gd` (autoload **Network**): host (ENet, UDP port 7777, up to 4 players), join by IP, leave, status.
+    - A joining client loads the host's scene fresh, then says it's ready with its character. The host makes its body (`Player_<id>`, owned by that client: `set_multiplayer_authority`) on every machine and sends it the bodies already there.
+    - The scene's own Player is the host's body.
+    - Offline nothing changes: `Network.is_online()` is false and everything runs as before.
+  - **Players** (`PlayerMovement`):
+    - Your own body is simulated at once on your machine (prediction). Each tick's input goes to the host as a packet: move, where you're looking (absolute, so a lost packet can't leave your aim off), buttons as bits, weapon pick, sent with the previous two inputs in case one is lost.
+    - The host runs each client's packets in order on its copy of their body (exactly their moves, as Source runs user commands) and sends every body's state 30 times a second: position, look, health, dead, weapon, grapple tip.
+    - Reconciliation: the client compares the host's position for a given packet with where it predicted itself at that packet. A small difference is eased in, more than 3 m is jumped, and all later predictions shift by the same amount so nothing is counted twice.
+    - Other players' bodies are shown 100 ms behind the host's newest update, interpolated, with velocity worked out so their run/idle plays. Their weapon and grapple line follow the host's word (`PlayerGrapple.rope_tip/show_remote`).
+    - Health comes from the host: drops go through `take_damage` (HUD, flinch, death).
+    - Death in co-op is a respawn beside someone alive (host-decided, `respawn()`, `respawned` hides the HUD's death label), not a level reload.
+    - The shooter's id is the body's owner (`get_multiplayer_authority()`), not this machine's.
+    - Hit-stop slow motion is off online (`Engine.time_scale` is the whole game's).
+    - The keys are ignored while a menu has the mouse (the game runs on under the pause menu in co-op).
+  - **Shots and explosions:**
+    - Only the host's `resolve_shot` hurts anything. A client's own shot casts the same rays for its tracers, blood and holes. The host sends the hit marker back (`_net_hit`), and other players' shots (`_net_shot` tracer per pellet, `_net_fired` sound once a shot).
+    - `Explosion.explode` hurts only on the host. Its look goes to everyone who didn't set it off (`Network.send_explosion`).
+  - **Enemies** (`scripts/net/net_entities.gd`, NetEntities): the host gives every creature in "enemies" (or `net_entities`) an id.
+    - Each client gets a spawn when one comes within 320 m of its player (900 m for big ones), 20 updates a second (position, rotation, health, plus `net_state()` extras), and a despawn when it's gone.
+    - The client makes a puppet from the same scene: meta `net_puppet`, physics bodies frozen, size settings pinned. Puppets are shown 100 ms behind and interpolated, with their velocity set so their animation plays.
+    - Health drops go through the puppet's own `take_damage`, so flinches and deaths play the same as offline.
+    - Creatures that are part of the scene are found by their path rather than made again.
+  - **The Stack:**
+    - The lift and cable car run the same motion on every machine. The host sends their exact state 10 times a second, and a client runs it on by half its ping, so the platform under you matches the host's (`StackLift._sync`). A button press is predicted like any input.
+    - Its hordes, web spiders and camps are ordinary host spawns, carried by NetEntities.
+  - **Loadout:** bodies made later (joiners) get theirs too.
+  - **Pause menu:** a Co-op panel (status, Host, IP + Join, Leave, how to test alone). Online, Esc doesn't pause the game.
+  - **Chunks:** the host streams chunks round every player (it already did). The ground's collision is the whole map's everywhere (Terrain3D FULL_GAME), so a far-off player costs the host only their chunks. If that's too much, the first fix is a smaller radius round remote players.
+  - **Still to do in step 1** (the user's call: synced, not switched off): the boss worm and the barnacles. Then a test run.
+  - **To test alone:** run two copies (Godot: Debug > Customize Run Instances > 2). Host in one, Join 127.0.0.1 in the other.
+  - **Full compile check** (scratchpad `full_check.gd`): every script under scripts/ and tools/, with the autoloads stood in as engine singletons. It caught a deliberately broken script. 133 scripts, 0 failures.

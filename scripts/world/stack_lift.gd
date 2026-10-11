@@ -7,7 +7,13 @@ extends AnimatableBody3D
 ## parent's space), easing in and out, pausing at each, then back the way it
 ## came. Its deck's top is level with the floor at each stop. An
 ## AnimatableBody3D, so whatever stands on it rides with it.
-## Rule 1 (co-op): the host moves it; it's synced like any moving platform.
+## Rule 1 (co-op): the host's lift is the real one, but every machine runs
+## the same motion (it's fully decided by its stops and its state), so it's
+## smooth under your feet. The host sends its exact state SYNC_EVERY; a
+## client takes it and runs it forward by half its ping -- so the lift it
+## stands on is where the host's is NOW, and predicting your own body on it
+## doesn't fight the host. A button pressed is pressed on both machines (your
+## input runs on each), so a call starts with no wait.
 
 @export var stops := PackedVector3Array()
 ## Top speed (m/s), how quickly it gets up to it, and the pause at each stop.
@@ -28,6 +34,11 @@ var _at := 0
 var _called := false
 var _wait := 0.0
 var _speed := 0.0
+
+## Seconds between the host's updates of it.
+const SYNC_EVERY := 0.1
+const STEP := 1.0 / 60.0
+var _sync_left := 0.0
 
 
 func _ready() -> void:
@@ -93,7 +104,35 @@ func _piece(at: Vector3, piece_size: Vector3, material: Material) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not multiplayer.is_server() or stops.size() < 2:
+	if not multiplayer.is_server() and not Network.is_online():
+		return
+	_advance(delta)
+	if multiplayer.is_server() and Network.is_online():
+		_sync_left -= delta
+		if _sync_left <= 0.0:
+			_sync_left = SYNC_EVERY
+			_sync.rpc(position, _speed, _target, _step, _at, _called, _wait)
+
+
+## Client: the host's lift, as it was when sent -- then run on by however
+## long that took to get here.
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _sync(at: Vector3, speed_now: float, target: int, step: int, stop: int, called: bool, wait: float) -> void:
+	position = at
+	_speed = speed_now
+	_target = target
+	_step = step
+	_at = stop
+	_called = called
+	_wait = wait
+	var behind := minf(Network.half_ping(), 0.5)
+	while behind > 0.0:
+		_advance(minf(behind, STEP))
+		behind -= STEP
+
+
+func _advance(delta: float) -> void:
+	if stops.size() < 2:
 		return
 	if on_call and not _called:
 		return # waiting to be called

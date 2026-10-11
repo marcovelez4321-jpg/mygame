@@ -16,6 +16,8 @@ signal jumped
 signal dashed
 signal wall_jumped
 signal mantled
+## Back from the dead (co-op: the host brought you back beside your buddy).
+signal respawned
 
 @export_group("Mouse")
 @export var mouse_sensitivity: float = 0.0025
@@ -285,6 +287,35 @@ var _mantle_cooldown_left: float = 0.0
 var _last_mantle_ledge_position: Vector3 = Vector3.ZERO
 var _mantle_grace_left: float = 0.0
 
+## Where this body first came in: where it comes back if nobody's alive to
+## come back beside (co-op).
+var spawn_position := Vector3.ZERO
+
+# ---- Co-op (Network) -------------------------------------------------------------
+## Physics ticks between the host's updates of a body (2: 30 a second).
+const NET_STATE_EVERY := 2
+## A client's own body more than this far from where the host has it just
+## jumps there; less, and it's eased in over a few frames.
+const NET_SNAP_DISTANCE := 3.0
+## Someone else's body is shown this far behind the host's newest update.
+const NET_INTERP_DELAY_MSEC := 100
+## Client, own body: this tick's number, where it predicted itself at each
+## tick (looked up when the host's answer for that tick comes back), the
+## correction still being eased in, and the last few input packets (resent
+## with each new one, so a lost packet costs nothing).
+var _net_tick := 0
+var _net_predicted := {}
+var _net_correction := Vector3.ZERO
+var _net_recent: Array = []
+## Where this tick's look ended up, before any recoil: what's sent as the aim.
+var _net_look := Vector2.ZERO
+## Host, someone else's body: their input packets not run yet, and the last
+## one run (answered with each update).
+var _net_inputs: Array = []
+var _net_last_tick := 0
+## Client, someone else's body: [msec, position, yaw, pitch] from the host.
+var _net_snaps: Array = []
+
 # Reused every tick instead of allocating new ones (Rule 2: no per-frame
 # allocations in the physics loop).
 var _step_params := PhysicsTestMotionParameters3D.new()
@@ -304,7 +335,15 @@ static func local_player(tree: SceneTree) -> PlayerMovement:
 
 func _ready() -> void:
 	add_to_group("player")
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	spawn_position = global_position
+	# Your own body looks through its camera; everyone else's is just seen.
+	if is_multiplayer_authority():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		camera.make_current()
+	else:
+		camera.current = false
+	weapons.shot_resolved.connect(_on_shot_resolved_net)
+	weapons.shot_fired.connect(_on_shot_fired_net)
 	# Saved sensitivity from the pause menu, if the player has ever set one.
 	if GameSettings.mouse_sensitivity > 0.0:
 		mouse_sensitivity = GameSettings.mouse_sensitivity
@@ -332,11 +371,37 @@ func request_weapon(index: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _is_dead:
-		_pending_look_delta = Vector2.ZERO # mouse movement is ignored while dead
+	if not Network.is_online():
+		if _is_dead:
+			_pending_look_delta = Vector2.ZERO # mouse movement is ignored while dead
+			return
+		_simulate_movement(_gather_input(), delta)
 		return
-	var input := _gather_input()
-	_simulate_movement(input, delta)
+	# Co-op. Your own body: you move it now (prediction) and tell the host.
+	if is_multiplayer_authority():
+		if _is_dead:
+			_pending_look_delta = Vector2.ZERO
+		else:
+			var input := _gather_input()
+			_simulate_movement(input, delta)
+			if not multiplayer.is_server():
+				_send_to_host(input)
+				_ease_in_correction(delta)
+	# Someone else's body, on the host: moved by their input packets.
+	elif multiplayer.is_server() and not _is_dead:
+		_run_their_inputs(delta)
+	# (Someone else's body on a client: shown by _process, from the host's updates.)
+	if multiplayer.is_server() and Engine.get_physics_frames() % NET_STATE_EVERY == 0:
+		_send_state()
+
+
+func _process(_delta: float) -> void:
+	if Network.is_online() and not is_multiplayer_authority() and not multiplayer.is_server():
+		_show_from_host()
+
+
+func is_dead() -> bool:
+	return _is_dead
 
 
 ## Freeze the player and restart the level after a short delay.
@@ -347,7 +412,39 @@ func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	_is_dead = true
 	velocity = Vector3.ZERO
 	grapple.release()
-	get_tree().create_timer(respawn_delay).timeout.connect(_restart_level)
+	if not Network.is_online():
+		get_tree().create_timer(respawn_delay).timeout.connect(_restart_level)
+	elif multiplayer.is_server():
+		# Co-op: the level goes on for everyone else; the host brings you back.
+		get_tree().create_timer(respawn_delay).timeout.connect(_respawn_everywhere)
+
+
+## Host: back beside someone still alive, on every machine.
+func _respawn_everywhere() -> void:
+	if not is_instance_valid(self) or not Network.is_online():
+		return
+	var at := Network.respawn_point(self)
+	respawn(at)
+	_net_respawn.rpc(at)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_respawn(at: Vector3) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		respawn(at)
+
+
+## Alive again at `at`, full health.
+func respawn(at: Vector3) -> void:
+	_is_dead = false
+	health.is_dead = false
+	health.current_health = health.max_health
+	velocity = Vector3.ZERO
+	global_position = at
+	_net_correction = Vector3.ZERO
+	_net_predicted.clear()
+	_net_snaps.clear()
+	respawned.emit()
 
 
 func _restart_level() -> void:
@@ -358,7 +455,7 @@ func _restart_level() -> void:
 ## downstream works from the PlayerInput it returns.
 func _gather_input() -> PlayerInput:
 	var input := PlayerInput.new()
-	if controls_locked:
+	if controls_locked or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		# An empty input: you stand still (gravity and friction still apply)
 		# and nothing buffered from before leaks through afterward.
 		_pending_look_delta = Vector2.ZERO
@@ -422,6 +519,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	rotate_y(-input.look_delta.x)
 	_pitch = clamp(_pitch - input.look_delta.y, deg_to_rad(-89.0), deg_to_rad(89.0))
 	head.rotation.x = _pitch
+	_net_look = Vector2(rotation.y, _pitch)
 	_absorb_recoil_compensation(input.look_delta)
 
 	_mantle_cooldown_left = maxf(_mantle_cooldown_left - delta, 0.0)
@@ -479,7 +577,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_start_dash(wishdir)
 
 	# The tentacle grapple (E). Space used to let go of it isn't also a wall jump.
-	if grapple.tick(input.grapple, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id()):
+	if grapple.tick(input.grapple, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority()):
 		fresh_jump = false
 
 	var was_airborne := not is_on_floor()
@@ -545,9 +643,9 @@ func _finish_tick(input: PlayerInput, delta: float) -> void:
 	_dash_held_prev = input.want_dash
 
 	# Aim comes from the player's own state (head position and facing), not
-	# from the camera, so a server can rebuild the same shot (Rule 1).
-	# multiplayer.get_unique_id() is 1 offline, which matches the host's id.
-	weapons.tick(input.fire, input.reload, input.aim, input.quick_throw, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, multiplayer.get_unique_id())
+	# from the camera, so a server can rebuild the same shot (Rule 1). The
+	# shooter is whoever owns this body (1 offline, and for the host).
+	weapons.tick(input.fire, input.reload, input.aim, input.quick_throw, input.select_weapon, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority())
 	weapons.tick_items(input.use_pills, input.use_bandage, delta)
 	weapons.tick_dual(input.toggle_dual)
 	_update_view_recoil(delta)
@@ -915,7 +1013,7 @@ func _stomp(enemy: Enemy, impact_speed: float) -> void:
 		var enemy_health := enemy.get_node_or_null("Health") as Health
 		if enemy_health:
 			var hit_dir := Vector3(velocity.x, -1.0, velocity.z).normalized()
-			enemy_health.take_damage(enemy_health.current_health, multiplayer.get_unique_id(),
+			enemy_health.take_damage(enemy_health.current_health, get_multiplayer_authority(),
 					hit_dir, enemy.global_position, stomp_impact_force)
 
 	# A stomp kill goes straight through Health.take_damage() rather than
@@ -945,6 +1043,8 @@ func _stomp(enemy: Enemy, impact_speed: float) -> void:
 ## it blur past at normal speed. ignore_time_scale=true on the timer is what
 ## makes `duration` mean real seconds even while time_scale itself is down.
 func _hit_stop(scale: float, duration: float) -> void:
+	if Network.is_online():
+		return # time_scale is the whole game's: in co-op it'd slow everyone down
 	Engine.time_scale = scale
 	# Engine's own setter, not a lambda: the lambda would belong to this node,
 	# and a level restart mid-hit-stop would free it before the timer fires.
@@ -956,9 +1056,213 @@ func _on_shot_fired() -> void:
 	camera.kick_fov(4.0)
 
 
-func _on_hit_confirmed(killed: bool, _kind: WeaponController.HitKind) -> void:
+func _on_hit_confirmed(killed: bool, kind: WeaponController.HitKind) -> void:
+	# Co-op: the host decided a client's hit -- its hit marker goes to them.
+	if Network.is_online() and multiplayer.is_server() and not is_multiplayer_authority():
+		_net_hit.rpc_id(get_multiplayer_authority(), killed, kind)
 	camera.shake(3.0 if killed else 1.5)
 	camera.kick_fov(8.0 if killed else 3.0)
+
+
+# ---- Co-op -------------------------------------------------------------------------
+
+## Client, own body: this tick's input to the host (with the last two, in
+## case one got lost), and where it predicted itself, to check against the
+## host's answer.
+func _send_to_host(input: PlayerInput) -> void:
+	_net_tick += 1
+	_net_predicted[_net_tick] = global_position + _net_correction
+	_net_predicted.erase(_net_tick - 180)
+	_net_recent.append([_net_tick, _pack(input)])
+	if _net_recent.size() > 3:
+		_net_recent.pop_front()
+	_net_input.rpc_id(1, _net_recent)
+
+
+## An input packet: the move, where you were looking (the aim; not a mouse
+## delta, so a lost packet can't leave your aim off), the buttons as bits,
+## and a weapon picked on the wheel.
+func _pack(input: PlayerInput) -> Array:
+	var buttons := 0
+	for i in NET_BUTTONS.size():
+		if input.get(NET_BUTTONS[i]):
+			buttons |= 1 << i
+	return [input.wishdir, _net_look, buttons, input.select_weapon]
+
+
+const NET_BUTTONS: Array[StringName] = [&"want_jump", &"want_dash", &"fire", &"aim", &"quick_throw", &"use_pills",
+		&"use_bandage", &"reload", &"grab", &"grapple", &"toggle_dual"]
+
+
+func _unpack(packed: Array) -> PlayerInput:
+	var input := PlayerInput.new()
+	input.wishdir = packed[0]
+	var buttons: int = packed[2]
+	for i in NET_BUTTONS.size():
+		input.set(NET_BUTTONS[i], buttons & (1 << i) != 0)
+	input.select_weapon = packed[3]
+	return input
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func _net_input(recent: Array) -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != get_multiplayer_authority():
+		return
+	for entry: Array in recent:
+		if int(entry[0]) > _net_last_tick and (_net_inputs.is_empty() or int(entry[0]) > int(_net_inputs.back()[0])):
+			_net_inputs.append(entry)
+
+
+## Host: runs their packets in order, exactly the moves they made (the way
+## Source runs each player's commands); none waiting, they wait. A backlog
+## (a stall, then a burst) is caught up a few a tick.
+func _run_their_inputs(delta: float) -> void:
+	if _net_inputs.size() > 12:
+		_net_inputs = _net_inputs.slice(_net_inputs.size() - 6)
+	var runs := 0
+	while not _net_inputs.is_empty() and runs < 3:
+		var entry: Array = _net_inputs.pop_front()
+		_net_last_tick = entry[0]
+		var look: Vector2 = entry[1][1]
+		rotation.y = look.x
+		_pitch = look.y
+		head.rotation.x = _pitch
+		_simulate_movement(_unpack(entry[1]), delta)
+		runs += 1
+
+
+## Host: where this body is, to everyone (and, for a client's own body, which
+## of its packets that answers).
+func _send_state() -> void:
+	_net_state.rpc(_net_last_tick, global_position, rotation.y, _pitch, health.current_health, _is_dead,
+			weapons.get_current_index(), grapple.rope_tip())
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func _net_state(tick: int, at: Vector3, yaw: float, pitch: float, hp: float, dead: bool, weapon: int, rope_tip: Vector3) -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return
+	_take_health(hp, dead)
+	if is_multiplayer_authority():
+		_reconcile(tick, at)
+		return
+	_net_snaps.append([Time.get_ticks_msec(), at, yaw, pitch])
+	if _net_snaps.size() > 10:
+		_net_snaps.pop_front()
+	if weapon != weapons.get_current_index() and weapon >= 0:
+		weapons.call("_select", weapon)
+	grapple.show_remote(rope_tip)
+
+
+## Client, own body: the host's answer to packet `tick`. Where it predicted
+## itself then vs where the host has it: a small difference is eased in, a
+## big one jumped (Source's prediction error smoothing). Either way every
+## prediction since moves by the same amount, so it isn't counted again.
+func _reconcile(tick: int, at: Vector3) -> void:
+	var predicted: Variant = _net_predicted.get(tick)
+	if predicted == null:
+		return
+	for old: int in _net_predicted.keys():
+		if old <= tick:
+			_net_predicted.erase(old)
+	var error := at - (predicted as Vector3)
+	if error.length() < 0.05:
+		return
+	for later: int in _net_predicted.keys():
+		_net_predicted[later] += error
+	if error.length() > NET_SNAP_DISTANCE:
+		global_position += error + _net_correction
+		_net_correction = Vector3.ZERO
+	else:
+		_net_correction += error
+
+
+func _ease_in_correction(delta: float) -> void:
+	if _net_correction == Vector3.ZERO:
+		return
+	var step := _net_correction * minf(delta * 12.0, 1.0)
+	global_position += step
+	_net_correction -= step
+	if _net_correction.length() < 0.01:
+		global_position += _net_correction
+		_net_correction = Vector3.ZERO
+
+
+## Client, someone else's body: where the host had it NET_INTERP_DELAY ago,
+## between the updates either side of that moment.
+func _show_from_host() -> void:
+	if _net_snaps.is_empty():
+		return
+	var at := Time.get_ticks_msec() - NET_INTERP_DELAY_MSEC
+	var a: Array = _net_snaps[0]
+	var b: Array = _net_snaps[0]
+	for i in _net_snaps.size():
+		b = _net_snaps[i]
+		if int(b[0]) >= at:
+			a = _net_snaps[maxi(i - 1, 0)]
+			break
+		a = b
+	var span := float(int(b[0]) - int(a[0]))
+	var t := clampf(float(at - int(a[0])) / span, 0.0, 1.0) if span > 0.0 else 1.0
+	var before := global_position
+	global_position = (a[1] as Vector3).lerp(b[1], t)
+	rotation.y = lerp_angle(a[2], b[2], t)
+	_pitch = lerpf(a[3], b[3], t)
+	head.rotation.x = _pitch
+	# Its model's run/idle reads how fast it's going.
+	var dt := get_process_delta_time()
+	if dt > 0.0:
+		velocity = (global_position - before) / dt
+
+
+## The health the host says this body has: a drop goes through take_damage
+## (the flinch, the HUD, death), a rise is just set.
+func _take_health(hp: float, dead: bool) -> void:
+	if multiplayer.is_server():
+		return
+	if not dead and (health.is_dead or _is_dead) and hp > 0.0:
+		return # waiting for the host's respawn
+	if hp < health.current_health - 0.01:
+		health.take_damage(health.current_health - hp)
+	elif hp > health.current_health:
+		health.current_health = hp
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_hit(killed: bool, kind: int) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		weapons.hit_confirmed.emit(killed, kind as WeaponController.HitKind)
+
+
+## Host: a shot from this body, to everyone who didn't fire it (they drew
+## their own): its tracer, and its sound.
+func _on_shot_resolved_net(from: Vector3, to: Vector3, hit: bool) -> void:
+	if not (Network.is_online() and multiplayer.is_server()):
+		return
+	for peer in multiplayer.get_peers():
+		if peer != get_multiplayer_authority():
+			_net_shot.rpc_id(peer, from, to, hit)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _net_shot(from: Vector3, to: Vector3, hit: bool) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		weapons.shot_resolved.emit(from, to, hit)
+
+
+## Host: the gun going off (once a shot, however many pellets): its sound.
+func _on_shot_fired_net() -> void:
+	if not (Network.is_online() and multiplayer.is_server()):
+		return
+	for peer in multiplayer.get_peers():
+		if peer != get_multiplayer_authority():
+			_net_fired.rpc_id(peer)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _net_fired() -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		weapons.shot_fired.emit()
 
 
 ## Auto step-up, the same idea as Quake's PM_StepSlideMove and Doom's

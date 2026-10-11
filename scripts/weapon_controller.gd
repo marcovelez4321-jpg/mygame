@@ -840,7 +840,10 @@ func _finish_reload(weapon: WeaponData) -> void:
 	_ammo[weapon.ammo_type] = available - take
 
 
-## Casts the rays and applies damage. In co-op only the host runs this.
+## Casts the rays and applies damage. In co-op only the host's run of it
+## hurts anything; a client's own shot (predicted, so it shows the instant
+## you fire) casts the same rays for its tracers, blood and bullet holes, and
+## the host sends back what it really hit (the hit marker).
 ## Each pellet can punch through up to weapon.max_penetrations living targets
 ## -- it keeps casting past a hit enemy (excluding whoever it already hit) up
 ## to that many times, damaging each one it passes through, and always stops
@@ -850,6 +853,7 @@ func _finish_reload(weapon: WeaponData) -> void:
 ## the hit marker for each one.
 func resolve_shot(shot: Shot) -> void:
 	var space := _body.get_world_3d().direct_space_state
+	var real := _body.multiplayer.is_server()
 	for pellet in shot.weapon.pellets:
 		var direction := _spread(shot.direction, shot.spread_degrees)
 		var ray_origin := shot.origin
@@ -875,7 +879,8 @@ func resolve_shot(shot: Shot) -> void:
 			if result.collider is PhysicalBone3D:
 				shot_resolved.emit(ray_origin, result.position, true)
 				_spawn_blood(space, result, direction)
-				_hit_mutating_corpse(result.collider, shot, ray_origin, direction, result.position)
+				if real:
+					_hit_mutating_corpse(result.collider, shot, ray_origin, direction, result.position)
 				if penetrations_left <= 0:
 					break
 				penetrations_left -= 1
@@ -888,12 +893,23 @@ func resolve_shot(shot: Shot) -> void:
 			var hit_node := result.collider as Node # null on a body with no node (see LevelGeometry)
 			var health := hit_node.get_node_or_null("Health") as Health if hit_node else null
 			shot_resolved.emit(ray_origin, result.position, health != null)
-			_push_physics_body(result.collider, direction, result.position, shot.weapon.impact_force)
+			if real:
+				_push_physics_body(result.collider, direction, result.position, shot.weapon.impact_force)
 			if health == null:
 				BloodFX.spawn_bullet_hole(_body.get_tree().current_scene, result.position, result.normal)
 				break # world geometry always stops it, penetration or not
 
 			var kind: HitKind = _hit_kind(result.collider, ray_origin, direction) if not health.is_dead else HitKind.NORMAL
+			if not real:
+				# A client's own shot: the look of the hit, not the hit (the host's is).
+				_play_hit_effects(space, result, direction, kind, false)
+				if penetrations_left <= 0:
+					break
+				penetrations_left -= 1
+				range_left -= ray_origin.distance_to(result.position)
+				exclude.append((result.collider as CollisionObject3D).get_rid())
+				ray_origin = result.position + direction * 0.01
+				continue
 			var damage := _damage_for(shot.weapon, kind, health.current_health, shot.origin.distance_to(result.position), result.collider)
 			# Any one shotgun pellet kills a normal rat outright (not the big,
 			# tough bodyguards).
@@ -1239,6 +1255,8 @@ func _own_body_rids(collider: Node) -> Array[RID]:
 ## Same trick as player_movement.gd's _hit_stop(): briefly slows the whole
 ## game to `scale` for `duration` REAL (unscaled) seconds, then snaps back.
 func _hit_stop(scale: float, duration: float) -> void:
+	if Network.is_online():
+		return # time_scale is the whole game's: in co-op it'd slow everyone down
 	Engine.time_scale = scale
 	# Engine's own setter, not a lambda: the lambda would belong to this node,
 	# and a level restart mid-hit-stop would free it before the timer fires.

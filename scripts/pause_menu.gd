@@ -58,6 +58,7 @@ var _characters: Array[String] = []
 var _audio_rows: Dictionary = {}
 ## "Infinite Grapples" (made from a copy of the Infinite Ammo row).
 var _infinite_grapples_check: CheckButton
+var _coop_panel: Panel
 
 ## Sensitivity is stored on the player as raw radians-per-pixel (a tiny
 ## number like 0.0025), which makes for an awkward slider. We show/store the
@@ -95,6 +96,7 @@ func _ready() -> void:
 	audio_button.pressed.connect(_show_audio_panel)
 	_build_audio_panel()
 	_build_graphics_panel()
+	_build_coop_panel()
 	_populate_character_options()
 	character_option.item_selected.connect(_on_character_selected)
 	_add_tentacle_row()
@@ -169,7 +171,9 @@ func open() -> void:
 	# Only offered when you're somewhere other than the hub already.
 	var current := get_tree().current_scene
 	hub_button.visible = current != null and current.scene_file_path != MissionData.HUB_SCENE
-	get_tree().paused = true
+	# In co-op the game doesn't stop for one player's menu (the others are
+	# still playing): only offline does Esc freeze it.
+	get_tree().paused = not Network.is_online()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_sync_sensitivity_slider()
 	if is_instance_valid(player):
@@ -435,7 +439,61 @@ func _show_audio_panel() -> void:
 func _show_main_panel() -> void:
 	_audio_panel.visible = false
 	_graphics_panel.visible = false
+	_coop_panel.visible = false
 	menu_panel.visible = true
+
+
+## Co-op: host a game, or join one by IP address (Network). To try it alone,
+## run two copies: Host in one, Join 127.0.0.1 in the other.
+func _build_coop_panel() -> void:
+	var vbox := _make_sub_panel("Co-op")
+	_coop_panel = vbox.get_parent() as Panel
+	var status := Label.new()
+	status.text = Network.status
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(status)
+	Network.status_changed.connect(func(text: String) -> void: status.text = text)
+	var host := Button.new()
+	host.text = "Host (port %d)" % Network.PORT
+	host.custom_minimum_size = Vector2(0, 36)
+	host.pressed.connect(func() -> void: Network.host())
+	vbox.add_child(host)
+	var row := HBoxContainer.new()
+	var address := LineEdit.new()
+	address.text = "127.0.0.1"
+	address.placeholder_text = "Host's IP address"
+	address.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var join := Button.new()
+	join.text = "Join"
+	join.custom_minimum_size = Vector2(90, 36)
+	join.pressed.connect(func() -> void:
+		Network.join(address.text)
+		close() # loading the host's world; play when it's in
+	)
+	row.add_child(address)
+	row.add_child(join)
+	vbox.add_child(row)
+	var leave := Button.new()
+	leave.text = "Leave (back to playing alone)"
+	leave.custom_minimum_size = Vector2(0, 36)
+	leave.pressed.connect(func() -> void: Network.leave())
+	vbox.add_child(leave)
+	var help := Label.new()
+	help.text = "Playing alone? Run two copies of the game: Host in one, Join 127.0.0.1 in the other.\nOver the internet the host forwards UDP port %d on their router." % Network.PORT
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.add_theme_font_size_override("font_size", 13)
+	vbox.add_child(help)
+	_finish_sub_panel(vbox)
+	var coop_button := Button.new()
+	coop_button.text = "Co-op"
+	coop_button.custom_minimum_size = audio_button.custom_minimum_size
+	audio_button.get_parent().add_child(coop_button)
+	audio_button.get_parent().move_child(coop_button, audio_button.get_index())
+	coop_button.pressed.connect(func() -> void:
+		menu_panel.visible = false
+		_coop_panel.visible = true
+	)
 
 
 func _on_audio_slider_changed(percent: float, bus: String) -> void:

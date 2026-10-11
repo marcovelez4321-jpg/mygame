@@ -83,6 +83,7 @@ func _find_player() -> void:
 	_player_health = player.get_node("Health") as Health
 	_player_health.damaged.connect(_on_player_damaged)
 	_player_health.died.connect(_on_player_died)
+	player.respawned.connect(func() -> void: death_label.visible = false)
 
 
 func _process(_delta: float) -> void:

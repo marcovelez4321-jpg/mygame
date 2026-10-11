@@ -63,9 +63,18 @@ class Settings:
 
 
 ## Blows up at `center`. Returns who was hurt (not counting the attacker).
+## Co-op: only the host's explosion hurts or pushes anything (a client's own
+## rocket still blows up on its screen the instant it lands); the host sends
+## its look to everyone who didn't fire it.
 static func explode(world: Node3D, center: Vector3, settings: Settings) -> Array[Hit]:
+	if not world.multiplayer.is_server():
+		play_effects(world, center, settings.radius, settings.knockback)
+		var none: Array[Hit] = []
+		return none
 	var hits := _apply_damage_and_push(world, center, settings)
 	play_effects(world, center, settings.radius, settings.knockback)
+	if Network.is_online():
+		Network.send_explosion(center, settings.radius, settings.knockback, settings.attacker_id)
 	return hits
 
 

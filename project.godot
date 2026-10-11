@@ -24,6 +24,7 @@ buses/default_bus_layout="uid://c7rqaqmls4uen"
 GameSettings="*res://scripts/game_settings.gd"
 SewerLook="*res://scenes/sewer_look.tscn"
 PauseMenu="*res://scenes/ui/pause_menu.tscn"
+Network="*res://scripts/net/network.gd"
 PS1Dither="*res://scenes/ui/ps1_dither.tscn"
 FrameCounter="*res://scripts/ui/frame_counter.gd"
 
