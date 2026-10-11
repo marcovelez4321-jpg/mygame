@@ -13,6 +13,13 @@ extends Node3D
 ##     surface (two dust emitters used in turn, one rubble emitter);
 ##   - a low rumble loop from its head while it's underground, louder the
 ##     closer it is (3D falloff does the "closer" part).
+## On the open world's terrain (the user's: everything follows the land),
+## the dirt's every vertex sits on the real ground under it -- the shader
+## reads Terrain3D's own height maps (link_terrain() copies them over) -- so
+## the mound, its bow wave and the furrow hug hills, dips and slopes; the
+## landing ring and the dust bursts sit on the ground and tilt with it
+## (ground(): Terrain3D's height and normal there, no raycast). On a level's
+## floor (no terrain) they stay flat, as before.
 ## Optimisation: every mesh, material and particle setup is made once and
 ## shared by every worm (static); a worm's emitters are only created the
 ## first time it breaks the surface; nothing casts shadows; no raycasts.
@@ -63,6 +70,14 @@ static var _fall_process: ParticleProcessMaterial
 static var _ring_mesh: TorusMesh
 static var _ring_material: StandardMaterial3D
 
+## Terrain3D's private uniforms the dirt shader reads the ground from.
+const TERRAIN_UNIFORMS: Array[StringName] = [&"_vertex_density", &"_region_size", &"_region_texel_size",
+		&"_region_map_size", &"_region_map", &"_height_maps"]
+## The terrain whose height maps the dirt has (its instance id), and the
+## one found in this scene (weak: scenes change).
+static var _linked_terrain := 0
+static var _terrain: WeakRef
+static var _terrain_looked_msec := -100000
 ## Instance 0 = the mound, 1..FURROW_COUNT = the furrow's patches.
 var _dirt: MultiMeshInstance3D
 ## Each furrow patch: when it was laid (seconds, -1 = gone), where (its full
@@ -85,6 +100,8 @@ var _ring: MeshInstance3D
 var _ring_tween: Tween
 var _fall: GPUParticles3D
 var _tremor_left := 0.0
+## Under the open world's terrain this frame (follow()).
+var _on_terrain := false
 var _drool_left := 0.0
 var _shed_left := 0.0
 
@@ -134,9 +151,13 @@ func _ready() -> void:
 ## floor line (`underground` covers that too: the worm says so), with clods
 ## and dust streaming off it; the furrow laid behind it and settling; and the
 ## rumble while it's under.
-func follow(head: Vector3, velocity: Vector3, ground_y: float, max_depth: float, radius: float, underground: bool) -> void:
+## `on_terrain`: it's under the open world's terrain (not a level's floor), so
+## the dirt follows the ground's shape.
+func follow(head: Vector3, velocity: Vector3, ground_y: float, max_depth: float, radius: float, underground: bool,
+		on_terrain: bool = false) -> void:
 	var depth := ground_y - head.y
 	var active := underground and depth > -radius * 0.5 and depth < max_depth
+	_on_terrain = on_terrain and link_terrain(self)
 	var flat := Vector3(velocity.x, 0.0, velocity.z)
 	if flat.length_squared() > 0.01:
 		_facing = Basis.looking_at(flat.normalized(), Vector3.UP)
@@ -150,7 +171,9 @@ func follow(head: Vector3, velocity: Vector3, ground_y: float, max_depth: float,
 		var width := radius * 2.6 * (0.6 + 0.4 * near)
 		var mound := Transform3D(_facing * Basis.from_scale(Vector3(width, 1.0, width * 1.5)), floor_point)
 		multimesh.set_instance_transform(0, mound)
-		multimesh.set_instance_custom_data(0, Color(radius * 1.1 * near * emerge, 0.37, 1.0, 0.0))
+		multimesh.set_instance_custom_data(0, Color(radius * 1.1 * near * emerge, 0.37, 1.0, 2.0 if _on_terrain else 0.0))
+		if _on_terrain:
+			floor_point = ground(self, floor_point.x, floor_point.z, floor_point.y)[0]
 		var stream := Transform3D(_facing.scaled(Vector3.ONE * size), floor_point + Vector3.UP * 0.1)
 		_clods.global_transform = stream
 		_haze.global_transform = stream
@@ -186,7 +209,7 @@ func _lay_furrow(floor_point: Vector3, radius: float, near: float) -> void:
 	_furrow_born[i] = Time.get_ticks_msec() * 0.001
 	_furrow_place[i] = place
 	_furrow_height[i] = radius * 0.4 * (0.5 + 0.5 * near)
-	_dirt.multimesh.set_instance_custom_data(i + 1, Color(_furrow_height[i], randf() * 10.0, 0.0, 1.0))
+	_dirt.multimesh.set_instance_custom_data(i + 1, Color(_furrow_height[i], randf() * 10.0, 0.0, 3.0 if _on_terrain else 1.0))
 
 
 ## Every patch settles: its ridges sink flat over the second half of
@@ -267,14 +290,19 @@ func shockwave(at: Vector3, radius: float) -> void:
 	if _ring_tween:
 		_ring_tween.kill()
 	_ring.visible = true
-	_ring.global_position = at + Vector3.UP * 0.15
-	_ring.scale = Vector3(0.5, 1.0, 0.5)
+	# Lying on the ground there, tilted with it (on the terrain).
+	var normal := Vector3.UP
+	if _on_terrain:
+		var spot: Array = ground(self, at.x, at.z, at.y)
+		at = spot[0]
+		normal = spot[1]
+	_ring.global_transform = Transform3D(_up_basis(normal) * Basis.from_scale(Vector3(0.5, 1.0, 0.5)), at + normal * 0.25)
 	_ring.transparency = 0.0
 	_ring_tween = create_tween()
 	_ring_tween.tween_property(_ring, "scale", Vector3(radius, 1.5, radius), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_ring_tween.parallel().tween_property(_ring, "transparency", 1.0, 0.45).set_ease(Tween.EASE_IN)
 	_ring_tween.tween_callback(func() -> void: _ring.visible = false)
-	burst(at, Vector3.UP)
+	burst(at, normal)
 
 
 ## Passing under the floor at `surface` (the floor point above it): every
@@ -385,6 +413,58 @@ func _make_stream(process: ParticleProcessMaterial, mesh: Mesh, amount: int, lif
 	emitter.explosiveness = 0.0
 	emitter.randomness = 0.5
 	return emitter
+
+
+## The open world's ground at (x, z): [the point on it, which way it faces],
+## from Terrain3D's own data (no raycast); [(x, fallback_y, z), up] where
+## there's no terrain (a level, a hole, off its edge).
+static func ground(node: Node, x: float, z: float, fallback_y: float) -> Array:
+	var terrain := _find_terrain(node)
+	if terrain:
+		var data: Object = terrain.call(&"get_data")
+		if data:
+			var probe := Vector3(x, 0.0, z)
+			var height: float = data.call(&"get_height", probe)
+			if not is_nan(height) and is_finite(height):
+				var normal: Vector3 = data.call(&"get_normal", probe)
+				if not normal.is_finite() or normal.length_squared() < 0.01:
+					normal = Vector3.UP
+				return [Vector3(x, height, z), normal.normalized()]
+	return [Vector3(x, fallback_y, z), Vector3.UP]
+
+
+## Gives the dirt material the terrain's height maps (once per terrain).
+## False if this scene has no terrain.
+static func link_terrain(node: Node) -> bool:
+	var terrain := _find_terrain(node)
+	if terrain == null:
+		return false
+	if _linked_terrain == terrain.get_instance_id():
+		return true
+	var material: Object = terrain.call(&"get_material")
+	if material == null or _dirt_material == null:
+		return false
+	var source: RID = material.call(&"get_material_rid")
+	for uniform in TERRAIN_UNIFORMS:
+		RenderingServer.material_set_param(_dirt_material.get_rid(), uniform, RenderingServer.material_get_param(source, uniform))
+	_linked_terrain = terrain.get_instance_id()
+	return true
+
+
+## The scene's Terrain3D, or null (looked for at most once a second).
+static func _find_terrain(node: Node) -> Node:
+	if _terrain and is_instance_valid(_terrain.get_ref()):
+		return _terrain.get_ref() as Node
+	if Time.get_ticks_msec() - _terrain_looked_msec < 1000 or not node.is_inside_tree():
+		return null
+	_terrain_looked_msec = Time.get_ticks_msec()
+	var scene := node.get_tree().current_scene
+	var found := scene.find_children("*", "Terrain3D", true, false) if scene else []
+	if found.is_empty():
+		return null
+	_terrain = weakref(found[0])
+	_linked_terrain = 0
+	return found[0]
 
 
 static func _up_basis(normal: Vector3) -> Basis:

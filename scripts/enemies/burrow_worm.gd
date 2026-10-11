@@ -315,6 +315,9 @@ var _radii := PackedFloat32Array()
 var _below := PackedByteArray() # each segment under the floor plane last tick
 var _vel := Vector3.ZERO
 var _ground_y := 0.0
+## The ground under its head is the open world's terrain (not a level's
+## floor): its dirt and dust follow the land's shape (WormFX).
+var _on_terrain := false
 var _home := Vector3.ZERO
 var _inside := true
 var _wander_to := Vector3.ZERO
@@ -383,6 +386,10 @@ func _apply_size() -> void:
 	hop_height *= size
 	plough_start_range *= size
 	shockwave_radius *= size
+	# The throw grows with it too (it didn't: a 2x worm's ring reached twice
+	# as far with the push of a ring half its size, and barely moved anyone).
+	shockwave_force *= size
+	shockwave_lift *= size
 	brood_spread *= size
 	puke_spread *= size
 	rumble_range *= size
@@ -698,7 +705,7 @@ func _physics_process(delta: float) -> void:
 	_contact(delta)
 	_time += delta
 	_place_segments()
-	_fx.follow(_pos[0], _vel, _ground_y, lurk_depth + 2.0, _radii[0], _pos[0].y < _ground_y or _phase == Phase.PLOUGH)
+	_fx.follow(_pos[0], _vel, _ground_y, lurk_depth + 2.0, _radii[0], _pos[0].y < _ground_y or _phase == Phase.PLOUGH, _on_terrain)
 	_jaw_fx(delta)
 	if _phase == Phase.PLOUGH:
 		_plough_furrow(delta)
@@ -791,7 +798,8 @@ func _update_phase(head: Vector3, delta: float) -> void:
 				# Done: back down, on and round for the next attack.
 				_phase = Phase.DIVE
 				_phase_left = dive_time
-				_fx.burst(Vector3(head.x, _ground_y, head.z), Vector3.UP)
+				var spot := _surface(head.x, head.z)
+				_fx.burst(spot[0], spot[1])
 	_fx.rumble_boost(windup_rumble_boost * (1.0 - clampf(_phase_left / maxf(windup_time, 0.01), 0.0, 1.0)) if _phase == Phase.WINDUP else 0.0)
 
 
@@ -1104,7 +1112,10 @@ func _shockwave(at: Vector3) -> void:
 		if falloff <= 0.0:
 			continue
 		var out := away / distance if distance > 0.01 else Vector3.FORWARD
-		var push := out * shockwave_force * falloff + Vector3.UP * shockwave_lift * falloff
+		# Players are thrown hard over most of the ring, fading only near its
+		# edge (squared, not straight-line): a landing sends you flying.
+		var throw := 1.0 - pow(distance / shockwave_radius, 2.0) if body is PlayerMovement else falloff
+		var push := out * shockwave_force * throw + Vector3.UP * shockwave_lift * throw
 		var body_health := body.get_node_or_null("Health") as Health
 		if body is PlayerMovement:
 			if body_health and shockwave_damage > 0.0:
@@ -1188,7 +1199,8 @@ func _plough_furrow(delta: float) -> void:
 	_plough_cloud_left -= delta
 	if _plough_cloud_left <= 0.0:
 		_plough_cloud_left = 0.45
-		_fx.burst(surface, Vector3.UP)
+		var spot := _surface(surface.x, surface.z)
+		_fx.burst(spot[0], spot[1])
 		SoundPlayer.play_3d(breach_sound, surface, world, 0.5)
 
 
@@ -1357,8 +1369,17 @@ func _nearest_player() -> Node3D:
 func _follow_ground(head: Vector3) -> void:
 	var top := Vector3(head.x, maxf(head.y, _ground_y) + 6.0, head.z)
 	var hit := _static_ray(top, Vector3(head.x, minf(head.y, _ground_y) - 8.0, head.z))
-	if not hit.is_empty() and LevelGeometry.is_terrain(hit.collider):
+	_on_terrain = not hit.is_empty() and LevelGeometry.is_terrain(hit.collider)
+	if _on_terrain:
 		_ground_y = (hit.position as Vector3).y
+
+
+## The ground at (x, z): [point, facing] -- the terrain's own there when it's
+## on the open world's terrain, else its floor level, facing up.
+func _surface(x: float, z: float) -> Array:
+	if _on_terrain:
+		return WormFX.ground(self, x, z, _ground_y)
+	return [Vector3(x, _ground_y, z), Vector3.UP]
 
 
 ## In the ground: under the floor it lives in, or inside level geometry (a
@@ -1423,7 +1444,8 @@ func _crossings() -> void:
 	for i in range(1, _pos.size()):
 		var below := 1 if _pos[i].y < _ground_y else 0
 		if below != _below[i] and i % 4 == 0:
-			BloodFX.spawn_impact(world, Vector3(_pos[i].x, _ground_y + 0.05, _pos[i].z), Vector3.UP, dirt_color, 1.0)
+			var spot := _surface(_pos[i].x, _pos[i].z)
+			BloodFX.spawn_impact(world, (spot[0] as Vector3) + (spot[1] as Vector3) * 0.05, spot[1], dirt_color, 1.0)
 		_below[i] = below
 
 
@@ -1437,8 +1459,9 @@ func _trail(delta: float) -> void:
 	if _trail_left > 0.0:
 		return
 	_trail_left = trail_interval
-	var surface := Vector3(head.x, _ground_y + 0.05, head.z)
-	BloodFX.spawn_impact(get_tree().current_scene, surface, Vector3.UP, dirt_color, 0.75)
+	var spot := _surface(head.x, head.z)
+	var surface := (spot[0] as Vector3) + (spot[1] as Vector3) * 0.05
+	BloodFX.spawn_impact(get_tree().current_scene, surface, spot[1], dirt_color, 0.75)
 	_shake_near(surface, rumble, rumble_range)
 
 

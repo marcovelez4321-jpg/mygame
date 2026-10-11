@@ -40,6 +40,7 @@ const AUDIO_BUS_LABELS := {
 	"Player": "Player",
 	"Hits": "Hit Feedback",
 	"Ambience": "Ambience",
+	"Music": "Music",
 }
 ## Slider range in percent; 100 sits in the middle so any category can be
 ## turned up as well as down.

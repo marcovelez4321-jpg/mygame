@@ -69,7 +69,7 @@ const HIVE_HOLES := 3 # a hall
 const PANIC_FLIGHTS := 30
 const PANIC_HEIGHT := 0.6
 const PANIC_WIDTH := 6.0
-## Cobwebs: one for about every three halls inside, two outside a tower;
+## Cobwebs: one for about every two halls inside, two outside a tower;
 ## this many of the inside ones huge.
 const WEB_HUGE_CHANCE := 0.15
 const WEBS_OUTSIDE := 2
@@ -1509,7 +1509,7 @@ static func _segment_gap(p1: Vector3, q1: Vector3, p2: Vector3, q2: Vector3) -> 
 	return (p1 + d1 * s).distance_to(p2 + d2 * t)
 
 
-## Cobwebs (the user's): rare, still, pale. Inside, about one for every three
+## Cobwebs (the user's): rare, still, pale. Inside, about one for every two
 ## halls, strung across a corner of a hall or a window room -- most 2-6 m
 ## across, now and then (in a hall) one 15-30 m. Outside, two a tower,
 ## huge (15-30 m), across the corner where a block's top meets the wall
@@ -1520,7 +1520,8 @@ func _cobwebs() -> void:
 		spots.append([hall.box, true])
 	for w in window_rooms:
 		spots.append([w.room, false])
-	var count := roundi(halls.size() / 3.0)
+	# One for about every two halls inside (50% more than every three: the user's).
+	var count := roundi(halls.size() / 2.0)
 	var placed := 0
 	var tries := 0
 	while placed < count and tries < count * 12:

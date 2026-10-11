@@ -19,9 +19,11 @@ enum OutlineMode { LOOKING, ALWAYS, OFF }
 enum TentacleStyle { SYMBIOTE, FLESH_WORM, SPIDER_HORDE }
 
 ## Every audio bus the pause menu's Audio panel shows a slider for, in order:
-## Master, then one per audio/sfx folder (default_bus_layout.tres).
+## Master, then one per audio/sfx folder (default_bus_layout.tres), then
+## Music (the radios' songs: kept apart from Ambience's stings, but through
+## the same SFX crunch as everything else -- the user's).
 const AUDIO_BUSES: Array[String] = ["Master", "Body", "Surface", "Gore", "Props",
-		"Weapons", "Enemies", "Player", "Hits", "Ambience"]
+		"Weapons", "Enemies", "Player", "Hits", "Ambience", "Music"]
 
 var resolution: Vector2i = Vector2i(1280, 720)
 var window_mode: WindowMode = WindowMode.WINDOWED

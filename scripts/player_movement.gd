@@ -735,6 +735,17 @@ func _absorb_recoil_compensation(look_delta: Vector2) -> void:
 ## way (Rule 1). Shoves arriving in the same tick add up.
 func shove(push: Vector3) -> void:
 	_pending_shove += push
+	# Co-op: a client's own game is moving this body too (prediction), so it
+	# gets the same shove -- otherwise it'd be dragged there by corrections
+	# instead of thrown.
+	if Network.is_online() and multiplayer.is_server() and not is_multiplayer_authority():
+		_net_shove.rpc_id(get_multiplayer_authority(), push)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_shove(push: Vector3) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		_pending_shove += push
 
 
 ## Cancels whatever speed you had heading INTO the shove (running at the

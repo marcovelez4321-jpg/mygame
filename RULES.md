@@ -1312,3 +1312,16 @@ them:
     - Both buses feed Ambience (its volume slider).
   - **Cheap:** a radio only plays within 220 m (checked twice a second). Coming back, it picks the song up where it would be by now, as if it never stopped.
   - Checked headless: all 4 models build with collision, both voices play a song from the folder, and the buses are made.
+
+- 2026-10-11: **Worm dirt follows the land; the shockwave throws again; more inside cobwebs; a Music slider.**
+  - **Worm effects on the terrain** (the user's ask: the mound, the dirt it pushes, its holes, all following the land, not one flat level).
+    - The dirt shader (`worm_dirt.gdshader`) now reads Terrain3D's own height maps: its private uniforms, copied from the terrain's material by `WormFX.link_terrain()`. Every vertex of the mound, bow wave and furrow sits on the real ground under it (bilinear between the terrain's vertices), with the dirt's height on top; normals include the ground's slope.
+    - Only under the open world's terrain (custom.w + 2, from `BurrowWorm._on_terrain`). A level's floor and a cave stay flat, as before.
+    - The landing ring lies on the ground and tilts with it.
+    - Dust bursts, the trail puffs and the body's crossing puffs sit on the real ground under each point, facing its slope (`WormFX.ground()`: Terrain3D's height and normal, no raycasts). Breach holes already used the hit surface.
+  - **The shockwave didn't throw anyone** (the user's report). A bug from making the boss 2x: `_apply_size` doubled `shockwave_radius` but not `shockwave_force`/`shockwave_lift`, so a 24 m ring pushed like a 12 m one, and ground friction ate it.
+    - Fixed: the throw scales with size too (the boss: 28 m/s out, 20 up at the middle).
+    - Players get a squared falloff (strong over most of the ring), so a landing sends you flying.
+    - Co-op: the host also sends the shove to the player's own game (`PlayerMovement._net_shove`), so they're thrown, not dragged back by corrections.
+  - **Inside cobwebs 50% more common** (the user's): about one for every two halls (13 inside this build, was 8).
+  - **Music has its own slider** (the user's): a Music bus (`default_bus_layout.tres`, `GameSettings.AUDIO_BUSES`). The radios feed it instead of Ambience, so the ambient stings and the music are set separately. It goes through the SFX bus's PS1 crunch like everything else (the user's).

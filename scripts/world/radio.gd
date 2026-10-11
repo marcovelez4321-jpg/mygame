@@ -13,6 +13,7 @@ extends RigidBody3D
 ##   an old speaker), heard out to voice_reach;
 ##   the hall's ECHO (bus RadioEcho: muffled, delayed, a huge reverb), heard
 ##   out to echo_reach, fading as you come close (echo_near_db..echo_far_db).
+## Both feed the Music bus: its own volume slider, apart from Ambience.
 ## A radio only plays while you're within echo_reach (+ a margin); when you
 ## come back it picks the song up where it "would be" by now, like a
 ## broadcast that never stopped -- so a building full of them costs nothing
@@ -175,8 +176,8 @@ static func _load_songs() -> Array[AudioStream]:
 
 ## The two radio buses, made once: the VOICE an old speaker (no lows, no
 ## highs, a little lo-fi grit); the ECHO the halls (muffled, two long
-## delays, a vast reverb, all wet). Both feed Ambience, so its volume
-## slider sets theirs.
+## delays, a vast reverb, all wet). Both feed Music, so its volume slider
+## sets theirs (not Ambience's: the user's).
 static func _ensure_buses() -> void:
 	if AudioServer.get_bus_index(VOICE_BUS) == -1:
 		var voice := _add_bus(VOICE_BUS)
@@ -221,6 +222,6 @@ static func _add_bus(bus_name: StringName) -> int:
 	AudioServer.add_bus()
 	var index := AudioServer.bus_count - 1
 	AudioServer.set_bus_name(index, bus_name)
-	var send := &"Ambience" if AudioServer.get_bus_index(&"Ambience") != -1 else &"Master"
+	var send := &"Music" if AudioServer.get_bus_index(&"Music") != -1 else &"Master"
 	AudioServer.set_bus_send(index, send)
 	return index

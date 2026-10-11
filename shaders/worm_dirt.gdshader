@@ -7,7 +7,11 @@ shader_type spatial;
 //   INSTANCE_CUSTOM.z = churn: 1 = turning over (the moving mound), 0 = settled
 //   INSTANCE_CUSTOM.w = shape: 0 = mound (a dome with a steep bow wave at the
 //                       front), 1 = furrow (two loose ridges either side of a
-//                       dark trough)
+//                       dark trough); +2 = on the open world's terrain: then
+//                       every vertex sits on the real ground under it (read
+//                       from Terrain3D's own height maps, the uniforms below,
+//                       which WormFX copies over from the terrain), so the dirt
+//                       follows hills, dips and slopes, not one flat level.
 // The lumps come from noise in WORLD space, so as the mound moves the ground
 // seems to heave up and fall back as it passes, instead of a bump sliding
 // over it. The dirt texture is mapped in world space too (it stays put on the
@@ -27,6 +31,14 @@ uniform float lump_size = 0.45;
 uniform float lump_amount = 0.45;
 uniform float churn_speed = 0.9;
 uniform float snap_resolution : hint_range(16.0, 320.0) = 160.0;
+// Terrain3D's height maps and region layout (its private uniforms, the same
+// names; copied from the terrain's material by WormFX).
+uniform float _vertex_density = 1.0;
+uniform float _region_size = 1024.0;
+uniform float _region_texel_size = 0.0009765625;
+uniform int _region_map_size = 32;
+uniform int _region_map[1024];
+uniform highp sampler2DArray _height_maps : repeat_disable;
 
 varying vec3 world_pos;
 varying float shade;
@@ -72,11 +84,49 @@ float furrow_cover(vec2 p) {
 	return (1.0 - smoothstep(0.75, 0.95, abs(p.x))) * (1.0 - smoothstep(0.7, 1.0, abs(p.y)));
 }
 
+float shape_of(vec4 custom) {
+	return mod(custom.w, 2.0);
+}
+
+// One height-map texel (vertex units), or `fallback` off the terrain.
+float terrain_texel(vec2 texel, float fallback) {
+	ivec2 region = ivec2(floor(texel * _region_texel_size)) + (_region_map_size / 2);
+	int inside = int(uint(region.x | region.y) < uint(_region_map_size));
+	int layer = _region_map[region.y * _region_map_size + region.x] * inside - 1;
+	if (layer < 0) {
+		return fallback;
+	}
+	return texelFetch(_height_maps, ivec3(ivec2(mod(texel, _region_size)), layer), 0).r;
+}
+
+// The terrain's height at world x/z, between its four nearest vertices.
+float terrain_height(vec2 world_xz, float fallback) {
+	vec2 uv = world_xz * _vertex_density;
+	vec2 base = floor(uv);
+	vec2 f = uv - base;
+	float a = terrain_texel(base, fallback);
+	float b = terrain_texel(base + vec2(1.0, 0.0), fallback);
+	float c = terrain_texel(base + vec2(0.0, 1.0), fallback);
+	float d = terrain_texel(base + vec2(1.0, 1.0), fallback);
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// How far the ground under plane point `local` is above (or below) the
+// copy's own origin: 0 off the terrain (a level's floor is flat).
+float lift_at(vec2 local, mat4 model, vec4 custom) {
+	if (custom.w < 1.5) {
+		return 0.0;
+	}
+	float origin_y = model[3].y;
+	vec2 world_xz = (model * vec4(local.x, 0.0, local.y, 1.0)).xz;
+	return terrain_height(world_xz, origin_y) - origin_y;
+}
+
 // Height (meters) at plane point `local` (the mesh's own x/z, -0.5..0.5).
 float height_at(vec2 local, mat4 model, vec4 custom, float time) {
 	vec2 p = local * 2.0;
 	vec2 world_xz = (model * vec4(local.x, 0.0, local.y, 1.0)).xz;
-	float shape = mix(dome(p), furrow_ridges(p), custom.w);
+	float shape = mix(dome(p), furrow_ridges(p), shape_of(custom));
 	float lump = lumps(world_xz, custom.y, custom.z, time);
 	return shape * custom.x * (1.0 + lump_amount * lump);
 }
@@ -90,20 +140,24 @@ void vertex() {
 	float rim = lumps((MODEL_MATRIX * vec4(VERTEX, 1.0)).xz * 2.0, custom.y + 3.0, 0.0, 0.0) * 0.12;
 	float mound_cover = dome(p) - 0.04 + rim;
 	float trail_cover = furrow_cover(p) - 0.04 + rim;
-	cover = mix(mound_cover, trail_cover, custom.w);
-	// Outside it: under the floor, out of sight.
-	VERTEX.y = cover > 0.0 ? max(h, 0.0) + 0.02 : -0.05;
-	// Normals from the slope (the mesh's own space: the copy's stretch is
-	// taken care of by the normal matrix).
+	float shape = shape_of(custom);
+	cover = mix(mound_cover, trail_cover, shape);
+	// On the ground under it (the terrain's, where it's on the terrain);
+	// outside it, just under the ground, out of sight.
+	VERTEX.y = (cover > 0.0 ? max(h, 0.0) + 0.06 : -0.08) + lift_at(local, MODEL_MATRIX, custom);
+	// Normals from the slope -- the dirt's and the ground's (the mesh's own
+	// space: the copy's stretch is taken care of by the normal matrix).
 	float e = 0.03;
-	float hx = height_at(local + vec2(e, 0.0), MODEL_MATRIX, custom, TIME) - height_at(local - vec2(e, 0.0), MODEL_MATRIX, custom, TIME);
-	float hz = height_at(local + vec2(0.0, e), MODEL_MATRIX, custom, TIME) - height_at(local - vec2(0.0, e), MODEL_MATRIX, custom, TIME);
+	float hx = height_at(local + vec2(e, 0.0), MODEL_MATRIX, custom, TIME) + lift_at(local + vec2(e, 0.0), MODEL_MATRIX, custom)
+			- height_at(local - vec2(e, 0.0), MODEL_MATRIX, custom, TIME) - lift_at(local - vec2(e, 0.0), MODEL_MATRIX, custom);
+	float hz = height_at(local + vec2(0.0, e), MODEL_MATRIX, custom, TIME) + lift_at(local + vec2(0.0, e), MODEL_MATRIX, custom)
+			- height_at(local - vec2(0.0, e), MODEL_MATRIX, custom, TIME) - lift_at(local - vec2(0.0, e), MODEL_MATRIX, custom);
 	NORMAL = normalize(vec3(-hx / (2.0 * e), 1.0, -hz / (2.0 * e)));
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// Darker in the dips and down the middle of a furrow (loose, damp dirt
 	// turned up from below), lighter on the crests.
 	float crest = clamp(h / max(custom.x, 0.001), 0.0, 1.0);
-	float trough = custom.w * (1.0 - smoothstep(0.15, 0.45, abs(p.x)));
+	float trough = shape * (1.0 - smoothstep(0.15, 0.45, abs(p.x)));
 	shade = mix(0.55, 1.05, crest) * (1.0 - 0.35 * trough);
 
 	vec4 clip_position = PROJECTION_MATRIX * (MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
