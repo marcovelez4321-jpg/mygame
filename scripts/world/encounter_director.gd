@@ -11,8 +11,9 @@ extends Node
 ##   ground, away from the yard and other bands -- heading somewhere.
 ##   What comes depends on the biome there (sewer: more rats and roaches;
 ##   reef: more spiders and Harvestmen): a rat swarm, a roach swarm, a
-##   spider pack, or 2-3 Harvestmen.
-##   CAMPS: the tweakers (people) only live at the megastructures. Coming
+##   spider pack, 2-3 Harvestmen, or a gang of tweakers (people,
+##   gang_min..gang_max, about 1 band in 7 in either biome: the user's).
+##   CAMPS: the megastructures also have their own tweakers. Coming
 ##   within camp_range of one, a big gang (camp_min..camp_max) is there --
 ##   set up on its far side from you -- patrolling round it, not wandering
 ##   off. Wipe a camp out and that structure stays empty for camp_rest.
@@ -35,6 +36,9 @@ extends Node
 @export var clear_radius: float = 100.0
 ## Which biome is where (empty = the sewer everywhere).
 @export var biomes: BiomeMap
+## A roaming gang of tweakers: this many (the user's).
+@export var gang_min: int = 6
+@export var gang_max: int = 12
 @export_group("Camps")
 ## A megastructure is one this tall (metres); within camp_range of a player
 ## it has a camp of camp_min..camp_max tweakers; wiped out, it stays empty
@@ -49,9 +53,10 @@ extends Node
 
 enum Band { TWEAKERS, RATS, ROACHES, SPIDERS, HARVESTMEN }
 
-## How likely each roaming band is: [sewer, reef] weights. (Tweakers don't
-## roam: they're camps.)
+## How likely each roaming band is: [sewer, reef] weights. Tweakers 1.5 in
+## both: about 1 band in 7 either way (the user's).
 const WEIGHTS := {
+	Band.TWEAKERS: [1.5, 1.5],
 	Band.RATS: [3.0, 1.0],
 	Band.ROACHES: [3.0, 2.0],
 	Band.SPIDERS: [2.0, 3.0],
@@ -209,6 +214,9 @@ func _start_band(player: Node3D) -> void:
 	group.position = spot # the world's root sits at the origin
 	get_tree().current_scene.add_child(group)
 	match band:
+		Band.TWEAKERS:
+			for i in randi_range(gang_min, gang_max):
+				_add(group, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), i)
 		Band.RATS:
 			var nest := RAT_NEST.instantiate() as RatNest
 			nest.rat_count = randi_range(5, 9) # x2: a leaderless pack (RatNest)

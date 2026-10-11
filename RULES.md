@@ -1235,3 +1235,5 @@ them:
     - **Spiders at every web** (`Megastructure.webs`, `_update_webs`, host only): a SpiderPack in a RoamingGroup patrolling round the web. 4-8 spiders for a 2 m web, up to 20-30 for a 30 m one. Patrol radius 20-50 m by size (outside, kept within the ledge). Magnified indoors like the rest of the infestation. Each horde is there while a player is within 120 m of its patrol and gone once everyone has left, like the floor nests.
   - Test world: the Stack's plateau widened to 560 m (`STACK_PLATEAU`; the hive's far corner is ~530 m out). It takes effect on the next test-world bake.
   - Counts: 25 halls, 36 window rooms, 28 skybridges (19 as drawn, 9 moved, 6 left out), 3,387 indoor growths in 189 batches.
+
+- 2026-10-11: **Human gangs roam the whole map** (the user's ask; every number the user's). The EncounterDirector's bands can now be a gang of tweakers (`Band.TWEAKERS`): `gang_min`..`gang_max` = 6-12, weight 1.5 in both biomes (about 1 band in 7: 14% in the sewer, 16% in the reef). The megastructure camps stay as they were.
