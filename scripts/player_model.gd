@@ -137,12 +137,12 @@ func _wear_backpack(skeleton: Skeleton3D) -> void:
 	bag.material_override = BackpackView.pack_material()
 	attachment.add_child(bag)
 	# Sized and placed in the body's own terms: on the back (+Z: the player
-	# faces -Z), its straps (the pack's +x) against it, a little below the
+	# faces -Z), its straps (the pack's -x) against it, a little below the
 	# bone, upright, whatever the bone's turn.
 	var box := mesh.get_aabb()
 	var size := BACKPACK_HEIGHT / maxf(box.size.y, 0.001)
 	var body := _player.global_transform
-	var facing := body.basis.orthonormalized() * Basis(Vector3.UP, PI * 0.5) # pack +x -> body -Z (toward the back)
+	var facing := body.basis.orthonormalized() * Basis(Vector3.UP, -PI * 0.5) # pack -x (straps) -> body -Z (toward the back)
 	var chest := skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin
 	var place := chest + body.basis.z.normalized() * (0.12 + box.size.x * size * 0.5) - body.basis.y.normalized() * 0.08
 	bag.global_transform = Transform3D(facing.scaled(Vector3.ONE * size), place - facing * (box.get_center() * size))

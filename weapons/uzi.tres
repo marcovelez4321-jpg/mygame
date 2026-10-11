@@ -25,6 +25,7 @@ recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-
 recoil_scale = 3.0
 recoil_jitter = 0.4
 carry_weight = 2.5
+backpack_length = 0.36
 one_handed = true
 arms_fitted = true
 grip_point = Vector3(-0.035, -0.25, -0.4)

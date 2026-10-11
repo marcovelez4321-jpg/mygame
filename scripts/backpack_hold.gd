@@ -35,13 +35,3 @@ extends Resource
 ## Which way the elbow points (camera space), and its bend (degrees).
 @export var elbow_direction: Vector3 = Vector3(-0.7, -1.0, 0.3)
 @export_range(40.0, 170.0, 1.0) var elbow_degrees: float = 100.0
-
-@export_group("Items")
-## The space the items tumble about in (bag space, shares of the bag's size
-## from its middle): the main compartment, measured off the model -- inside
-## its walls (not the straps' side, at +x), from a false bottom a little
-## way up (the user's: deep in) up to just below where it's unzipped to.
-## Tuned live: O, then X (a yellow wireframe shows it).
-@export var items_area: AABB = AABB(Vector3(-0.40, -0.32, -0.40), Vector3(0.69, 0.57, 0.79))
-## How big each item prop is drawn (metres, its longest side).
-@export var item_size: float = 0.084

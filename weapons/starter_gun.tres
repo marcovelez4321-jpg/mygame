@@ -16,6 +16,7 @@ recoil_scale = 4.0
 recoil_jitter = 0.32
 aim_position = Vector3(-0.00096765015, -0.11331543, -0.3)
 carry_weight = 1.0
+backpack_length = 0.22
 one_handed = true
 arms_fitted = true
 grip_point = Vector3(0.05289026, -0.03200796, 0.023460455)

@@ -189,6 +189,9 @@ enum ReloadStyle {
 ## What it weighs in your backpack, kg (the user's: each gun its own --
 ## Backpack.weight(); a heavy pack slows you down).
 @export var carry_weight: float = 3.5
+## How long it is lying in your backpack (metres; 0 = as long as fits
+## across the bag's floor -- the user's: a long gun takes up room).
+@export var backpack_length: float = 0.0
 
 @export_group("Switching")
 ## Seconds to bring this weapon up after choosing it. You can't fire during

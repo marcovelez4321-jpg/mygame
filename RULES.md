@@ -1442,3 +1442,11 @@ them:
   - The camp kit's sleeping pad still comes from the forest props (`FOREST_SCENE`).
   - Also noted for the camps step (docs/CLIMB_VISION.md): the tent saves, the bedroll sleeps, each its own recipe; in the backpack both show as the rolled sleeping bag. The survival pack has no tent -- to ask then.
   - Not compiled or run (asks first).
+- **Backpack items: real rigid bodies in the pack's own shape (2026-10-11).** The user's: the box container wasn't doing it (the shape should match the model, nothing to fit by hand); items should tumble over each other naturally, at about their real size, the long gun taking real room; the new pack exactly where the old one was, same size.
+  - **Where it sits:** the 180-degree turn added with the swap was wrong -- both packs have their straps at -x upright -- so it's gone: the new pack's middle, size (0.608 m vs 0.609) and facing match the old one's. On your back its straps now face your back (it was being worn sideways).
+  - **The container** is the pack's convex hull (`BackpackView.pack_hull()`, worked out once from the model), brought in by a 2.5 cm wall, with a lid just under the opening; it's built as slabs outside each side (`_build_container`). X in the bag tuning shows it as a yellow wireframe (no editing: `items_area` and `item_size` are gone).
+  - **The items** are RigidBody3Ds (Jolt) in a physics world of their own (a never-drawn SubViewport with its own World3D), each shaped like its model (convex, so cans roll), continuous collision, friction 0.55, bounce 0.15. They're pulled by gravity turned into the bag's frame less the bag's acceleration (`INERTIA` 0.6) via constant_force, and a flick of the bag (a change in its turning) swirls them (`SWIRL` 0.35). The props you see copy their bodies.
+  - **Sizes** (`REAL_SIZE`, longest side): pills 9 cm, bandage 10, bullets 9, shells 11, rockets 28, grenade 11, scrap 11, silk 12, camp kit 30. A gun is `WeaponData.backpack_length` (pistol 22 cm, revolver 27, MP5 36), else as long as fits across the floor's diagonal (92%).
+  - **On your back:** frozen; the shuffle now wakes them with a knock and lets them tumble 1.2 s, then freezes them.
+  - The texture paths use `art/Survival` (the folder's real name; my earlier "wrong case" note was wrong).
+  - Not compiled or run (asks first).
