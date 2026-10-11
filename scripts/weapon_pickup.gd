@@ -29,6 +29,9 @@ var _ignored: Node
 
 
 func _ready() -> void:
+	# A bare pickup (no shape of its own in its scene): shows its gun.
+	if weapon and not get_children().any(func(child: Node) -> bool: return child is CollisionShape3D):
+		_show_gun(self, weapon)
 	add_to_group(InteractHighlight.GROUP) # outlined when you look at it
 	_pickup_area.body_entered.connect(_on_body_entered)
 	_pickup_area.body_exited.connect(func(body: Node3D) -> void:
@@ -57,16 +60,7 @@ static func drop(weapon: WeaponData, by: Node3D) -> WeaponPickup:
 	pickup.weapon = weapon
 	pickup.ammo_amount = 0
 	pickup.mass = 3.0
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(0.6, 0.18, 0.2)
-	shape.shape = box
-	pickup.add_child(shape)
-	if weapon.viewmodel_scene:
-		var model := weapon.viewmodel_scene.instantiate() as Node3D
-		if model:
-			model.basis = Basis.from_euler(weapon.model_facing_degrees * (PI / 180.0))
-			pickup.add_child(model)
+	_show_gun(pickup, weapon)
 	var area := Area3D.new()
 	area.name = "PickupArea"
 	var zone := CollisionShape3D.new()
@@ -76,6 +70,35 @@ static func drop(weapon: WeaponData, by: Node3D) -> WeaponPickup:
 	area.add_child(zone)
 	pickup.add_child(area)
 	pickup._ignored = by
-	by.get_tree().current_scene.add_child(pickup)
+	var level := by.get_tree().current_scene
+	(level if level else by.get_tree().root).add_child(pickup)
 	pickup.global_position = by.global_position + Vector3.UP * 0.6 - by.global_basis.z * 0.5
 	return pickup
+
+## The gun on the ground, at about its real length (WeaponData.
+## backpack_length, or LONG_GUN for one without; a model's own units are no
+## guide -- the sawed-off's is 5 long), facing forward, with a box round it.
+const LONG_GUN := 0.9
+
+
+static func _show_gun(body: Node3D, gun: WeaponData) -> void:
+	var size := Vector3(0.6, 0.18, 0.2)
+	if gun.viewmodel_scene:
+		var model := gun.viewmodel_scene.instantiate() as Node3D
+		if model:
+			var holder := Node3D.new()
+			holder.name = "Model"
+			holder.add_child(model)
+			model.basis = Basis.from_euler(gun.model_facing_degrees * (PI / 180.0))
+			var box := BackpackView._bounds(holder)
+			var longest := maxf(box.size.x, maxf(box.size.y, box.size.z))
+			var fit := (gun.backpack_length if gun.backpack_length > 0.0 else LONG_GUN) / maxf(longest, 0.0001)
+			holder.scale = Vector3.ONE * fit
+			holder.position = -box.get_center() * fit
+			size = (box.size * fit).max(Vector3.ONE * 0.04)
+			body.add_child(holder)
+	var shape := CollisionShape3D.new()
+	var collider := BoxShape3D.new()
+	collider.size = size
+	shape.shape = collider
+	body.add_child(shape)

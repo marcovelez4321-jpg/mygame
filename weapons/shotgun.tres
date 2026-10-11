@@ -30,7 +30,6 @@ carry_weight = 2.5
 backpack_length = 0.5
 draw_time = 0.6
 one_handed = true
-arms_fitted = false
 grip_point = Vector3(0, -0.3, -1.6)
 model_facing_degrees = Vector3(0, 180, 0)
 viewmodel_scene = ExtResource("2_sawn")

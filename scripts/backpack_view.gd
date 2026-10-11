@@ -301,12 +301,19 @@ func release_arm() -> void:
 const INERTIA := 0.6
 ## How much a change in the bag's turning pushes what's inside (0..1).
 const SWIRL := 0.35
-## How thick the pack's walls are (metres), and how far under the opening
+## How thick the pack's walls are (metres: a little thicker than they look,
+## for the physics' few millimetres of give), and how far under the opening
 ## the items stop (bag units), so none pokes out of the top.
-const WALL := 0.025
+const WALL := 0.035
 const LID_GAP := 0.02
 ## The walls' slabs (metres thick).
 const SLAB := 0.3
+## The straps' share of the pack's width (its -x side), left out of the
+## container.
+const STRAP_CUT := 0.1
+## Nothing's longer than this share of the inside's narrowest width (the
+## user's: things shrink to fit the bag, never poke out of it).
+const FIT_SHARE := 0.85
 ## On your back: how often the jostling's added up (s), how much (metres
 ## moved + m/s of jolts) shuffles the items once, and how long they tumble.
 const RESTLESS_CHECK := 0.5
@@ -319,14 +326,16 @@ const REAL_SIZE := {
 	Backpack.Kind.SHELLS: 0.11, Backpack.Kind.ROCKETS: 0.28, Backpack.Kind.GRENADES: 0.11,
 	Backpack.Kind.SCRAP: 0.11, Backpack.Kind.SILK: 0.12, Backpack.Kind.CAMP_KIT: 0.3,
 }
-## A gun with no length of its own: this share of the inside's floor
-## diagonal (lying across it -- the user's: a long gun takes up room).
-const LONG_GUN_SHARE := 0.92
 
 var _bodies: Array[Dictionary] = [] # {key, kind, body: RigidBody3D, node: the prop, area: its click zone}
 var _world: SubViewport
 var _container: StaticBody3D
 var _built_scale := 0.0
+## The container, in metres: its walls (each normal . p <= d inside, the lid
+## too), its middle, and how far across it is along x, y and z there.
+var _walls: Array[Plane] = []
+var _inner_center := Vector3.ZERO
+var _inner_size := Vector3.ONE
 var _last_axes := Basis.IDENTITY
 var _last_origin := Vector3.ZERO
 var _last_velocity := Vector3.ZERO
@@ -401,6 +410,8 @@ func _build_container() -> void:
 			sides.append(Plane(n, box.end[axis] * s))
 			sides.append(Plane(-n, -box.position[axis] * s))
 	sides.append(Plane(Vector3.UP, _lid_height() * s))
+	_walls = sides
+	_measure_inside(s)
 	for side in sides:
 		var shape := CollisionShape3D.new()
 		var slab := BoxShape3D.new()
@@ -410,6 +421,51 @@ func _build_container() -> void:
 		shape.transform = Transform3D(Basis.looking_at(-side.normal, up), side.normal * (side.d + SLAB * 0.5))
 		_container.add_child(shape)
 	_world.add_child(_container)
+
+
+## The inside's middle (the hull's, kept under the lid) and how far across
+## it is through there, along x, y and z.
+func _measure_inside(s: float) -> void:
+	var middle: Vector3 = pack_hull().get("middle", _bag_box.get_center()) * s
+	middle.y = minf(middle.y, _lid_height() * s - 0.05)
+	_inner_center = middle
+	for axis in 3:
+		var along := Vector3.ZERO
+		along[axis] = 1.0
+		_inner_size[axis] = _reach(middle, along) + _reach(middle, -along)
+
+
+## How far from `from` the walls are along `direction`.
+func _reach(from: Vector3, direction: Vector3) -> float:
+	var nearest := 10.0
+	for wall in _walls:
+		var facing := wall.normal.dot(direction)
+		if facing > 0.0001:
+			nearest = minf(nearest, (wall.d - wall.normal.dot(from)) / facing)
+	return maxf(nearest, 0.0)
+
+
+## Whether a ball of `radius` at `point` is wholly inside the walls.
+func _inside_walls(point: Vector3, radius: float) -> bool:
+	for wall in _walls:
+		if wall.normal.dot(point) + radius > wall.d:
+			return false
+	return true
+
+
+## Where a new item of `size` drops in: over the middle of the opening (a
+## little to the side, at random), as high as it fits -- checked against
+## the walls, so it never starts outside them.
+func _drop_point(size: Vector3) -> Vector3:
+	var radius := size.length() * 0.5
+	for attempt in 8:
+		var spread := 0.35 * (1.0 - attempt / 8.0)
+		var point := _inner_center + Vector3(randf_range(-0.5, 0.5) * _inner_size.x * spread, 0.0,
+				randf_range(-0.5, 0.5) * _inner_size.z * spread)
+		point.y = maxf(_inner_center.y + _reach(_inner_center, Vector3.UP) - radius, _inner_center.y)
+		if _inside_walls(point, radius):
+			return point
+	return _inner_center
 
 
 func _clear_bodies() -> void:
@@ -447,6 +503,11 @@ func _push_items(delta: float) -> void:
 	var wake := pull.distance_to(_last_pull) > 0.3 or kick.length() > 0.5
 	for body in _bodies:
 		var rigid := body.body as RigidBody3D
+		# Got outside somehow (squeezed through): dropped back in.
+		if not _inside_walls(rigid.global_position, -0.02):
+			rigid.global_position = _drop_point(Vector3.ONE * 0.05)
+			rigid.linear_velocity = Vector3.ZERO
+			rigid.angular_velocity = Vector3.ZERO
 		rigid.constant_force = pull * rigid.mass
 		if kick != Vector3.ZERO:
 			rigid.linear_velocity += kick.cross(rigid.global_position - middle).limit_length(2.0)
@@ -504,14 +565,16 @@ func _sync_bodies(stacks: Array[Dictionary]) -> void:
 				_bodies.append(body)
 
 
-## How long a thing is in the bag (metres, its longest side).
-func _real_size(stack: Dictionary, inside: AABB) -> float:
+## How long a thing is in the bag (metres, its longest side): about its real
+## size, but never more than FIT_SHARE of the inside's narrowest width (the
+## user's: shrunk to fit, not poking out). A gun with no length of its own
+## is as long as fits.
+func _real_size(stack: Dictionary) -> float:
+	var fits := minf(_inner_size.x, _inner_size.z) * FIT_SHARE
 	if stack.kind == Backpack.Kind.GUN:
 		var weapon: WeaponData = stack.weapon
-		if weapon and weapon.backpack_length > 0.0:
-			return weapon.backpack_length
-		return Vector2(inside.size.x, inside.size.z).length() * LONG_GUN_SHARE
-	return float(REAL_SIZE.get(stack.kind, 0.1))
+		return minf(weapon.backpack_length, fits) if weapon and weapon.backpack_length > 0.0 else fits
+	return minf(float(REAL_SIZE.get(stack.kind, 0.1)), fits)
 
 
 ## A new item: its prop at about its real size, a click zone round it, and
@@ -525,7 +588,7 @@ func _new_body(stack: Dictionary, key: String, inside: AABB) -> Dictionary:
 	holder.add_child(model)
 	var box := _bounds(model)
 	var longest := maxf(box.size.x, maxf(box.size.y, box.size.z))
-	var fit := _real_size(stack, inside) / maxf(longest, 0.0001)
+	var fit := _real_size(stack) / maxf(longest, 0.0001)
 	model.scale *= fit
 	model.position -= box.get_center() * fit
 	var size := (box.size * fit).max(Vector3.ONE * 0.01)
@@ -554,11 +617,7 @@ func _new_body(stack: Dictionary, key: String, inside: AABB) -> Dictionary:
 	shape.shape = _shape_of(holder, size)
 	rigid.add_child(shape)
 	_world.add_child(rigid)
-	var drop := Vector3(randf_range(inside.position.x, inside.end.x), inside.end.y - size.y * 0.6,
-			randf_range(inside.position.z, inside.end.z))
-	var room := inside.grow(-0.02)
-	drop = drop.clamp(room.position + size * 0.3, room.end - size * 0.3)
-	rigid.global_transform = Transform3D(Basis.from_euler(Vector3(randf() * TAU, randf() * TAU, randf() * TAU)), drop)
+	rigid.global_transform = Transform3D(Basis.from_euler(Vector3(randf() * TAU, randf() * TAU, randf() * TAU)), _drop_point(size))
 	rigid.freeze = _frozen
 	holder.transform = rigid.global_transform
 	return {key = key, kind = stack.kind, body = rigid, node = holder, area = pick}
@@ -870,7 +929,26 @@ static func pack_hull() -> Dictionary:
 	var mesh := pack_mesh()
 	if mesh == null:
 		return _hull
-	var points := (mesh.create_convex_shape(true, true) as ConvexPolygonShape3D).points
+	# The main body only: not the straps (the -x side's outer STRAP_CUT of its
+	# width) -- the gap between them and its back would count as inside, and
+	# what settled there showed outside the bag.
+	var box := mesh.get_aabb()
+	var cut := box.position.x + box.size.x * STRAP_CUT
+	var body := PackedVector3Array()
+	for surface in mesh.get_surface_count():
+		for point in (mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+			if point.x > cut:
+				body.append(point)
+	if body.size() < 4:
+		return _hull
+	while body.size() % 3 != 0:
+		body.append(body[0])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = body
+	var cloud := ArrayMesh.new()
+	cloud.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var points := (cloud.create_convex_shape(true, true) as ConvexPolygonShape3D).points
 	var planes: Array[Plane] = []
 	var count := points.size()
 	for a in count:
@@ -916,7 +994,10 @@ static func pack_hull() -> Dictionary:
 			if shared >= 2:
 				edges.append(points[a])
 				edges.append(points[b])
-	_hull = {planes = planes, edges = edges}
+	var middle := Vector3.ZERO
+	for point in points:
+		middle += point
+	_hull = {planes = planes, edges = edges, middle = middle / maxf(points.size(), 1.0)}
 	return _hull
 
 
