@@ -21,17 +21,23 @@ still to be chosen are asked before each is built.
 ## The grapple, reworked ("set it, then launch" -- HL2-style, not a swing)
 - Hold right mouse: the same landing ring shows where it goes; it charges.
 - It only fires if held at least **half** the charge (no spamming).
+- It costs **1 stamina bar**, as does a dash.
 - **Charge timing:** release right as it fills = a tiny extra boost and a
   sound.
-- **Launch timing:** a second, perfectly timed release = another sound and
-  another tiny speed boost.
-- Launch straight at the point like Spider-Man's zip; momentum carries on.
+- It launches you **automatically** the moment the anchor bites, straight at
+  the point like Spider-Man's zip; momentum carries on.
+- **Launch timing:** a second, separate timed press while flying = another
+  sound and another tiny speed boost.
 - **One grapple at a time:** cancel the first before firing another.
 - **Perch** (stick to the wall at the point for a few seconds), **reel**
   (in) and **rappel** (out, down).
 - Anchors on creatures: big ones you launch at (kick / ride), small ones
   you yank, flying roaches can carry you up.
-- (Open: "flares for the grapple" -- to be clarified.)
+- **Flares:** the grapple can carry one, left burning stuck at its anchor
+  (lights where you're heading: dark shafts, the hive); and flares can be
+  thrown by hand, sticking where they land.
+- While it holds you (attached, perched, reeling, rappelling) the bars drain
+  **1 every 4 s**; **perching lasts until stamina runs out**.
 
 ## Mutations (the arm taken over)
 - Swappable at camps; earned by eating creatures (you are what you eat);
@@ -46,6 +52,8 @@ still to be chosen are asked before each is built.
 - Out: Barnacle Tongue.
 
 ## Climbing as the progression
+- **The ascent 50% longer:** the towers ×1.25 taller, plus extra detours
+  (fewer direct ways up, gaps to go round).
 - Altimeter on the HUD, height records, milestones.
 - Surfaces matter (rotten growth tears loose, slime and barnacle crust are
   slippery, pipes and cables are routes).
@@ -58,8 +66,11 @@ still to be chosen are asked before each is built.
 
 ## The boss worm hunts you up the Stack
 - It crashes up through the Stack's floors and burrows through the
-  megastructures' walls, chasing you as you climb -- immersive and scary
-  (mechanics to be chosen from the list offered).
+  megastructures' walls, chasing you as you climb -- immersive and scary.
+  Mechanics to be chosen from the 13 offered (tells, floor cracks,
+  bursting up through floors, moving in the walls, hunting by sound, bait,
+  chase phases, the shaft chase, cutting you off from outside, destroying
+  the way back, safe floors, its body as terrain, glimpses).
 
 ## Secrets
 - **Secret rooms:** a key (the existing key asset) opens a locked door to a

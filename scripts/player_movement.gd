@@ -51,10 +51,11 @@ signal respawned
 @export var respawn_delay: float = 2.0
 
 @export_group("Stamina")
-## Deadlock-style: a small number of discrete charges (shown as pips in the
-## HUD, see hud.gd/hud.tscn's StaminaBar) rather than a continuous meter --
-## dash and wall jump each spend exactly one.
-@export var max_stamina_charges: int = 3
+## Deadlock-style bars (the pips under the crosshair, hud.gd) -- one shared
+## stamina for everything (the user's: 4 bars): a dash, a wall jump and a
+## grapple each spend one bar; while the grapple holds you it drains them
+## slowly (PlayerGrapple.drain_per_second), and they don't refill meanwhile.
+@export var max_stamina_charges: int = 4
 ## Seconds for ONE spent charge to fully refill.
 @export var stamina_recharge_time: float = 2.0
 ## Pause after spending a charge before that pip starts refilling again --
@@ -256,6 +257,10 @@ var _recoil_offset := Vector2.ZERO
 ## with the same press while it's held.
 var _use_took_press: bool = false
 
+## The stamina left, in bars (fractional: holding on drains it smoothly).
+var stamina: float = 0.0
+## A drain this tick (the grapple holding you): no refilling next tick.
+var _stamina_held := false
 ## How many stamina charges are currently available (0..max_stamina_charges).
 ## Public so hud.gd can read it straight off the player for the pip display.
 var stamina_charges: int = 0
@@ -348,7 +353,8 @@ func _ready() -> void:
 	if GameSettings.mouse_sensitivity > 0.0:
 		mouse_sensitivity = GameSettings.mouse_sensitivity
 	health.died.connect(_on_died)
-	stamina_charges = max_stamina_charges
+	stamina = float(max_stamina_charges)
+	_sync_stamina()
 	# Camera juice is purely cosmetic feedback (Rule 1) -- driven off the same
 	# signals the HUD's own hit marker uses, so gunplay reads as impactful
 	# without touching the actual aim/shot math at all.
@@ -439,6 +445,8 @@ func respawn(at: Vector3) -> void:
 	_is_dead = false
 	health.is_dead = false
 	health.current_health = health.max_health
+	stamina = float(max_stamina_charges)
+	_sync_stamina()
 	velocity = Vector3.ZERO
 	global_position = at
 	_net_correction = Vector3.ZERO
@@ -577,7 +585,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_start_dash(wishdir)
 
 	# The tentacle grapple (E). Space used to let go of it isn't also a wall jump.
-	if grapple.tick(input.grapple, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority()):
+	if grapple.tick(input.grapple, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority(), input.wishdir):
 		fresh_jump = false
 
 	var was_airborne := not is_on_floor()
@@ -593,7 +601,9 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_try_step_up(delta)
 	else:
 		velocity.y -= gravity * grapple.gravity_scale() * delta
-		_air_move(wishdir, delta)
+		# Launching or perched, the grapple moves you; hanging, you can sway.
+		if not grapple.holds_still():
+			_air_move(wishdir, delta)
 
 		# Wall jump: airborne only (it's an air-movement tool, not a way to
 		# cancel a step-up), and a fresh press so holding jump against a wall
@@ -772,27 +782,46 @@ func has_key(key_name: String) -> bool:
 
 
 func _update_stamina(delta: float) -> void:
+	if _stamina_held:
+		_stamina_held = false # still hanging on: no refilling
+		return
 	if _stamina_regen_timer > 0.0:
 		_stamina_regen_timer = maxf(_stamina_regen_timer - delta, 0.0)
 		return
-	if stamina_charges >= max_stamina_charges:
+	if stamina >= max_stamina_charges:
 		return
-	stamina_recharge_fraction += delta / stamina_recharge_time
-	if stamina_recharge_fraction >= 1.0:
-		stamina_recharge_fraction = 0.0
-		stamina_charges += 1
+	stamina = minf(stamina + delta / stamina_recharge_time, float(max_stamina_charges))
+	_sync_stamina()
 
 
-## Spends one charge if any are available. Both dash and wall jump go through
-## this instead of checking stamina_charges themselves, so "can I afford
-## this" and "pay for it" can never drift apart.
-func _spend_stamina() -> bool:
-	if stamina_charges <= 0:
+## Spends one bar if there's a whole one. Dash, wall jump and the grapple all
+## go through this, so "can I afford this" and "pay for it" never drift apart.
+func spend_stamina() -> bool:
+	if stamina < 1.0:
 		return false
-	stamina_charges -= 1
-	stamina_recharge_fraction = 0.0
+	stamina -= 1.0
 	_stamina_regen_timer = stamina_recharge_delay
+	_sync_stamina()
 	return true
+
+
+func _spend_stamina() -> bool:
+	return spend_stamina()
+
+
+## Drains `bars` (the grapple holding you). False once it's empty.
+func drain_stamina(bars: float) -> bool:
+	stamina = maxf(stamina - bars, 0.0)
+	_stamina_held = true
+	_stamina_regen_timer = stamina_recharge_delay
+	_sync_stamina()
+	return stamina > 0.0
+
+
+## The HUD's view of it: whole bars, and how full the next one is.
+func _sync_stamina() -> void:
+	stamina_charges = int(floor(stamina + 0.0001))
+	stamina_recharge_fraction = clampf(stamina - stamina_charges, 0.0, 1.0)
 
 
 ## A short, direct burst of speed toward wishdir (or straight ahead if no

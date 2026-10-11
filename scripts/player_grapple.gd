@@ -1,86 +1,111 @@
 class_name PlayerGrapple
 extends Node3D
 
-## The tentacle grapple (right mouse, or E). Only with a one-handed gun out (WeaponData.
-## one_handed): the right hand keeps the gun, the left throws the tentacle.
-## With anything else out, E switches to the last one-handed gun first.
+## The tentacle grapple (right mouse, or E). Only with a one-handed gun out
+## (WeaponData.one_handed): the right hand keeps the gun, the left throws the
+## tentacle. With anything else out, it switches to the last one-handed gun.
 ##
-## Hold E to coil it (charge_time for full power), let go to lash it out.
-## Releasing early gives less range and a slower pull; under min_hold nothing
-## fires. It grabs any world surface and pulls you toward it Titanfall 2 style
-## (you can still steer, and keep your speed when you let go with Space).
-## Big enemies (BIG_GROUP: the Harvestman, the worm) pull you to them; you
-## kick them on arrival and bounce off, or, holding E again during the zip,
-## latch on and ride them until you jump. Two charges, regrowing one at a
-## time; a miss still spends one.
+## Set it, then launch (the user's: HL2-style, not a swing -- docs/CLIMB_VISION.md):
+##   CHARGE: hold right mouse; the ring shows where it'll bite. It only fires
+##   once held at least min_charge_share of charge_time (no spamming), and
+##   costs one bar of the player's stamina -- the same bars dashes use.
+##   Let go right as it fills (good_window): a tiny extra boost, and a sound.
+##   LAUNCH: the moment it bites you're thrown straight at the spot, no
+##   gravity, no steering -- like Spider-Man's zip. Press right mouse again in
+##   the last moments of the flight (perfect_window): let go at speed with
+##   another tiny boost and a second sound, flying on past.
+##   PERCH: arriving, you stick to the wall at the spot.
+##   RAPPEL (back, S) lets line out and down -- you hang on it under the spot
+##   and can sway; REEL (forward, W) climbs back up it to the spot.
+##   Space lets go (with a hop). One grapple at a time: a new one only once
+##   this one's let go.
+##   While it holds you (launching, perched, hanging, riding) your stamina
+##   drains (drain_per_second: a bar every 4 s); empty, it lets go and you fall.
+## Big enemies (BIG_GROUP: the Harvestman, the worm) you launch at: kick them
+## on arrival and bounce off, or press again during the flight to latch on
+## and ride them until you jump. Small enemies are a miss.
 ##
-## References: Titanfall 2's grapple (pull, steer, keep momentum), Opposing
-## Force's barnacle grapple (an organic one), Bulletstorm's leash (yank).
+## References: HL2 and Titanfall 2's grapples (straight at the point, keep
+## your momentum), Spider-Man's web-zip, Opposing Force's barnacle grapple
+## (an organic one).
 ##
 ## Rule 1 (co-op): tick() and apply_pull() run inside the player's simulation
-## step from the input packet (PlayerInput.grapple), so the host can run them
-## for every player; the kick's damage happens there too. Only _process()
-## draws: your own grapple as the tentacle in your chosen style
-## (GrappleTentacle, GameSettings.tentacle_style), everyone else's as a plain
-## line.
+## step from the input packet (PlayerInput.grapple), so the host runs them for
+## every player; the kick's damage happens there too. Only _process() draws:
+## your own grapple as the tentacle in your chosen style (GrappleTentacle,
+## GameSettings.tentacle_style), everyone else's as a plain line. The timing
+## sounds are your own (local).
 
 signal fired(power: float)
 signal attached(to_enemy: bool)
 signal missed
 signal kicked(damage: float)
 signal released
+## The timing rewards: let go right as it filled; let go perfectly mid-flight.
+signal charge_timed
+signal launch_timed
 
 ## Anything in this group (on the node itself or any parent of the part hit)
 ## is a big enemy you zip to. Small enemies are a miss.
 const BIG_GROUP := "grapple_big"
 
-enum Rope { NONE, LASH, PULL, RIDE, MISS }
+enum Rope { NONE, LASH, LAUNCH, PERCH, HANG, RIDE, MISS }
 
 @export_group("Charge")
-## Seconds of holding E for a full-power grapple.
+## Seconds of holding for a full-power grapple.
 @export var charge_time: float = 1.5
-## Let go sooner than this and nothing fires (a tap doesn't waste a charge).
-@export var min_hold: float = 0.3
-## Power when fired at exactly min_hold (0.2 = 20% range); full at charge_time.
-@export var min_power: float = 0.2
-@export var max_charges: int = 2
-## Seconds for one spent charge to grow back (one at a time).
-@export var recharge_time: float = 3.0
+## It only fires once held at least this share of charge_time (the user's:
+## half -- no spamming); let go sooner and nothing happens, nothing's spent.
+@export_range(0.0, 1.0, 0.05) var min_charge_share: float = 0.5
+## Let go within this many seconds of it filling: the charge reward.
+@export var good_window: float = 0.15
+## How much faster the launch is for it.
+@export var charge_boost: float = 1.12
 
 @export_group("Lash")
-## Reach at full power, in meters.
+## Reach at full power, in meters (half at the least charge).
 @export var max_range: float = 56.0
-## How fast the tentacle flies out, m/s (the pull starts when it lands).
+## How fast the tentacle flies out, m/s (the launch starts when it bites).
 @export var lash_speed: float = 120.0
 ## How long a miss takes to whip out and snap back.
 @export var miss_time: float = 0.45
 
-@export_group("Pull")
-## Pull speed at full power, m/s.
-@export var pull_speed: float = 15.6
-## Pull speed at min_power, as a fraction of pull_speed. Set it to min_power
-## (0.2) to scale the speed exactly like the range.
-@export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
-## How hard it pulls you up to that speed, m/s per second.
-@export var pull_accel: float = 54.6
-## Gravity while pulled (0 = none, 1 = full).
-@export_range(0.0, 1.0, 0.05) var pull_gravity_scale: float = 0.0
+@export_group("Launch")
+## Launch speed at full power, m/s; at the least charge, this share of it.
+@export var launch_speed: float = 32.0
+@export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.75
+## The last seconds of the flight in which a press lets go perfectly, and
+## how much faster you fly on for it.
+@export var perfect_window: float = 0.3
+@export var perfect_boost: float = 1.15
+## How close to the spot counts as arriving.
+@export var arrive_distance: float = 1.4
+
+@export_group("Hold")
+## Stamina bars drained a second while it holds you (0.25: one every 4 s).
+@export var drain_per_second: float = 0.25
+## How far off the wall you perch, and the line's speeds.
+@export var perch_standoff: float = 0.55
+@export var reel_speed: float = 3.0
+@export var rappel_speed: float = 4.5
 ## Upward speed added when you let go with Space.
 @export var release_hop: float = 3.0
-## Slows the pull near the point so you settle against it instead of jittering
-## (speed is capped at distance x this).
-@export var arrive_slowdown: float = 5.0
 
 @export_group("Big Enemies")
 ## How close (to the grabbed spot) counts as arriving: kick or latch on.
 @export var kick_reach: float = 2.2
-## Kick damage per m/s you were going when you hit (15.6 m/s x 4 = 62).
+## Kick damage per m/s you were going when you hit (32 m/s x 4 = 128).
 @export var kick_damage_per_speed: float = 4.0
 ## How hard you bounce back off after a kick, and up.
 @export var kick_bounce: float = 9.0
 @export var kick_bounce_up: float = 6.0
 ## How far off the enemy's surface you hang while riding.
 @export var ride_standoff: float = 1.3
+
+@export_group("Sound")
+## The timing rewards' sounds (empty: a generated chime).
+@export var charge_timed_sound: AudioStream
+@export var launch_timed_sound: AudioStream
 
 @export_group("Look")
 ## Where your grapple comes from on screen (camera space), until the new arms
@@ -92,11 +117,8 @@ enum Rope { NONE, LASH, PULL, RIDE, MISS }
 @export var line_color: Color = Color(0.08, 0.02, 0.03)
 @export var line_width: float = 0.04
 
-## Charges ready now, and how far the next one has grown back (0..1), for the HUD.
-var charges: int = 0
-var recharge_fraction: float = 0.0
-## Testing: grapples never run out (the pause menu's "Infinite Grapples"
-## switch, like Infinite Ammo). On for now, while the user tests the Stack.
+## Testing: the grapple costs and drains no stamina (the pause menu's
+## "Infinite Grapples" switch, like Infinite Ammo).
 var infinite_charges: bool = true
 ## 0..1 how coiled the tentacle is right now (the arm animation reads this).
 var coil: float = 0.0
@@ -107,7 +129,14 @@ var _held_prev := false
 var _coiling := false
 var _hold := 0.0
 var _power := 0.0
-var _regen := 0.0
+## This launch got the charge reward (and so goes charge_boost faster).
+var _charge_bonus := false
+var _launch_speed := 0.0
+## How long the launch has made no headway (stuck on something: perch there).
+var _stalled := 0.0
+var _last_distance := INF
+## The line's length while hanging.
+var _rope_length := 0.0
 ## What it's stuck to, and where on it (in its own space, so a moving enemy
 ## or prop carries the spot along).
 var _anchor: Node3D
@@ -122,11 +151,14 @@ var _ride_wanted := false
 var _ride_prev := Vector3.ZERO
 var _ride_velocity := Vector3.ZERO
 var _attacker_id := 0
+## This tick's move input (x = strafe, y = back(+)/forward(-)): reel/rappel.
+var _move := Vector2.ZERO
 
 var _line: MeshInstance3D
 var _tentacle: GrappleTentacle
 ## Your own view: the landing ring while you hold the grapple.
 var _indicator: GrappleIndicator
+var _chime: AudioStreamPlayer
 ## Co-op, someone else's grapple on a client: where its tip is, from the host
 ## (INF: not out). Their grapple isn't run here, just drawn.
 var _remote_tip := Vector3.INF
@@ -137,17 +169,19 @@ var arms: FirstPersonArms
 
 func _ready() -> void:
 	_player = get_parent() as PlayerMovement
-	charges = max_charges
+	charge_timed.connect(_chime_play.bind(true))
+	launch_timed.connect(_chime_play.bind(false))
 
 
 ## Called by PlayerMovement every simulation tick, before gravity and the
-## move. `held` = E, `jump_pressed` = a fresh Space. Returns true if Space
-## was used up letting go (so it isn't also a wall jump).
-func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Vector3, attacker_id: int) -> bool:
+## move. `held` = right mouse (or E), `jump_pressed` = a fresh Space, `move`
+## = this tick's move input. Returns true if Space was used up letting go
+## (so it isn't also a wall jump).
+func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Vector3, attacker_id: int, move: Vector2 = Vector2.ZERO) -> bool:
 	_attacker_id = attacker_id
+	_move = move
 	var pressed := held and not _held_prev
 	_held_prev = held
-	_regrow(delta)
 
 	var weapons := _player.weapons
 	var gun := weapons.current_weapon()
@@ -155,7 +189,7 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 
 	# Out of the one-handed gun (picked a two-handed one): the left hand's
 	# needed on it, so the tentacle lets go.
-	if not hand_free and not _coiling and (_rope == Rope.PULL or _rope == Rope.RIDE):
+	if not hand_free and not _coiling and is_pulling():
 		release()
 
 	if _rope == Rope.LASH or _rope == Rope.MISS:
@@ -166,20 +200,29 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			else:
 				_rope = Rope.NONE
 
-	if (_rope == Rope.PULL or _rope == Rope.RIDE) and not is_instance_valid(_anchor):
+	if is_pulling() and not is_instance_valid(_anchor):
 		release()
 
-	if jump_pressed and (_rope == Rope.PULL or _rope == Rope.RIDE):
+	if jump_pressed and is_pulling():
 		_let_go()
 		return true
 
-	# During a zip to a big enemy, E means "ride it", not a new grapple: a
-	# fresh press after the lash, held until you arrive.
-	if (_rope == Rope.LASH or _rope == Rope.PULL) and _to_enemy:
-		if pressed:
-			_ride_wanted = true
-		elif not held:
-			_ride_wanted = false
+	# Holding on costs stamina; out of it, you fall.
+	if is_pulling() and not infinite_charges:
+		if not _player.drain_stamina(drain_per_second * delta):
+			release()
+			return false
+
+	# Flying at a big enemy, a press means "ride it" (held till you arrive);
+	# at a wall, a press in the last moments means let go at speed.
+	if _rope == Rope.LASH or _rope == Rope.LAUNCH:
+		if _to_enemy:
+			if pressed:
+				_ride_wanted = true
+			elif not held:
+				_ride_wanted = false
+		elif pressed and _rope == Rope.LAUNCH and _time_to_arrive() <= perfect_window:
+			_perfect_release()
 		return false
 
 	if _coiling:
@@ -189,9 +232,10 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			_hold += delta
 		else:
 			_coiling = false
-			if _hold >= min_hold:
+			if _hold >= charge_time * min_charge_share:
+				_charge_bonus = _hold >= charge_time and _hold <= charge_time + good_window
 				_fire(origin, aim)
-	elif pressed and _rope != Rope.RIDE and charges > 0 and not weapons.is_busy():
+	elif pressed and _rope == Rope.NONE and not weapons.is_busy() and (infinite_charges or _player.stamina >= 1.0):
 		if hand_free or weapons.switch_to_one_handed():
 			_coiling = true
 			_hold = 0.0
@@ -200,7 +244,7 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 	return false
 
 
-## Holding E, winding it up.
+## Holding it, winding it up.
 func is_coiling() -> bool:
 	return _coiling
 
@@ -210,46 +254,37 @@ func is_out() -> bool:
 	return _rope != Rope.NONE
 
 
-## True while the rope is holding you (gravity and ground movement change).
+## True while the line is holding you (gravity and ground movement change).
 func is_pulling() -> bool:
-	return _rope == Rope.PULL or _rope == Rope.RIDE
+	return _rope == Rope.LAUNCH or _rope == Rope.PERCH or _rope == Rope.HANG or _rope == Rope.RIDE
+
+
+## True while it moves you entirely itself (launching, perched, riding): no
+## steering in the air then. Hanging on the line you can still sway.
+func holds_still() -> bool:
+	return _rope == Rope.LAUNCH or _rope == Rope.PERCH or _rope == Rope.RIDE
 
 
 func gravity_scale() -> float:
-	return pull_gravity_scale if is_pulling() else 1.0
+	return 0.0 if holds_still() else 1.0
 
 
-## Called by PlayerMovement just before move_and_slide(): the pull itself.
+## Called by PlayerMovement just before move_and_slide().
 func apply_pull(delta: float) -> void:
-	if _rope == Rope.RIDE:
-		_ride(delta)
-		return
-	if _rope != Rope.PULL:
-		return
-	var point := _anchor_point()
-	var chest := _player.global_position + Vector3.UP * 0.9
-	var to := point - chest
-	var distance := to.length()
-	if _to_enemy and distance <= kick_reach:
-		if _ride_wanted:
-			_start_ride()
-		else:
-			_kick(to / maxf(distance, 0.001))
-		return
-	if distance < 0.01:
-		return
-	var direction := to / distance
-	var power_t := inverse_lerp(min_power, 1.0, _power) if min_power < 1.0 else 1.0
-	var speed := pull_speed * lerpf(min_speed_scale, 1.0, clampf(power_t, 0.0, 1.0))
-	speed = minf(speed, distance * arrive_slowdown)
-	var along := _player.velocity.dot(direction)
-	if along < speed:
-		_player.velocity += direction * minf(pull_accel * delta, speed - along)
+	match _rope:
+		Rope.RIDE:
+			_ride(delta)
+		Rope.LAUNCH:
+			_fly(delta)
+		Rope.PERCH:
+			_perch(delta)
+		Rope.HANG:
+			_hang(delta)
 
 
-## Lets go without a hop (death, mantling, switching guns).
+## Lets go without a hop (death, mantling, switching guns, out of stamina).
 func release() -> void:
-	if _rope == Rope.PULL or _rope == Rope.RIDE:
+	if is_pulling():
 		released.emit()
 	_rope = Rope.NONE
 	_coiling = false
@@ -257,24 +292,15 @@ func release() -> void:
 	_ride_wanted = false
 
 
-func _regrow(delta: float) -> void:
-	if charges >= max_charges:
-		_regen = 0.0
-		recharge_fraction = 0.0
-		return
-	_regen += delta
-	if _regen >= recharge_time:
-		_regen = 0.0
-		charges += 1
-	recharge_fraction = _regen / recharge_time
-
-
 func _fire(origin: Vector3, aim: Vector3) -> void:
-	if not infinite_charges:
-		charges -= 1
-	_power = lerpf(min_power, 1.0, clampf(inverse_lerp(min_hold, charge_time, _hold), 0.0, 1.0))
+	if not infinite_charges and not _player.spend_stamina():
+		_hold = 0.0
+		return # out of stamina: nothing to throw it with
+	_power = clampf(_hold / charge_time, min_charge_share, 1.0)
 	_hold = 0.0
 	release()
+	if _charge_bonus:
+		charge_timed.emit()
 	var reach := max_range * _power
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + aim * reach)
 	query.exclude = [_player.get_rid()]
@@ -302,12 +328,104 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 	_rope = Rope.LASH
 
 
+## It bit: launched straight at the spot.
 func _land() -> void:
 	if not is_instance_valid(_anchor):
 		_rope = Rope.NONE
 		return
-	_rope = Rope.PULL
+	var power_t := inverse_lerp(min_charge_share, 1.0, _power) if min_charge_share < 1.0 else 1.0
+	_launch_speed = launch_speed * lerpf(min_speed_scale, 1.0, clampf(power_t, 0.0, 1.0))
+	if _charge_bonus:
+		_launch_speed *= charge_boost
+	_rope = Rope.LAUNCH
+	_stalled = 0.0
+	_last_distance = INF
+	_player.velocity = _to_spot().normalized() * _launch_speed
 	attached.emit(_to_enemy)
+
+
+## The flight: straight at the spot at launch speed (it follows a moving
+## spot). Arriving -- or stopped short by something in the way -- you perch;
+## at a big enemy, you kick it or latch on.
+func _fly(delta: float) -> void:
+	var to := _to_spot()
+	var distance := to.length()
+	var reach := kick_reach if _to_enemy else arrive_distance
+	if distance <= reach:
+		if _to_enemy:
+			if _ride_wanted:
+				_start_ride()
+			else:
+				_kick(to / maxf(distance, 0.001))
+		else:
+			_start_perch()
+		return
+	# Making no headway (a ledge or a beam in the way): perch where you are.
+	_stalled = _stalled + delta if distance > _last_distance - _launch_speed * delta * 0.25 else 0.0
+	_last_distance = distance
+	if _stalled > 0.25:
+		_start_perch()
+		return
+	_player.velocity = to / distance * _launch_speed
+
+
+## Seconds of the flight left (INF if not launching).
+func _time_to_arrive() -> float:
+	if _rope != Rope.LAUNCH or _launch_speed <= 0.0:
+		return INF
+	return maxf(_to_spot().length() - arrive_distance, 0.0) / _launch_speed
+
+
+## Let go at just the right moment in the flight: on past it, faster.
+func _perfect_release() -> void:
+	release()
+	_player.velocity *= perfect_boost
+	launch_timed.emit()
+
+
+func _start_perch() -> void:
+	_rope = Rope.PERCH
+	_player.velocity = Vector3.ZERO
+
+
+## Stuck to the wall at the spot. Back (S) lets the line out: hanging under it.
+func _perch(delta: float) -> void:
+	var normal := (_anchor.global_basis * _normal_local).normalized()
+	var spot := _anchor_point() + normal * perch_standoff - Vector3.UP * 0.9
+	_player.velocity = ((spot - _player.global_position) / maxf(delta, 0.001)).limit_length(20.0)
+	if _move.y > 0.1:
+		_rope = Rope.HANG
+		_rope_length = maxf(_to_spot().length(), arrive_distance)
+
+
+## On the line under the spot: gravity and a little sway, but never further
+## than the line's length. Back (S) rappels down, forward (W) reels up --
+## all the way up, and you're perched again.
+func _hang(delta: float) -> void:
+	if _move.y > 0.1:
+		_rope_length = minf(_rope_length + rappel_speed * delta, max_range)
+	elif _move.y < -0.1:
+		_rope_length -= reel_speed * delta
+		if _rope_length <= arrive_distance:
+			_start_perch()
+			return
+	var point := _anchor_point()
+	var chest := _player.global_position + Vector3.UP * 0.9
+	var next := chest + _player.velocity * delta
+	var out := next - point
+	var stretch := out.length() - _rope_length
+	if stretch > 0.0:
+		# Taut: no more moving outward, and pulled back in to the line's length.
+		var along := out / out.length()
+		var outward := _player.velocity.dot(along)
+		if outward > 0.0:
+			_player.velocity -= along * outward
+		_player.velocity -= along * (stretch / maxf(delta, 0.001)) * 0.5
+
+
+## From the chest to the spot it's stuck to.
+func _to_spot() -> Vector3:
+	return _anchor_point() - (_player.global_position + Vector3.UP * 0.9)
 
 
 func _let_go() -> void:
@@ -368,6 +486,40 @@ func _is_small_enemy(node: Node) -> bool:
 	return false
 
 
+# --- Sound (your own: the timing rewards) ---
+
+func _chime_play(for_charge: bool) -> void:
+	if not _player.is_multiplayer_authority():
+		return
+	if _chime == null:
+		_chime = AudioStreamPlayer.new()
+		_chime.bus = &"Player" if AudioServer.get_bus_index(&"Player") != -1 else &"Master"
+		add_child(_chime)
+	var custom := charge_timed_sound if for_charge else launch_timed_sound
+	_chime.stream = custom if custom else _make_chime(880.0 if for_charge else 1320.0, 0.14 if for_charge else 0.2)
+	_chime.play()
+
+
+## A short bright chime, rising a fifth (placeholder until the user's sounds).
+static func _make_chime(pitch: float, seconds: float) -> AudioStreamWAV:
+	var rate := 22050
+	var frames := int(seconds * rate)
+	var data := PackedByteArray()
+	data.resize(frames * 2)
+	var phase := 0.0
+	for i in frames:
+		var t := float(i) / frames
+		phase += TAU * pitch * lerpf(1.0, 1.5, minf(t * 3.0, 1.0)) / rate
+		var envelope := minf(t * 40.0, 1.0) * pow(1.0 - t, 2.0)
+		var sample := (sin(phase) * 0.7 + sin(phase * 2.0) * 0.2) * envelope * 0.6
+		data.encode_s16(i * 2, int(clampf(sample, -1.0, 1.0) * 32767.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.data = data
+	return wav
+
+
 # --- Drawing (per peer, never touches the simulation) ---
 
 ## Your own view: while you hold the grapple, the ring (GrappleIndicator) on
@@ -384,7 +536,7 @@ func _update_indicator(delta: float) -> void:
 		add_child(_indicator)
 	var origin := camera.global_position
 	var aim := -camera.global_basis.z
-	var power := lerpf(min_power, 1.0, clampf(inverse_lerp(min_hold, charge_time, _hold), 0.0, 1.0))
+	var power := clampf(_hold / charge_time, min_charge_share, 1.0)
 	var reach := max_range * power
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + aim * reach)
 	query.exclude = [_player.get_rid()]
@@ -398,6 +550,7 @@ func _update_indicator(delta: float) -> void:
 	var grabs := target != null and (_big_enemy(target) != null or not _is_small_enemy(target))
 	_indicator.show_at(hit.position, hit.normal, grabs, fill, origin, delta)
 
+
 ## Where the tentacle's tip is right now, or INF while it isn't out (the host
 ## sends this with each player's update).
 func rope_tip() -> Vector3:
@@ -407,7 +560,7 @@ func rope_tip() -> Vector3:
 		Rope.MISS:
 			var t := clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0)
 			return _start_point().lerp(_lash_end, sin(t * PI)) # out and snaps back
-		Rope.PULL, Rope.RIDE:
+		Rope.LAUNCH, Rope.PERCH, Rope.HANG, Rope.RIDE:
 			if is_instance_valid(_anchor):
 				return _anchor_point()
 	return Vector3.INF
@@ -429,7 +582,7 @@ func _process(delta: float) -> void:
 	if mine:
 		_ensure_tentacle()
 		var normal := (_anchor.global_basis * _normal_local).normalized() if is_instance_valid(_anchor) else Vector3.UP
-		var stuck := _rope == Rope.PULL or _rope == Rope.RIDE
+		var stuck := is_pulling()
 		var arm_points: Array[Vector3] = []
 		var arm_coil := 0.0
 		if is_instance_valid(arms) and arms.raise > 0.01:

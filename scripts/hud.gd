@@ -31,10 +31,13 @@ const SCREEN_BLOOD_FADE_TIME := 0.7
 @onready var weapon_wheel: Control = $WeaponWheel
 @onready var pickup_label: Label = $PickupLabel
 ## Deadlock-style stamina pips: the width of each Fill rect (0..PIP_WIDTH) is
-## how full that charge is. Left-to-right = pip index, matching
-## player_movement.gd's stamina_charges count.
-@onready var stamina_pips: Array[ColorRect] = [$StaminaBar/Pip0Fill, $StaminaBar/Pip1Fill, $StaminaBar/Pip2Fill]
+## how full that bar is. Left-to-right = pip index, matching
+## player_movement.gd's stamina_charges count. Made to match the player's
+## max_stamina_charges (_build_stamina_pips: 4 now), centred under the
+## crosshair, styled like the scene's own first pip.
+var stamina_pips: Array[ColorRect] = []
 const PIP_WIDTH := 14.0
+const PIP_GAP := 3.0
 
 ## Centre-screen messages from the map ("You need the gold key") -- same
 ## pop-in as pickups, held a little longer since they're there to be read.
@@ -83,6 +86,7 @@ func _find_player() -> void:
 	_player_health = player.get_node("Health") as Health
 	_player_health.damaged.connect(_on_player_damaged)
 	_player_health.died.connect(_on_player_died)
+	_build_stamina_pips(player.max_stamina_charges)
 	player.respawned.connect(func() -> void: death_label.visible = false)
 
 
@@ -194,12 +198,41 @@ func _make_center_label(height_fraction: float, font_size: int) -> Label:
 	return label
 
 
+## `count` pips under the crosshair (the scene's three were the old count):
+## a dim background and a fill each, in the scene's colours.
+func _build_stamina_pips(count: int) -> void:
+	var bar := $StaminaBar as Control
+	var back_color := ($StaminaBar/Pip0Bg as ColorRect).color if bar.has_node(^"Pip0Bg") else Color(1, 1, 1, 0.18)
+	var fill_color := ($StaminaBar/Pip0Fill as ColorRect).color if bar.has_node(^"Pip0Fill") else Color(0.4, 0.85, 1, 0.95)
+	for child in bar.get_children():
+		child.free()
+	stamina_pips.clear()
+	var width := count * PIP_WIDTH + (count - 1) * PIP_GAP
+	bar.offset_left = -width * 0.5
+	bar.offset_right = width * 0.5
+	for i in count:
+		var x := i * (PIP_WIDTH + PIP_GAP)
+		var back := ColorRect.new()
+		back.color = back_color
+		back.position = Vector2(x, 0.0)
+		back.size = Vector2(PIP_WIDTH, 8.0)
+		bar.add_child(back)
+		var fill := ColorRect.new()
+		fill.color = fill_color
+		fill.position = Vector2(x, 0.0)
+		fill.size = Vector2(0.0, 8.0)
+		bar.add_child(fill)
+		stamina_pips.append(fill)
+
+
 ## Each pip is full (PIP_WIDTH) if that charge is available, empty if it
 ## isn't, and the ONE pip currently regenerating (index == stamina_charges)
 ## fills in gradually as stamina_recharge_fraction climbs toward 1 -- reads
 ## the player's stamina fields directly rather than a signal since this is
 ## a smooth, every-frame fill, not an event.
 func _update_stamina_bar() -> void:
+	if stamina_pips.size() != player.max_stamina_charges:
+		_build_stamina_pips(player.max_stamina_charges)
 	for i in stamina_pips.size():
 		var fraction := 0.0
 		if i < player.stamina_charges:

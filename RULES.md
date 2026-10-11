@@ -1364,3 +1364,17 @@ them:
 - 2026-10-11: **Rule 11 (hardcore) added; the climbing vision written up** (`docs/CLIMB_VISION.md`: everything decided for the climbing direction, what's out for now, and the build order).
 
 - 2026-10-11: The "ideas not turned down count as wanted" rule was meant for that one list only (the user's correction): it's not a standing rule, and is gone from Rule 10. The climbing list's decisions stand.
+
+- 2026-10-11: **The grapple reworked: set it, then launch; one shared stamina (4 bars).** Every rule the user's (docs/CLIMB_VISION.md).
+  - **Stamina** (`PlayerMovement`): one shared pool, 4 bars (was 3), now fractional (`stamina`). A dash, a wall jump and a grapple each spend one bar (`spend_stamina()`). While the grapple holds you it drains (`drain_stamina()`, `PlayerGrapple.drain_per_second` 0.25: a bar every 4 s) and doesn't refill. The HUD builds its pips from `max_stamina_charges`. Respawning refills it.
+  - **The grapple** (`player_grapple.gd`; states NONE, LASH, LAUNCH, PERCH, HANG, RIDE, MISS). Its own charges are gone (the pause menu's Infinite Grapples now means no stamina cost or drain).
+    - Hold right mouse to charge (the ring as before). It fires only once held at least half of `charge_time` (no cost if let go sooner).
+    - Let go within `good_window` (0.15 s) of it filling: `charge_timed` (a chime) and a `charge_boost` x1.12 faster launch.
+    - When it bites you're **launched** straight at the spot at `launch_speed` (32 m/s at full, 75% at half charge), no gravity, no air steering. It follows a moving spot.
+    - A press in the last `perfect_window` (0.3 s) of the flight: `launch_timed` (a second chime), you let go and fly on x1.15 faster.
+    - Arriving, or stopped short by something in the way, you **perch** on the wall at the spot. Back (S) **rappels** onto the line, hanging under the spot with gravity and a little sway (`rappel_speed` 4.5). Forward (W) **reels** back up to the perch (`reel_speed` 3). Space lets go with a hop.
+    - **One at a time:** a new grapple only once this one's let go.
+    - Big enemies: launched at, then kicked on arrival, or press during the flight to ride (as before).
+    - The chimes are generated placeholders (`charge_timed_sound`/`launch_timed_sound` take the user's sounds), local to your own game.
+  - Checked by driving the real player with input packets, as the host does: under half a charge, nothing fires or is spent; a timed full charge gives the reward and launches to a wall 30 m off and perches; a press while perched starts nothing; rappel and reel work; Space lets go; a perfect mid-flight press gives the second reward (28.6 to 32.9 m/s).
+  - (From now on no test or check runs without the user's yes.)
