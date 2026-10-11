@@ -58,6 +58,8 @@ var _time := 0.0
 var _alt_held := false
 var _cursor := Vector2.ZERO
 var _dot: Control
+## Tuning: the items' box drawn as a yellow wireframe, seen through the bag.
+var _box_lines: MeshInstance3D
 
 static var _scenes := {}
 static var _forest: StandardMaterial3D
@@ -110,6 +112,8 @@ func update(delta: float) -> bool:
 		material.set_shader_parameter("clip_height", clip if unzip > 0.0 else _bag_box.end.y + 1.0)
 	_hold_with_left_hand()
 	_update_items(delta)
+	if _box_lines and _box_lines.visible:
+		_draw_box()
 	_dot.visible = _picking()
 	_dot.position = _cursor_at() - _dot.size * 0.5
 	return true
@@ -152,6 +156,41 @@ func _on_your_back(delta: float) -> void:
 	if _restless >= RESTLESS_SHUFFLE:
 		_restless = 0.0
 		_shuffle()
+
+
+## Tuning (Viewmodel, O then X): the items' box shown as a yellow wireframe,
+## through the bag, or hidden.
+func show_box(on: bool) -> void:
+	if on and _box_lines == null and _bag:
+		_box_lines = MeshInstance3D.new()
+		_box_lines.mesh = ImmediateMesh.new()
+		_box_lines.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = Color(1.0, 0.85, 0.1)
+		material.no_depth_test = true
+		material.render_priority = 10
+		_box_lines.material_override = material
+		_bag.add_child(_box_lines)
+	if _box_lines:
+		_box_lines.visible = on
+		if on:
+			_draw_box()
+
+
+func _draw_box() -> void:
+	var lines := _box_lines.mesh as ImmediateMesh
+	lines.clear_surfaces()
+	lines.surface_begin(Mesh.PRIMITIVE_LINES)
+	var box := _inside()
+	for a in 8:
+		for axis in 3:
+			if a & (1 << axis):
+				continue # each edge once: from the corner with that bit clear
+			var b := a | (1 << axis)
+			lines.surface_add_vertex(box.position + box.size * Vector3(a & 1, (a >> 1) & 1, (a >> 2) & 1))
+			lines.surface_add_vertex(box.position + box.size * Vector3(b & 1, (b >> 1) & 1, (b >> 2) & 1))
+	lines.surface_end()
 
 
 ## One rough rearrangement: everything nudged about, dropped to the bottom

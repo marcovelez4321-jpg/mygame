@@ -39,9 +39,9 @@ extends Resource
 @export_group("Items")
 ## The space the items tumble about in (bag space, shares of the bag's size
 ## from its middle): the main compartment, measured off the model -- inside
-## its walls (not the front pocket, at -x), from a false bottom at about
-## half height (so what's in there piles up to just under the opening and
-## you see it) up to just below where it's unzipped to.
-@export var items_area: AABB = AABB(Vector3(-0.17, -0.05, -0.44), Vector3(0.63, 0.31, 0.88))
+## its walls (not the front pocket, at -x), from a false bottom about a
+## quarter of the way up (the user's: deeper in) up to just below where
+## it's unzipped to. Tuned live: O, then X (a yellow wireframe shows it).
+@export var items_area: AABB = AABB(Vector3(-0.17, -0.3, -0.44), Vector3(0.63, 0.56, 0.88))
 ## How big each item prop is drawn (metres, its longest side).
 @export var item_size: float = 0.084

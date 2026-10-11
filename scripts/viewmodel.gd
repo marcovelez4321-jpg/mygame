@@ -219,6 +219,8 @@ var _tuning_left_arm: bool = false
 var _tuning_bag: bool = false
 ## Bag tuning: which finger [ and ] curl (-1: the whole fist; 0 thumb .. 4 pinky).
 var _bag_finger := -1
+## Bag tuning, X: the keys move and size the items' box instead.
+var _tuning_bag_box := false
 ## The open backpack (your own view), and whether it was out last frame.
 var _bag_view: BackpackView
 var _bag_was_out := false
@@ -1413,6 +1415,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning = _tuning or _tuning_bag
 		_tune_label.visible = _tuning
 		_bag_finger = -1
+		_tuning_bag_box = false
+		_bag_view.show_box(false)
 		_tuning_grip = false
 		_tuning_right_arm = false
 		_tuning_left_arm = false
@@ -1420,6 +1424,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_tuning_muzzle = false
 		_tuning_aim = false
 		_update_label("open the backpack (Tab) to see it" if _tuning_bag else "")
+	elif _tuning_bag and key.keycode == KEY_X:
+		_tuning_bag_box = not _tuning_bag_box
+		_bag_view.show_box(_tuning_bag_box)
+		_update_label("")
 	elif _tuning_bag and key.keycode in [KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5]:
 		_bag_finger = int(key.keycode - KEY_1) if key.keycode != KEY_0 else -1
 		_update_label("")
@@ -1642,9 +1650,23 @@ func _process(delta: float) -> void:
 ##   [ / ]: a looser / tighter fist -- or, after 1-5, just that finger
 ##   (thumb, index, middle, ring, pinky; 0 back to the whole fist).
 ##   , / .: the elbow straighter / bent.
+##   X: the same keys move the items' box instead (Shift: size it), shown as
+##   a yellow wireframe.
 ##   F3 saves it (scenes/player/backpack_hold.tres).
 func _tune_bag(x: float, y: float, z: float, fine: float, delta: float) -> void:
 	var hold := _bag_view.hold
+	if _tuning_bag_box:
+		# X: the items' box (shares of the bag's size, along the bag's own
+		# axes -- watch the wireframe). Shift: grow/shrink it about its middle.
+		var area := hold.items_area
+		var change := Vector3(x, y, z) * 0.25 * fine * delta
+		if Input.is_key_pressed(KEY_SHIFT):
+			area.size = (area.size + change).max(Vector3.ONE * 0.02)
+			area.position -= change * 0.5
+		else:
+			area.position += change
+		hold.items_area = area
+		return
 	var alt := Input.is_key_pressed(KEY_ALT)
 	var shift := Input.is_key_pressed(KEY_SHIFT)
 	if alt and Input.is_key_pressed(KEY_CTRL):
@@ -1808,13 +1830,20 @@ func _update_label(message: String) -> void:
 		var curls := hold.finger_curl
 		curls.resize(5)
 		var finger_names := ["thumb", "index", "middle", "ring", "pinky"]
+		if _tuning_bag_box:
+			var area := hold.items_area
+			_tune_label.text = ("TUNING THE ITEMS' BOX (the yellow wireframe)\nfrom (%.3f, %.3f, %.3f)  size (%.3f, %.3f, %.3f)  (shares of the bag)\n\n"
+					+ "Arrows/PgUp,PgDn = move it (along the bag's own axes)\nShift + those = grow/shrink it\n"
+					+ "Ctrl = finer   X = back to the hold   F3 = save   O = done\n%s") % [
+					area.position.x, area.position.y, area.position.z, area.size.x, area.size.y, area.size.z, message]
+			return
 		_tune_label.text = ("TUNING THE BACKPACK HOLD (Tab to open it)\nbag at (%.3f, %.3f, %.3f)  turned (%.1f, %.1f, %.1f)  size %.3f\n"
 				+ "hand on bag (%.2f, %.2f, %.2f)  turned (%.1f, %.1f, %.1f)\n"
 				+ "elbow points (%.2f, %.2f, %.2f)  bend %.0f\n"
 				+ "fist %.2f   fingers: thumb %+.2f  index %+.2f  middle %+.2f  ring %+.2f  pinky %+.2f   [ ] now curls: %s\n\n"
 				+ "Arrows/PgUp,PgDn = move bag   Shift = turn bag   +/- = size\nAlt = move hand on it   Alt+Shift = turn hand\n"
 				+ "Ctrl+Alt = point the elbow   , . = elbow bend\n"
-				+ "[ ] = curl   1-5 = pick a finger   0 = whole fist\nCtrl = finer   F3 = save   O = done\n%s") % [
+				+ "[ ] = curl   1-5 = pick a finger   0 = whole fist\nX = the items' box   Ctrl = finer   F3 = save   O = done\n%s") % [
 				hold.bag_position.x, hold.bag_position.y, hold.bag_position.z,
 				hold.bag_rotation_degrees.x, hold.bag_rotation_degrees.y, hold.bag_rotation_degrees.z, hold.bag_scale,
 				hold.handle_point.x, hold.handle_point.y, hold.handle_point.z,
