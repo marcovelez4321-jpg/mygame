@@ -387,6 +387,26 @@ func _bake() -> void:
 	var scene := PackedScene.new()
 	var error := scene.pack(root)
 	if error == OK:
+		# Keep the scene's uid (the project's main scene points at it by uid; a
+		# fresh save would give it a new one and Play couldn't find it).
+		# (Read from the file's own header: ResourceLoader's uid lookup needs the
+		# editor's cache, which a --script run doesn't have.)
+		var uid := _uid_in_header(SCENE_PATH)
 		error = ResourceSaver.save(scene, SCENE_PATH)
+		if error == OK and uid != ResourceUID.INVALID_ID:
+			error = ResourceSaver.set_uid(SCENE_PATH, uid)
 	print("test world: terrain data in ", DATA_DIR, ", scene ", SCENE_PATH, " (error ", error, ")")
 	quit()
+
+
+## The uid in a text scene's header (`[gd_scene ... uid="uid://..."]`), or
+## INVALID_ID if it has none (or isn't there yet).
+static func _uid_in_header(path: String) -> int:
+	if not FileAccess.file_exists(path):
+		return ResourceUID.INVALID_ID
+	var header := FileAccess.get_file_as_string(path).get_slice("\n", 0)
+	var at := header.find("uid=\"")
+	if at < 0:
+		return ResourceUID.INVALID_ID
+	var text := header.substr(at + 5).get_slice("\"", 0)
+	return ResourceUID.text_to_id(text)

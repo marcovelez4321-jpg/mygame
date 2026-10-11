@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://c2jn1gw6was7e"]
+[gd_scene format=3 uid="uid://8csi35th24b5"]
 
 [ext_resource type="Shader" uid="uid://dkm5q24etjal" path="res://shaders/alien_terrain.gdshader" id="1_k6tl3"]
 [ext_resource type="Script" uid="uid://bdy1lul7nr03o" path="res://scripts/world/world_navigation.gd" id="2_5vhu7"]
