@@ -97,6 +97,16 @@ const HALLS := [
 			[2400.0, 2720.0], [2940.0, 3260.0], [3480.0, 3800.0], [4000.0, 4300.0]],
 	[[440.0, 600.0]], # the stump's: open to the sky, broken into the main tower's 440 m hall
 ]
+## Barnacles (the user's: more the higher you go): a spot's chance of a nest
+## is this many times higher at the top of the tallest tower than at the
+## bottom; the outside walls get OUTSIDE_NESTS, thickening the same way up
+## every tower.
+const NEST_TOP_DENSITY := 3.0
+const OUTSIDE_NESTS := 30
+## Human gangs camped in the towers (the user's): on the floor of about one
+## hall in three, and up on some mezzanines.
+const GANG_HALL_CHANCE := 1.0 / 3.0
+const GANG_DECK_CHANCE := 0.15
 const FLOOR := 40.0 # the base's storeys
 const SLAB := 4.0
 const WALL := 6.0
@@ -153,6 +163,9 @@ var lift_buttons := PackedVector3Array()
 var entrance_spots := PackedVector3Array()
 ## Spots on floors and mezzanines inside where a barnacle nest may grow.
 var nest_spots := PackedVector3Array()
+## Where human gangs camp (Megastructure.gang_spots): x, y, z on a floor,
+## w how far round it they wander.
+var gang_spots := PackedVector4Array()
 ## Floors the sewer growths grow on inside: {rect (x/z), y, zone, kinds
 ## (Kind -> weight), density, shaft (keep its middle clear)}.
 var growth_floors: Array[Dictionary] = []
@@ -437,7 +450,7 @@ func _base() -> void:
 	for f in floors + 1:
 		_slab_with_hole(f * FLOOR - SLAB * 0.5, inner, SHAFT, "Base")
 	for f in floors:
-		if random.randf() < 0.45:
+		for n in _nests_at(0.45, f * FLOOR):
 			var ring := Vector2.from_angle(random.randf() * TAU) * random.randf_range(SHAFT * 0.5 + 12.0, inner * 0.5 - 10.0)
 			nest_spots.append(Vector3(ring.x, f * FLOOR, ring.y))
 		growth_floors.append({rect = Rect2(-inner * 0.5, -inner * 0.5, inner, inner), y = f * FLOOR, zone = "Base_%d" % f,
@@ -1096,19 +1109,30 @@ func _hall_features(hall: Dictionary) -> void:
 		var deck_y := floor_y + tall * level
 		var wall_mid := box.get_center() + out * (across_len * 0.5 - depth * 0.5)
 		_add(Vector3(wall_mid.x, deck_y - 2.0, wall_mid.z), cross * span + Vector3.UP * 4.0 + out.abs() * depth, &"interior", group)
-		if random.randf() < 0.45:
+		for n in _nests_at(0.45, deck_y):
 			nest_spots.append(Vector3(wall_mid.x, deck_y, wall_mid.z) + cross * random.randf_range(-span * 0.3, span * 0.3))
+		# Now and then a gang camped up on it.
+		if random.randf() < GANG_DECK_CHANCE:
+			gang_spots.append(Vector4(wall_mid.x, deck_y, wall_mid.z, minf(depth, span) * 0.35))
 		var deck_size := cross * span + out.abs() * depth
 		growth_floors.append({rect = Rect2(wall_mid.x - deck_size.x * 0.5, wall_mid.z - deck_size.z * 0.5, deck_size.x, deck_size.z),
 				y = deck_y, zone = group, kinds = HALL_GROWTH, density = 0.8, shaft = 0.0})
 		_switchback(box, out, cross, across_len * 0.5 - depth, along_len - 24.0, floor_y, deck_y, group)
 	growth_floors.append({rect = Rect2(box.position.x + 4.0, box.position.z + 4.0, box.size.x - 8.0, box.size.z - 8.0), y = floor_y,
 			zone = group, kinds = HALL_GROWTH, density = 1.2, shaft = (UPPER_SHAFT * 0.5 + 6.0) if main else 0.0})
-	# Now and then a barnacle nest's spot on the hall floor.
-	if random.randf() < 0.6:
+	# Now and then a barnacle nest's spot on the hall floor (more the higher up).
+	for n in _nests_at(0.6, floor_y):
 		var spot := Vector3(random.randf_range(box.position.x + 12.0, box.end.x - 12.0), floor_y, random.randf_range(box.position.z + 12.0, box.end.z - 12.0))
 		if not (main and shaft.has_point(Vector2(spot.x, spot.z))):
 			nest_spots.append(spot)
+	# A gang camped on the floor of about one hall in three (the user's).
+	if random.randf() < GANG_HALL_CHANCE:
+		for attempt in 10:
+			var spot := Vector3(random.randf_range(box.position.x + 20.0, box.end.x - 20.0), floor_y, random.randf_range(box.position.z + 20.0, box.end.z - 20.0))
+			if main and shaft.grow(20.0).has_point(Vector2(spot.x, spot.z)):
+				continue
+			gang_spots.append(Vector4(spot.x, spot.y, spot.z, 18.0))
+			break
 	# Columns in a skewed grid, a few leaning.
 	for i in random.randi_range(4, 8):
 		var at := Vector3(random.randf_range(box.position.x + 8.0, box.end.x - 8.0), 0.0, random.randf_range(box.position.z + 8.0, box.end.z - 8.0))
@@ -1365,8 +1389,18 @@ func _panic_stairs(hall: Dictionary) -> void:
 				kinds = HALL_GROWTH, density = 0.8 * HIVE_GROWTH, shaft = 0.0, xform = Transform3D(basis, (a + b) * 0.5)})
 	growth_floors.append({rect = Rect2(box.position.x + 4.0, box.position.z + 4.0, box.size.x - 8.0, box.size.z - 8.0), y = floor_y,
 			zone = group, kinds = HALL_GROWTH, density = 1.2 * HIVE_GROWTH, shaft = 0.0})
-	if random.randf() < 0.6:
+	for n in _nests_at(0.6, floor_y):
 		nest_spots.append(Vector3(random.randf_range(box.position.x + 12.0, box.end.x - 12.0), floor_y, random.randf_range(box.position.z + 12.0, box.end.z - 12.0)))
+
+
+## How many barnacle nests a spot at height y gets, for a `chance` at the
+## bottom: NEST_TOP_DENSITY times that by the top of the tallest tower (the
+## user's: barnacles more common the higher you go), so up there a floor can
+## have two.
+func _nests_at(chance: float, y: float) -> int:
+	var up := clampf(y / float(TOWERS[0][3]), 0.0, 1.0)
+	var expected := chance * lerpf(1.0, NEST_TOP_DENSITY, up)
+	return int(expected) + (1 if random.randf() < expected - floorf(expected) else 0)
 
 
 ## Whether a landing (top middle `centre`, half size r) fits: inside the
@@ -1627,7 +1661,14 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	root.inside = AABB(Vector3(-TOWERS[0][2] * 0.5, DEPTHS_FLOOR - 10.0, -TOWERS[0][2] * 0.5), Vector3(TOWERS[0][2], TOWERS[0][3] - DEPTHS_FLOOR, TOWERS[0][2]))
 	root.terrain_holes = terrain_holes
 	root.floor_nests = nest_spots
-	root.barnacle_nests = 10 # the outside walls; inside, floor_nests
+	root.gang_spots = gang_spots
+	# The outside walls (inside, floor_nests): up every tower, thicker higher up.
+	root.barnacle_nests = OUTSIDE_NESTS
+	root.nest_top_density = NEST_TOP_DENSITY
+	var columns := PackedVector3Array()
+	for tower: Array in TOWERS:
+		columns.append(Vector3(tower[0], tower[3], tower[1]))
+	root.nest_columns = columns
 	root.webs = web_nests
 	var shell := Node3D.new()
 	shell.name = "Shell"

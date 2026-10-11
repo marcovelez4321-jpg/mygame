@@ -38,6 +38,12 @@ extends Node3D
 @export var barnacle_nests: int = 20
 ## The outside nests grow up to this high (where players get to).
 @export var nest_height: float = 600.0
+## Its towers (local: x, height, z), if it has them: the outside nests grow
+## up all of them, thicker the higher up (nest_top_density times as thick at
+## the top as at the bottom -- the user's: barnacles more common the higher
+## you go). Empty: up its middle to nest_height, evenly.
+@export var nest_columns := PackedVector3Array()
+@export var nest_top_density: float = 3.0
 @export var cluster_scene: PackedScene = preload("res://scenes/enemy/barnacle_cluster.tscn")
 ## Spots on its floors (local space) where a nest grows while a player's near.
 @export var floor_nests := PackedVector3Array()
@@ -49,12 +55,21 @@ extends Node3D
 ## more than infest_range + 150 m away; far-off ones sleep meanwhile.
 @export var infest_range: float = 500.0
 @export var roach_swarms: int = 3
-@export var spider_hordes: int = 2
+@export var spider_hordes: int = 3 # x1.5 (the user's)
 @export var rat_hordes: int = 2
 ## Everything in its infestation is this much bigger (bites x size; health
 ## stays the same) -- a place not built for people breeds things to match.
 ## Only its own hordes: a Rat Bender's keep their size.
 @export var infest_magnify: float = 2.0
+@export_group("Gangs")
+## Human gangs camped on its floors (the builder's spots, local; the user's:
+## about one hall in three). Each is there while a player's within gang_reach
+## of it and gone once everyone's left, like the floor nests. Each spot:
+## x, y, z (local, on the floor), w = how far round it they wander.
+@export var gang_spots := PackedVector4Array()
+@export var gang_reach: float = 160.0
+@export var gang_min: int = 6
+@export var gang_max: int = 12
 @export_group("Webs")
 ## Cobwebs with a spider horde each (the builder's: {at: the floor by the
 ## web, local; size: the web's width, m; indoors; radius: how far its
@@ -71,6 +86,11 @@ const SKYLINE := preload("res://shaders/skyline.gdshader")
 const ROACH := preload("res://scenes/enemy/roach.tscn")
 const SPIDER_PACK := preload("res://scenes/enemy/spider_pack.tscn")
 const RAT_NEST := preload("res://scenes/enemy/rat_nest.tscn")
+const TWEAKERS: Array[PackedScene] = [
+	preload("res://scenes/enemy/enemy.tscn"),
+	preload("res://scenes/enemy/enemy_gunner.tscn"),
+	preload("res://scenes/enemy/enemy_rusher.tscn"),
+]
 ## Megastructure lairs (WormDirector picks them up).
 const LAIR_GROUP := "megastructure_lairs"
 
@@ -80,6 +100,8 @@ var _infestation: Array[RoamingGroup] = []
 var _floor_nests := {}
 ## webs index -> its spiders' group, while they're there.
 var _web_hordes := {}
+## gang_spots index -> its gang, while it's there.
+var _gangs := {}
 
 
 func _ready() -> void:
@@ -116,9 +138,12 @@ func _grow_nests() -> void:
 		var from: Vector3
 		var to: Vector3
 		if outside:
-			var y := randf_range(8.0, nest_height)
-			from = Vector3(0.0, y, 0.0) - direction * 900.0
-			to = Vector3(0.0, y, 0.0)
+			var column := Vector3(0.0, nest_height, 0.0)
+			if not nest_columns.is_empty():
+				column = nest_columns[randi() % nest_columns.size()]
+			var y := lerpf(8.0, column.y, _toward_top(randf()))
+			from = Vector3(column.x, y, column.z) - direction * 900.0
+			to = Vector3(column.x, y, column.z)
 		else:
 			from = inside.position + Vector3(randf(), randf(), randf()) * inside.size
 			to = from + direction * 120.0
@@ -136,6 +161,16 @@ func _grow_nests() -> void:
 		grown += 1
 
 
+## A height share (0 bottom .. 1 top) for a random `u` (0..1), spread so the
+## top is nest_top_density times as likely as the bottom (inverse of a
+## straight-line density rising up the tower).
+func _toward_top(u: float) -> float:
+	var a := (nest_top_density - 1.0) * 0.5
+	if absf(a) < 0.0001:
+		return u
+	return (-1.0 + sqrt(1.0 + 4.0 * a * u * (1.0 + a))) / (2.0 * a)
+
+
 func _process(delta: float) -> void:
 	_camera_check -= delta
 	if _camera_check > 0.0:
@@ -149,6 +184,7 @@ func _process(delta: float) -> void:
 	if multiplayer.is_server():
 		_update_floor_nests()
 		_update_webs()
+		_update_gangs()
 
 
 ## The floor nests near a player grown; the ones nobody's near any more gone.
@@ -171,6 +207,36 @@ func _update_floor_nests() -> void:
 		elif nest != null and nearest > floor_nest_reach + 50.0:
 			nest.queue_free()
 			_floor_nests.erase(i)
+
+
+## The floors' gangs near a player there; the ones nobody's near cleared.
+func _update_gangs() -> void:
+	var players := get_tree().get_nodes_in_group("player")
+	for i in gang_spots.size():
+		var spot := gang_spots[i]
+		var at := to_global(Vector3(spot.x, spot.y, spot.z))
+		var nearest := INF
+		for node in players:
+			nearest = minf(nearest, (node as Node3D).global_position.distance_to(at))
+		var gang = _gangs.get(i) # untyped: it may have been freed
+		if gang != null and not is_instance_valid(gang):
+			_gangs.erase(i)
+			gang = null
+		if gang == null and nearest < gang_reach:
+			var group := RoamingGroup.new()
+			group.name = "Gang"
+			group.use_navmesh = false
+			group.anchor = at
+			group.anchor_radius = spot.w
+			group.drift_speed = 1.0
+			add_child(group)
+			group.global_position = at
+			for member in randi_range(gang_min, gang_max):
+				_member(group, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), member)
+			_gangs[i] = group
+		elif gang != null and nearest > gang_reach + 80.0:
+			(gang as RoamingGroup).disband()
+			_gangs.erase(i)
 
 
 ## The webs near a player with their spiders; the ones nobody's near cleared.

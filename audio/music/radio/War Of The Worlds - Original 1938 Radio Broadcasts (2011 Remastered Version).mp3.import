@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cmppaqc5jwd6c"
+path="res://.godot/imported/War Of The Worlds - Original 1938 Radio Broadcasts (2011 Remastered Version).mp3-f1e013669b9a9ae700dfa511ed13b912.mp3str"
+
+[deps]
+
+source_file="res://audio/music/radio/War Of The Worlds - Original 1938 Radio Broadcasts (2011 Remastered Version).mp3"
+dest_files=["res://.godot/imported/War Of The Worlds - Original 1938 Radio Broadcasts (2011 Remastered Version).mp3-f1e013669b9a9ae700dfa511ed13b912.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

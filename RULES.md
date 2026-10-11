@@ -1399,3 +1399,9 @@ them:
   - **How it's held** is `BackpackHold` (`scenes/player/backpack_hold.tres`): the bag's place, turn and size; the hand's place on it, its turn and fist; the elbow; the unzip; the items' space. Tuned in game with F2 then O (bag open), F3 saves.
   - **On your back:** the pack rides the character's upper chest bone (`PlayerModel._wear_backpack`), gone while you hold it out.
   - Compiled (with the user's yes): 138 scripts, 0 failures. Not yet seen in game.
+- **More enemies up the towers; barnacles thicker higher up and bursting at you (2026-10-11).** The user's: spiders and humans more common, humans camped on the towers' floors, barnacles more common the higher you go, and a barnacle you get too close to spurts out its brood.
+  - **More spiders and humans** (x1.5): the roaming bands' weights (`EncounterDirector.WEIGHTS`: tweakers 2.25 both, spiders 3.0 / 4.5) and the Stack's infestation (`Megastructure.spider_hordes` 3).
+  - **Gangs in the towers** (`Megastructure.gang_spots`, from `StackBuilder`): on the floor of about one hall in three (`GANG_HALL_CHANCE`, not the hive, clear of the main shaft) and on some mezzanines (`GANG_DECK_CHANCE` 0.15). 6-12 tweakers (grunts, gunners, rushers) camp there while a player's within 160 m; gone once everyone's 240 m off.
+  - **Barnacles thicker higher up** (x3 by the top, `NEST_TOP_DENSITY`): a floor or mezzanine's chance of a nest rises from its old chance at the ground to three times it at the top of the tallest tower (two on one floor up there). The outside nests (30 now, `OUTSIDE_NESTS`) grow up every tower, three times as thick at its top as at its foot (`Megastructure.nest_columns`, `_toward_top`).
+  - **The burst** (`Barnacle.burst_range` 5 m, `burst_cooldown` 6 s): come within 5 m of an awake barnacle and it swells and spits its brood straight away, again every 6 s while you stay close (up to twice its usual brood).
+  - The Stack rebaked. Not compiled or run (asks first).

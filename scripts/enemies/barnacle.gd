@@ -60,6 +60,10 @@ enum Brood { ROACHES, SPIDERS }
 ## world's many nests don't fill the game's creature caps from miles off).
 @export var wake_range: float = 40.0
 @export var max_brood: int = 4
+## Too close (the user's: 5 m): it throbs and spits at once, whatever its
+## timer says -- then not again for burst_cooldown. The throb is its warning.
+@export var burst_range: float = 5.0
+@export var burst_cooldown: float = 6.0
 
 @export_group("Look")
 @export var blood_color: Color = Color(0.6, 0.03, 0.03)
@@ -82,6 +86,8 @@ var _wake_check := 0.0
 var _awake := false
 var _spit_left := 0.0
 var _swelling := false
+var _close := false
+var _burst_left := 0.0
 var _dead := false
 
 @onready var health: Health = $Health
@@ -122,10 +128,19 @@ func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server() or _dead or _swelling:
 		return
 	_wake_check -= delta
+	_burst_left -= delta
 	if _wake_check <= 0.0:
-		_wake_check = 0.5 + randf() * 0.25 # (spread out over the frames)
-		_awake = _player_near()
+		# (Spread out over the frames; checked faster while someone's near.)
+		_wake_check = (0.2 if _awake else 0.5) + randf() * 0.1
+		var nearest := _nearest_player()
+		_awake = nearest < wake_range
+		_close = nearest < burst_range
 	if not _awake:
+		return
+	# Someone right up against it: it bursts (more than its usual brood allowed).
+	if _close and _burst_left <= 0.0 and _alive_brood() < max_brood * 2:
+		_burst_left = burst_cooldown
+		_swell()
 		return
 	_spit_left -= delta
 	if _spit_left <= 0.0:
@@ -135,11 +150,12 @@ func _physics_process(delta: float) -> void:
 		_swell()
 
 
-func _player_near() -> bool:
+## How far the nearest player is.
+func _nearest_player() -> float:
+	var nearest := INF
 	for node in get_tree().get_nodes_in_group("player"):
-		if (node as Node3D).global_position.distance_squared_to(global_position) < wake_range * wake_range:
-			return true
-	return false
+		nearest = minf(nearest, (node as Node3D).global_position.distance_to(global_position))
+	return nearest
 
 
 ## Its brood still alive (and forgets the rest).

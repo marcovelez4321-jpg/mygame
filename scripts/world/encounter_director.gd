@@ -53,13 +53,13 @@ extends Node
 
 enum Band { TWEAKERS, RATS, ROACHES, SPIDERS, HARVESTMEN }
 
-## How likely each roaming band is: [sewer, reef] weights. Tweakers 1.5 in
-## both: about 1 band in 7 either way (the user's).
+## How likely each roaming band is: [sewer, reef] weights. Tweakers and
+## spiders made half again as likely (the user's): tweakers about 1 band in 5.
 const WEIGHTS := {
-	Band.TWEAKERS: [1.5, 1.5],
+	Band.TWEAKERS: [2.25, 2.25], # x1.5 (the user's)
 	Band.RATS: [3.0, 1.0],
 	Band.ROACHES: [3.0, 2.0],
-	Band.SPIDERS: [2.0, 3.0],
+	Band.SPIDERS: [3.0, 4.5], # x1.5 (the user's)
 	Band.HARVESTMEN: [1.0, 2.0],
 }
 const TWEAKERS: Array[PackedScene] = [
