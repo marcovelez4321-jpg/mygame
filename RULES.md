@@ -1336,3 +1336,5 @@ them:
     - Checked headless end to end: rewound, a ray at the old spot hits and the real spot misses; restored, the reverse, and the body's mode is back.
     - Hitscan only: rockets and grenades fly in real time on the host, as in Source. The known trade-off (Source's too): a target can be hit just after ducking behind cover, because on the shooter's screen they hadn't yet.
   - `Net` (`scripts/net/net.gd`) gained `round_trip_msec(node, peer)` and `body_of(node, id)` (returns Node3D: naming PlayerMovement would tie Net to the player's script, which needs the game's autoloads, and Net has to load in bakes). NetEntities uses Net, not the Network autoload, for the same reason.
+
+- 2026-10-11: **The Stack's original low drone is back, subtle** (the user's: the buzzing hum near the Stack was far too loud -- they'd had their audio off before). `make_drone` is the original again: 38-113 Hz tones beating against each other and a sub-40 Hz rumble, a bassy hum felt more than heard (checked: it measures the same as the original). The Stack plays it at `drone_volume_db` -8 dB (was +2), a setting on TheStack/Decor/Sound.

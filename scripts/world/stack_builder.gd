@@ -1689,6 +1689,7 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	sound.name = "Sound"
 	sound.wind_stream = wind
 	sound.drone_stream = drone
+	sound.drone_volume_db = -8.0 # subtle: felt more than heard (the user's)
 	sound.openings = openings
 	sound.inside = root.inside
 	_own(root, sound, decor)
@@ -2515,10 +2516,10 @@ static func make_wind(seconds: float = 12.0) -> AudioStreamWAV:
 	return _wav(_crossfade_loop(samples, rate), rate)
 
 
-## The drone: a deep buzzing hum (two voices a hair apart, beating slowly),
-## its overtones through a slowly gliding resonance so the building seems to
-## moan, a rumble under it. Built from overtones, not just the deep tone, so
-## it's heard on any speakers -- the ear fills the low note back in.
+## The drone: low tones beating slowly against each other, a rumble under
+## them -- a deep, bassy hum you feel more than hear (the original; the
+## user's pick over a louder buzzing one, kept subtle by the Stack's
+## drone_volume_db).
 static func make_drone(seconds: float = 16.0) -> AudioStreamWAV:
 	var rate := 22050
 	var frames := int(seconds * rate)
@@ -2527,32 +2528,14 @@ static func make_drone(seconds: float = 16.0) -> AudioStreamWAV:
 	var noise_random := RandomNumberGenerator.new()
 	noise_random.seed = 4
 	var rumble := 0.0
-	var low := 0.0
-	var band := 0.0
 	for i in frames:
 		var t := float(i) / rate
-		var phase := t / seconds * TAU
-		var swell := 0.75 + 0.25 * sin(phase * 2.0)
-		var buzz := 0.0
-		for n in range(1, 13):
-			buzz += (sin(TAU * 55.0 * n * t) + 0.8 * sin(TAU * 55.3 * n * t)) / n
-		buzz += sin(TAU * 82.5 * t) * 0.5 # a fifth above, faint
-		# The moan: the buzz through a resonance gliding 150..330 Hz.
-		var centre := 240.0 + 90.0 * sin(phase * 3.0) + 30.0 * sin(phase * 7.0 + 1.0)
-		var f := 2.0 * sin(PI * centre / rate)
-		low += f * band
-		var high := buzz - low - 0.25 * band
-		band += f * high
-		rumble += (noise_random.randf_range(-1.0, 1.0) - rumble) * 0.04
-		samples[i] = (buzz * 0.12 + band * 0.12 + rumble * 2.0) * swell
-	# Driven a little into saturation: louder for its peaks, and grittier.
-	var peak := 0.0001
-	for s in samples:
-		peak = maxf(peak, absf(s))
-	for i in frames:
-		samples[i] = tanh(samples[i] / peak * 2.5)
+		var swell := 0.75 + 0.25 * sin(t / seconds * TAU * 2.0)
+		var tone := sin(TAU * 38.0 * t) * 0.45 + sin(TAU * 38.5 * t) * 0.35 + sin(TAU * 57.0 * t) * 0.2 \
+				+ sin(TAU * 76.0 * t) * 0.1 + sin(TAU * 113.0 * t) * 0.05
+		rumble += (noise_random.randf_range(-1.0, 1.0) - rumble) * 0.01
+		samples[i] = (tone * 0.6 + rumble * 2.5) * swell * 0.7
 	return _wav(_crossfade_loop(samples, rate), rate)
-
 
 static func _crossfade_loop(samples: PackedFloat32Array, rate: int) -> PackedFloat32Array:
 	var fade := rate
