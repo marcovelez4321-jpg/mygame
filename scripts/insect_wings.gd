@@ -6,8 +6,9 @@ extends Node3D
 ## pale, veined, see-through wings made in code, beating in a blur while they
 ## fly, and a buzz.
 ##   On a body (first_person off): on the back, a 3D buzz from there.
-##   In first person: just behind your view, so the tips flicker at the edges
-##   of the screen as they beat, and the buzz is in your ears.
+##   In first person: no wings in your view (they covered the crosshair --
+##   the user's), just the buzz in your ears; your hands drop instead
+##   (Viewmodel's flight dip).
 ## Presentation only (Rule 1): it just follows the player's `flying`.
 
 ## Beats a second, and how far each beat swings (degrees).
@@ -32,7 +33,7 @@ static var _look: StandardMaterial3D
 func setup(player: PlayerMovement, in_first_person: bool) -> void:
 	_player = player
 	first_person = in_first_person
-	for side: float in [-1.0, 1.0]:
+	for side: float in ([] if first_person else [-1.0, 1.0]):
 		for pair in 2: # fore and hind wings
 			var hinge := Node3D.new()
 			hinge.position = Vector3(side * 0.06, 0.05 - pair * 0.12, 0.0)

@@ -398,12 +398,10 @@ func _ready() -> void:
 	if is_multiplayer_authority():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		camera.make_current()
-		# Your own wings: just in front of and below your view, the tips
-		# flickering at the screen's edges as they beat (InsectWings).
+		# Your own wings: heard, not seen (InsectWings; your hands drop).
 		var wings := InsectWings.new()
 		wings.name = "Wings"
 		camera.add_child(wings)
-		wings.position = Vector3(0.0, -0.15, -0.35)
 		wings.setup(self, true)
 	else:
 		camera.current = false

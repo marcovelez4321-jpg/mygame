@@ -190,6 +190,9 @@ static var _arms_only_meshes := {}
 ## The arms model's size (PlayerModel.fit_scale_for() of ITS head height).
 var _arms_fit_scale := 1.0
 var _player_model: PlayerModel
+## Flying (PlayerMovement.flying): 0..1 of the way into the lowered pose the
+## reload dips to (the user's: hands down while the wings are out).
+var _flight_lower := 0.0
 ## The new arms (use_new_arms), and the grapple their left arm works for.
 var _fp_arms: FirstPersonArms
 var _grapple: PlayerGrapple
@@ -1556,10 +1559,18 @@ func _update_sway(delta: float) -> void:
 	var blend := 1.0 - exp(-sway_smoothing * delta)
 	_sway_position = _sway_position.lerp(target_position, blend)
 	_sway_tilt = _sway_tilt.lerp(target_tilt, blend)
+	# Flying: the hands eased down into the reload's lowered pose, and back up
+	# after (on this layer, so the reload's and the switch's own dips aren't
+	# touched).
+	var body := _weapons.get_parent() as PlayerMovement if _weapons else null
+	var lower := 1.0 if body and body.flying else 0.0
+	_flight_lower = move_toward(_flight_lower, lower, delta * (4.0 if lower > _flight_lower else 3.0))
+	var dip := smoothstep(0.0, 1.0, _flight_lower)
+
 	# Aiming steadies the sway and carries the gun toward your eye.
 	var calm := 1.0 - aim_steady
-	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0) * calm + aim_offset + _preview_offset
-	_sway_pivot.rotation_degrees = Vector3(_sway_tilt.x, _sway_tilt.y, 0.0) * calm
+	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0) * calm + aim_offset + _preview_offset + LOWERED_OFFSET * dip
+	_sway_pivot.rotation_degrees = Vector3(_sway_tilt.x, _sway_tilt.y, 0.0) * calm + Vector3(LOWERED_TILT_DEGREES * dip, 0.0, 0.0)
 
 
 func _process(delta: float) -> void:
