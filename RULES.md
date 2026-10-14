@@ -1489,3 +1489,4 @@ them:
   - **Speed juice** (`CameraJuice.set_motion`, your own camera only, from a run up to the cap): the camera rolls into strafes and turns and sways; the view widens up to 12 degrees; speed lines rush out at the screen's edges (`shaders/speed_lines.gdshader`); a generated rushing-air loop gets louder and higher; a light rattle past 80%.
   - Reference: VHOLUME (2026) -- momentum kept between moves, bhops with no penalty, wall moves that redirect instead of stopping.
   - Not compiled or run (asks first).
+- **Speed juice: no speed lines, no wind rush (2026-10-14).** The user's: took both out; the camera's tilt, sway, speed FOV and rattle stay. `shaders/speed_lines.gdshader` deleted. Not compiled or run (asks first).

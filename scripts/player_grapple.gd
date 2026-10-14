@@ -56,7 +56,7 @@ enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS }
 
 @export_group("Charge")
 ## Seconds of holding for a full-power grapple.
-@export var charge_time: float = 1.5
+@export var charge_time: float = 1.0
 ## It only fires once held at least this share of charge_time (the user's:
 ## half -- no spamming); let go sooner and nothing happens, nothing's spent.
 @export_range(0.0, 1.0, 0.05) var min_charge_share: float = 0.5

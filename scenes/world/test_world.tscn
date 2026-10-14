@@ -76,7 +76,6 @@ _shader_parameters = {
 }
 shader_override_enabled = true
 shader_override = ExtResource("1_k6tl3")
-show_checkered = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0kkto"]
 transparency = 4
@@ -125,7 +124,6 @@ material = SubResource("Terrain3DMaterial_fxg6t")
 assets = SubResource("Terrain3DAssets_pb6gh")
 collision_mode = 3
 vertex_spacing = 4.0
-show_checkered = true
 top_level = true
 metadata/_edit_lock_ = true
 
