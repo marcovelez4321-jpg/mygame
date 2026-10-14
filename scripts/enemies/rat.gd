@@ -158,6 +158,9 @@ func _ready() -> void:
 	add_to_group(Factions.GROUPS[Factions.Side.RAT])
 	Population.mark_born(self)
 	lock_rotation = true # upright; the Visual turns to face where it runs
+	# Everyone's gravity (Fall), not the world default's real-world 9.8 (the
+	# leaps' aim reads gravity_scale, so it stays true).
+	gravity_scale = Fall.GRAVITY / float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
 	# Small and fast against the open world's ground, which is a surface with
 	# no thickness: swept, so a step can't carry it through a hillside.
 	continuous_cd = true
@@ -232,6 +235,10 @@ func _roll_variety() -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
+	# Falling (not mid-leap: its arc is aimed with plain gravity), pulled
+	# harder, like everything (Fall).
+	if _state != State.LEAP and linear_velocity.y < 0.0:
+		apply_central_force(Vector3.DOWN * mass * Fall.GRAVITY * (Fall.MULTIPLIER - 1.0))
 	if _eater != null:
 		_held_in_jaws()
 		return

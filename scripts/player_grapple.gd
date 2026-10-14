@@ -8,7 +8,8 @@ extends Node3D
 ## Charge it, then it pulls you (docs/CLIMB_VISION.md):
 ##   CHARGE: hold right mouse; the ring shows where it'll bite. It only fires
 ##   once held at least min_charge_share of charge_time (no spamming), and
-##   costs one bar of the player's stamina -- the same bars dashes use.
+##   only with some of the player's stamina meter left (it costs nothing to
+##   fire; holding on drains it -- the user's single meter, 2026-10-14).
 ##   Let go right as it fills (good_window): a tiny extra boost, and a sound.
 ##   PULL (the user's: back to the original, Titanfall 2 style -- the straight
 ##   launch didn't feel natural): once it bites it hauls you toward the spot,
@@ -22,9 +23,11 @@ extends Node3D
 ##   and can sway; REEL (forward, W) climbs back up it to the spot.
 ##   Space lets go (with a hop). One grapple at a time: a new one only once
 ##   this one's let go.
-##   While it holds you (pulling, perched, hanging, riding) your stamina
-##   drains (drain_per_second: a bar every 4 s); empty, it lets go and you fall.
-## TENDRILS (the user's, 2026-10-14): where it bites (on the level, not a
+##   While it holds you (pulling, perched, hanging, riding) the meter drains
+##   (drain_per_second: 1 a second, 10 s on a full one); empty, it lets go
+##   and you fall.
+## TENDRILS (the user's, 2026-10-14; switched off for now -- tendrils_enabled
+## -- to come back to): where it bites (on the level, not a
 ## creature), three tendrils shoot on from the spot -- fanned out ahead the
 ## way you're flying (or up and onward: tendril_spread) -- each to a surface
 ## up to tendril_reach on, an M2 marker floating over each. Look right at
@@ -100,6 +103,8 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export var arrive_distance: float = 4.0
 
 @export_group("Tendrils")
+## Off for now (the user's, 2026-10-14: to come back to).
+@export var tendrils_enabled: bool = false
 ## Which way the three tendrils fan out from the spot (the user's: ahead;
 ## up and onward as the other choice).
 @export var tendril_spread: TendrilSpread = TendrilSpread.FAN_AHEAD
@@ -116,8 +121,9 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export var marker_aim_degrees: float = 4.0
 
 @export_group("Hold")
-## Stamina bars drained a second while it holds you (0.25: one every 4 s).
-@export var drain_per_second: float = 0.25
+## The meter drained a second while it holds you (1: a full 10 s meter lasts
+## 10 s; PlayerMovement.max_stamina).
+@export var drain_per_second: float = 1.0
 ## How far off the wall you perch, and the line's speeds.
 @export var perch_standoff: float = 1.0
 @export var reel_speed: float = 3.0
@@ -284,7 +290,7 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			if _hold >= charge_time * min_charge_share:
 				_charge_bonus = _hold >= charge_time and _hold <= charge_time + good_window
 				_fire(origin, aim)
-	elif pressed and _rope == Rope.NONE and not weapons.is_busy() and (infinite_charges or _player.stamina >= 1.0):
+	elif pressed and _rope == Rope.NONE and not weapons.is_busy() and (infinite_charges or _player.has_stamina()):
 		if hand_free or weapons.switch_to_one_handed():
 			_coiling = true
 			_hold = 0.0
@@ -343,7 +349,7 @@ func release() -> void:
 
 
 func _fire(origin: Vector3, aim: Vector3) -> void:
-	if not infinite_charges and not _player.spend_stamina():
+	if not infinite_charges and not _player.has_stamina():
 		_hold = 0.0
 		return # out of stamina: nothing to throw it with
 	_power = clampf(_hold / charge_time, min_charge_share, 1.0)
@@ -392,7 +398,7 @@ func _land() -> void:
 	_stalled = 0.0
 	_last_distance = INF
 	attached.emit(_to_enemy)
-	if not _to_enemy:
+	if not _to_enemy and tendrils_enabled:
 		_sprout(_anchor_point(), (_anchor.global_basis * _normal_local).normalized())
 
 

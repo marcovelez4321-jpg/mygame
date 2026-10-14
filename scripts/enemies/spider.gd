@@ -384,7 +384,9 @@ func _set_surface(normal: Vector3, velocity: Vector3) -> void:
 ## prey, and it grabs on to the first surface it hits -- floor, wall or ceiling.
 func _fly(delta: float) -> void:
 	_air_time += delta
-	var gravity := ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float
+	# Everyone's gravity (Fall); dropping (not a leap -- its arc is aimed with
+	# plain gravity) it pulls harder on the way down.
+	var gravity := Fall.GRAVITY if _state == State.LEAP else Fall.pull(_velocity.y)
 	_velocity += Vector3.DOWN * gravity * delta
 	if _state == State.LEAP and not _leap_bit and pack and is_instance_valid(pack.target):
 		if global_position.distance_to(Factions.aim_point(pack.target)) < bite_reach:
@@ -449,7 +451,7 @@ func leap(target: Node3D) -> void:
 		return
 	var aim := Factions.aim_point(target)
 	var gap := aim - global_position
-	var gravity := ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float
+	var gravity := Fall.GRAVITY # the leap's arc: plain gravity (see _fly)
 	global_position += _normal * 0.05 # off the surface
 	_launch(gap / leap_time + Vector3.UP * 0.5 * gravity * leap_time, State.LEAP)
 	_heading = gap.normalized()
@@ -566,8 +568,7 @@ func _corpse_physics(delta: float) -> void:
 	if _landed_dead:
 		return
 	_air_time += delta
-	var gravity := ProjectSettings.get_setting("physics/3d/default_gravity", 9.8) as float
-	_velocity += Vector3.DOWN * gravity * delta
+	_velocity += Vector3.DOWN * Fall.pull(_velocity.y) * delta # dead weight: falls like everything
 	var move := _velocity * delta
 	var hit := _surface_ray(global_position, global_position + move + move.normalized() * _ride)
 	if not hit.is_empty():

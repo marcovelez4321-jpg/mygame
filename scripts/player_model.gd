@@ -148,6 +148,14 @@ func _wear_backpack(skeleton: Skeleton3D) -> void:
 	bag.global_transform = Transform3D(facing.scaled(Vector3.ONE * size), place - facing * (box.get_center() * size))
 	bag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	_backpack_on_back = bag
+	# The wings (PlayerMovement.flying) sprout from behind the pack -- on
+	# everyone else's body; your own are in your view (InsectWings).
+	if not _player.is_multiplayer_authority():
+		var wings := InsectWings.new()
+		wings.name = "Wings"
+		attachment.add_child(wings)
+		wings.global_transform = Transform3D(body.basis.orthonormalized(), place + body.basis.z.normalized() * (box.size.x * size * 0.5 + 0.05))
+		wings.setup(_player, false)
 
 
 func _find_skeleton() -> Skeleton3D:

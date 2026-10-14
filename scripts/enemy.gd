@@ -413,7 +413,7 @@ func _physics_process(delta: float) -> void:
 		if _spawning_time_left <= 0.0:
 			_state = State.IDLE
 		if not is_on_floor():
-			velocity.y -= gravity * delta
+			velocity.y -= gravity * (Fall.MULTIPLIER if velocity.y < 0.0 else 1.0) * delta
 		move_and_slide()
 		return
 
@@ -444,7 +444,7 @@ func _physics_process(delta: float) -> void:
 		velocity.z = _shove.z
 		_shove = _shove.move_toward(Vector3.ZERO, (18.0 if is_on_floor() else 5.0) * delta)
 	if not is_on_floor():
-		velocity.y -= gravity * delta
+		velocity.y -= gravity * (Fall.MULTIPLIER if velocity.y < 0.0 else 1.0) * delta # falling pulls harder (Fall)
 	move_and_slide()
 
 

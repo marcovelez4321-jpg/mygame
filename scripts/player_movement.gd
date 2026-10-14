@@ -8,7 +8,7 @@ extends CharacterBody3D
 
 ## Presentation-only events for sound (player_sound.gd) -- fired at the exact
 ## points the existing camera shake/kick calls already mark as "this
-## happened" (see _simulate_movement()'s jump branch, _start_dash(),
+## happened" (see _simulate_movement()'s jump branch, _open_wings(),
 ## _wall_jump()). Nothing in simulation reads these back; they exist purely
 ## so a listener can react, the same reason weapon_controller.gd has
 ## shot_fired/hit_confirmed.
@@ -68,27 +68,43 @@ signal respawned
 @export var respawn_delay: float = 2.0
 
 @export_group("Stamina")
-## Deadlock-style bars (the pips under the crosshair, hud.gd) -- one shared
-## stamina for everything (the user's: 4 bars): a dash, a wall jump and a
-## grapple each spend one bar; while the grapple holds you it drains them
-## slowly (PlayerGrapple.drain_per_second), and they don't refill meanwhile.
-@export var max_stamina_charges: int = 4
-## Seconds for ONE spent charge to fully refill.
-@export var stamina_recharge_time: float = 2.0
-## Pause after spending a charge before that pip starts refilling again --
-## without this, tapping dash repeatedly at the exact regen rate would never
-## actually run you out.
-@export var stamina_recharge_delay: float = 0.5
+## One meter (the user's, 2026-10-14; it was 4 bars), shown under the
+## crosshair. It holds max_stamina: seconds of the grapple holding you. The
+## grapple drains it while it holds you (1 a second: PlayerGrapple.
+## drain_per_second), the wings faster (wing_drain); wall jumps are free;
+## there's no dash. It refills stamina_refill_delay after you stop, empty to
+## full in stamina_refill_time (a heavy pack: slower).
+@export var max_stamina: float = 10.0
+@export var stamina_refill_time: float = 10.0
+@export var stamina_refill_delay: float = 1.5
+## The least left to start the grapple or the wings.
+@export var stamina_to_start: float = 0.5
 
-@export_group("Dash")
-@export var dash_speed: float = 16.0
-@export var dash_duration: float = 0.15
-@export var dash_cooldown: float = 0.6
-## A little extra vertical pop if you're looking upward when you dash --
-## scales with how far up you're looking (0 at the horizon, full strength
-## looking straight up), so aiming up turns the dash into a small assisted
-## hop instead of a second jump. Kept deliberately small.
-@export var dash_up_boost: float = 5.0
+## How the wings fly (the user's: burst and strafe-steer; burst and glide
+## to switch to).
+enum WingStyle { BURST_AND_STRAFE, BURST_AND_GLIDE }
+
+@export_group("Wings")
+## Insect wings, the dash's replacement (the user's): hold Shift in the air.
+## A burst where you aim (wing_burst_speed, past the momentum cap for a
+## moment), easing over wing_burst_time to a fast cruise. Strafe style: you
+## fly where you look (turning toward it at wing_turn_rate, wider arcs the
+## faster), A/D bank-turns you (wing_bank_rate), no gravity. Glide style:
+## after the burst it slows to glide_speed, turns slower toward your aim and
+## sinks. Let go (or run dry, or grapple, or land) and your momentum carries
+## on. Drains the meter at wing_drain a second (4 s on a full one). Not
+## while grappling.
+@export var wing_style: WingStyle = WingStyle.BURST_AND_STRAFE
+@export var wing_burst_speed: float = 34.0
+@export var wing_cruise_speed: float = 26.0
+@export var wing_burst_time: float = 0.6
+@export var wing_drain: float = 2.5
+@export var wing_turn_rate: float = 150.0
+@export var wing_bank_rate: float = 80.0
+@export var glide_speed: float = 22.0
+@export var glide_turn_rate: float = 70.0
+## How much of everyone's gravity a glide sinks with.
+@export_range(0.0, 1.0, 0.05) var glide_gravity: float = 0.3
 
 @export_group("Wall Jump")
 ## How far BEHIND the player counts as "against a wall" for a wall jump --
@@ -197,7 +213,7 @@ class PlayerInput:
 	var wishdir: Vector2 = Vector2.ZERO   # x = strafe (+right), y = forward(-)/back(+)
 	var look_delta: Vector2 = Vector2.ZERO # mouse motion this tick, already scaled by sensitivity
 	var want_jump: bool = false
-	var want_dash: bool = false
+	var want_wings: bool = false # Shift in the air: the wings (no dash any more)
 	var fire: bool = false
 	var aim: bool = false # right mouse, with a gun that aims (the sniper): aim down the sights
 	var quick_throw: bool = false # Q: throw a grenade without switching to it
@@ -253,7 +269,6 @@ const MIN_STEP_RISE := 0.02
 
 var _pitch: float = 0.0
 var _jump_held_prev: bool = false
-var _dash_held_prev: bool = false
 var _pending_look_delta: Vector2 = Vector2.ZERO
 ## While the backpack's out its view takes the mouse first (BackpackView's
 ## free aim: a cursor over the bag) and hands on what's left to look with.
@@ -286,27 +301,23 @@ var _recoil_offset := Vector2.ZERO
 ## with the same press while it's held.
 var _use_took_press: bool = false
 
-## The stamina left, in bars (fractional: holding on drains it smoothly).
+## The meter (0..max_stamina; the HUD reads it).
 var stamina: float = 0.0
-## A drain this tick (the grapple holding you): no refilling next tick.
+## A drain this tick (the grapple holding you, the wings): no refilling next tick.
 var _stamina_held := false
-## How many stamina charges are currently available (0..max_stamina_charges).
-## Public so hud.gd can read it straight off the player for the pip display.
-var stamina_charges: int = 0
-## 0..1 fill progress of the NEXT charge that's currently regenerating (the
-## HUD reads this for the one pip that's mid-refill). Public for the same
-## reason as stamina_charges.
-var stamina_recharge_fraction: float = 0.0
 var _stamina_regen_timer: float = 0.0
 
-var _dash_time_left: float = 0.0
-var _dash_cooldown_left: float = 0.0
-var _dash_dir: Vector3 = Vector3.ZERO
+## The wings: out (flying), how long this flight's been, where it's headed,
+## and how far a glide has sunk.
+var flying := false
+var _flight_time := 0.0
+var _flight_dir := Vector3.FORWARD
+var _glide_sink := 0.0
 
 ## One wall jump, then nothing more until you touch the ground or dash --
 ## otherwise you could just alternate walls forever and never actually fall.
 ## Reset to false wherever landing and dashing already happen (see
-## is_on_floor() branch below and _start_dash()), set true in _wall_jump().
+## is_on_floor() branch below), set true in _wall_jump().
 var _wall_jumped_since_reset := false
 ## Wall jumps (Vholume-style): the last wall you were next to in the air and
 ## how long it still counts (coyote), a jump press waiting for a wall
@@ -387,6 +398,13 @@ func _ready() -> void:
 	if is_multiplayer_authority():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		camera.make_current()
+		# Your own wings: just in front of and below your view, the tips
+		# flickering at the screen's edges as they beat (InsectWings).
+		var wings := InsectWings.new()
+		wings.name = "Wings"
+		camera.add_child(wings)
+		wings.position = Vector3(0.0, -0.15, -0.35)
+		wings.setup(self, true)
 	else:
 		camera.current = false
 	weapons.shot_resolved.connect(_on_shot_resolved_net)
@@ -395,8 +413,8 @@ func _ready() -> void:
 	if GameSettings.mouse_sensitivity > 0.0:
 		mouse_sensitivity = GameSettings.mouse_sensitivity
 	health.died.connect(_on_died)
-	stamina = float(max_stamina_charges)
-	_sync_stamina()
+	stamina = max_stamina
+	flying = false
 	# Camera juice is purely cosmetic feedback (Rule 1) -- driven off the same
 	# signals the HUD's own hit marker uses, so gunplay reads as impactful
 	# without touching the actual aim/shot math at all.
@@ -509,8 +527,8 @@ func respawn(at: Vector3) -> void:
 	_is_dead = false
 	health.is_dead = false
 	health.current_health = health.max_health
-	stamina = float(max_stamina_charges)
-	_sync_stamina()
+	stamina = max_stamina
+	flying = false
 	bag_open = false
 	velocity = Vector3.ZERO
 	global_position = at
@@ -549,7 +567,7 @@ func _gather_input() -> PlayerInput:
 	input.wishdir = move.normalized()
 
 	input.want_jump = Input.is_physical_key_pressed(KEY_SPACE)
-	input.want_dash = Input.is_physical_key_pressed(KEY_SHIFT)
+	input.want_wings = Input.is_physical_key_pressed(KEY_SHIFT)
 	# Only count clicks while the mouse is captured, so clicking menu buttons
 	# never fires the gun.
 	input.fire = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
@@ -643,16 +661,11 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		return
 
 	_update_stamina(delta)
-	_dash_cooldown_left = maxf(_dash_cooldown_left - delta, 0.0)
-	_dash_time_left = maxf(_dash_time_left - delta, 0.0)
 
 	var wishdir := Vector3.ZERO
 	if input.wishdir != Vector2.ZERO:
 		wishdir = (transform.basis * Vector3(input.wishdir.x, 0.0, input.wishdir.y)).normalized()
 
-	var fresh_dash: bool = input.want_dash and not _dash_held_prev
-	if fresh_dash and _dash_cooldown_left <= 0.0 and _spend_stamina():
-		_start_dash(wishdir)
 
 	# The tentacle grapple (E). Space used to let go of it isn't also a wall jump.
 	if grapple.tick(input.grapple and not input.bag_open, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority(), input.wishdir):
@@ -675,7 +688,8 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 			jumped.emit()
 		_try_step_up(delta)
 	else:
-		velocity.y -= gravity * grapple.gravity_scale() * delta
+		# Falling pulls harder than rising (Fall.MULTIPLIER): no floaty drop.
+		velocity.y -= gravity * (Fall.MULTIPLIER if velocity.y < 0.0 else 1.0) * grapple.gravity_scale() * delta
 		# Launching or perched, the grapple moves you; hanging, you can sway.
 		if not grapple.holds_still():
 			var before := Vector2(velocity.x, velocity.z).length()
@@ -702,15 +716,13 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_look_for_wall(delta)
 		if fresh_jump:
 			_wall_jump_buffer_left = wall_jump_buffer
-		if _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0 and _spend_stamina():
+		if _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0: # free (the user's)
 			_wall_jump(_last_wall_normal)
 			_wall_jump_buffer_left = 0.0
 			_wall_seen_left = 0.0
 		_wall_jump_buffer_left = maxf(_wall_jump_buffer_left - delta, 0.0)
 
-	if _dash_time_left > 0.0:
-		velocity.x = _dash_dir.x * dash_speed
-		velocity.z = _dash_dir.z * dash_speed
+	_update_wings(input, delta)
 
 	grapple.apply_pull(delta)
 	_apply_pending_shove()
@@ -736,7 +748,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 ## the others do.
 func _finish_tick(input: PlayerInput, delta: float) -> void:
 	_jump_held_prev = input.want_jump
-	_dash_held_prev = input.want_dash
+
 
 	# Aim comes from the player's own state (head position and facing), not
 	# from the camera, so a server can rebuild the same shot (Rule 1). The
@@ -876,69 +888,81 @@ func has_key(key_name: String) -> bool:
 
 func _update_stamina(delta: float) -> void:
 	if _stamina_held:
-		_stamina_held = false # still hanging on: no refilling
+		_stamina_held = false # still draining: no refilling
 		return
 	if _stamina_regen_timer > 0.0:
 		_stamina_regen_timer = maxf(_stamina_regen_timer - delta, 0.0)
 		return
-	if stamina >= max_stamina_charges:
+	if stamina >= max_stamina:
 		return
-	# A heavy backpack refills it slower (Backpack.refill_scale()).
-	stamina = minf(stamina + delta / stamina_recharge_time * backpack.refill_scale(), float(max_stamina_charges))
-	_sync_stamina()
+	# Empty to full in stamina_refill_time; a heavy backpack refills it slower.
+	stamina = minf(stamina + delta * max_stamina / maxf(stamina_refill_time, 0.01) * backpack.refill_scale(), max_stamina)
 
 
-## Spends one bar if there's a whole one. Dash, wall jump and the grapple all
-## go through this, so "can I afford this" and "pay for it" never drift apart.
-func spend_stamina() -> bool:
-	if stamina < 1.0:
-		return false
-	stamina -= 1.0
-	_stamina_regen_timer = stamina_recharge_delay
-	_sync_stamina()
-	return true
+## Enough left to start the grapple or the wings.
+func has_stamina() -> bool:
+	return stamina >= stamina_to_start
 
 
-func _spend_stamina() -> bool:
-	return spend_stamina()
-
-
-## Drains `bars` (the grapple holding you). False once it's empty.
-func drain_stamina(bars: float) -> bool:
-	stamina = maxf(stamina - bars, 0.0)
+## Drains `amount` (the grapple holding you, the wings). False once it's empty.
+func drain_stamina(amount: float) -> bool:
+	stamina = maxf(stamina - amount, 0.0)
 	_stamina_held = true
-	_stamina_regen_timer = stamina_recharge_delay
-	_sync_stamina()
+	_stamina_regen_timer = stamina_refill_delay
 	return stamina > 0.0
 
 
-## The HUD's view of it: whole bars, and how full the next one is.
-func _sync_stamina() -> void:
-	stamina_charges = int(floor(stamina + 0.0001))
-	stamina_recharge_fraction = clampf(stamina - stamina_charges, 0.0, 1.0)
+## The wings (Shift in the air, not while grappling): out with a burst,
+## flown, folded when you let go, run dry, grapple or land.
+func _update_wings(input: PlayerInput, delta: float) -> void:
+	var grappling := grapple.is_out() or grapple.is_coiling() or grapple.is_pulling()
+	var wanted := input.want_wings and not is_on_floor() and not grappling and not _is_dead
+	if flying and (not wanted or stamina <= 0.0):
+		flying = false # folded: the momentum carries on
+	elif not flying and wanted and has_stamina():
+		_open_wings()
+	if not flying:
+		return
+	_flight_time += delta
+	drain_stamina(wing_drain * delta)
+	var aim := -head.global_transform.basis.z
+	var burst := 1.0 - smoothstep(0.0, wing_burst_time, _flight_time)
+	if wing_style == WingStyle.BURST_AND_STRAFE:
+		# A/D bank-turns you (your view with it); you fly where you look,
+		# turning toward it -- wider arcs the faster.
+		rotate_y(-input.wishdir.x * deg_to_rad(wing_bank_rate) * delta)
+		var speed := lerpf(wing_cruise_speed, wing_burst_speed, burst)
+		var turn := deg_to_rad(wing_turn_rate) * wing_cruise_speed / maxf(speed, 0.01) * delta
+		_flight_dir = _turn_toward(_flight_dir, aim, turn)
+		velocity = _flight_dir * speed
+	else:
+		# Glide: after the burst, slower, turning lazily toward your aim,
+		# sinking.
+		var speed := lerpf(glide_speed, wing_burst_speed, burst)
+		var rate := lerpf(glide_turn_rate, wing_turn_rate, burst)
+		_flight_dir = _turn_toward(_flight_dir, aim, deg_to_rad(rate) * delta)
+		_glide_sink = minf(_glide_sink + Fall.GRAVITY * glide_gravity * delta * (1.0 - burst), 8.0)
+		velocity = _flight_dir * speed + Vector3.DOWN * _glide_sink
 
 
-## A short, direct burst of speed toward wishdir (or straight ahead if no
-## movement keys are held) -- horizontal only, so it can't be used to cancel
-## a fall the way a wall jump or the normal jump would.
-func _start_dash(wishdir: Vector3) -> void:
-	_dash_dir = wishdir if wishdir != Vector3.ZERO else -transform.basis.z
-	_dash_time_left = dash_duration
-	_dash_cooldown_left = dash_cooldown
-	_wall_jumped_since_reset = false # dashing also refreshes the wall-jump limiter
-
-	# How far up you're looking, from the ACTUAL look direction (not a raw
-	# pitch angle -- same reasoning as look_dir elsewhere in this file), so
-	# 0 at the horizon and 1.0 dead straight up. Only added, never
-	# subtracted, so looking down doesn't turn a dash into extra fall speed.
-	var look_up: float = (-head.global_transform.basis.z).y
-	if look_up > 0.0:
-		velocity.y += look_up * dash_up_boost
-
+## The wings out: a burst where you aim.
+func _open_wings() -> void:
+	flying = true
+	_flight_time = 0.0
+	_glide_sink = 0.0
+	_flight_dir = -head.global_transform.basis.z
+	velocity = _flight_dir * maxf(velocity.length(), wing_burst_speed)
 	camera.shake(2.0)
-	camera.kick_fov(12.0)
-	dashed.emit()
+	camera.kick_fov(10.0)
+	dashed.emit() # (the old dash's sound, for now)
 
+
+## `from` turned toward `to` by at most `most` radians.
+static func _turn_toward(from: Vector3, to: Vector3, most: float) -> Vector3:
+	var angle := from.angle_to(to)
+	if angle <= most or angle < 0.0001:
+		return to.normalized()
+	return from.normalized().slerp(to.normalized(), most / angle).normalized()
 
 ## Kicks off the wall found at our back, toward wherever we're actually
 ## LOOKING -- not just straight off its surface. Blends two pieces: the
@@ -1275,7 +1299,7 @@ func _pack(input: PlayerInput) -> Array:
 	return [input.wishdir, _net_look, buttons, input.select_weapon, input.use_item]
 
 
-const NET_BUTTONS: Array[StringName] = [&"want_jump", &"want_dash", &"fire", &"aim", &"quick_throw", &"use_pills",
+const NET_BUTTONS: Array[StringName] = [&"want_jump", &"want_wings", &"fire", &"aim", &"quick_throw", &"use_pills",
 		&"use_bandage", &"reload", &"grab", &"grapple", &"toggle_dual", &"bag_open"]
 
 
@@ -1325,11 +1349,12 @@ func _run_their_inputs(delta: float) -> void:
 ## of its packets that answers).
 func _send_state() -> void:
 	_net_state.rpc(_net_last_tick, global_position, rotation.y, _pitch, health.current_health, _is_dead,
-			weapons.get_current_index(), grapple.rope_tip())
+			weapons.get_current_index(), grapple.rope_tip(), flying)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
-func _net_state(tick: int, at: Vector3, yaw: float, pitch: float, hp: float, dead: bool, weapon: int, rope_tip: Vector3) -> void:
+func _net_state(tick: int, at: Vector3, yaw: float, pitch: float, hp: float, dead: bool, weapon: int, rope_tip: Vector3,
+		wings: bool) -> void:
 	if multiplayer.get_remote_sender_id() != 1:
 		return
 	_take_health(hp, dead)
@@ -1342,6 +1367,7 @@ func _net_state(tick: int, at: Vector3, yaw: float, pitch: float, hp: float, dea
 	if weapon != weapons.get_current_index() and weapon >= 0:
 		weapons.call("_select", weapon)
 	grapple.show_remote(rope_tip)
+	flying = wings # (their wings, shown on their body)
 
 
 ## Client, own body: the host's answer to packet `tick`. Where it predicted
