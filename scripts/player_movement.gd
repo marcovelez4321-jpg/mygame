@@ -33,6 +33,23 @@ signal respawned
 ## If false, you must tap jump right as you land, like vanilla Quake.
 @export var auto_bhop: bool = true
 
+@export_group("Momentum (Vholume-style)")
+## The user's: momentum carries through everything -- bhops and wall jumps
+## keep your speed and add to it, up to speed_cap (horizontal m/s; 4x a run).
+## Gains stop there; nothing slows you down to it.
+@export var speed_cap: float = 28.0
+## A bhop (jumping the tick you land): no ground friction that tick, and
+## this much faster (0.1 = +10%).
+@export var bhop_gain: float = 0.1
+## A wall jump: your speed kept (at least wall_jump_min_speed), sent where
+## you look (bent off the wall if you look into it), and this much faster.
+@export var wall_jump_gain: float = 0.15
+@export var wall_jump_min_speed: float = 7.0
+## Forgiveness: a jump pressed this long before you reach a wall still
+## kicks off it, and a wall you were next to this long ago still counts.
+@export var wall_jump_buffer: float = 0.15
+@export var wall_coyote_time: float = 0.15
+
 @export_group("Air Movement (Quake 3 PM_AirAccelerate)")
 ## How much speed you gain per strafe cycle in the air.
 @export var air_accel: float = 10.0
@@ -291,6 +308,16 @@ var _dash_dir: Vector3 = Vector3.ZERO
 ## Reset to false wherever landing and dashing already happen (see
 ## is_on_floor() branch below and _start_dash()), set true in _wall_jump().
 var _wall_jumped_since_reset := false
+## Wall jumps (Vholume-style): the last wall you were next to in the air and
+## how long it still counts (coyote), a jump press waiting for a wall
+## (buffer), and whether you were in the air last tick (a bhop is a jump the
+## tick you land).
+var _last_wall_normal := Vector3.ZERO
+var _wall_seen_left := 0.0
+var _wall_jump_buffer_left := 0.0
+var _airborne_prev := false
+## The body's turn last frame (for the camera's lean into turns).
+var _last_yaw := 0.0
 
 ## Seconds left in an in-progress mantle; <= 0 means not mantling. The actual
 ## climb is driven by a Tween (see _start_mantle()) animating global_position
@@ -430,9 +457,17 @@ func _physics_process(delta: float) -> void:
 		_send_state()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if Network.is_online() and not is_multiplayer_authority() and not multiplayer.is_server():
 		_show_from_host()
+	# Your own camera's speed juice (CameraJuice.set_motion): how fast, how
+	# much sideways, how fast you're turning.
+	if is_multiplayer_authority() and camera and camera.current and delta > 0.0:
+		var flat := Vector3(velocity.x, 0.0, velocity.z)
+		var sideways := clampf(flat.dot(global_basis.x) / maxf(ground_max_speed, 0.01), -1.0, 1.0)
+		var turning := rad_to_deg(angle_difference(_last_yaw, rotation.y)) / delta
+		_last_yaw = rotation.y
+		camera.set_motion(flat.length(), sideways, turning)
 
 
 func is_dead() -> bool:
@@ -628,8 +663,13 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	# Being pulled counts as airborne: no ground friction slowing the pull.
 	if is_on_floor() and not grapple.is_pulling():
 		_wall_jumped_since_reset = false # touching ground resets the wall-jump limiter
-		_ground_move(wishdir, delta)
+		_wall_seen_left = 0.0
 		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
+		if do_jump and _airborne_prev:
+			# A bhop (jumping the tick you land): no friction, and faster.
+			_gain_speed(bhop_gain)
+		else:
+			_ground_move(wishdir, delta)
 		if do_jump:
 			velocity.y = jump_velocity * backpack.jump_scale() # a heavy pack: lower
 			jumped.emit()
@@ -638,7 +678,9 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		velocity.y -= gravity * grapple.gravity_scale() * delta
 		# Launching or perched, the grapple moves you; hanging, you can sway.
 		if not grapple.holds_still():
+			var before := Vector2(velocity.x, velocity.z).length()
 			_air_move(wishdir, delta)
+			_cap_gain(before)
 
 		# Wall jump: airborne only (it's an air-movement tool, not a way to
 		# cancel a step-up), and a fresh press so holding jump against a wall
@@ -653,10 +695,18 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		# fresh_jump was already computed above (before the mantle check), and
 		# _jump_held_prev doesn't change until _finish_tick() at the end of
 		# this same tick, so it's still valid to reuse here.
-		if fresh_jump and not _wall_jumped_since_reset:
-			var wall_normal := _find_wall_behind()
-			if wall_normal != Vector3.ZERO and _spend_stamina():
-				_wall_jump(wall_normal)
+		# (Vholume-style, the user's -- it was unresponsive: only a wall right
+		# behind you counted, once per ground touch.) Now any wall round you,
+		# a press a moment early or a wall a moment gone still counts, and
+		# they chain as far as your stamina goes.
+		_look_for_wall(delta)
+		if fresh_jump:
+			_wall_jump_buffer_left = wall_jump_buffer
+		if _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0 and _spend_stamina():
+			_wall_jump(_last_wall_normal)
+			_wall_jump_buffer_left = 0.0
+			_wall_seen_left = 0.0
+		_wall_jump_buffer_left = maxf(_wall_jump_buffer_left - delta, 0.0)
 
 	if _dash_time_left > 0.0:
 		velocity.x = _dash_dir.x * dash_speed
@@ -671,6 +721,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	var pre_slide_speed := velocity.length()
 
 	move_and_slide()
+	_airborne_prev = not is_on_floor() # (a jump the tick you land is a bhop)
 
 	if was_airborne:
 		_check_enemy_stomp(pre_slide_speed)
@@ -904,15 +955,66 @@ func _wall_jump(wall_normal: Vector3) -> void:
 	var look_dir := -head.global_transform.basis.z
 	look_dir.y = 0.0
 	look_dir = look_dir.normalized() if look_dir.length_squared() > 0.0001 else wall_normal
-	var launch := wall_normal * wall_jump_push + look_dir * wall_jump_look_speed
-	velocity.x = launch.x
-	velocity.z = launch.z
+	var off := Vector3(wall_normal.x, 0.0, wall_normal.z).normalized()
+	# Looking into the wall: the kick bounces off it (mirrored), not into it.
+	if look_dir.dot(off) < 0.0:
+		look_dir = (look_dir - off * 2.0 * look_dir.dot(off)).normalized()
+	# Your speed kept, sent where you look, pushed a bit off the wall, faster.
+	var speed := maxf(Vector2(velocity.x, velocity.z).length(), wall_jump_min_speed)
+	var heading := (look_dir + off * (wall_jump_push / maxf(wall_jump_look_speed, 0.01))).normalized()
+	var kept := minf(speed * (1.0 + wall_jump_gain), maxf(speed, speed_cap))
+	velocity.x = heading.x * kept
+	velocity.z = heading.z * kept
 	velocity.y = wall_jump_up_velocity * backpack.jump_scale() # a heavy pack: lower
 	_wall_jumped_since_reset = true
 	camera.shake(3.0)
 	camera.kick_fov(6.0)
 	_hit_stop(wall_jump_hit_stop_scale, wall_jump_hit_stop_time)
 	wall_jumped.emit()
+
+
+## The wall you're next to in the air (Vholume-style: any side), if any: a
+## ring of rays at chest height. Seen, it counts for wall_coyote_time.
+func _look_for_wall(delta: float) -> void:
+	_wall_seen_left = maxf(_wall_seen_left - delta, 0.0)
+	var space := get_world_3d().direct_space_state
+	var from := global_position + Vector3.UP * 0.9
+	var nearest := INF
+	for i in 8:
+		var dir := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 8.0)
+		var query := PhysicsRayQueryParameters3D.create(from, from + dir * wall_check_distance)
+		query.exclude = [get_rid()]
+		query.collision_mask = 1
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or absf((hit.normal as Vector3).y) > 0.7:
+			continue
+		var distance := from.distance_to(hit.position)
+		if distance < nearest:
+			nearest = distance
+			_last_wall_normal = hit.normal
+			_wall_seen_left = wall_coyote_time
+
+
+## Speed gained (a bhop): this share more, horizontally, up to speed_cap.
+func _gain_speed(share: float) -> void:
+	var flat := Vector2(velocity.x, velocity.z)
+	var speed := flat.length()
+	if speed < 0.1:
+		return
+	var faster := minf(speed * (1.0 + share), maxf(speed, speed_cap))
+	velocity.x *= faster / speed
+	velocity.z *= faster / speed
+
+
+## Strafing gains (Quake's air acceleration) stop at speed_cap -- never
+## taking away speed you already had (from a stomp, a blast).
+func _cap_gain(before: float) -> void:
+	var flat := Vector2(velocity.x, velocity.z)
+	var speed := flat.length()
+	var most := maxf(before, speed_cap)
+	if speed > most:
+		velocity.x *= most / speed
+		velocity.z *= most / speed
 
 
 ## Is there a wall at our BACK? A position check, not "am I actively
