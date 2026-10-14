@@ -329,6 +329,12 @@ var _wall_jump_buffer_left := 0.0
 var _airborne_prev := false
 ## The body's turn last frame (for the camera's lean into turns).
 var _last_yaw := 0.0
+## The world's wind, if it has one (ProceduralStacks.wind_at: position ->
+## m/s). In the air it pushes you toward its speed along it -- getting hold
+## of you at wind_grip a second (the user's: gentle, about 2 s) -- and never
+## slows you.
+static var wind_at: Callable
+@export var wind_grip: float = 0.5
 
 ## Seconds left in an in-progress mantle; <= 0 means not mantling. The actual
 ## climb is driven by a Tween (see _start_mantle()) animating global_position
@@ -721,6 +727,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_wall_jump_buffer_left = maxf(_wall_jump_buffer_left - delta, 0.0)
 
 	_update_wings(input, delta)
+	_blow(delta)
 
 	grapple.apply_pull(delta)
 	_apply_pending_shove()
@@ -941,6 +948,20 @@ func _update_wings(input: PlayerInput, delta: float) -> void:
 		_flight_dir = _turn_toward(_flight_dir, aim, deg_to_rad(rate) * delta)
 		_glide_sink = minf(_glide_sink + Fall.GRAVITY * glide_gravity * delta * (1.0 - burst), 8.0)
 		velocity = _flight_dir * speed + Vector3.DOWN * _glide_sink
+
+
+## The world's wind, in the air: pulled toward its speed along it.
+func _blow(delta: float) -> void:
+	if not wind_at.is_valid() or is_on_floor():
+		return
+	var wind: Vector3 = wind_at.call(global_position)
+	var speed := wind.length()
+	if speed < 0.01:
+		return
+	var way := wind / speed
+	var along := Vector3(velocity.x, 0.0, velocity.z).dot(way)
+	if along < speed:
+		velocity += way * minf(speed - along, (speed - along) * wind_grip * delta)
 
 
 ## The wings out: a burst where you aim.

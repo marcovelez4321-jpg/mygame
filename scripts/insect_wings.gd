@@ -6,9 +6,15 @@ extends Node3D
 ## pale, veined, see-through wings made in code, beating in a blur while they
 ## fly, and a buzz.
 ##   On a body (first_person off): on the back, a 3D buzz from there.
-##   In first person: no wings in your view (they covered the crosshair --
-##   the user's), just the buzz in your ears; your hands drop instead
+##   In first person: beside your head, lying flat, resting just past the
+##   screen's sides (a 90-degree view) -- each beat swings the tips in, so
+##   they flicker at the lower left and right edges, never near the
+##   crosshair (the user's) -- and the buzz in your ears; your hands drop
 ##   (Viewmodel's flight dip).
+## First person: where they rest, swept forward from straight out
+## (degrees), and how far each beat swings them in.
+const FP_REST_DEGREES := 38.0
+const FP_BEAT_DEGREES := 8.0
 ## Presentation only (Rule 1): it just follows the player's `flying`.
 
 ## Beats a second, and how far each beat swings (degrees).
@@ -33,18 +39,26 @@ static var _look: StandardMaterial3D
 func setup(player: PlayerMovement, in_first_person: bool) -> void:
 	_player = player
 	first_person = in_first_person
-	for side: float in ([] if first_person else [-1.0, 1.0]):
+	for side: float in [-1.0, 1.0]:
 		for pair in 2: # fore and hind wings
 			var hinge := Node3D.new()
-			hinge.position = Vector3(side * 0.06, 0.05 - pair * 0.12, 0.0)
+			if first_person:
+				hinge.position = Vector3(side * 0.2, -0.12 - pair * 0.04, 0.05)
+			else:
+				hinge.position = Vector3(side * 0.06, 0.05 - pair * 0.12, 0.0)
 			add_child(hinge)
 			var wing := MeshInstance3D.new()
 			var quad := QuadMesh.new()
-			quad.size = Vector2(0.75 - pair * 0.15, 0.22 - pair * 0.04)
+			if first_person:
+				quad.size = Vector2(0.6 - pair * 0.1, 0.18 - pair * 0.03)
+			else:
+				quad.size = Vector2(0.75 - pair * 0.15, 0.22 - pair * 0.04)
 			wing.mesh = quad
 			wing.material_override = _material()
 			wing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			wing.position = Vector3(side * quad.size.x * 0.5, 0.0, 0.0)
+			if first_person:
+				wing.rotation.x = -PI * 0.5 # lying flat, seen from above
 			hinge.add_child(wing)
 			hinge.set_meta(&"side", side)
 			hinge.set_meta(&"pair", pair)
@@ -76,6 +90,13 @@ func _process(delta: float) -> void:
 	for hinge in _wings:
 		var side: float = hinge.get_meta(&"side")
 		var pair: int = hinge.get_meta(&"pair")
+		if first_person:
+			# Resting just past the screen's sides; each beat swings the tips in.
+			var wave := sin(_time * TAU * beat_rate + pair * 1.4)
+			var sweep := deg_to_rad(FP_REST_DEGREES + FP_BEAT_DEGREES * (0.5 + 0.5 * wave) + pair * 3.0)
+			hinge.rotation = Vector3(wave * 0.35, side * sweep, 0.0)
+			hinge.scale = Vector3.ONE * maxf(_open, 0.01)
+			continue
 		var beat := sin(_time * TAU * beat_rate + pair * 1.4) * deg_to_rad(beat_swing) * _open
 		# Swept back and out as they open, then beating up and down.
 		hinge.rotation = Vector3(0.0, side * deg_to_rad(25.0 + pair * 15.0) * _open, side * (beat + deg_to_rad(10.0)))

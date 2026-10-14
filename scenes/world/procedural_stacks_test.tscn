@@ -1,0 +1,31 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/world/procedural_stacks.gd" id="1_stacks"]
+[ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="2_env"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="4_hud"]
+[ext_resource type="Script" path="res://scripts/world/loadout.gd" id="5_loadout"]
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="6_weapon"]
+[ext_resource type="Resource" path="res://weapons/starter_gun.tres" id="7_pistol"]
+[ext_resource type="Resource" path="res://weapons/shotgun.tres" id="8_shotgun"]
+[ext_resource type="Resource" path="res://weapons/grenade.tres" id="9_grenade"]
+
+[node name="ProceduralStacksTest" type="Node3D"]
+script = ExtResource("1_stacks")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("2_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 100, 0)
+light_energy = 0.8
+shadow_enabled = true
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+
+[node name="HUD" parent="." instance=ExtResource("4_hud")]
+
+[node name="Loadout" type="Node" parent="."]
+script = ExtResource("5_loadout")
+weapons = Array[ExtResource("6_weapon")]([ExtResource("7_pistol"), ExtResource("8_shotgun"), ExtResource("9_grenade")])
