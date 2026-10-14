@@ -24,6 +24,14 @@ extends Node3D
 ##   this one's let go.
 ##   While it holds you (pulling, perched, hanging, riding) your stamina
 ##   drains (drain_per_second: a bar every 4 s); empty, it lets go and you fall.
+## TENDRILS (the user's, 2026-10-14): where it bites (on the level, not a
+## creature), three tendrils shoot on from the spot -- fanned out ahead the
+## way you're flying (or up and onward: tendril_spread) -- each to a surface
+## up to tendril_reach on, an M2 marker floating over each. Look right at
+## one and right click: you're re-attached there at once (no charge-up), for
+## half a stamina bar, 25% faster (up to the speed cap) -- the other markers
+## vanish, and the new spot sprouts three more. Unused, they stay till you
+## fire a brand-new charged grapple.
 ## Big enemies (BIG_GROUP: the Harvestman, the worm) pull you to them: kick them
 ## on arrival and bounce off, or press again during the flight to latch on
 ## and ride them until you jump. Small enemies are a miss.
@@ -53,6 +61,8 @@ signal launch_timed
 const BIG_GROUP := "grapple_big"
 
 enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS }
+## Where the tendrils look: fanned ahead the way you're flying, or up and on.
+enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 
 @export_group("Charge")
 ## Seconds of holding for a full-power grapple.
@@ -88,6 +98,22 @@ enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS }
 @export var perfect_boost: float = 1.16
 ## How close to the spot counts as arriving.
 @export var arrive_distance: float = 4.0
+
+@export_group("Tendrils")
+## Which way the three tendrils fan out from the spot (the user's: ahead;
+## up and onward as the other choice).
+@export var tendril_spread: TendrilSpread = TendrilSpread.FAN_AHEAD
+## How far on they reach, and how far apart they fan (degrees each side).
+@export var tendril_reach: float = 15.0
+@export var tendril_fan_degrees: float = 30.0
+## A spot this close to the bite doesn't count (it's the same wall).
+@export var tendril_min_distance: float = 2.0
+## Re-attaching: stamina bars it costs, how much faster it sends you (up to
+## the player's speed cap), and how near the crosshair a marker must be
+## (degrees) -- right on it.
+@export var reattach_cost: float = 0.5
+@export var reattach_boost: float = 0.25
+@export var marker_aim_degrees: float = 4.0
 
 @export_group("Hold")
 ## Stamina bars drained a second while it holds you (0.25: one every 4 s).
@@ -161,6 +187,11 @@ var _ride_velocity := Vector3.ZERO
 var _attacker_id := 0
 ## This tick's move input (x = strafe, y = back(+)/forward(-)): reel/rappel.
 var _move := Vector2.ZERO
+## The tendrils' spots: {at (world), normal, collider (what it's on)}, and
+## where they came from (for drawing them).
+var _spots: Array[Dictionary] = []
+var _spots_from := Vector3.ZERO
+var _spot_marks: Array[Node3D] = []
 
 var _line: MeshInstance3D
 var _tentacle: GrappleTentacle
@@ -214,6 +245,15 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 	if jump_pressed and is_pulling():
 		_let_go()
 		return true
+
+	# Right on a tendril's marker: re-attach there, at once.
+	if pressed and not _spots.is_empty() and not _coiling and hand_free:
+		var pick := _spot_in_sight(origin, aim)
+		if pick >= 0 and (infinite_charges or _player.stamina >= reattach_cost):
+			if not infinite_charges:
+				_player.drain_stamina(reattach_cost)
+			_reattach(pick)
+			return false
 
 	# Holding on costs stamina; out of it, you fall.
 	if is_pulling() and not infinite_charges:
@@ -309,6 +349,7 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 	_power = clampf(_hold / charge_time, min_charge_share, 1.0)
 	_hold = 0.0
 	release()
+	_clear_spots() # a brand-new grapple: the old tendrils' spots go
 	if _charge_bonus:
 		charge_timed.emit()
 	var reach := max_range * _power
@@ -351,6 +392,8 @@ func _land() -> void:
 	_stalled = 0.0
 	_last_distance = INF
 	attached.emit(_to_enemy)
+	if not _to_enemy:
+		_sprout(_anchor_point(), (_anchor.global_basis * _normal_local).normalized())
 
 
 ## The pull (the original, Titanfall 2 style): you're hauled toward the spot
@@ -385,6 +428,87 @@ func _pull(delta: float) -> void:
 	var along := _player.velocity.dot(direction)
 	if along < speed:
 		_player.velocity += direction * minf(pull_accel * heavy * delta, speed - along)
+
+
+## The three tendrils from a spot it bit (`at`, on a surface facing
+## `normal`): fanned ahead the way you're flying (or up and onward), each to
+## a level surface up to tendril_reach on; more angles tried if one misses.
+func _sprout(at: Vector3, normal: Vector3) -> void:
+	_clear_spots()
+	_spots_from = at
+	var ahead := _player.velocity
+	ahead.y = 0.0
+	if ahead.length_squared() < 1.0:
+		ahead = -_player.global_basis.z
+	ahead = ahead.normalized()
+	var up := 0.15 if tendril_spread == TendrilSpread.FAN_AHEAD else 0.8
+	var from := at + normal * 0.3
+	var space := get_world_3d().direct_space_state
+	for step: float in [0.0, -1.0, 1.0, -1.6, 1.6, -0.5, 0.5]:
+		if _spots.size() >= 3:
+			break
+		var way := (ahead.rotated(Vector3.UP, deg_to_rad(tendril_fan_degrees) * step) + Vector3.UP * up).normalized()
+		var query := PhysicsRayQueryParameters3D.create(from, from + way * tendril_reach)
+		query.exclude = [_player.get_rid()]
+		query.collision_mask = 1
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or (hit.position as Vector3).distance_to(at) < tendril_min_distance:
+			continue
+		if not LevelGeometry.is_static(hit.collider) or _is_small_enemy(hit.collider) or _big_enemy(hit.collider):
+			continue
+		var crowded := false
+		for spot in _spots:
+			if (spot.at as Vector3).distance_to(hit.position) < tendril_min_distance:
+				crowded = true
+		if not crowded:
+			_spots.append({at = hit.position, normal = hit.normal, collider = hit.collider})
+	_show_spots()
+
+
+## The tendril spot your crosshair's right on (within marker_aim_degrees),
+## or -1.
+func _spot_in_sight(origin: Vector3, aim: Vector3) -> int:
+	var best := -1
+	var best_angle := deg_to_rad(marker_aim_degrees)
+	for i in _spots.size():
+		var angle := aim.angle_to((_spots[i].at as Vector3) - origin)
+		if angle < best_angle:
+			best_angle = angle
+			best = i
+	return best
+
+
+## Re-attached to a tendril's spot: at once, faster (reattach_boost, up to
+## the speed cap), heading there; the other spots vanish and the new one
+## sprouts three more.
+func _reattach(index: int) -> void:
+	var spot: Dictionary = _spots[index]
+	var target := spot.collider as Node3D
+	release()
+	_clear_spots()
+	if not is_instance_valid(target):
+		return
+	_anchor = target
+	_anchor_local = target.global_transform.affine_inverse() * (spot.at as Vector3)
+	_normal_local = (target.global_basis.inverse() * (spot.normal as Vector3)).normalized()
+	_to_enemy = false
+	_charge_bonus = false
+	var speed := _player.velocity.length()
+	var cap := maxf(speed, _player.speed_cap)
+	var faster := minf(maxf(speed, pull_speed) * (1.0 + reattach_boost), cap)
+	_player.velocity = _to_spot().normalized() * faster
+	_pull_speed = faster
+	_rope = Rope.PULL
+	_stalled = 0.0
+	_last_distance = INF
+	_lash_end = spot.at
+	attached.emit(false)
+	_sprout(spot.at, spot.normal)
+
+
+func _clear_spots() -> void:
+	_spots.clear()
+	_show_spots()
 
 
 ## Seconds left till you arrive (INF if not pulled).
@@ -571,6 +695,64 @@ func _update_indicator(delta: float) -> void:
 	_indicator.show_at(hit.position, hit.normal, grabs, fill, origin, delta)
 
 
+## Your own view: each tendril spot's tendril (a dark line from where it
+## sprouted) and its M2 marker floating over it (the same size at any
+## distance, seen through walls; yellow while your crosshair's right on it).
+func _show_spots() -> void:
+	for mark in _spot_marks:
+		if is_instance_valid(mark):
+			mark.queue_free()
+	_spot_marks.clear()
+	if _player == null or not _player.is_multiplayer_authority() or not is_inside_tree():
+		return
+	for spot in _spots:
+		var at: Vector3 = spot.at
+		var mark := Node3D.new()
+		mark.top_level = true
+		add_child(mark)
+		var line := MeshInstance3D.new()
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var box := BoxMesh.new()
+		box.size = Vector3(line_width, line_width, 1.0)
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = line_color
+		box.material = material
+		line.mesh = box
+		mark.add_child(line)
+		var length := _spots_from.distance_to(at)
+		if length > 0.01:
+			var along := (at - _spots_from) / length
+			var up := Vector3.UP if absf(along.y) < 0.99 else Vector3.FORWARD
+			line.global_transform = Transform3D(Basis.looking_at(along, up) * Basis.from_scale(Vector3(1.0, 1.0, length)), (_spots_from + at) * 0.5)
+		var label := Label3D.new()
+		label.text = "M2"
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.fixed_size = true
+		label.pixel_size = 0.0012
+		label.font_size = 40
+		label.outline_size = 10
+		label.outline_modulate = Color(0.0, 0.0, 0.0, 0.85)
+		label.render_priority = 10
+		mark.add_child(label)
+		label.global_position = at + (spot.normal as Vector3) * 0.3 + Vector3.UP * 0.25
+		_spot_marks.append(mark)
+
+
+## The marker your crosshair's right on, yellow; the rest pale.
+func _light_spot_in_sight() -> void:
+	if _spot_marks.is_empty() or _player.camera == null:
+		return
+	var camera := _player.camera
+	var pick := _spot_in_sight(camera.global_position, -camera.global_basis.z)
+	for i in _spot_marks.size():
+		var mark := _spot_marks[i]
+		if not is_instance_valid(mark) or mark.get_child_count() < 2:
+			continue
+		(mark.get_child(1) as Label3D).modulate = Color(1.0, 0.85, 0.15) if i == pick else Color(0.95, 0.93, 0.86, 0.85)
+
+
 ## Where the tentacle's tip is right now, or INF while it isn't out (the host
 ## sends this with each player's update).
 func rope_tip() -> Vector3:
@@ -610,6 +792,7 @@ func _process(delta: float) -> void:
 			arm_coil = arms.coil
 		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, arm_points, arm_coil, delta)
 		_update_indicator(delta)
+		_light_spot_in_sight()
 		if _line:
 			_line.visible = false
 	else:

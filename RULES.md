@@ -1490,3 +1490,8 @@ them:
   - Reference: VHOLUME (2026) -- momentum kept between moves, bhops with no penalty, wall moves that redirect instead of stopping.
   - Not compiled or run (asks first).
 - **Speed juice: no speed lines, no wind rush (2026-10-14).** The user's: took both out; the camera's tilt, sway, speed FOV and rattle stay. `shaders/speed_lines.gdshader` deleted. Not compiled or run (asks first).
+- **The grapple's three tendrils and M2 re-attach (2026-10-14).** The user's design (step 2 of the new order; the procedural-Stack direction written into docs/CLIMB_VISION.md the same day).
+  - When it bites the level (not a creature), three tendrils shoot on from the spot to surfaces up to 15 m away (`tendril_reach`), fanned ahead the way you're flying, 30 degrees apart (`tendril_spread` FAN_AHEAD; UP_AND_ONWARD -- up and on -- is the other choice, the user's). More angles are tried if one misses; spots closer than 2 m to the bite or each other don't count; creatures don't.
+  - Each spot shows its tendril (a dark line from the bite) and an "M2" marker over it (same size at any distance, seen through walls; yellow under your crosshair) -- your own view only.
+  - Look right at a marker (within 4 degrees, `marker_aim_degrees`) and right click: re-attached there at once, no charge-up, for half a stamina bar (`reattach_cost`), your speed (at least the pull's) +25% (`reattach_boost`), up to the speed cap, heading there; the other markers vanish at once (the user's), and the new spot sprouts three more -- a chain as long as your stamina lasts. Unused, they stay till you fire a brand-new charged grapple. Works mid-pull, perched, hanging, or after letting go.
+  - Not compiled or run (asks first).
