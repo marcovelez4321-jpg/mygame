@@ -1,10 +1,27 @@
 [gd_resource type="Resource" script_class="SoundEvent" format=3 uid="uid://c54flptomjix7"]
 
 [ext_resource type="Script" uid="uid://dpm4dmxv0u4h" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://dd76pkrxfujl3" path="res://audio/events/Footstep_Boot_Concrete-003.wav" id="1_s4t7t"]
+[ext_resource type="AudioStream" uid="uid://c8od0tcww6tbs" path="res://audio/events/Footstep_Boot_Concrete-001.wav" id="2_llr64"]
+[ext_resource type="AudioStream" uid="uid://cxk0ywqhon5qa" path="res://audio/events/Footstep_Boot_Concrete-002.wav" id="3_ic8h4"]
+[ext_resource type="AudioStream" uid="uid://01wwt3kdc2f7" path="res://audio/events/Footstep_Boot_Concrete-004.wav" id="4_3l5c5"]
+[ext_resource type="AudioStream" uid="uid://dpugpq0eackh0" path="res://audio/events/Footstep_Boot_Concrete-005.wav" id="5_m47ny"]
+[ext_resource type="AudioStream" uid="uid://cn1o4r1ccw27d" path="res://audio/events/Footstep_Boot_Concrete-006.wav" id="6_upf4c"]
+[ext_resource type="AudioStream" uid="uid://bg6uutix0501f" path="res://audio/events/Footstep_Boot_Concrete-007.wav" id="7_qoyqa"]
+[ext_resource type="AudioStream" uid="uid://b2jgs2dfcpk4g" path="res://audio/events/Footstep_Boot_Concrete-008.wav" id="8_gktmb"]
+[ext_resource type="AudioStream" uid="uid://dtylv8n20pgac" path="res://audio/events/Footstep_Boot_Concrete-009.wav" id="9_v7bod"]
+[ext_resource type="AudioStream" uid="uid://cwqvx4khdbm08" path="res://audio/events/Footstep_Boot_Concrete-010.wav" id="10_esljo"]
+[ext_resource type="AudioStream" uid="uid://b8k5g18v62ecq" path="res://audio/events/Footstep_Boot_Concrete-011.wav" id="11_b1j3o"]
+[ext_resource type="AudioStream" uid="uid://c4jxqh6jtcao6" path="res://audio/events/Footstep_Boot_Concrete-012.wav" id="12_np0ix"]
+[ext_resource type="AudioStream" uid="uid://bd8hcvfgnomm4" path="res://audio/events/Footstep_Boot_Concrete-013.wav" id="13_aprax"]
+[ext_resource type="AudioStream" uid="uid://b7ymnj1st2w21" path="res://audio/events/Footstep_Boot_Concrete-014.wav" id="14_u8y3l"]
+[ext_resource type="AudioStream" uid="uid://bdxnjvlup0v4c" path="res://audio/events/Footstep_Boot_Concrete-015.wav" id="15_rvwv1"]
+[ext_resource type="AudioStream" uid="uid://btxpaw5cm1rie" path="res://audio/events/Footstep_Boot_Concrete-016.wav" id="16_l62jk"]
+[ext_resource type="AudioStream" uid="uid://dwwg5dx3u7x0o" path="res://audio/events/Footstep_Boot_Concrete-017.wav" id="17_8b66l"]
 
 [resource]
 script = ExtResource("1")
+clips = Array[AudioStream]([ExtResource("1_s4t7t"), ExtResource("2_llr64"), ExtResource("3_ic8h4"), ExtResource("4_3l5c5"), ExtResource("5_m47ny"), ExtResource("6_upf4c"), ExtResource("7_qoyqa"), ExtResource("8_gktmb"), ExtResource("9_v7bod"), ExtResource("10_esljo"), ExtResource("11_b1j3o"), ExtResource("12_np0ix"), ExtResource("13_aprax"), ExtResource("14_u8y3l"), ExtResource("15_rvwv1"), ExtResource("16_l62jk"), ExtResource("17_8b66l")])
 clip_folder = "res://audio/sfx/surface/concrete"
-clip_prefix = "step"
 pitch_variance = 0.08
 bus = "Surface"

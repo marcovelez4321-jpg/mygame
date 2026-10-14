@@ -864,6 +864,9 @@ func _model_for(stack: Dictionary) -> Node3D:
 			var mesh := MeshInstance3D.new()
 			mesh.mesh = (part as MeshInstance3D).mesh
 			textured(mesh, part as MeshInstance3D)
+			# Its own turn and stretch kept (the RPG's rocket is stored squashed
+			# and stretched 6.6x by it -- without it, a mushroom).
+			mesh.basis = part.basis
 			copy = mesh
 		elif part:
 			copy = part.duplicate() as Node3D # a part made of parts (the rocket)

@@ -1,9 +1,14 @@
-[gd_resource type="Resource" script_class="SoundEvent" format=3]
+[gd_resource type="Resource" script_class="SoundEvent" format=3 uid="uid://tpmmvxt5v4k4"]
 
-[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="Script" uid="uid://dpm4dmxv0u4h" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://ca4nmsfyt7ldx" path="res://audio/sfx/explosions/Rocket_Explosion-001.wav" id="1_34wvu"]
+[ext_resource type="AudioStream" uid="uid://dd7esnmllwhtk" path="res://audio/sfx/explosions/Rocket_Explosion-002.wav" id="2_ljl31"]
+[ext_resource type="AudioStream" uid="uid://bk6hbvk7fe8w6" path="res://audio/sfx/explosions/Rocket_Explosion-003.wav" id="3_t1iny"]
+[ext_resource type="AudioStream" uid="uid://d3ebakgpxulh5" path="res://audio/sfx/explosions/Rocket_Explosion-004.wav" id="4_qt8e1"]
 
 [resource]
 script = ExtResource("1")
+clips = Array[AudioStream]([ExtResource("1_34wvu"), ExtResource("2_ljl31"), ExtResource("3_t1iny"), ExtResource("4_qt8e1")])
 clip_folder = "res://audio/sfx/explosions"
 clip_prefix = "explosion"
 pitch_variance = 0.05

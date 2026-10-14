@@ -103,6 +103,7 @@ var _airborne := false
 var _eating := false
 ## The floor height where they started lifting it (MAX_EXTRA_HEIGHT).
 var _ground_y := 0.0
+var _cached_floor_y := 0.0
 ## How hard each grab slot's roach is pulling right now, 0..1 (strain()).
 var _strain := {}
 ## Where it's flying the body (FLY), and when to look for a quieter spot.
@@ -192,22 +193,27 @@ func is_eating() -> bool:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
+		
 	var still: Array[FlyingRoach] = []
 	for roach in roaches:
 		if is_instance_valid(roach) and roach.is_carrying(self):
 			still.append(roach)
 	roaches = still
+	
 	if not is_instance_valid(body) or not is_instance_valid(ragdoll):
 		_finish()
 		return
+		
 	_timer -= delta
 	var holders := _holders()
 	var holding := holders.size()
+	
 	match phase:
 		Phase.GATHER:
 			if holding >= MIN_ROACHES:
 				phase = Phase.LIFT
 				_ground_y = _floor_under(ragdoll.body_position(), ragdoll.body_position().y - 0.2)
+				_cached_floor_y = _ground_y
 				_eating = true # dig in as soon as it's coming up
 				_timer = EAT_TIME
 			elif _timer <= 0.0 or roaches.size() < MIN_ROACHES:
@@ -219,15 +225,20 @@ func _physics_process(delta: float) -> void:
 			if _timer <= 0.0:
 				_finish() # eaten its fill
 				return
+				
 			_ground_check -= delta
 			if _ground_check <= 0.0:
 				_ground_check = 0.2
 				_airborne = not ragdoll.is_touching_ground()
+				# Throttle expensive floor raycasts instead of firing them every single frame
+				_cached_floor_y = _floor_under(ragdoll.body_position(), _ground_y)
+				
 			if phase == Phase.LIFT and _airborne:
 				phase = Phase.FLY
 				_repick = 0.0
 			elif phase == Phase.FLY and not _airborne:
 				phase = Phase.LIFT # sagged back down (or snagged): lift it clear first
+				
 			_lift(holders, _fly_velocity(delta) if phase == Phase.FLY else Vector3.ZERO)
 
 
@@ -252,9 +263,7 @@ func strain(slot: int) -> float:
 ## the weight spread over the body. Real forces against real weight: the
 ## parts with the most body hanging off them sag lowest.
 func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
-	var hips := ragdoll.body_position()
-	var floor_y := _floor_under(hips, _ground_y)
-	var target_y := minf(floor_y, _ground_y + MAX_EXTRA_HEIGHT) + CARRY_HEIGHT
+	var target_y := minf(_cached_floor_y, _ground_y + MAX_EXTRA_HEIGHT) + CARRY_HEIGHT
 	var delta := get_physics_process_delta_time()
 	var mass := ragdoll.total_mass()
 	var weight := mass * ragdoll.gravity_strength()
@@ -265,6 +274,7 @@ func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 	var hover := clampf((1.0 - SUPPORT_PER_ROACH * holders.size()) / (GRIP_STRENGTH * holders.size()), 0.0, 1.0)
 	var pushes := {}
 	_strain.clear()
+	
 	for roach in holders:
 		var bone := grip_bone(roach.carry_slot)
 		if bone == null:
@@ -278,6 +288,7 @@ func _lift(holders: Array[FlyingRoach], travel: Vector3 = Vector3.ZERO) -> void:
 		var steer := (flat * share * STEER_RATE).limit_length(grip_force * 0.5)
 		var push: Vector3 = (Vector3.UP * grip_force * effort + steer) * delta
 		pushes[bone] = pushes.get(bone, Vector3.ZERO) + push # two roaches on one part add up
+		
 	ragdoll.carry(pushes, maxf(1.0 - SUPPORT_PER_ROACH * holders.size(), 0.0))
 
 

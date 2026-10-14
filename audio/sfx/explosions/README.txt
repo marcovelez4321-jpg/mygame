@@ -5,4 +5,4 @@ sounding identical).
 
 LIVE:
 explosion_01 .. 04      rockets now, explosive barrels later: a big boom with some
-                        debris tail. Heard from far away.
+						debris tail. Heard from far away.

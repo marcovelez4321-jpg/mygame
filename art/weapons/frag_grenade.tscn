@@ -6,12 +6,16 @@
 transform = Transform3D(6, 0, 0, 0, 6, 0, 0, 0, 6, 0, 0, 0)
 
 [node name="Grenades" parent="." unique_id=872328411 instance=ExtResource("1")]
-transform = Transform3D(0.035, 0, 0, 0, 0.035, 0, 0, 0, 0.035, 0, -0.0105, -0.007)
+transform = Transform3D(0.035, 0, 0, 0, 0.035, 0, 0, 0, 0.035, 0, 0, 0)
 
 [node name="Smoke Grenade" parent="Grenades" index="0" unique_id=1770512973]
+transform = Transform3D(0.034309294, 0, -0.13632365, 0, 0.21086212, 0, 0.13632365, 0, 0.034309294, 0, 0, 0)
+visible = false
+
+[node name="Pin" parent="Grenades/Smoke Grenade" index="0" unique_id=188076310]
 visible = false
 
 [node name="Frag Grenade" parent="Grenades" index="1" unique_id=786461619]
-transform = Transform3D(0.1035338, 0, 0.102461845, 0, 0.17586204, 0, -0.100903414, 0, 0.105132855, 0, 0.26952058, 0.21223244)
+transform = Transform3D(0.1035338, 0, 0.102461845, 0, 0.17586204, 0, -0.100903414, 0, 0.105132855, 0, 0, 0)
 
 [editable path="Grenades"]

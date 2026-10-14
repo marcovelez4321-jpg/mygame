@@ -80,19 +80,25 @@ func _grow() -> void:
 		nest = Nest.SPIDERS if randf() < spider_nest_chance else Nest.ROACHES
 	if nest == Nest.SPIDERS:
 		fungus_color = spider_fungus_color
+		
+	var is_server := multiplayer.is_server()
 	var pack: SpiderPack = null
-	if multiplayer.is_server():
+	
+	if is_server:
 		if nest == Nest.SPIDERS:
 			pack = SpiderPack.new()
 			pack.start_count = 0
 			pack.free_when_empty = false # more are coming
 			pack.position = global_position # the level's root sits at the origin
 			get_tree().current_scene.add_child(pack)
+			
 		for i in count:
 			var hit := _surface_near(up, 0.0 if i == 0 else radius)
 			if hit.is_empty():
 				continue
 			var barnacle := barnacle_scene.instantiate() as Barnacle
+			if not barnacle:
+				continue
 			# Biggest first (in the middle), down to the smallest, so every
 			# clump has a spread of sizes -- each nudged a little.
 			var t := 1.0 - float(i) / maxf(count - 1, 1)
@@ -102,17 +108,22 @@ func _grow() -> void:
 			barnacle.swelling.connect(_on_barnacle_swelling.bind(barnacle))
 			add_child(barnacle)
 			barnacle.global_transform = Transform3D(_basis_on(hit.normal), hit.position)
+			
 		_spawn_defenders()
 		_spawn_guard_pack()
+		
 		for i in (leech_count if spawn_leeches else 0):
 			var flat := Vector2.from_angle(randf() * TAU) * randf_range(radius, radius * 1.8)
 			var leech := leech_scene.instantiate() as Node3D
-			add_child(leech)
-			leech.global_position = global_position + global_basis * Vector3(flat.x, 0.0, flat.y) + up * 0.4
+			if leech:
+				add_child(leech)
+				leech.global_position = global_position + global_basis * Vector3(flat.x, 0.0, flat.y) + up * 0.4
+				
 	for i in fungus_count:
 		var hit := _surface_near(up, radius * 1.2)
 		if not hit.is_empty():
 			_add_fungus(hit.position, hit.normal)
+			
 	for i in decoy_count:
 		var hit := _surface_near(up, radius * 1.3)
 		if not hit.is_empty():
@@ -125,6 +136,8 @@ func _add_decoy(at: Vector3, normal: Vector3) -> void:
 	if not _decoy_skins.has(spiders):
 		_decoy_skins[spiders] = PS1Look.material(BARNACLE_TEXTURE, Color(0.72, 0.76, 0.9) if spiders else Color.WHITE, false)
 	var decoy := BARNACLE_MODEL.instantiate() as Node3D
+	if not decoy:
+		return
 	add_child(decoy)
 	for mesh in decoy.find_children("*", "MeshInstance3D", true, false):
 		(mesh as MeshInstance3D).material_override = _decoy_skins[spiders]
@@ -140,8 +153,11 @@ func _add_decoy(at: Vector3, normal: Vector3) -> void:
 func _on_barnacle_swelling(barnacle: Barnacle) -> void:
 	if not is_instance_valid(barnacle):
 		return
+	var barnacle_pos := barnacle.global_position
 	for decoy in _decoys:
-		var distance := decoy.global_position.distance_to(barnacle.global_position)
+		if not is_instance_valid(decoy):
+			continue
+		var distance := decoy.global_position.distance_to(barnacle_pos)
 		if distance < decoy_reach:
 			_throb(decoy, distance * 0.12)
 
@@ -149,10 +165,11 @@ func _on_barnacle_swelling(barnacle: Barnacle) -> void:
 ## Three swelling pulses, each bigger than the last (taller than wide), then
 ## a little squash: Barnacle's throb, without the spit.
 func _throb(decoy: Node3D, delay: float) -> void:
-	# (get_meta with a null default still errors when it's missing: check first)
-	var previous: Variant = decoy.get_meta(&"throb") if decoy.has_meta(&"throb") else null
-	if previous is Tween and (previous as Tween).is_valid():
-		return # already throbbing
+	if decoy.has_meta(&"throb"):
+		var previous := decoy.get_meta(&"throb") as Tween
+		if previous and previous.is_valid():
+			return # already throbbing
+			
 	var rest: Vector3 = decoy.get_meta(&"rest")
 	var pulse := THROB_TIME / 6.0
 	var tween := create_tween()
@@ -165,7 +182,6 @@ func _throb(decoy: Node3D, delay: float) -> void:
 	tween.tween_property(decoy, "scale", rest * Vector3(1.15, 0.8, 1.15), 0.08)
 	tween.tween_property(decoy, "scale", rest, 0.2).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	decoy.set_meta(&"throb", tween)
-
 
 ## A spot on the surface under a random point within `within` of the middle
 ## (a ray from just off the surface back into it), or {} if there's nothing
@@ -183,10 +199,11 @@ func _surface_near(up: Vector3, within: float) -> Dictionary:
 
 
 func _barnacle_rids() -> Array[RID]:
+	var children := get_children()
 	var rids: Array[RID] = []
-	for child in get_children():
+	for child in children:
 		if child is Barnacle:
-			rids.append((child as Barnacle).get_rid())
+			rids.append(child.get_rid())
 	return rids
 
 
@@ -228,9 +245,10 @@ func _spawn_defenders() -> void:
 	var floor_at: Vector3 = hit.position if not hit.is_empty() else global_position
 	for i in defender_count:
 		var defender := defender_scene.instantiate() as Node3D
-		var around := Vector2.from_angle(randf() * TAU) * randf_range(1.0, radius * 1.5)
-		defender.position = floor_at + Vector3(around.x, 0.0, around.y) # the level's root sits at the origin
-		get_tree().current_scene.add_child(defender)
+		if defender:
+			var around := Vector2.from_angle(randf() * TAU) * randf_range(1.0, radius * 1.5)
+			defender.position = floor_at + Vector3(around.x, 0.0, around.y) # the level's root sits at the origin
+			get_tree().current_scene.add_child(defender)
 
 
 func _spawn_guard_pack() -> void:
@@ -241,6 +259,7 @@ func _spawn_guard_pack() -> void:
 	query.exclude = _barnacle_rids()
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	var pack := guard_pack_scene.instantiate() as Node3D
-	pack.set("count", guard_count)
-	pack.position = hit.position if not hit.is_empty() else global_position # the level's root sits at the origin
-	get_tree().current_scene.add_child(pack)
+	if pack:
+		pack.set("count", guard_count)
+		pack.position = hit.position if not hit.is_empty() else global_position # the level's root sits at the origin
+		get_tree().current_scene.add_child(pack)

@@ -144,8 +144,11 @@ func _set_asleep(asleep: bool, members: Array[Node]) -> void:
 	var mode := Node.PROCESS_MODE_DISABLED if asleep else Node.PROCESS_MODE_INHERIT
 	for node in members:
 		node.process_mode = mode
+	# The living only: a body stays in the physics world (the hordes drag,
+	# haul and eat them; switched off, it wasn't there to pull on).
 	for body in bodies():
-		body.process_mode = mode
+		if not asleep or Factions.is_alive_target(body):
+			body.process_mode = mode
 
 
 ## The next stop: somewhere leg_min..leg_max away (or, camped, somewhere

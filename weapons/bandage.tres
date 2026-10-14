@@ -10,6 +10,7 @@ script = ExtResource("1")
 weapon_name = "Bandage"
 magazine_size = 1
 heal_item = 1
+right_finger_curl = null
 draw_time = 0.3
 viewmodel_scene = ExtResource("2_model")
 viewmodel_position = Vector3(-0.1270232, -0.20535542, -0.52372193)

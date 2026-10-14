@@ -50,7 +50,7 @@ const WALL_DOT := 0.7
 
 @export_group("Crawling")
 ## How fast it reaches the speed its pack wants, m/s².
-@export var acceleration: float = 70.0
+@export var acceleration: float = 15.0
 ## How far (in leg spans) it feels for the surface under it before deciding
 ## it walked off an edge.
 @export var stick_distance: float = 0.6
@@ -63,13 +63,13 @@ const WALL_DOT := 0.7
 
 @export_group("Leap")
 ## On the floor, it leaps at prey this far away (like a rat)...
-@export var leap_range_min: float = 1.5
-@export var leap_range_max: float = 4.0
+@export var leap_range_min: float = 10
+@export var leap_range_max: float = 15
 ## ...and from a wall or ceiling, from up to this far.
-@export var wall_leap_range: float = 7.0
+@export var wall_leap_range: float = 25
 ## Chance per second it takes a leap it could make: on the floor, and from a
 ## wall or ceiling (it's up there to leap, so much more eager).
-@export var leap_chance: float = 0.6
+@export var leap_chance: float = 0.7
 @export var wall_leap_chance: float = 1.8
 @export var leap_cooldown: float = 2.5
 @export var leap_damage: float = 12.0

@@ -1,11 +1,24 @@
-[gd_resource type="Resource" script_class="BackpackHold" format=3]
+[gd_resource type="Resource" script_class="BackpackHold" format=3 uid="uid://bpyueokfnd010"]
 
-[ext_resource type="Script" path="res://scripts/backpack_hold.gd" id="1"]
+[ext_resource type="Script" uid="uid://byy4mh5ga72iy" path="res://scripts/backpack_hold.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
-bag_position = Vector3(-0.19250798, -0.38538745, -0.59219396)
-bag_rotation_degrees = Vector3(9.552143, 86.83597, 46.936646)
-handle_point = Vector3(0.31722617, 0.24799174, -0.2794383)
+bag_position = Vector3(-0.18554415, -0.31124654, -0.5275146)
+bag_rotation_degrees = Vector3(4.94065, 94.33677, 46.874405)
+bag_scale = 0.9387923233611224
+swing_time = 0.4
+handle_point = Vector3(0.32375488, 0.25381556, -0.20697206)
+hand_rotation_degrees = Vector3(0, 11.56931, 0)
+fist = 0.8090409878787908
 finger_curl = PackedFloat32Array(0, 0, 0, 0, 0)
 elbow_direction = Vector3(-0.22675006, -0.3614198, 0.9044115)
+item_scales = {
+"BULLETS": 1.5513282159785162,
+"CAMP_KIT": 1.2762815625000004,
+"GRENADES": 0.613913253540759,
+"GUN": 3.0,
+"PILLS": 1.4071004226562505,
+"ROCKETS": 0.3957339570166503,
+"SHELLS": 1.2155062500000002
+}

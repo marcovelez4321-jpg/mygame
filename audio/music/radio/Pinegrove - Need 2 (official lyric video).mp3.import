@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://otvxdg0urxad"
+path="res://.godot/imported/Pinegrove - Need 2 (official lyric video).mp3-750e26cbf8b5d0fe56555545b144ea36.mp3str"
+
+[deps]
+
+source_file="res://audio/music/radio/Pinegrove - Need 2 (official lyric video).mp3"
+dest_files=["res://.godot/imported/Pinegrove - Need 2 (official lyric video).mp3-750e26cbf8b5d0fe56555545b144ea36.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

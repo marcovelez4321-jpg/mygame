@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://iyerukwvunos"
+path="res://.godot/imported/Deftones – Knife Prty (Official Visualizer) 4.mp3-0c95e5ecd69c89a84b41688e05dbb8cc.mp3str"
+
+[deps]
+
+source_file="res://audio/music/radio/Deftones – Knife Prty (Official Visualizer) 4.mp3"
+dest_files=["res://.godot/imported/Deftones – Knife Prty (Official Visualizer) 4.mp3-0c95e5ecd69c89a84b41688e05dbb8cc.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

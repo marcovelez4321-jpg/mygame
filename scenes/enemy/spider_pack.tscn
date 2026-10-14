@@ -1,6 +1,19 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dwh531b4rtkwn"]
 
-[ext_resource type="Script" path="res://scripts/enemies/spider_pack.gd" id="1_pack"]
+[ext_resource type="Script" uid="uid://dtlr5yb1je7bw" path="res://scripts/enemies/spider_pack.gd" id="1_pack"]
 
-[node name="SpiderPack" type="Node3D"]
+[node name="SpiderPack" type="Node3D" unique_id=794336678]
 script = ExtResource("1_pack")
+spider_scale = 1.5
+spider_speed = 40.0
+roam_pace = 0.8
+pack_radius_min = 4.0
+pack_radius_max = 10.0
+prefer_players = true
+lose_range = 70.0
+charge_range = 15.0
+engulf_radius_min = 1.1
+engulf_radius_max = 3.5
+dart_speed = 1.2
+roam_radius = 100.0
+roam_height = 20.0

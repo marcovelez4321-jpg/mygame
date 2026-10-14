@@ -22,9 +22,9 @@ extends Node3D
 @export var probe_height_min: float = 1.0
 @export var probe_height_max: float = 3.5
 ## How far a probe reaches for a wall or a ceiling.
-@export var probe_reach: float = 12.0
+@export var probe_reach: float = 24.0
 ## Chance a nest goes on a ceiling (if a probe finds one) instead of a wall.
-@export_range(0.0, 1.0, 0.05) var ceiling_chance: float = 0.35
+@export_range(0.0, 1.0, 0.05) var ceiling_chance: float = 0.7
 ## Chance a nest goes on the floor instead (the rest go on walls).
 @export_range(0.0, 1.0, 0.05) var floor_chance: float = 0.3
 ## A ceiling has to be at least this high above the floor under it.
@@ -32,7 +32,7 @@ extends Node3D
 @export var min_spacing: float = 15.0
 @export var safe_radius: float = 15.0
 ## Tries per nest before giving up on it.
-@export var attempts: int = 30
+@export var attempts: int = 15
 
 
 func _ready() -> void:

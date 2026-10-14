@@ -97,23 +97,31 @@ func regenerate(total: float, duration: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if is_dead or (_bleed_left <= 0.0 and _regen_left <= 0.0):
-		_bleed_left = 0.0
-		_regen_left = 0.0
+	if is_dead:
 		set_physics_process(false)
 		return
+
+	# Handle Regeneration Over Time
 	if _regen_left > 0.0:
 		var heal_step := minf(delta, _regen_left)
 		_regen_left -= heal_step
 		current_health = minf(current_health + _regen_rate * heal_step, max_health)
-	if _bleed_left <= 0.0:
-		return
-	var step := minf(delta, _bleed_left)
-	_bleed_left -= step
-	current_health = maxf(current_health - _bleed_rate * step, 0.0)
-	if current_health <= 0.0:
-		is_dead = true
-		died.emit(_bleed_attacker, false)
+
+	# Handle Bleed Over Time
+	if _bleed_left > 0.0:
+		var bleed_step := minf(delta, _bleed_left)
+		_bleed_left -= bleed_step
+		current_health = maxf(current_health - _bleed_rate * bleed_step, 0.0)
+		
+		if current_health <= 0.0:
+			is_dead = true
+			set_physics_process(false)
+			died.emit(_bleed_attacker, false)
+			return
+
+	# Disable physics process if effects have fully expired
+	if _bleed_left <= 0.0 and _regen_left <= 0.0:
+		set_physics_process(false)
 
 
 func _record_hit(impulse: Vector3, position: Vector3) -> void:

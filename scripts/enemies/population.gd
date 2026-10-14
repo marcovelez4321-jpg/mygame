@@ -9,9 +9,9 @@ extends RefCounted
 ## Hand-placed ones count too (born when the level loads, so they go first).
 ## Rule 1: host only, like every spawn.
 
-const MAX_RATS := 100
-const MAX_ROACHES := 100
-const MAX_SPIDERS := 100
+const MAX_RATS := 65
+const MAX_ROACHES := 65
+const MAX_SPIDERS := 65
 
 
 ## Stamps when `creature` was born (Rat/FlyingRoach call this in _ready()).

@@ -2,10 +2,10 @@
 
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://du22o2gcx5qoy" path="res://art/weapons/frag_grenade.tscn" id="2_model"]
-[ext_resource type="Resource" path="res://audio/events/weapons/grenade_throw.tres" id="3_throw"]
+[ext_resource type="Resource" uid="uid://dev8wn3vsnu8q" path="res://audio/events/weapons/grenade_throw.tres" id="3_throw"]
 [ext_resource type="Resource" path="res://audio/events/weapons/grenade_switch.tres" id="4_switch"]
 [ext_resource type="Resource" path="res://audio/events/weapons/grenade_tick.tres" id="5_tick"]
-[ext_resource type="Resource" path="res://audio/events/weapons/grenade_bounce.tres" id="6_bounce"]
+[ext_resource type="Resource" uid="uid://dtnqwf5htbhhg" path="res://audio/events/weapons/grenade_bounce.tres" id="6_bounce"]
 [ext_resource type="Animation" uid="uid://down878swuxr5" path="res://art/animations/LowerPistol.res" id="7_hold"]
 
 [resource]
@@ -17,8 +17,11 @@ magazine_size = 1
 explosion_radius = 4.5
 explosion_knockback = 12.0
 throws_grenade = true
+throw_lift_degrees = 11.0
+fuse_time = 2.0
 fuse_tick_sound = ExtResource("5_tick")
 bounce_sound = ExtResource("6_bounce")
+right_finger_curl = null
 arms_fitted = true
 viewmodel_scene = ExtResource("2_model")
 viewmodel_position = Vector3(0.20518848, -0.111903615, -0.32364586)

@@ -1479,3 +1479,7 @@ them:
   - **The bag 15% smaller** (`bag_scale` 0.84, about 0.67 m), same spot.
   - **The sawed-off's own right-hand grip** (`WeaponData.right_grip*`, `FirstPersonArms.set_right_grip`): its fingers cupped round the grip (`right_grip_cup` 0.85 of the way from flat to the fist), each finger tunable, the wrist turnable; the arm stays where it was. F2 then Y tunes it ([ ] curl, 1-5 a finger, Shift + arrows the wrist, which turns the gun with it); F3 saves.
   - Compiled (138 scripts, 0 failures). The drag/double-click and the grip haven't been tried in game.
+- **Fixed: thousands of "apply central impulse ... without a physics space" errors; the backpack's rocket looked like a mushroom (2026-10-14).** The user's reports.
+  - **The errors** (`EnemyRagdoll.carry()` from `RoachCarry._lift()`, about 60 a second): since a group keeps its dead members' bodies (the 5-second-vanishing fix), a group gone to sleep (every player far off: `RoamingGroup._set_asleep`) switched its bodies off too -- and a switched-off body is out of the physics world, while the roaches carrying it kept pulling. Now a sleeping group switches off only its living members, and `carry()` does nothing for a body that's asleep or not a ragdoll yet.
+  - **The rocket:** in `RPG.glb` the `Rocket` part's mesh is stored squashed, stretched 6.6x along its length by its own node's transform; the backpack copied the mesh without it. It keeps the part's own transform now.
+  - Not compiled or run (asks first).

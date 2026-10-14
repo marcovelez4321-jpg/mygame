@@ -1,6 +1,10 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://c8puncb2c066k"]
 
-[ext_resource type="Script" path="res://scripts/enemies/barnacle_cluster.gd" id="1_cluster"]
+[ext_resource type="Script" uid="uid://ora17pfr4s6i" path="res://scripts/enemies/barnacle_cluster.gd" id="1_cluster"]
 
-[node name="BarnacleCluster" type="Node3D"]
+[node name="BarnacleCluster" type="Node3D" unique_id=549713200]
 script = ExtResource("1_cluster")
+radius = 8.0
+size_max = 2.5
+fungus_count = 5
+defender_count = 1

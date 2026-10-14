@@ -10,18 +10,28 @@
 [ext_resource type="Script" uid="uid://blpts7jbv0f5n" path="res://scripts/world/eye_scatter.gd" id="8_22031"]
 [ext_resource type="Script" uid="uid://b1vfe5trujhmp" path="res://scripts/world/worm_director.gd" id="9_wnu4w"]
 [ext_resource type="Script" uid="uid://k5ol8htogvp2" path="res://scripts/world/encounter_director.gd" id="10_v085t"]
-[ext_resource type="PackedScene" path="res://scenes/megastructures/the_stack.scn" id="11_ykgsn"]
+[ext_resource type="PackedScene" uid="uid://dgi2jnnhqhfsr" path="res://scenes/megastructures/the_stack.scn" id="11_ykgsn"]
 [ext_resource type="Script" uid="uid://cku7pyx3p03gi" path="res://scripts/world/cloud_deck.gd" id="13_c2v4b"]
 [ext_resource type="Script" uid="uid://8l5laalbjcbl" path="res://scripts/world/skyline_layer.gd" id="14_oysqe"]
 [ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="15_25kst"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/spider_pack.tscn" id="22_3nfe5"]
-[ext_resource type="PackedScene" path="res://scenes/enemy/rat.tscn" id="24_prvl0"]
+[ext_resource type="PackedScene" uid="uid://dwh531b4rtkwn" path="res://scenes/enemy/spider_pack.tscn" id="22_3nfe5"]
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="23_k6tl3"]
+[ext_resource type="Resource" uid="uid://4o8gxqlvnutb" path="res://weapons/starter_gun.tres" id="24_5vhu7"]
+[ext_resource type="PackedScene" uid="uid://cwqrqy7cuat8c" path="res://scenes/enemy/rat.tscn" id="24_prvl0"]
+[ext_resource type="Resource" uid="uid://c5cnojtgl7uns" path="res://weapons/shotgun.tres" id="25_lludv"]
 [ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="26_8sgms"]
+[ext_resource type="Resource" uid="uid://dt6eiug7x3mql" path="res://weapons/grenade.tres" id="26_y826p"]
 [ext_resource type="Script" uid="uid://dyxx8s0555h3a" path="res://scripts/world/biome_atmosphere.gd" id="27_0bcx0"]
+[ext_resource type="Resource" uid="uid://bjfayi7xo4rw8" path="res://weapons/pkm.tres" id="27_u65ls"]
 [ext_resource type="Script" uid="uid://g1ouk8chgse1" path="res://scripts/world/alien_atmosphere.gd" id="28_h1i0h"]
+[ext_resource type="Resource" uid="uid://bpjpjn7wvra10" path="res://weapons/ppsh.tres" id="28_rsl8k"]
+[ext_resource type="Resource" uid="uid://cm8emkwg5001e" path="res://weapons/rpg.tres" id="29_6n4eo"]
 [ext_resource type="PackedScene" uid="uid://djmeis3phxch8" path="res://scenes/player/player.tscn" id="29_fyxt2"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="30_0goju"]
+[ext_resource type="Resource" uid="uid://e3410hmw0eai" path="res://weapons/revolver.tres" id="30_22031"]
+[ext_resource type="Resource" uid="uid://brnsy2rrq6n3b" path="res://weapons/machine_gun.tres" id="31_wnu4w"]
 [ext_resource type="Script" uid="uid://b6c6fwaffk3y6" path="res://scripts/world/loadout.gd" id="32_ldemw"]
+[ext_resource type="Resource" uid="uid://cd1tqnoroiq4t" path="res://weapons/sniper.tres" id="32_v085t"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
 _shader_parameters = {
@@ -66,6 +76,7 @@ _shader_parameters = {
 }
 shader_override_enabled = true
 shader_override = ExtResource("1_k6tl3")
+show_checkered = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0kkto"]
 transparency = 4
@@ -114,6 +125,7 @@ material = SubResource("Terrain3DMaterial_fxg6t")
 assets = SubResource("Terrain3DAssets_pb6gh")
 collision_mode = 3
 vertex_spacing = 4.0
+show_checkered = true
 top_level = true
 metadata/_edit_lock_ = true
 
@@ -151,6 +163,8 @@ biomes = ExtResource("5_u65ls")
 
 [node name="TheStack" parent="." unique_id=1618061883 instance=ExtResource("11_ykgsn")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 250, 31.5, -1450)
+interior_distance = 450.0
+nest_height = 5000.0
 webs = Array[Dictionary]([{
 &"at": Vector3(104.48445, 1010.25, -253.94556),
 &"indoors": true,
@@ -252,10 +266,11 @@ webs = Array[Dictionary]([{
 &"radius": 8.141447,
 &"size": 24.933556
 }])
+web_reach = 5000.0
 
 [node name="CloudDeck" type="MeshInstance3D" parent="." unique_id=433324838]
 script = ExtResource("13_c2v4b")
-height = 1300.0
+height = 900.0
 
 [node name="SkylineLayer" type="Node3D" parent="." unique_id=2100368034]
 script = ExtResource("14_oysqe")
@@ -294,3 +309,4 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
 
 [node name="Loadout" type="Node" parent="." unique_id=904333592]
 script = ExtResource("32_ldemw")
+weapons = Array[ExtResource("23_k6tl3")]([ExtResource("24_5vhu7"), ExtResource("25_lludv"), ExtResource("26_y826p"), ExtResource("27_u65ls"), ExtResource("28_rsl8k"), ExtResource("29_6n4eo"), ExtResource("30_22031"), ExtResource("31_wnu4w"), ExtResource("32_v085t"), null])

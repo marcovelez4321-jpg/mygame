@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cmamhpw1dj7uc"
+path="res://.godot/imported/PARDONME @wyamarco.mp3-b8680971f5a00bd7a7b49875a0aff927.mp3str"
+
+[deps]
+
+source_file="res://audio/music/radio/PARDONME @wyamarco.mp3"
+dest_files=["res://.godot/imported/PARDONME @wyamarco.mp3-b8680971f5a00bd7a7b49875a0aff927.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

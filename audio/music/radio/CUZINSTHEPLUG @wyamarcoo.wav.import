@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://suyat3sq47l"
+path="res://.godot/imported/CUZINSTHEPLUG @wyamarcoo.wav-445dcbb55e098e1381d9c5f1d5bfa528.sample"
+
+[deps]
+
+source_file="res://audio/music/radio/CUZINSTHEPLUG @wyamarcoo.wav"
+dest_files=["res://.godot/imported/CUZINSTHEPLUG @wyamarcoo.wav-445dcbb55e098e1381d9c5f1d5bfa528.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=true
+force/max_rate_hz=22050.0
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=1

@@ -4,8 +4,8 @@
 [ext_resource type="Script" uid="uid://nnai8cso0red" path="res://scripts/health.gd" id="2_health"]
 [ext_resource type="Texture2D" uid="uid://5eieikmsrqr6" path="res://art/props/PSX Creatures/Textures/tape_worm.png" id="3_skin"]
 [ext_resource type="Texture2D" uid="uid://dfm077mca87nt" path="res://art/props/PSX Creatures/Textures/barnacle.png" id="4_maw"]
-[ext_resource type="Resource" path="res://audio/events/enemy/barnacle_splat.tres" id="5_breach"]
-[ext_resource type="Resource" path="res://audio/events/rat_bite.tres" id="6_bite"]
+[ext_resource type="Resource" uid="uid://c0i73higdgvgq" path="res://audio/events/enemy/barnacle_splat.tres" id="5_breach"]
+[ext_resource type="Resource" uid="uid://gl8ov8lewm85" path="res://audio/events/rat_bite.tres" id="6_bite"]
 [ext_resource type="Resource" path="res://audio/events/enemy/roach_splat.tres" id="7_death"]
 [ext_resource type="Resource" path="res://audio/events/enemy/worm_roar.tres" id="9_roar"]
 

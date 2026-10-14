@@ -640,6 +640,10 @@ func body_position() -> Vector3:
 ## lesson as _apply_hit_impulse()'s body_share), and a real grip on a wrist
 ## loads the whole arm anyway.
 func carry(pushes: Dictionary, weight: float = 1.0) -> void:
+	# Asleep (its group's far from everyone: switched off, out of the physics
+	# world) or not a ragdoll yet: there's nothing to pull on.
+	if _bones.is_empty() or not _enemy.can_process() or not _bones[0].is_inside_tree():
+		return
 	var holding := not pushes.is_empty()
 	for bone in _bones:
 		bone.can_sleep = _settled and not holding
@@ -721,14 +725,28 @@ func _allow_sleep() -> void:
 ## shot to the arm kicks the arm, a shot to the chest rocks the whole body, and
 ## a weak weapon like the pistol just makes the body go limp.
 func _apply_hit_impulse() -> void:
+	# Defer the impulse application to ensure the physics space is ready, 
+	# especially if the ragdoll was just activated this same frame.
+	_apply_hit_impulse_deferred.call_deferred()
+
+func _apply_hit_impulse_deferred() -> void:
+	# Safety check: make sure the enemy and health references still exist
+	if not _enemy or not _enemy.health:
+		return
+		
 	var health := _enemy.health
 	var impulse := health.last_hit_impulse * hit_push_scale
+	
 	if impulse == Vector3.ZERO:
 		# Not a shot: a plain shove away from where the enemy was facing.
 		var push := _enemy.global_transform.basis.z * death_push
 		for bone in _bones:
-			bone.apply_central_impulse(push)
+			if is_instance_valid(bone) and bone.is_inside_tree():
+				bone.apply_central_impulse(push)
 		return
+		
+	# (Optional) If you have logic below this for bone-specific hits, 
+	# make sure to check `bone.is_inside_tree()` there as well!
 
 	impulse.y += impulse.length() * hit_lift
 	var nearest: PhysicalBone3D = _bones[0]

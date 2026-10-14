@@ -43,14 +43,14 @@ const HANDOVER_SPEED := 0.8
 ## Which of MODELS it is (-1: picked from its place).
 @export var model_index: int = -1
 ## How far it can be heard at all (the echo's reach).
-@export var echo_reach: float = 220.0
+@export var echo_reach: float = 275.0
 ## Loudness of each voice at its best (dB).
 @export var clear_volume_db: float = 2.0
 @export var voice_volume_db: float = -2.0
 @export var echo_volume_db: float = 0.0
 ## The crossfade: clear inside clear_until (m), tinny out to tinny_until,
 ## echo fullest from echo_full_at; the echo right at the radio (dB).
-@export var clear_until: float = 6.0
+@export var clear_until: float = 15.0
 @export var tinny_until: float = 45.0
 @export var echo_full_at: float = 80.0
 @export var echo_near_db: float = -30.0

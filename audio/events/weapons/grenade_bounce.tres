@@ -1,9 +1,13 @@
-[gd_resource type="Resource" script_class="SoundEvent" format=3]
+[gd_resource type="Resource" script_class="SoundEvent" format=3 uid="uid://dtnqwf5htbhhg"]
 
-[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="Script" uid="uid://dpm4dmxv0u4h" path="res://scripts/sound_event.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://dmprowfsdbd38" path="res://audio/events/weapons/frag_bnc_stone1.wav" id="1_i3mrs"]
+[ext_resource type="AudioStream" uid="uid://chkbycd0cmvji" path="res://audio/events/weapons/frag_bnc_stone2.wav" id="2_pmi4k"]
+[ext_resource type="AudioStream" uid="uid://b6imuwsj6a873" path="res://audio/events/weapons/frag_bnc_stone3.wav" id="3_jpy81"]
 
 [resource]
 script = ExtResource("1")
+clips = Array[AudioStream]([ExtResource("1_i3mrs"), ExtResource("2_pmi4k"), ExtResource("3_jpy81")])
 clip_folder = "res://audio/sfx/weapons/grenade"
 clip_prefix = "bounce"
 pitch_variance = 0.1

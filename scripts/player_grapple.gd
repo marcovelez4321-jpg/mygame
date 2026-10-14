@@ -63,52 +63,52 @@ enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS }
 ## Let go within this many seconds of it filling: the charge reward.
 @export var good_window: float = 0.15
 ## How much faster the pull is for it.
-@export var charge_boost: float = 1.12
+@export var charge_boost: float = 1.16
 
 @export_group("Lash")
 ## Reach at full power, in meters (half at the least charge).
-@export var max_range: float = 56.0
+@export var max_range: float = 45.0
 ## How fast the tentacle flies out, m/s (the pull starts when it bites).
-@export var lash_speed: float = 120.0
+@export var lash_speed: float = 150.0
 ## How long a miss takes to whip out and snap back.
 @export var miss_time: float = 0.45
 
 @export_group("Pull")
 ## Pull speed at full power, m/s; at the least charge, this share of it.
-@export var pull_speed: float = 15.6
+@export var pull_speed: float = 17.0
 @export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
 ## How hard it pulls you up to that speed, m/s per second.
-@export var pull_accel: float = 54.6
+@export var pull_accel: float = 60.0
 ## Slows the pull near the spot so you settle onto it (speed is capped at
 ## distance x this).
-@export var arrive_slowdown: float = 5.0
+@export var arrive_slowdown: float = 1.0
 ## The last seconds before arriving in which a press lets go perfectly, and
 ## how much faster you fly on for it.
 @export var perfect_window: float = 0.3
-@export var perfect_boost: float = 1.15
+@export var perfect_boost: float = 1.16
 ## How close to the spot counts as arriving.
-@export var arrive_distance: float = 1.4
+@export var arrive_distance: float = 4.0
 
 @export_group("Hold")
 ## Stamina bars drained a second while it holds you (0.25: one every 4 s).
 @export var drain_per_second: float = 0.25
 ## How far off the wall you perch, and the line's speeds.
-@export var perch_standoff: float = 0.55
+@export var perch_standoff: float = 1.0
 @export var reel_speed: float = 3.0
 @export var rappel_speed: float = 4.5
 ## Upward speed added when you let go with Space.
-@export var release_hop: float = 3.0
+@export var release_hop: float = 2.5
 
 @export_group("Big Enemies")
 ## How close (to the grabbed spot) counts as arriving: kick or latch on.
-@export var kick_reach: float = 2.2
+@export var kick_reach: float = 3.5
 ## Kick damage per m/s you were going when you hit (15.6 m/s x 4 = 62).
 @export var kick_damage_per_speed: float = 4.0
 ## How hard you bounce back off after a kick, and up.
-@export var kick_bounce: float = 9.0
-@export var kick_bounce_up: float = 6.0
+@export var kick_bounce: float = 13.5
+@export var kick_bounce_up: float = 8.0
 ## How far off the enemy's surface you hang while riding.
-@export var ride_standoff: float = 1.3
+@export var ride_standoff: float = 1.0
 
 @export_group("Sound")
 ## The timing rewards' sounds (empty: a generated chime).
