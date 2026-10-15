@@ -228,14 +228,14 @@ func set_highlighted(on: bool) -> void:
 		_label = Label3D.new()
 		_label.text = "%s\n%s" % [info[0], info[1]]
 		_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_label.no_depth_test = true
-		_label.fixed_size = true
-		_label.pixel_size = 0.0012
-		_label.font_size = 28
+		_label.no_depth_test = false # (hidden behind the tree, not seen through it)
+		_label.fixed_size = false # world-sized: small, and smaller further off
+		_label.pixel_size = 0.003
+		_label.font_size = 24
 		_label.outline_size = 8
 		_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.85)
 		_label.render_priority = 10
-		_label.position = Vector3.UP * 0.9
+		_label.position = Vector3.UP * 1.1 # above the pod, not over it
 		add_child(_label)
 	if _label:
 		_label.visible = on

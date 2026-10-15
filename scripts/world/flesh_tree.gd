@@ -478,7 +478,7 @@ func _grow_pod(mutation: StringName, slot: int) -> void:
 	var pod := CarryItem.spawn(self, to_global(_pod_spots[slot]), {kind = CarryItem.POD, mutation = mutation})
 	pod.set_meta(&"on_tree", true)
 	pod.set_meta(&"net_big", true) # seen by clients from well below (NetEntities)
-	pod.set_meta(&"highlight_range", 45.0) # read from the grapple's reach
+	pod.set_meta(&"highlight_range", 15.0) # read up close (the user's: not from the ground)
 	pod.freeze = true
 	_pods.append(pod)
 
