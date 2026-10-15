@@ -336,19 +336,18 @@ static var _hand_looks := {}
 func _on_hand_changed(data: Dictionary) -> void:
 	if data.get("empty", false):
 		# The gun's in the bag, the hand's empty: the arms drop out of view.
+		# Only the right arm and the gun go (the user's: the left arm -- the
+		# grapple, the bag -- works and shows as ever).
 		_hand_weapon = null
 		_hands_empty = true
-		if _switch_tween:
-			_switch_tween.kill()
-		_switch_tween = create_tween()
-		_switch_tween.tween_property(self, "position", LOWERED_OFFSET, 0.2).set_ease(Tween.EASE_IN)
-		_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, 0.2)
-		_switch_tween.tween_callback(func() -> void:
-			if is_instance_valid(_model):
-				_model.visible = false
-		)
+		if is_instance_valid(_model):
+			_model.visible = false
+		if _fp_arms:
+			_fp_arms.set_right_hidden(true)
 		return
 	_hands_empty = false
+	if _fp_arms:
+		_fp_arms.set_right_hidden(false)
 	if data.is_empty():
 		_hand_weapon = null
 		var gun := _weapons.current_weapon()

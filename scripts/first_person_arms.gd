@@ -304,6 +304,18 @@ func set_right_grip(on: bool, cup: float = 0.85, curls: PackedFloat32Array = Pac
 	_pose_right()
 
 
+## The gun's in the backpack (WeaponController.stow_gun()): the right arm drops
+## out of view and shrinks away; the left (the grapple, the bag) is untouched.
+var _right_hidden := false
+
+
+func set_right_hidden(on: bool) -> void:
+	if on == _right_hidden:
+		return
+	_right_hidden = on
+	_pose_right()
+
+
 ## The right arm from scratch: the hold pose, the cant, then its nudge.
 func _pose_right() -> void:
 	for bone in _right_bones:
@@ -335,6 +347,12 @@ func _pose_right() -> void:
 		_current[forearm] = [pose[0], (parent_basis.inverse() * turned).get_rotation_quaternion(), pose[2]]
 	_nudge(skeleton.find_bone(RIGHT_ROOT), _right_move, _right_turn)
 	_straighten(skeleton.find_bone(RIGHT_ROOT), skeleton.find_bone("forearm.R"), hand_bone)
+	if _right_hidden:
+		var root := skeleton.find_bone(RIGHT_ROOT)
+		var pose: Array = _current[root]
+		var parent := skeleton.get_bone_parent(root)
+		var parent_basis := bone_in_rig(parent).basis if parent != -1 else Basis.IDENTITY
+		_current[root] = [(pose[0] as Vector3) + parent_basis.inverse() * Vector3(0.0, -hide_drop, 0.0), pose[1], Vector3.ONE * 0.001]
 	if _dual:
 		_left_hold = _mirrored_right()
 	_write()
