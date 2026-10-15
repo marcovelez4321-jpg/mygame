@@ -82,10 +82,10 @@ signal respawned
 @export var stamina_recharge_delay: float = 0.5
 
 @export_group("Dash")
-## The user's (2026-10-15): the dash ADDS dash_speed on top of the speed you
-## already have, for dash_duration (twice the old 0.15 s: twice as far), and
-## you keep the speed you went in with afterwards -- momentum is never cut.
-@export var dash_speed: float = 16.0
+## The old dash (the user's, 2026-10-15: the add-on-top version lost your
+## speed after): for dash_duration you're sent along at dash_speed, and you
+## keep it after. Faster (16 -> 20) and twice as long (0.15 -> 0.3 s) than it was.
+@export var dash_speed: float = 20.0
 @export var dash_duration: float = 0.3
 @export var dash_cooldown: float = 0.6
 ## A little extra vertical pop if you're looking upward when you dash --
@@ -341,9 +341,6 @@ var _dash_held_prev: bool = false
 var _dash_time_left: float = 0.0
 var _dash_cooldown_left: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
-## How fast you were already going along the dash when it started (what's
-## left once the dash's push comes off again).
-var _dash_entry_along := 0.0
 ## The wings: the speed you opened them at (they never fly you slower).
 var _flight_floor := 0.0
 
@@ -720,8 +717,6 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	_dash_cooldown_left = maxf(_dash_cooldown_left - delta, 0.0)
 	if _dash_time_left > 0.0:
 		_dash_time_left = maxf(_dash_time_left - delta, 0.0)
-		if _dash_time_left <= 0.0:
-			_end_dash()
 
 	var wishdir := Vector3.ZERO
 	if input.wishdir != Vector2.ZERO:
@@ -788,6 +783,10 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 			_wall_jump_buffer_left = 0.0
 			_wall_seen_left = 0.0
 		_wall_jump_buffer_left = maxf(_wall_jump_buffer_left - delta, 0.0)
+
+	if _dash_time_left > 0.0:
+		velocity.x = _dash_dir.x * dash_speed
+		velocity.z = _dash_dir.z * dash_speed
 
 	_update_wings(input, delta)
 	_blow(delta)
@@ -1027,10 +1026,6 @@ func _start_dash(wishdir: Vector3) -> void:
 	_dash_time_left = dash_duration
 	_dash_cooldown_left = dash_cooldown
 	_wall_jumped_since_reset = false # dashing also refreshes the wall-jump limiter
-	# On top of the speed you have (the user's): the push comes off again
-	# at the end (_end_dash()), leaving what you went in with.
-	_dash_entry_along = maxf(Vector3(velocity.x, 0.0, velocity.z).dot(_dash_dir), 0.0)
-	velocity += _dash_dir * dash_speed
 	# How far up you're looking, from the ACTUAL look direction (not a raw
 	# pitch angle), so 0 at the horizon and 1.0 dead straight up. Only added,
 	# never subtracted, so looking down doesn't turn a dash into extra fall speed.
@@ -1040,14 +1035,6 @@ func _start_dash(wishdir: Vector3) -> void:
 	camera.shake(2.0)
 	camera.kick_fov(12.0)
 	dashed.emit()
-
-
-## The dash's push comes off -- only what it added: you're left at least as
-## fast along it as you went in (more, if you gained on the way).
-func _end_dash() -> void:
-	var along := Vector3(velocity.x, 0.0, velocity.z).dot(_dash_dir)
-	var extra := clampf(along - _dash_entry_along, 0.0, dash_speed)
-	velocity -= _dash_dir * extra
 
 
 ## Landed at `speed` m/s straight down: past fall_safe_speed it hurts (the
