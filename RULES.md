@@ -1512,3 +1512,56 @@ them:
   - **Streaming:** halls and plates within 700 m up/down and 1.5 km across a player are built in full (one mesh per material + box collision, 8 ms a frame); the rest of each tower is one plain box cut away round what's built.
   - Wind grip set by the user: gentle, about 2 s (`wind_grip` 0.5). The stairwell guarantee kept (the user's). Towers never below 330 m (the gap jitter now leaves at least that); players start at the crossing nearest the middle.
   - Tested (the user's yes): compiled, 141 scripts, 0 failures; a headless build from seed 1 -- 25 towers 1.2-11.2 km, 433 halls (37% sealed), 31 plates; the world planned in under 0.5 s; near the start 88 halls/plates to build, 2.8 ms each typically, the slowest 31 ms; 6 km up, 63, 2.1 ms typically; the wind at 10 km in the open 3.2 m/s. Not yet played.
+- **Greybox: towers x2 not x3, and the test world's look (2026-10-14).** The user's: x3 was too big, and the map looked weirder than the test world (the fog). Tower footprints now 220-400 m (the Stack's x2), heights still 1-12 km. The look matched to the test world: its sewer air laid on a copy of the environment (`AlienAtmosphere.sewer()` -- the murky green-brown fog, haze, fill and sun tint its BiomeAtmosphere gives outside the reef), the test world's sun, its cloud deck (`CloudDeck`, at 900 m), the camera seeing 16 km (it was the default, cutting the towers off), and the towers' outside through the Stack's skyline shader so they fade into the murk and the clouds the same way. Not compiled or run (asks first); not committed yet.
+- **Greybox halls: the original Stack's, 1.5x (2026-10-14).** The user's: the rooms were too empty; they love the original Stack's interior, especially the halls. Their picks: the original generator 95% of the time and the new mix 5%; towers 1.5x the Stack's widths (165-300 m) so the halls fill them; hall heights the originals x1.5 (240-750 m); and every new thing kept on top (floating rubble, cave-ins and small shafts, lifts and slopes, sealed halls and the outside). How: `StackBuilder._hall_features` -- the same code that built the Stack's halls (mezzanines up switchback ramps, the column grid, the hanging stepped pyramid, the leaning slab, mid-air stairs, its lamps) -- is run in a box 1/1.5 the hall's size and everything it makes is scaled up 1.5x (`ProceduralStacks._original_hall`), so the whole look grows, not just the room. `StackBuilder.new(false)` makes an empty builder for this (its constructor otherwise builds the whole Stack; the Stack's bake is unchanged). Not compiled or run (asks first); not committed yet. Flight missing in this scene (the user's report) still to look into.
+- **Focus moves to the open world; feeding off the virus, the Flesh Tree, your right hand (2026-10-15).** The user's: the procedural Stacks wait until co-op is done; survival is built on the open world (`scenes/world/test_world.tscn`). Every value the user's (many rounds; all in docs/CLIMB_VISION.md "Focus now"). Built co-op-ready and aggressively optimized (the user's, twice), with standard AAA techniques: relevance, think-rate throttling, LOD and draw ranges, shared resources, registries rather than scene searches.
+  - **Stamina:** the 4 bars and the dash are back. The dash now ADDS 16 m/s on top of your speed for 0.3 s (twice as far), keeps what you went in with, and lifts 30% more (6.5). Wall jumps stay free. The grapple is free to fire and drains 1 bar every 3.5 s while attached to anything. Infinite Grapples is off by default. Momentum is kept by the wings (never slower than you opened them at), mantles (speed given back at the top) and perches (given back when you let go).
+  - **Fall damage:** over 22 m/s landing, 3 hp per m/s (softer than HL2).
+  - **Virus** (`scripts/virus.gd`):
+    - **Points:** fresh +2, rotten +1, boss +3; 14 points = a mutation.
+    - **Eating raw:** 35 damage fresh, 90 rotten (Roach gut: 20/50; Chitin doesn't help).
+    - **Hunger:** one meter for food and water, full to empty in 20 minutes; empty costs 1 hp every 2 s. Raw meat fills 25%, rotten 15%, cooked 45%.
+    - **On death:** the newest mutation withers, the points are lost, and the tree shrinks a step.
+    - **The pool:** wings (Shift in the air), Chitin (35% less damage, via `Health.damage_scale`), Roach gut, Rat lungs (+50% refill), Mantis legs (+50% jump height, half fall damage), Spinnerets (+25% reach), Tendrils (the parked ones), and the Tentacle whip (double-tap right click; 0.4 s; 5 m; 50 to everything the tentacle touches, its hitbox capsules along the lash; 1 bar).
+  - **The big ones** (`scripts/big_ones.gd`): 75% of every group gets one member at 2x size, 2x health, 0.8x speed and 1.5x damage, made big before its `_ready`. It drops a meat chunk (1 kg from a rat, roach or spider; 2 kg from a person). Bosses (the worm, Harvestman, Rat Bender, Swarm King) drop a 4 kg boss chunk.
+  - **Items:**
+    - **Meat** (`scripts/carry_item.gd`, `CarryItem`): the user's `New assets/Flesh2.fbx` raw and `Flesh.fbx` cooked; rotten is tinted green-grey, with flies. It rots after 10 minutes anywhere (aged in 2-minute steps, the user's). It cooks in 25 s on, over or within 1 m of a fire, keeping partial progress (checked once a second).
+    - **Fires** (`FireSource`: a static registry of distance checks; `BurningBarrel`): a rusty barrel with roaring flames, sparks, a smoke column (seen to 1.5 km) and a 12 m light. They go in half the Stack's window rooms (`StackBuilder._fire_spots` -> `Megastructure.fire_spots`; needs a Stack re-bake), at every Stack gang spot, and at every open-world camp.
+  - **Your right hand** (`scripts/player_hand.gd`):
+    - **Pulling things in:** the grapple pulls any item (meat, pods, guns, ammo, pills, CarryItems) in at 20 m/s, and the gun goes away. Other props up to 15 kg hang off the tentacle: left click throws them (25 m/s), right click lets go, and holding one drains stamina. Over 15 kg is an anchor.
+    - **Using what you hold:** left click uses it ("left click to feed off the virus" shows to its left), G drops it, and F stows it. Grappling a second item stows the first.
+    - **The backpack:** double-clicking an item in the bag brings it into your hand. With your hand empty, F (when not looking at a button) stows the gun; both guns can sit in the bag.
+    - **The old F prop mover** (`PhysicsGrabber`) is removed.
+    - **Looks:** the gripping tendrils show on whatever the tentacle holds. The viewmodel shows the held thing at real size, at most 30 cm.
+  - **Screen and sound:**
+    - **Trip flash** (`scripts/trip_flash.gd`): one of the user's images from `art/trip/` (black until added), tearing and shaking for 1.5 s, "i shouldve cooked that" (meat only), and a generated noise burst.
+    - **Hunger cues** (`scripts/hunger_cues.gd`, under 15%): edges dim to 60% and the hands shake. The growl (every ~10 s) and breathing are sound slots for the user.
+    - **HUD:** a thin amber hunger bar under the pips.
+  - **The Flesh Tree** (`scripts/world/flesh_tree.gd`, 40 m behind the yard's middle, its roots arching round the yard):
+    - **Shape:** a meat-and-bone oak, 0.5 km tall plus 0.5 km per mutation, with its trunk 25 m wide at 0.5 km (keeping its proportions as it grows). A limb comes about every 10 m, spiralling up. About 20 of the user's eldritch creatures are scattered on it.
+    - **Growing:** it regrows only when nobody can see it (an engine frustum notifier; clients report to the host), with a new layout seed every time (the user's).
+    - **Cost:** one mesh, two surfaces and one trimesh, every look value an export.
+    - **Pods:** three pods with random mutations ripen at the top, each with its name shown on highlight; ripening plays a heartbeat and shows "something is ripening". Taking one shrivels the rest. Testing: `pods_on_start` (on).
+  - **Yard grass:** Grass_01 within 45 m of the yard's middle, fading out over 10 m (`alien_terrain.gdshader` `yard_*`, set by `TerrainLook`).
+  - **Co-op:** NetEntities now replicates things made in code (`net_spawn_args`/`net_restore`) and big ones' sizes. Hunger and the hand/backpack meat go to their owner by rpc. All damage is the host's.
+  - **Worm fix (the user's bug, body invisible):** its body's culling box was fixed to ±500 m round the world's origin, and the worm lives about 1.5 km out; it now follows the segments each tick.
+  - Edits went through a scratch folder and PowerShell: Windows Controlled folder access blocks the app writing to Documents. Not compiled or run (asks first); not committed yet.
+  - **Tested (the user's yes):**
+    - **Compiled:** 151 scripts, 0 failures.
+    - **Stack re-baked:** 25 barrel spots in its 44 window rooms, plus its 3 gang spots. The bake tools now stand in for the autoloads before loading their body (`tools/stack_bake.gd`, `tools/test_world_bake.gd`), since the Stack and the world now reach `Network`.
+    - **Open-world walk-through, headless: 22/22 pass.** Checked:
+      - the tree builds (about 6k triangles, a 17 ms rebuild, 20 creatures), and 3 pods are ripe on start;
+      - a big person gets 2x health and 0.8x speed, and drops a chunk where it dies;
+      - grappled into the hand, the chunk shows the prompt; eaten raw it does 35 damage, gives 2 points and fills 25% hunger;
+      - meat cooks on a barrel in 25 s;
+      - a pod comes into the hand and gives its mutation, the points are spent, and the other pods shrivel;
+      - the whip hits for 50;
+      - fall damage is 24 at 30 m/s;
+      - F stows the gun, with both guns in the bag.
+    - **Found and fixed on the way:**
+      - a pod was being unfrozen mid-pull;
+      - the population cap's culls dropped meat (now they don't, and big ones are culled last);
+      - **`web_reach` was 5000 in the open-world scene:** all 20 Stack web hordes (about 317 spiders) spawned at load, km away, and were mostly culled at once. The user set it back to 120 m (the override was removed).
+  - **CPU profile, headless:**
+    - **Physics:** 6.45 ms a tick (of 16.7). Enemies take about 3.3 ms of it (83 creatures), world-chunk streaming about 1 ms, and the player about 1 ms. Everything added today is within the noise (±1 ms).
+    - **Nodes:** 24.4k, including 5.8k MultiMeshes, 5k meshes, 872 barnacles, 151 particle systems and 81 lights. Rendering isn't measurable headless (frames are paced there).

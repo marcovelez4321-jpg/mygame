@@ -347,6 +347,7 @@ func _ready() -> void:
 	var floor_hit := _static_ray(global_position + Vector3.UP * 2.0, global_position + Vector3.DOWN * 50.0)
 	_ground_y = (floor_hit.position as Vector3).y if not floor_hit.is_empty() else global_position.y
 	health.died.connect(_on_died)
+	BigOnes.drops_meat(self, BigOnes.BOSS_MEAT, true) # a level boss: a boss chunk (+3)
 	_fx = WormFX.new()
 	_fx.size = size
 	_fx.rumble_stream = rumble_stream
@@ -716,6 +717,19 @@ func _physics_process(delta: float) -> void:
 
 
 func _place_segments() -> void:
+	# The body's culling box follows the body (the user's bug: the body
+	# vanished with the head still there -- its box was a fixed +-500 m round
+	# the world's origin, and the worm lives ~1.5 km out, in the Stack). Grown
+	# from every segment's place and widest girth: cheap, and never stale.
+	var low := _pos[0]
+	var high := _pos[0]
+	var widest := 0.0
+	for i in _segments.size():
+		low = low.min(_pos[i])
+		high = high.max(_pos[i])
+		widest = maxf(widest, _radii[i])
+	var pad := Vector3.ONE * (widest * 2.0 + segment_spacing)
+	_body_mm.custom_aabb = AABB(low - pad, high - low + pad * 2.0)
 	for i in _segments.size():
 		var forward := (_pos[i - 1] - _pos[i]) if i > 0 else _head_forward()
 		if forward.length_squared() < 0.0001:

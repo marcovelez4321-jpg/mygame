@@ -36,6 +36,9 @@ const DRAG_GRIP_BONES := ["LeftHand", "RightHand", "LeftFoot", "RightFoot", "Hea
 ## Every rat this swarm brings up is this much bigger, and has this many
 ## times the health, on top of its own little variety. 1 = normal rats.
 @export var rat_scale: float = 1.0
+## How many of the next rats spawned are big ones (BigOnes: set by its
+## group as its nest joins).
+var big_next := 0
 @export var rat_health_multiplier: float = 1.0
 ## ...and bites (and leap-bites) this many times harder.
 @export var rat_damage_multiplier: float = 1.0
@@ -281,6 +284,10 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float 
 		rat.scale_bonus = scale_bonus
 		rat.health_bonus = health_bonus
 		rat.damage_bonus = damage_bonus
+		var big := big_next > 0
+		if big:
+			big_next -= 1
+			BigOnes.big_rat(rat, false)
 		var spot := center + Vector3(rat.slot.x, 0.0, rat.slot.y) * randf_range(inner, reach)
 		# Onto the floor there (or where he stands, if there's none).
 		var query := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.0, spot + Vector3.DOWN * 3.0)
@@ -289,6 +296,8 @@ func spawn_rats(amount: int, center: Vector3, spread: float = -1.0, ring: float 
 			query.exclude = [(bender as CollisionObject3D).get_rid()]
 		var hit := space.intersect_ray(query)
 		world.add_child(rat)
+		if big:
+			BigOnes.big_rat(rat, true)
 		rat.global_position = hit.position if not hit.is_empty() else spot
 		rats.append(rat)
 		_had_rats = true

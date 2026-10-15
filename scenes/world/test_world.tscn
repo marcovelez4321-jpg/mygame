@@ -32,6 +32,7 @@
 [ext_resource type="Resource" uid="uid://brnsy2rrq6n3b" path="res://weapons/machine_gun.tres" id="31_wnu4w"]
 [ext_resource type="Script" uid="uid://b6c6fwaffk3y6" path="res://scripts/world/loadout.gd" id="32_ldemw"]
 [ext_resource type="Resource" uid="uid://cd1tqnoroiq4t" path="res://weapons/sniper.tres" id="32_v085t"]
+[ext_resource type="Script" path="res://scripts/world/flesh_tree.gd" id="40_fleshtree"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
 _shader_parameters = {
@@ -264,7 +265,6 @@ webs = Array[Dictionary]([{
 &"radius": 8.141447,
 &"size": 24.933556
 }])
-web_reach = 5000.0
 
 [node name="CloudDeck" type="MeshInstance3D" parent="." unique_id=433324838]
 script = ExtResource("13_c2v4b")
@@ -308,3 +308,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
 [node name="Loadout" type="Node" parent="." unique_id=904333592]
 script = ExtResource("32_ldemw")
 weapons = Array[ExtResource("23_k6tl3")]([ExtResource("24_5vhu7"), ExtResource("25_lludv"), ExtResource("26_y826p"), ExtResource("27_u65ls"), ExtResource("28_rsl8k"), ExtResource("29_6n4eo"), ExtResource("30_22031"), ExtResource("31_wnu4w"), ExtResource("32_v085t"), null])
+
+[node name="FleshTree" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 40)
+script = ExtResource("40_fleshtree")

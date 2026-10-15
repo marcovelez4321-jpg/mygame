@@ -1,0 +1,393 @@
+class_name PlayerHand
+extends Node
+
+## Your right hand (the user's, 2026-10-15): grapple an item (PlayerGrapple)
+## and it flies in at FETCH_SPEED; the gun goes away while it's there.
+##   Left click uses it: raw meat feeds off the virus, cooked meat is eaten,
+##   a pod gives its mutation, pills are taken, a gun is equipped, ammo is
+##   loaded, grenades readied, a camp kit brought out to place. Scrap and silk
+##   just sit in your hand.
+##   G drops it at your feet (a CarryItem); F puts it in the backpack.
+##   Double-clicking something in the backpack brings it into your hand.
+## Held over a fire, meat cooks (CarryItem's rules).
+## Rule 1 (co-op): tick() runs in the player's simulation step from the input
+## packet; what changes the world (spawning, freeing, eating) only on the
+## host, which tells the owner what's in their hand (_net_hand).
+
+## How fast an item flies in (the user's).
+const FETCH_SPEED := 20.0
+## Where the hand holds things, in your head's space (for cooking over a
+## fire, and where a fetched item flies to).
+const HOLD_POINT := Vector3(0.25, -0.3, -0.5)
+## The heaviest thing a hand takes (the user's; heavier things are props on
+## the tentacle, or anchors).
+const MAX_WEIGHT := 15.0
+## Prompts to the left of it (the user's wording for meat).
+const PROMPTS := {
+	Backpack.Kind.MEAT: "left click to feed off the virus",
+	Backpack.Kind.COOKED_MEAT: "left click to eat",
+	Backpack.Kind.PILLS: "left click to take the pills",
+	Backpack.Kind.BANDAGE: "left click to wrap the bandage",
+	Backpack.Kind.GUN: "left click to equip",
+	Backpack.Kind.BULLETS: "left click to load",
+	Backpack.Kind.SHELLS: "left click to load",
+	Backpack.Kind.ROCKETS: "left click to load",
+	Backpack.Kind.GRENADES: "left click to ready",
+	Backpack.Kind.CAMP_KIT: "left click to set up camp",
+}
+
+## What's in it (CarryItem.to_data()); {} = nothing.
+var data: Dictionary = {}
+## Flying in right now (a world body), or null.
+var incoming: Node3D
+
+var _player: PlayerMovement
+var _fire_prev := false
+var _drop_prev := false
+var _cook_left := 0.0
+var _age_left := CarryItem.AGE_EVERY
+
+
+func _ready() -> void:
+	_player = get_parent() as PlayerMovement
+	_player.health.died.connect(func(_a: int, _c: bool) -> void:
+		cancel_fetch()
+		if is_holding():
+			_drop()
+	)
+
+
+func is_holding() -> bool:
+	return not data.is_empty()
+
+
+## Something on its way in, or in hand.
+func is_busy() -> bool:
+	return is_holding() or is_instance_valid(incoming)
+
+
+## Whether `body` goes in a hand (an item, not a prop): a CarryItem, a gun,
+## ammo or pills lying about.
+static func is_item(body: Node) -> bool:
+	return body is CarryItem or body is WeaponPickup or body is AmmoPickup or body is ItemPickup
+
+
+## The grapple bit an item: it flies in. Whatever's in your hand already goes
+## in the backpack (or, with no room, drops) -- the user's.
+func fetch(body: Node3D) -> void:
+	if not _decides() or not is_instance_valid(body):
+		return
+	if is_holding() and not _stow():
+		_drop()
+	cancel_fetch()
+	incoming = body
+	if body is RigidBody3D:
+		var rigid := body as RigidBody3D
+		rigid.set_meta(&"fetch_layers", [rigid.collision_layer, rigid.collision_mask])
+		rigid.freeze = true
+		rigid.collision_layer = 0
+		rigid.collision_mask = 0
+	if body is CarryItem and body.has_meta(&"on_tree"):
+		FleshTree.pod_taken(body as CarryItem)
+
+
+## Still flying in (the grapple's tip follows it).
+func fetching() -> Node3D:
+	return incoming if is_instance_valid(incoming) else null
+
+
+## Every simulation tick (PlayerMovement._finish_tick()): the item flying in,
+## a fresh left click (use), G (drop), F (stow, from _tick_use()).
+func tick(fire: bool, drop: bool, stow: bool, delta: float) -> void:
+	var fire_pressed := fire and not _fire_prev
+	var drop_pressed := drop and not _drop_prev
+	_fire_prev = fire
+	_drop_prev = drop
+	_fly_in(delta)
+	if not is_holding() or not _decides():
+		return
+	_cook(delta)
+	if drop_pressed:
+		_drop()
+	elif stow:
+		if not _stow() and _player.is_multiplayer_authority():
+			MapIO.show_message(_player.get_tree(), "No room in the backpack")
+	elif fire_pressed:
+		_use()
+
+
+## What left click does with it (the HUD shows it to its left).
+func prompt() -> String:
+	if not is_holding():
+		return ""
+	var kind: int = data.kind
+	if kind == CarryItem.POD:
+		var mutation: Array = Virus.MUTATIONS.get(data.mutation, ["?", ""])
+		return "left click to mutate: %s" % mutation[0]
+	return PROMPTS.get(kind, "")
+
+
+## A gun double-clicked in the backpack comes as GUN_CODE + its index in
+## your weapons (both guns can be in there: which one matters).
+const GUN_CODE := 1000
+
+
+## Double-clicked in the backpack: one of `code` (a Backpack.Kind, or a gun:
+## GUN_CODE + its index) into your hand. A gun goes into your hands, as a gun.
+func take_from_backpack(code: int) -> void:
+	if not _decides():
+		return
+	var weapons := _player.weapons
+	var backpack := _player.backpack
+	if code >= GUN_CODE:
+		if is_holding() and not _stow():
+			_drop()
+		weapons.equip_gun(code - GUN_CODE)
+		return
+	var kind := code as Backpack.Kind
+	if kind == Backpack.Kind.GUN:
+		return
+	var taken := {}
+	match kind:
+		Backpack.Kind.PILLS:
+			if weapons.take_item(WeaponController.Item.PILLS):
+				taken = {kind = kind, amount = 1}
+		Backpack.Kind.BANDAGE:
+			if weapons.take_item(WeaponController.Item.BANDAGE):
+				taken = {kind = kind, amount = 1}
+		Backpack.Kind.GRENADES:
+			if weapons.take_grenade():
+				taken = {kind = kind, amount = 1}
+		Backpack.Kind.BULLETS, Backpack.Kind.SHELLS, Backpack.Kind.ROCKETS:
+			var rounds := weapons.take_ammo(_ammo_type(kind))
+			if rounds > 0:
+				taken = {kind = kind, amount = rounds}
+		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT:
+			if backpack.take(kind, 1):
+				taken = {kind = kind, amount = 1}
+		Backpack.Kind.MEAT, Backpack.Kind.ROTTEN_MEAT, Backpack.Kind.COOKED_MEAT:
+			taken = backpack.take_meat(kind)
+	if taken.is_empty():
+		return
+	if is_holding() and not _stow():
+		_drop()
+	_hold(taken)
+
+
+# ---- Inside ------------------------------------------------------------------------
+
+func _hold(new_data: Dictionary) -> void:
+	data = new_data
+	_player.weapons.set_hand(data)
+	_send()
+
+
+func _empty() -> void:
+	data = {}
+	_player.weapons.set_hand({})
+	_send()
+
+
+func _hand_point() -> Vector3:
+	return _player.head.global_transform * HOLD_POINT
+
+
+## The item flying in at FETCH_SPEED; there, it's in your hand.
+func _fly_in(delta: float) -> void:
+	if not is_instance_valid(incoming):
+		incoming = null
+		return
+	var to := _hand_point() - incoming.global_position
+	var step := FETCH_SPEED * delta
+	if to.length() > step:
+		incoming.global_position += to.normalized() * step
+		return
+	if not _decides():
+		return
+	var arrived := _data_of(incoming)
+	incoming.queue_free()
+	incoming = null
+	if not arrived.is_empty():
+		_hold(arrived)
+
+
+func cancel_fetch() -> void:
+	if not is_instance_valid(incoming):
+		incoming = null
+		return
+	if incoming is RigidBody3D and incoming.has_meta(&"fetch_layers"):
+		var rigid := incoming as RigidBody3D
+		var layers: Array = rigid.get_meta(&"fetch_layers")
+		rigid.collision_layer = layers[0]
+		rigid.collision_mask = layers[1]
+		rigid.freeze = false
+	incoming = null
+
+
+## What a world body is, as hand data.
+static func _data_of(body: Node) -> Dictionary:
+	if body is CarryItem:
+		return (body as CarryItem).to_data()
+	if body is WeaponPickup:
+		var gun := body as WeaponPickup
+		return {kind = Backpack.Kind.GUN, amount = gun.ammo_amount, weapon = gun.weapon.resource_path if gun.weapon else ""}
+	if body is AmmoPickup:
+		var ammo := body as AmmoPickup
+		return {kind = _ammo_kind(ammo.ammo_type), amount = ammo.amount}
+	if body is ItemPickup:
+		var item := body as ItemPickup
+		return {kind = Backpack.Kind.PILLS if item.item == WeaponController.Item.PILLS else Backpack.Kind.BANDAGE, amount = item.amount}
+	return {}
+
+
+## Meat in your hand goes on aging (in CarryItem.AGE_EVERY steps), and held
+## over (or right by) a fire it cooks (looked for every CarryItem.COOK_EVERY).
+func _cook(delta: float) -> void:
+	if data.kind != Backpack.Kind.MEAT:
+		return
+	_cook_left -= delta
+	_age_left -= delta
+	var changed := false
+	if _cook_left <= 0.0:
+		_cook_left += CarryItem.COOK_EVERY
+		changed = CarryItem.cook(data, CarryItem.COOK_EVERY, _hand_point())
+	if _age_left <= 0.0:
+		_age_left += CarryItem.AGE_EVERY
+		changed = CarryItem.grow_old(data, CarryItem.AGE_EVERY) or changed
+	if changed:
+		_hold(data) # it rotted or cooked: the new look shows
+
+
+## Left click.
+func _use() -> void:
+	if not is_holding():
+		return
+	var weapons := _player.weapons
+	var kind: int = data.kind
+	var amount: int = data.get("amount", 1)
+	match kind:
+		Backpack.Kind.MEAT:
+			var held := data
+			_empty()
+			_player.virus.eat_raw(CarryItem.is_rotten_data(held), held.get("boss", false))
+		Backpack.Kind.COOKED_MEAT:
+			_empty()
+			_player.virus.eat_cooked()
+		CarryItem.POD:
+			var mutation: StringName = data.mutation
+			_empty()
+			_player.virus.take_mutation(mutation)
+		Backpack.Kind.PILLS, Backpack.Kind.BANDAGE:
+			var item := WeaponController.Item.PILLS if kind == Backpack.Kind.PILLS else WeaponController.Item.BANDAGE
+			_empty()
+			weapons.add_item(item, amount)
+			weapons.use_item(item)
+		Backpack.Kind.GUN:
+			var gun := _gun_of(data)
+			_empty()
+			weapons.pickup_weapon(gun, amount)
+		Backpack.Kind.BULLETS, Backpack.Kind.SHELLS, Backpack.Kind.ROCKETS:
+			_empty()
+			weapons.add_ammo(_ammo_type(kind), amount)
+		Backpack.Kind.GRENADES:
+			_empty()
+			_stow_grenade(amount)
+			weapons.equip_grenades()
+		Backpack.Kind.CAMP_KIT:
+			_empty()
+			_player.backpack.add(Backpack.Kind.CAMP_KIT, amount)
+			_player.backpack.use(Backpack.Kind.CAMP_KIT)
+
+
+## F: into the backpack. False (and still in your hand) if it doesn't fit.
+func _stow() -> bool:
+	var weapons := _player.weapons
+	var backpack := _player.backpack
+	var kind: int = data.kind
+	var amount: int = data.get("amount", 1)
+	match kind:
+		Backpack.Kind.MEAT, Backpack.Kind.COOKED_MEAT:
+			if not backpack.add_meat(data):
+				return false
+		Backpack.Kind.PILLS, Backpack.Kind.BANDAGE:
+			var item := WeaponController.Item.PILLS if kind == Backpack.Kind.PILLS else WeaponController.Item.BANDAGE
+			var taken := weapons.add_item(item, amount)
+			if taken < amount:
+				data.amount = amount - taken
+				return false
+		Backpack.Kind.GUN:
+			var gun := _gun_of(data)
+			if gun == null or (not weapons.get_owned_weapons().has(gun) and weapons.is_gun(gun) and weapons.gun_count() >= WeaponController.MAX_GUNS):
+				return false
+			weapons.pickup_weapon(gun, amount)
+		Backpack.Kind.BULLETS, Backpack.Kind.SHELLS, Backpack.Kind.ROCKETS:
+			weapons.add_ammo(_ammo_type(kind), amount, false)
+		Backpack.Kind.GRENADES:
+			if not _stow_grenade(amount):
+				return false
+		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT:
+			if backpack.add(kind as Backpack.Kind, amount) < amount:
+				return false
+		_:
+			return false # a pod: it won't go in the bag
+	_empty()
+	return true
+
+
+func _stow_grenade(amount: int) -> bool:
+	var grenade := _player.weapons.grenade_weapon()
+	if grenade == null:
+		return false
+	_player.weapons.add_ammo(grenade.ammo_type, amount, false)
+	return true
+
+
+## G: at your feet, a CarryItem.
+func _drop() -> void:
+	var at := _player.global_position + Vector3.UP * 0.6 - _player.global_basis.z * 0.5
+	CarryItem.spawn(_player, at, data)
+	_empty()
+
+
+static func _gun_of(item: Dictionary) -> WeaponData:
+	var path: String = item.get("weapon", "")
+	return load(path) as WeaponData if path != "" and ResourceLoader.exists(path) else null
+
+
+static func _ammo_type(kind: int) -> WeaponData.AmmoType:
+	match kind:
+		Backpack.Kind.SHELLS:
+			return WeaponData.AmmoType.SHELLS
+		Backpack.Kind.ROCKETS:
+			return WeaponData.AmmoType.ROCKETS
+	return WeaponData.AmmoType.BULLETS
+
+
+static func _ammo_kind(type: WeaponData.AmmoType) -> int:
+	match type:
+		WeaponData.AmmoType.SHELLS:
+			return Backpack.Kind.SHELLS
+		WeaponData.AmmoType.ROCKETS:
+			return Backpack.Kind.ROCKETS
+		WeaponData.AmmoType.GRENADES:
+			return Backpack.Kind.GRENADES
+	return Backpack.Kind.BULLETS
+
+
+# ---- Co-op ---------------------------------------------------------------------------
+
+func _decides() -> bool:
+	return not Network.is_online() or multiplayer.is_server()
+
+
+func _send() -> void:
+	if Network.is_online() and multiplayer.is_server() and not _player.is_multiplayer_authority():
+		_net_hand.rpc_id(_player.get_multiplayer_authority(), data)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_hand(new_data: Dictionary) -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return
+	data = new_data
+	_player.weapons.set_hand(data)

@@ -1,31 +1,33 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://cg4j3tyttw3g"]
 
-[ext_resource type="Script" path="res://scripts/world/procedural_stacks.gd" id="1_stacks"]
+[ext_resource type="Script" uid="uid://fqpkn0weuhi1" path="res://scripts/world/procedural_stacks.gd" id="1_stacks"]
 [ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="2_env"]
-[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" uid="uid://djmeis3phxch8" path="res://scenes/player/player.tscn" id="3_player"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="4_hud"]
-[ext_resource type="Script" path="res://scripts/world/loadout.gd" id="5_loadout"]
-[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="6_weapon"]
-[ext_resource type="Resource" path="res://weapons/starter_gun.tres" id="7_pistol"]
-[ext_resource type="Resource" path="res://weapons/shotgun.tres" id="8_shotgun"]
-[ext_resource type="Resource" path="res://weapons/grenade.tres" id="9_grenade"]
+[ext_resource type="Script" uid="uid://b6c6fwaffk3y6" path="res://scripts/world/loadout.gd" id="5_loadout"]
+[ext_resource type="Script" uid="uid://cku7pyx3p03gi" path="res://scripts/world/cloud_deck.gd" id="6_clouds"]
 
-[node name="ProceduralStacksTest" type="Node3D"]
+[node name="ProceduralStacksTest" type="Node3D" unique_id=1174491411]
 script = ExtResource("1_stacks")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=39465209]
 environment = ExtResource("2_env")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 100, 0)
-light_energy = 0.8
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=2042179133]
+transform = Transform3D(0.8660254, -0.38302222, 0.32139382, 0, 0.64278764, 0.76604444, -0.5, -0.66341394, 0.5566704, 0, 0, 0)
+light_energy = 1.15
 shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 90.0
 
-[node name="Player" parent="." instance=ExtResource("3_player")]
+[node name="CloudDeck" type="MeshInstance3D" parent="." unique_id=1474226301]
+script = ExtResource("6_clouds")
+height = 900.0
+
+[node name="Player" parent="." unique_id=1975706469 instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
 
-[node name="HUD" parent="." instance=ExtResource("4_hud")]
+[node name="HUD" parent="." unique_id=2096588769 instance=ExtResource("4_hud")]
 
-[node name="Loadout" type="Node" parent="."]
+[node name="Loadout" type="Node" parent="." unique_id=1809762224]
 script = ExtResource("5_loadout")
-weapons = Array[ExtResource("6_weapon")]([ExtResource("7_pistol"), ExtResource("8_shotgun"), ExtResource("9_grenade")])

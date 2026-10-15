@@ -18,6 +18,9 @@ extends Node
 ## Which biome is where (empty = sewer everywhere): the shader blends the
 ## reef and sewer colours by it.
 @export var biomes: BiomeMap
+## Grandma's yard's grass (the user's: TrenchBroom's Grass_01); the circle's
+## size and fade are the shader's yard_* settings. Empty = no grass.
+@export var yard_grass: Texture2D = preload("res://trenchbroom/textures/Grass/Grass_01-256x256.png")
 
 
 func _ready() -> void:
@@ -40,4 +43,6 @@ func _ready() -> void:
 	if biomes:
 		material.call("set_shader_param", &"biome_map", biomes.texture())
 		material.call("set_shader_param", &"biome_area", biomes.area_vector())
+	material.call("set_shader_param", &"yard_grass", yard_grass)
+	material.call("set_shader_param", &"yard_grass_on", yard_grass != null)
 	material.call("update")

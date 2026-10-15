@@ -30,11 +30,15 @@ static func make_room(tree: SceneTree, group: String, kind: Script, cap: int, ne
 	var excess := alive.size() + needed - cap
 	if excess <= 0:
 		return
+	# The oldest first -- but the big ones (BigOnes) last: they carry meat.
 	alive.sort_custom(func(a: Node, b: Node) -> bool:
+		if a.has_meta(&"big") != b.has_meta(&"big"):
+			return b.has_meta(&"big")
 		return int(a.get_meta("born", 0)) < int(b.get_meta("born", 0)))
 	for i in mini(excess, alive.size()):
 		var health := alive[i].get_node_or_null("Health") as Health
 		if health:
+			alive[i].set_meta(&"culled", true) # (a cull drops no meat: BigOnes)
 			health.take_damage(health.current_health + 1.0)
 
 

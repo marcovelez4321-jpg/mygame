@@ -210,8 +210,12 @@ const ROOM_GROWTH := {
 var random := RandomNumberGenerator.new()
 
 
-func _init() -> void:
+## `build` false: an empty builder (no Stack built) -- for borrowing its hall
+## generator (ProceduralStacks: the original halls, the user's).
+func _init(build: bool = true) -> void:
 	random.seed = SEED
+	if not build:
+		return
 	for t in TOWERS.size():
 		if t == STUMP:
 			_stump_blocks()
@@ -1664,6 +1668,7 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	root.terrain_holes = terrain_holes
 	root.floor_nests = nest_spots
 	root.gang_spots = gang_spots
+	_fire_spots(root)
 	# The outside walls (inside, floor_nests): up every tower, thicker higher up.
 	root.barnacle_nests = OUTSIDE_NESTS
 	root.nest_top_density = NEST_TOP_DENSITY
@@ -1749,6 +1754,30 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	lair.position = Vector3(0.0, INTERIOR_TOP * 0.5, 0.0)
 	_own(root, lair, root)
 	return root
+
+
+## Burning barrels in FIRE_ROOM_CHANCE of the (lit) window rooms (the
+## user's: half), FIRE_INSET in from the window so their smoke pours out of
+## it. Their own random (seeded), so the rest of the Stack's unchanged.
+const FIRE_ROOM_CHANCE := 0.5
+const FIRE_INSET := 5.0
+
+
+func _fire_spots(root: Megastructure) -> void:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = SEED + 7177
+	var spots := PackedVector3Array()
+	var outs := PackedVector3Array()
+	for w in window_rooms:
+		if not w.lit or dice.randf() >= FIRE_ROOM_CHANCE:
+			continue
+		var out: Vector3 = w.normal
+		var floor_y: float = (w.at as Vector3).y - (w.size as Vector2).y * 0.5
+		var spot: Vector3 = (w.at as Vector3) - out * FIRE_INSET
+		spots.append(Vector3(spot.x, floor_y, spot.z))
+		outs.append(out)
+	root.fire_spots = spots
+	root.fire_outs = outs
 
 
 func _own(root: Node, node: Node, parent: Node) -> void:

@@ -67,6 +67,16 @@ extends Node3D
 ## of it and gone once everyone's left, like the floor nests. Each spot:
 ## x, y, z (local, on the floor), w = how far round it they wander.
 @export var gang_spots := PackedVector4Array()
+
+@export_group("Fires")
+## Burning barrels (the user's): in half the window rooms (the builder's
+## spots, local; fire_outs: the window's way out, for their smoke) and one
+## at every gang's hangout. Each is there while a player's within fire_reach
+## (far enough that their smoke columns are seen from well off); made the
+## same on every machine from these spots.
+@export var fire_spots := PackedVector3Array()
+@export var fire_outs := PackedVector3Array()
+@export var fire_reach: float = 1200.0
 ## (Kept short: each gang is 6-12 people with ragdolls; only the ones round
 ## you are there.)
 @export var gang_reach: float = 100.0
@@ -107,6 +117,8 @@ var _floor_nests := {}
 var _web_hordes := {}
 ## gang_spots index -> its gang, while it's there.
 var _gangs := {}
+## Fire index (fire_spots, then gang_spots after them) -> its barrel.
+var _fires := {}
 
 
 func _ready() -> void:
@@ -184,6 +196,7 @@ func _process(delta: float) -> void:
 	var camera := get_viewport().get_camera_3d()
 	if camera and camera.far < view_distance:
 		camera.far = view_distance
+	_update_fires()
 	if multiplayer.is_server() and inside.size != Vector3.ZERO:
 		_update_infestation()
 	if multiplayer.is_server():
@@ -212,6 +225,38 @@ func _update_floor_nests() -> void:
 		elif nest != null and nearest > floor_nest_reach + 50.0:
 			nest.queue_free()
 			_floor_nests.erase(i)
+
+
+## The barrels near a player lit; the ones nobody's near put out (every
+## machine, once a second: squared distances only).
+func _update_fires() -> void:
+	var players := get_tree().get_nodes_in_group("player")
+	var reach_sq := fire_reach * fire_reach
+	var count := fire_spots.size() + gang_spots.size()
+	for i in count:
+		var local: Vector3
+		var out := Vector3.ZERO
+		if i < fire_spots.size():
+			local = fire_spots[i]
+			out = fire_outs[i] if i < fire_outs.size() else Vector3.ZERO
+		else:
+			var spot := gang_spots[i - fire_spots.size()]
+			local = Vector3(spot.x, spot.y, spot.z)
+		var at := to_global(local)
+		var near := false
+		for node in players:
+			if (node as Node3D).global_position.distance_squared_to(at) < reach_sq:
+				near = true
+				break
+		var barrel: Variant = _fires.get(i)
+		if barrel != null and not is_instance_valid(barrel):
+			_fires.erase(i)
+			barrel = null
+		if barrel == null and near:
+			_fires[i] = BurningBarrel.place(self, at, global_basis * out)
+		elif barrel != null and not near:
+			(barrel as Node).queue_free()
+			_fires.erase(i)
 
 
 ## The floors' gangs near a player there; the ones nobody's near cleared.

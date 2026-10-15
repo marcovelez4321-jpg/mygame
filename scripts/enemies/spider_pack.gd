@@ -33,6 +33,9 @@ const SPIDER_SCENE := preload("res://scenes/enemy/spider.tscn")
 ## a megastructure's infestation magnifies its hordes) -- with a normal
 ## spider's health all the same.
 @export var spider_scale: float = 1.0
+## How many of the next spiders spawned are big ones (BigOnes: set by its
+## group as it joins).
+var big_next := 0
 ## Twice a rat's top speed (RatSwarm.rat_speed is 5.3).
 @export var spider_speed: float = 10.6
 ## Patrolling, they go at this fraction of top speed: 0.5 = a rat pack's
@@ -219,11 +222,17 @@ func spawn_spiders(amount: int, center: Vector3, launch := Vector3.ZERO, launch_
 		spider.pack = self
 		spider.slot = Vector2.from_angle(randf() * TAU)
 		spider.slot_radius = randf_range(pack_radius_min, pack_radius_max)
+		var big := big_next > 0
+		if big:
+			big_next -= 1
+			BigOnes.big_spider(spider, false)
 		world.add_child(spider)
 		if not is_equal_approx(spider_scale, 1.0):
 			# Its _ready() gave it health for its size: back to a normal spider's.
 			spider.health.max_health /= spider_scale * spider_scale
 			spider.health.current_health = spider.health.max_health
+		if big:
+			BigOnes.big_spider(spider, true)
 		if launch != Vector3.ZERO:
 			spider.global_position = center
 			var spread := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * launch_spread

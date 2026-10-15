@@ -190,6 +190,7 @@ var _anim_name := ""
 
 func _ready() -> void:
 	super._ready()
+	BigOnes.drops_meat(self, BigOnes.BOSS_MEAT, true) # a level boss: a boss chunk (+3)
 	_home = global_position
 	_patrol_point = _home
 	swarm.bender = self

@@ -1,5 +1,145 @@
 # The climb: the game's direction (decided 2026-10-11; new direction 2026-10-14)
 
+## Focus now: survival on the open world (the user's, 2026-10-15)
+This wins over everything below. The procedural Stacks wait until the main
+co-op mode is finished; work happens in the open world
+(`scenes/world/test_world.tscn`).
+
+### Feeding off the virus
+Everything in this world, the character included, carries an eldritch virus;
+that's why the world went wrong (maybe the character's own ritual, just
+before the game starts).
+- **Big ones:** 75% of every enemy group (every kind: spiders, rats, roaches,
+  humans) has one member **2x the size**, with **2x health, 0.8x speed,
+  1.5x damage**. It drops a **meat chunk** where it dies. Level bosses (Worm,
+  Swarm King, Rat Bender, Harvestman) drop a **boss chunk**.
+- **The chunk** (stand-in model: the PSX Mega Pack's `meat_1`): yellow
+  highlight; grapple it into your right hand. Weight by enemy: rat, roach or
+  spider 1 kg, human 2 kg, boss 4 kg. It **rots after 10 minutes** wherever
+  it is (backpack too).
+- **Holding it:** text to its left, "left click to feed off the virus".
+  Left click = eat raw:
+  - **Points:** fresh +2, rotten +1, boss +3.
+  - **Damage:** fresh 35, rotten 90 (Chitin doesn't help; it can kill you).
+  - **Hunger:** fresh 25%, rotten 15%.
+  - **The trip:** a 1.5 s ANEURISM IV-style flash. The user's sharp abstract
+    images from `art/trip/` cover the screen (black until they're added); you
+    can't see but can still move. Big jittering scratchy red-white lowercase
+    text: "i shouldve cooked that".
+- **Cooking:** fresh meat only (rot can't be cooked). It takes **25 s** on,
+  over or within **1 m** of a fire; stepping away keeps partial cooking.
+  Cooked meat: **45%** hunger, no damage, no points. Fires for now:
+  - **burning barrels** in 50% of the Stack's window rooms, and one at every
+    human group's hangout;
+  - **Grandma's grill** in the yard.
+  - The placeable campfire comes with camps (step 7).
+- **14 points = a mutation.**
+
+### The Flesh Tree (the diegetic mutation picker)
+- **The tree:** a dead oak of raw red muscle and bone, rooted around
+  Grandma's house: the ritual spot.
+  - **Height:** starts **0.5 km** tall and grows **+0.5 km** per mutation
+    taken, only while it's off screen for everyone.
+  - **Climbing:** thick branches spiral up as platforms to jump, wall-jump
+    and grapple between.
+- **Picking a mutation:** at 14 points, **three random 1 m pods** you don't
+  have ripen near the top.
+  - Each pod is a translucent membrane with the mutation visible inside; its
+    name and effect show on highlight.
+  - Grapple one into your hand (it shrinks to hand size) and left-click to
+    eat it. The other two shrivel and fade.
+  - In co-op the pods are shared: whoever takes one, takes it.
+- **On death:** the newest mutation withers, those points are lost, and the
+  tree shrinks back 0.5 km (when off screen).
+- **The pool:**
+  - **Insect wings:** Shift flight, as built 2026-10-14; it replaces the
+    dash once taken.
+  - **Chitin skin:** 35% less damage from attacks and falls.
+  - **Roach gut:** raw 20 instead of 35, rotten 50 instead of 90.
+  - **Rat lungs:** stamina refills 50% faster.
+  - **Mantis legs:** +50% jump height, half fall damage.
+  - **Spinnerets:** +25% grapple reach.
+  - **Tendrils:** the parked three-tendril grapple.
+  - **Tentacle whip:** double-tap right click to lash the grapple's tentacle,
+    Cyberpunk monowire-style.
+    - Its hitbox is the tentacle itself, alive as it whips.
+    - 5 m reach; hits everything it touches for 50; costs 1 stamina bar.
+
+### Hunger
+- **One meter** for food and water: **20 minutes** from full to empty.
+- **Starving:** at empty, you lose 1 hp every 2 s.
+- **HUD:** a bar, plus body cues below **15%**: stomach growls, hands shake,
+  vision dims, weak breathing.
+
+### Your right hand
+- **The grapple:** aimed at any item or prop up to **15 kg**, it pulls the
+  thing into your right hand at **20 m/s**. Your gun goes away until you're
+  done.
+  - Crates, barrels and anything heavier act as anchors (they pull you). A
+    throw ability comes later.
+- **Everything else:** every backpack item can be held. Double left click in
+  the backpack puts the item in your hand (instead of using it).
+- **Controls:**
+  - Left click uses what you hold (pills heal, ammo loads, a gun equips,
+    food is eaten).
+  - **G** drops it at your feet.
+  - **F** stows it in the bag; F still uses buttons and levers with nothing
+    held.
+  - The old F prop mover is gone.
+
+### Details (the user's, 2026-10-15, second round)
+- **Meat models (New assets/):** `Flesh2.fbx` is raw and `Flesh.fbx` is
+  cooked.
+- **Rotten meat:** the raw chunk tinted sickly green-grey, with flies.
+- **Hunger bar:** thin and amber, under the 4 pips.
+- **Low hunger** (under 15%) gets strong cues:
+  - a growl about every 10 s;
+  - clear shaking;
+  - the screen edges dim up to 60%;
+  - breathing.
+  The sounds are the user's to add later; shake and dim work now.
+- **Right hand:**
+  - Real size, at most 30 cm.
+  - Grappling an item while holding one stows the held one (or drops it if
+    it doesn't fit).
+  - Only items (backpack things, meat, pods, pickups) go in the hand.
+- **Other props up to 15 kg** (chairs, crates, barrels) hang off the
+  tentacle in front of you:
+  - left click throws them at **25 m/s**;
+  - right click lets go;
+  - holding one drains 1 bar every 3.5 s.
+  - Over 15 kg they're anchors.
+- **Burning barrels:** the PSX pack's rusty metal barrel, with big, bright,
+  roaring flames, sparks, a smoke column visible from afar, and a 12 m
+  light.
+- **Grandma's grill:** not now.
+- **The trip flash:** one of the user's images, shaking and distorting for
+  the whole 1.5 s, with a harsh generated noise burst and heartbeat thump.
+- **The Flesh Tree:**
+  - **Trunk:** 25 m wide at 0.5 km tall, thickening as it grows.
+  - **Branch platforms:** about every 10 m up.
+  - **Eldritch creatures:** about 20 (from `New assets/Eldritch`, a few
+    kinds), scattered on the trunk and branches.
+  - **Pods:** pale pink, translucent and glowing.
+    - They grow only once the points are reached (never before). The three
+      mutations are rolled at random then.
+    - Ripening plays a sound, makes them glow, and shows "something is
+      ripening".
+- **The tentacle whip:** a 0.4 s lash.
+
+### Stamina back to the dash
+The dash and the **4 bars** are back exactly as before the wings (wings are
+a mutation now). The grapple drains **1 bar every 3.5 s** for as long as it's
+attached to anything.
+
+**Momentum is never cut (the user's):** the dash adds 16 m/s on top of your
+speed for 0.3 s (twice as far as the old dash) with 30% more lift, then leaves
+you the speed you went in with; the wings never fly you slower than you opened
+them at; a mantle gives your speed back at the top; a perch gives it back
+when you let go. Wall jumps stay free; firing the grapple is free (it drains
+while attached); Infinite Grapples is off by default. Both guns can be stowed
+in the backpack (F with your hand empty, not looking at a button).
+
 ## The new direction (the user's, 2026-10-14)
 This comes first; where an older section below disagrees, this wins (those
 are marked).

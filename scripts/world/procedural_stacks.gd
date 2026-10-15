@@ -5,11 +5,21 @@ extends Node3D
 ## docs/CLIMB_VISION.md): a world built from a seed instead of the Terrain3D
 ## open world. Every number here is the user's.
 ##
-## THE TOWERS: a 5x5 grid, each its own footprint (the Stack's widths x3:
-## 330-600 m) and height (1-12 km), the gaps between neighbours all
-## different (50-150 m). In the Stack's own concrete (painted windows
-## outside, plain inside).
-## THE HALLS, stacked up each tower, 150-440 m tall:
+## THE TOWERS: a 5x5 grid, each its own footprint (the Stack's widths x1.5:
+## 165-300 m, so the 1.5x original halls fill them -- the user's) and height (1-12 km), the gaps
+## between neighbours all different (50-150 m). In the Stack's own concrete
+## (painted windows outside -- through the Stack's skyline shader, so they
+## fade into the murk and the clouds like it -- plain inside).
+## THE LOOK: the test world's (the user's): its sewer air (fog, haze, the
+## sun's tint), the cloud deck (the scene's CloudDeck), the camera seeing
+## VIEW_DISTANCE.
+## THE HALLS, stacked up each tower, 240-750 m tall (the original Stack's
+## halls' heights x1.5). 95% of them are the ORIGINAL Stack's halls (the
+## user's: its look is the one): StackBuilder's own hall generator --
+## mezzanines up switchback ramps, the column grid, the hanging stepped
+## pyramid, the leaning slab, stairs stopping in mid-air, its lamps -- run at
+## the original scale and everything it makes scaled up 1.5x. The other 5%
+## get the new mix of stairs and pillars. All of them also get:
 ##   - their floors broken through: caved-in holes (1 in 3 floors, 15-40 m,
 ##     the rubble piled on the floor below) and small shafts (0-5, 25% each,
 ##     twice a player's size); a stairwell if nothing else gets you up;
@@ -42,10 +52,13 @@ extends Node3D
 @export var world_seed: int = 1
 
 const GRID := 5
-const WIDTH := Vector2(330.0, 600.0)
+const WIDTH := Vector2(165.0, 300.0)
 const GAP := Vector2(50.0, 150.0)
 const HEIGHT := Vector2(1000.0, 12000.0)
-const HALL := Vector2(150.0, 440.0)
+const HALL := Vector2(240.0, 750.0)
+## The original halls: how often, and how much bigger than the Stack's.
+const ORIGINAL_CHANCE := 0.95
+const ORIGINAL_SCALE := 1.5
 const WALL := StackBuilder.WALL
 const SKIN := 0.5
 const SLAB := StackBuilder.SLAB
@@ -94,6 +107,10 @@ const KEEP := 300.0
 ## A frame's budget for building (ms).
 const BUILD_BUDGET_MS := 8.0
 
+## How far the camera sees (the Stack's and the skyline's 16 km).
+const VIEW_DISTANCE := 16000.0
+const SKYLINE := preload("res://shaders/skyline.gdshader")
+
 const TEXTURES := {
 	&"windows": "res://art/megastructures/stack_concrete.res",
 	&"plain": "res://art/megastructures/stack_plain.res",
@@ -115,6 +132,7 @@ var _queue: Array[String] = []
 
 
 func _ready() -> void:
+	_atmosphere()
 	_make_materials()
 	_plan()
 	_ground()
@@ -131,6 +149,21 @@ func _ready() -> void:
 		var player := node as PlayerMovement
 		player.global_position = spawn_point()
 		player.spawn_position = player.global_position
+		if player.camera and player.camera.far < VIEW_DISTANCE:
+			player.camera.far = VIEW_DISTANCE
+
+
+## The test world's air: its sewer fog, haze, fill light and the sun's tint
+## (AlienAtmosphere.sewer(), as its BiomeAtmosphere lays it on), on a copy of
+## the scene's environment (the file's shared with the test world).
+func _atmosphere() -> void:
+	var world := get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+	var sun := get_node_or_null(^"Sun") as DirectionalLight3D
+	if world == null or world.environment == null:
+		return
+	world.environment = world.environment.duplicate()
+	var air := AlienAtmosphere.sewer()
+	AlienAtmosphere.apply_blend(world.environment, air, air, 0.0, sun)
 
 
 func _exit_tree() -> void:
@@ -451,9 +484,12 @@ func _build_hall(t: int, k: int) -> Node3D:
 		boxes.append(_box_between(Vector3(rect.position.x, y0 + tall, rect.position.y), Vector3(rect.end.x, y0 + tall + SLAB, rect.end.y), &"shell", true))
 	var inner := rect.grow(-WALL)
 	_cave_in_rubble(boxes, t, k, y0, r)
-	var mix: Array = MIXES[r.randi() % MIXES.size()]
-	_stairs(boxes, inner, y0, r, r.randi_range((mix[0] as Vector2i).x, (mix[0] as Vector2i).y))
-	_pillars(boxes, inner, y0, tall, r, r.randi_range((mix[1] as Vector2i).x, (mix[1] as Vector2i).y))
+	if r.randf() < ORIGINAL_CHANCE:
+		_original_hall(boxes, extras, t, k, inner, y0, tall)
+	else:
+		var mix: Array = MIXES[r.randi() % MIXES.size()]
+		_stairs(boxes, inner, y0, r, r.randi_range((mix[0] as Vector2i).x, (mix[0] as Vector2i).y))
+		_pillars(boxes, inner, y0, tall, r, r.randi_range((mix[1] as Vector2i).x, (mix[1] as Vector2i).y))
 	_floating_rubble(boxes, t, k, inner, y0, tall, r)
 	if r.randf() < SLOPE_CHANCE:
 		_rubble_slope(boxes, inner, y0, tall, r)
@@ -624,6 +660,35 @@ func _cave_in_rubble(boxes: Array[Dictionary], t: int, k: int, y0: float, r: Ran
 			var size := Vector3(r.randf_range(2.0, 8.0), r.randf_range(1.0, 4.0), r.randf_range(2.0, 8.0))
 			var at := Vector3(r.randf_range(area.position.x, area.end.x), y0 + size.y * 0.3, r.randf_range(area.position.y, area.end.y))
 			boxes.append({c = at, s = size, b = _tumbled(r, 0.5), mat = &"rubble", collide = true})
+
+
+## The original Stack's hall (StackBuilder._hall_features), at ORIGINAL_SCALE:
+## made in a box 1/1.5 the hall's size, everything scaled back up -- ramps,
+## columns, the pyramid, the slab, the stairs, its two lamps -- so it's the
+## original look, bigger, not original-sized things in a bigger room.
+static var _original: StackBuilder
+
+func _original_hall(boxes: Array[Dictionary], extras: Node3D, t: int, k: int, inner: Rect2, y0: float, tall: float) -> void:
+	if _original == null:
+		_original = StackBuilder.new(false)
+	_original.boxes.clear()
+	_original.lamps.clear()
+	_original.growth_floors.clear()
+	_original.nest_spots = PackedVector3Array()
+	_original.gang_spots = PackedVector4Array()
+	_original.random.seed = hash([world_seed, t, k, "original"])
+	var box := AABB(Vector3(inner.position.x, y0, inner.position.y) / ORIGINAL_SCALE, Vector3(inner.size.x, tall, inner.size.y) / ORIGINAL_SCALE)
+	_original._hall_features({tower = -1, box = box, name = "Hall_%d_%d" % [t, k]})
+	for b: Dictionary in _original.boxes:
+		boxes.append({c = (b.c as Vector3) * ORIGINAL_SCALE, s = (b.s as Vector3) * ORIGINAL_SCALE, b = b.b,
+				mat = &"plain" if b.mat == &"concrete" else b.mat, collide = true})
+	for lamp: Array in _original.lamps:
+		var light := OmniLight3D.new()
+		light.position = (lamp[0] as Vector3) * ORIGINAL_SCALE
+		light.light_color = lamp[1]
+		light.light_energy = lamp[2]
+		light.omni_range = float(lamp[3]) * ORIGINAL_SCALE
+		extras.add_child(light)
 
 
 ## Stair runs up from the floor (35 degrees, 4 m wide) to a landing, some
@@ -1075,12 +1140,13 @@ static func _box_faces(st: SurfaceTool, b: Dictionary) -> void:
 func _make_materials() -> void:
 	var windows := load(TEXTURES[&"windows"]) as Texture2D if ResourceLoader.exists(TEXTURES[&"windows"]) else null
 	var plain := load(TEXTURES[&"plain"]) as Texture2D if ResourceLoader.exists(TEXTURES[&"plain"]) else null
-	var shell := StandardMaterial3D.new()
-	shell.albedo_texture = windows
-	shell.albedo_color = Color(0.82, 0.8, 0.78)
-	shell.roughness = 1.0
-	shell.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
-	shell.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	# The outside: the Stack's skyline shader (its texture and colour), so the
+	# towers fade into the murk and the clouds the way the Stack does.
+	var shell := ShaderMaterial.new()
+	shell.shader = SKYLINE
+	if windows:
+		shell.set_shader_parameter("albedo_texture", windows)
+	shell.set_shader_parameter("albedo_color", Color(0.82, 0.8, 0.78))
 	_materials[&"shell"] = shell
 	for key in [&"plain", &"rubble"]:
 		var m := StandardMaterial3D.new()

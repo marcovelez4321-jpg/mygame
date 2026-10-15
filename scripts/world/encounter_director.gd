@@ -206,11 +206,17 @@ func _make_camp(shape: CollisionShape3D, player: Node3D) -> RoamingGroup:
 	get_tree().current_scene.add_child(camp)
 	for i in randi_range(camp_min, camp_max):
 		_add(camp, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), i)
-	camp.tree_exiting.connect(_on_camp_gone.bind(camp, shape))
+	# Their burning barrel at the hangout (the user's: one a gang), seen by
+	# clients through NetEntities; out when the camp goes.
+	var barrel := BurningBarrel.place(get_tree().current_scene, spot)
+	barrel.add_to_group(NetEntities.GROUP)
+	camp.tree_exiting.connect(_on_camp_gone.bind(camp, shape, barrel))
 	return camp
 
 
-func _on_camp_gone(camp: RoamingGroup, shape: CollisionShape3D) -> void:
+func _on_camp_gone(camp: RoamingGroup, shape: CollisionShape3D, barrel: Node = null) -> void:
+	if is_instance_valid(barrel):
+		barrel.queue_free()
 	if camp.members().is_empty():
 		_resting[shape] = Time.get_ticks_msec() + int(camp_rest * 1000.0)
 

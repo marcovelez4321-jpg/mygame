@@ -30,14 +30,25 @@ const SCREEN_BLOOD_FADE_TIME := 0.7
 @onready var damage_flash: ColorRect = $DamageFlash
 @onready var weapon_wheel: Control = $WeaponWheel
 @onready var pickup_label: Label = $PickupLabel
-## The stamina meter (the user's single meter, 2026-10-14; it was 4 pips):
-## one bar under the crosshair, its fill as full as the player's meter
-## (stamina / max_stamina), in the scene's pip colours.
-var _stamina_fill: ColorRect
+## Deadlock-style stamina pips (back again, the user's 2026-10-15): the width
+## of each Fill rect (0..PIP_WIDTH) is how full that bar is. Left-to-right =
+## pip index, matching player_movement.gd's stamina_charges count. Made to
+## match the player's max_stamina_charges (_build_stamina_pips: 4), centred
+## under the crosshair, styled like the scene's own first pip.
+var stamina_pips: Array[ColorRect] = []
 ## The weapon wheel (middle mouse): off -- guns go through the backpack.
 const WEAPON_WHEEL_ENABLED := false
-const METER_WIDTH := 65.0
-const METER_HEIGHT := 8.0
+const PIP_WIDTH := 14.0
+const PIP_GAP := 3.0
+## The hunger bar (Virus.hunger), a thin bar matching the pips' style just
+## under them (the user's: a bar plus body cues -- HungerCues).
+const HUNGER_WIDTH := 65.0
+const HUNGER_HEIGHT := 4.0
+const HUNGER_COLOR := Color(0.85, 0.55, 0.2, 0.95)
+var _hunger_fill: ColorRect
+## What you're holding in your right hand says what left click does, to its
+## left (the user's: "left click to feed off the virus").
+var _hand_label: Label
 
 ## Centre-screen messages from the map ("You need the gold key") -- same
 ## pop-in as pickups, held a little longer since they're there to be read.
@@ -88,8 +99,16 @@ func _find_player() -> void:
 	_player_health = player.get_node("Health") as Health
 	_player_health.damaged.connect(_on_player_damaged)
 	_player_health.died.connect(_on_player_died)
-	_build_stamina_meter()
+	_build_stamina_pips(player.max_stamina_charges)
 	player.respawned.connect(func() -> void: death_label.visible = false)
+	if player.get_node_or_null("HungerCues") == null:
+		var cues := HungerCues.new()
+		cues.name = "HungerCues"
+		player.add_child(cues)
+	if player.get_node_or_null("TripFlash") == null:
+		var trip := TripFlash.new()
+		trip.name = "TripFlash"
+		player.add_child(trip)
 
 
 func _process(_delta: float) -> void:
@@ -129,6 +148,7 @@ func _process(_delta: float) -> void:
 	$Crosshair.visible = player.weapons.aim_amount() <= 0.0 and not player.bag_open
 	_update_stamina_bar()
 	_update_use_prompt()
+	_update_hand_prompt()
 
 
 ## "[F] Press" / "[F] Pull" / "[F] Talk" under the crosshair while something
@@ -201,31 +221,82 @@ func _make_center_label(height_fraction: float, font_size: int) -> Label:
 	return label
 
 
-## The meter under the crosshair: a dim background and a fill, in the
-## scene's pip colours.
-func _build_stamina_meter() -> void:
+## `count` pips under the crosshair (the scene's three were the old count):
+## a dim background and a fill each, in the scene's colours -- and the hunger
+## bar under them.
+func _build_stamina_pips(count: int) -> void:
 	var bar := $StaminaBar as Control
 	var back_color := ($StaminaBar/Pip0Bg as ColorRect).color if bar.has_node(^"Pip0Bg") else Color(1, 1, 1, 0.18)
 	var fill_color := ($StaminaBar/Pip0Fill as ColorRect).color if bar.has_node(^"Pip0Fill") else Color(0.4, 0.85, 1, 0.95)
 	for child in bar.get_children():
 		child.free()
-	bar.offset_left = -METER_WIDTH * 0.5
-	bar.offset_right = METER_WIDTH * 0.5
-	var back := ColorRect.new()
-	back.color = back_color
-	back.size = Vector2(METER_WIDTH, METER_HEIGHT)
-	bar.add_child(back)
-	_stamina_fill = ColorRect.new()
-	_stamina_fill.color = fill_color
-	_stamina_fill.size = Vector2(METER_WIDTH, METER_HEIGHT)
-	bar.add_child(_stamina_fill)
+	stamina_pips.clear()
+	var width := count * PIP_WIDTH + (count - 1) * PIP_GAP
+	bar.offset_left = -width * 0.5
+	bar.offset_right = width * 0.5
+	for i in count:
+		var x := i * (PIP_WIDTH + PIP_GAP)
+		var back := ColorRect.new()
+		back.color = back_color
+		back.position = Vector2(x, 0.0)
+		back.size = Vector2(PIP_WIDTH, 8.0)
+		bar.add_child(back)
+		var fill := ColorRect.new()
+		fill.color = fill_color
+		fill.position = Vector2(x, 0.0)
+		fill.size = Vector2(0.0, 8.0)
+		bar.add_child(fill)
+		stamina_pips.append(fill)
+	var hunger_x := (width - HUNGER_WIDTH) * 0.5
+	var hunger_back := ColorRect.new()
+	hunger_back.color = back_color
+	hunger_back.position = Vector2(hunger_x, 8.0 + PIP_GAP)
+	hunger_back.size = Vector2(HUNGER_WIDTH, HUNGER_HEIGHT)
+	bar.add_child(hunger_back)
+	_hunger_fill = ColorRect.new()
+	_hunger_fill.color = HUNGER_COLOR
+	_hunger_fill.position = hunger_back.position
+	_hunger_fill.size = hunger_back.size
+	bar.add_child(_hunger_fill)
 
 
-## The fill as full as the meter, every frame.
+## Each pip is full (PIP_WIDTH) if that charge is available, empty if it
+## isn't, and the ONE pip currently regenerating (index == stamina_charges)
+## fills in gradually as stamina_recharge_fraction climbs toward 1 -- reads
+## the player's stamina fields directly rather than a signal since this is
+## a smooth, every-frame fill, not an event. The hunger bar too.
 func _update_stamina_bar() -> void:
-	if _stamina_fill == null:
-		return
-	_stamina_fill.size.x = METER_WIDTH * clampf(player.stamina / maxf(player.max_stamina, 0.01), 0.0, 1.0)
+	if stamina_pips.size() != player.max_stamina_charges:
+		_build_stamina_pips(player.max_stamina_charges)
+	for i in stamina_pips.size():
+		var fraction := 0.0
+		if i < player.stamina_charges:
+			fraction = 1.0
+		elif i == player.stamina_charges:
+			fraction = player.stamina_recharge_fraction
+		stamina_pips[i].size.x = PIP_WIDTH * fraction
+	if _hunger_fill and player.virus:
+		_hunger_fill.size.x = HUNGER_WIDTH * clampf(player.virus.hunger, 0.0, 1.0)
+
+
+## What left click does with what's in your right hand, to the left of it
+## (lower right of the screen).
+func _update_hand_prompt() -> void:
+	if _hand_label == null:
+		_hand_label = Label.new()
+		_hand_label.anchor_left = 0.3
+		_hand_label.anchor_right = 0.66
+		_hand_label.anchor_top = 0.74
+		_hand_label.anchor_bottom = 0.74
+		_hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_hand_label.add_theme_font_size_override("font_size", 18)
+		_hand_label.add_theme_constant_override("outline_size", 6)
+		_hand_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		_hand_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_hand_label)
+	var prompt: String = player.hand.prompt() if player.hand else ""
+	_hand_label.visible = prompt != "" and not player.bag_open and not player.controls_locked
+	_hand_label.text = prompt
 
 func _refresh_wheel() -> void:
 	weapon_wheel.set_weapons(player.weapons.get_owned_weapons(), player.weapons.get_current_index())

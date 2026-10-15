@@ -311,9 +311,85 @@ func _ready() -> void:
 	_weapons.throw_started.connect(_on_throw_started)
 	_weapons.quick_throw_started.connect(_on_quick_throw_started)
 	_weapons.item_used.connect(_on_item_used)
+	_weapons.hand_changed.connect(_on_hand_changed)
 	call_deferred("_show_current_weapon")
 	if OS.is_debug_build():
 		_make_tune_label()
+
+
+## Your right hand (PlayerHand, through WeaponController.hand_changed): a
+## thing in it is shown like a weapon -- a runtime copy of HAND_TEMPLATE's
+## hold (the pills', one-handed, right hand) with the thing as its model,
+## real size but no bigger than HAND_MAX_SIZE (the user's: 30 cm). Made once
+## per look and kept (_hand_looks), so picking things up never rebuilds.
+const HAND_TEMPLATE := preload("res://weapons/pills.tres")
+const HAND_MAX_SIZE := 0.3
+var _hand_weapon: WeaponData
+var _hands_empty := false
+## Starving (HungerCues sets it, 0..1): the hands shake, TREMBLE_AMOUNT (m).
+var tremble := 0.0
+var _tremble_time := 0.0
+const TREMBLE_AMOUNT := 0.006
+static var _hand_looks := {}
+
+
+func _on_hand_changed(data: Dictionary) -> void:
+	if data.get("empty", false):
+		# The gun's in the bag, the hand's empty: the arms drop out of view.
+		_hand_weapon = null
+		_hands_empty = true
+		if _switch_tween:
+			_switch_tween.kill()
+		_switch_tween = create_tween()
+		_switch_tween.tween_property(self, "position", LOWERED_OFFSET, 0.2).set_ease(Tween.EASE_IN)
+		_switch_tween.parallel().tween_property(self, "rotation_degrees:x", LOWERED_TILT_DEGREES, 0.2)
+		_switch_tween.tween_callback(func() -> void:
+			if is_instance_valid(_model):
+				_model.visible = false
+		)
+		return
+	_hands_empty = false
+	if data.is_empty():
+		_hand_weapon = null
+		var gun := _weapons.current_weapon()
+		if gun:
+			_on_weapon_switched(gun, maxf(gun.draw_time, 0.2))
+		return
+	_hand_weapon = _hand_look(data)
+	_on_weapon_switched(_hand_weapon, HAND_TEMPLATE.draw_time)
+
+
+## The weapon a held thing is shown as (made once per look).
+func _hand_look(data: Dictionary) -> WeaponData:
+	var key := "%d|%s|%s|%s" % [data.get("kind", -1), CarryItem.is_rotten_data(data), data.get("weapon", ""), data.get("mutation", "")]
+	if _hand_looks.has(key):
+		return _hand_looks[key]
+	var look := HAND_TEMPLATE.duplicate() as WeaponData
+	look.weapon_name = "Hand"
+	look.heal_item = -1
+	look.one_handed = true
+	look.viewmodel_scene = _hand_scene(data)
+	_hand_looks[key] = look
+	return look
+
+
+## The thing as a little scene of its own, sized for the hand.
+func _hand_scene(data: Dictionary) -> PackedScene:
+	var root := Node3D.new()
+	var model := CarryItem.model_for(data, _weapons.grenade_weapon())
+	if model == null:
+		model = Node3D.new()
+	root.add_child(model)
+	var box := BackpackView._bounds(model)
+	var longest := maxf(box.size.x, maxf(box.size.y, box.size.z))
+	var size := minf(CarryItem.size_of(data), HAND_MAX_SIZE)
+	model.scale *= size / maxf(longest, 0.0001)
+	for node in root.find_children("*", "", true, false):
+		node.owner = root
+	var scene := PackedScene.new()
+	scene.pack(root)
+	root.free()
+	return scene
 
 
 ## Covers the case where the controller announced its first weapon before we
@@ -597,7 +673,10 @@ func _keep_in_step() -> void:
 		return
 	if not (_tuning and _use_pose_shown):
 		_set_shoulder_pivot(false) # a throw cut off partway
-	var weapon := _weapons.current_weapon()
+	if _hands_empty:
+		return # the gun's in the backpack: nothing to show
+	# Something in your right hand (PlayerHand) is what's shown, not the gun.
+	var weapon := _hand_weapon if _hand_weapon else _weapons.current_weapon()
 	if weapon and weapon != _shown_weapon:
 		_show_weapon(weapon)
 		position = Vector3.ZERO
@@ -1566,6 +1645,10 @@ func _update_sway(delta: float) -> void:
 	var lower := 1.0 if body and body.flying else 0.0
 	_flight_lower = move_toward(_flight_lower, lower, delta * (4.0 if lower > _flight_lower else 3.0))
 	var dip := smoothstep(0.0, 1.0, _flight_lower)
+	# Starving (HungerCues): the hands shake.
+	if tremble > 0.0:
+		_tremble_time += delta
+		_sway_position += Vector2(sin(_tremble_time * 31.0), sin(_tremble_time * 27.0 + 1.3)) * TREMBLE_AMOUNT * tremble
 
 	# Aiming steadies the sway and carries the gun toward your eye.
 	var calm := 1.0 - aim_steady

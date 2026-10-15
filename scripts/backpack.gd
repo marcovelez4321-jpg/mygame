@@ -22,7 +22,8 @@ extends Node
 signal changed
 
 ## What a stack is.
-enum Kind { NONE = -1, GUN, BULLETS, SHELLS, ROCKETS, GRENADES, PILLS, BANDAGE, SCRAP, SILK, CAMP_KIT }
+enum Kind { NONE = -1, GUN, BULLETS, SHELLS, ROCKETS, GRENADES, PILLS, BANDAGE, SCRAP, SILK, CAMP_KIT,
+		MEAT, ROTTEN_MEAT, COOKED_MEAT }
 
 const MAX_STACKS := 12
 ## Camp kits: only one on you at a time (the user's).
@@ -54,6 +55,9 @@ const WEIGHTS := {
 var scrap := 0
 var silk := 0
 var camp_kits := 0
+## Meat chunks (CarryItem.to_data(): their weight, boss or not, when they
+## rot, cooked or not). They go on rotting in here (the user's).
+var meat: Array[Dictionary] = []
 ## True while the camp kit's been brought out to place (the camp builder
 ## takes it from there).
 var placing_camp := false
@@ -68,13 +72,50 @@ var _weighed_msec := -100000
 func _ready() -> void:
 	_player = get_parent() as PlayerMovement
 	camp_kits = 1 # the user's: you start with one, to make your first camp
+	changed.connect(_send_meat)
+
+
+## The meat in here goes on aging (rotting) -- the host's, in
+## CarryItem.AGE_EVERY steps (the user's: every couple of minutes).
+var _age_left := CarryItem.AGE_EVERY
+
+
+func _physics_process(delta: float) -> void:
+	if meat.is_empty() or (Network.is_online() and not multiplayer.is_server()):
+		return
+	_age_left -= delta
+	if _age_left > 0.0:
+		return
+	_age_left += CarryItem.AGE_EVERY
+	var turned := false
+	for chunk in meat:
+		turned = CarryItem.grow_old(chunk, CarryItem.AGE_EVERY) or turned
+	if turned:
+		changed.emit() # one went off: it moves to the rotten stack
+
+
+## Co-op: the host tells the owner what meat's in their pack (it's made and
+## eaten on the host).
+func _send_meat() -> void:
+	if Network.is_online() and multiplayer.is_server() and not _player.is_multiplayer_authority():
+		_net_meat.rpc_id(_player.get_multiplayer_authority(), meat)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_meat(new_meat: Array) -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return
+	meat.assign(new_meat)
+	changed.emit()
 
 
 ## Every stack in the pack: [{kind, count, weapon}] -- weapon only for GUN.
 func stacks() -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	var weapons := _player.weapons
-	var held := weapons.current_weapon()
+	# A gun's in the bag unless it's in your hands (stowed with F, or put
+	# away for something in your right hand: both can be in here).
+	var held := weapons.gun_in_hand()
 	for weapon in weapons.get_owned_weapons():
 		if weapons.is_gun(weapon) and weapon != held:
 			found.append({kind = Kind.GUN, count = 1, weapon = weapon})
@@ -90,7 +131,50 @@ func stacks() -> Array[Dictionary]:
 			[Kind.SILK, silk], [Kind.CAMP_KIT, camp_kits]]:
 		if pair[1] > 0:
 			found.append({kind = pair[0], count = pair[1], weapon = null})
+	var meats := {}
+	for chunk in meat:
+		var meat_kind := _meat_kind(chunk)
+		meats[meat_kind] = int(meats.get(meat_kind, 0)) + 1
+	for meat_kind: int in meats:
+		found.append({kind = meat_kind, count = meats[meat_kind], weapon = null})
 	return found
+
+
+## Which stack a chunk's in: fresh, rotten (by now) or cooked.
+static func _meat_kind(chunk: Dictionary) -> Kind:
+	if chunk.kind == Kind.COOKED_MEAT:
+		return Kind.COOKED_MEAT
+	return Kind.ROTTEN_MEAT if CarryItem.is_rotten_data(chunk) else Kind.MEAT
+
+
+## A meat chunk (CarryItem.to_data()) in, if there's room.
+func add_meat(chunk: Dictionary) -> bool:
+	var meat_kind := _meat_kind(chunk)
+	if not has_room_for(meat_kind):
+		return false
+	meat.append(chunk)
+	changed.emit()
+	return true
+
+
+## A chunk of `meat_kind` out (the freshest fresh one, the most rotten
+## rotten one), or {} if there's none.
+func take_meat(meat_kind: Kind) -> Dictionary:
+	var best := -1
+	for i in meat.size():
+		if _meat_kind(meat[i]) != meat_kind:
+			continue
+		if best < 0 or (meat_kind == Kind.MEAT and meat[i].age < meat[best].age) \
+				or (meat_kind == Kind.ROTTEN_MEAT and meat[i].age > meat[best].age):
+			best = i
+	if best < 0:
+		return {}
+	var chunk := meat[best]
+	meat.remove_at(best)
+	if meat_kind == Kind.ROTTEN_MEAT:
+		chunk.kind = Kind.MEAT # (a rotten chunk is meat that's old: CarryItem)
+	changed.emit()
+	return chunk
 
 
 ## Whether something of `kind` fits: its stack's already there, or there's a
@@ -150,8 +234,10 @@ func weight() -> float:
 	for stack in stacks():
 		if stack.kind == Kind.GUN:
 			total += (stack.weapon as WeaponData).carry_weight if stack.weapon else 3.5
-		else:
+		elif stack.kind not in [Kind.MEAT, Kind.ROTTEN_MEAT, Kind.COOKED_MEAT]:
 			total += float(WEIGHTS.get(stack.kind, 0.0)) * stack.count
+	for chunk in meat:
+		total += float(chunk.meat_weight)
 	return total
 
 

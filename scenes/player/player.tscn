@@ -7,7 +7,6 @@
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="5_0owmy"]
 [ext_resource type="Script" uid="uid://tgadday71xt4" path="res://scripts/shot_tracer.gd" id="5_tr"]
 [ext_resource type="Script" uid="uid://djr8ub72le0rl" path="res://scripts/viewmodel.gd" id="6_vm"]
-[ext_resource type="Script" uid="uid://dw038d55lfgyp" path="res://scripts/physics_grabber.gd" id="9_pg"]
 [ext_resource type="Script" uid="uid://dboj4h0l2eide" path="res://scripts/camera_juice.gd" id="10_cj"]
 [ext_resource type="Script" uid="uid://cyhyhcjdo6tm1" path="res://scripts/player_sound.gd" id="20_psnd"]
 [ext_resource type="Script" uid="uid://bb00yxeqxtnlf" path="res://scripts/weapon_sound.gd" id="21_wsnd"]
@@ -83,10 +82,6 @@ pickup_sound = ExtResource("33_pick")
 
 [node name="ShotTracer" type="Node" parent="." unique_id=1041867928]
 script = ExtResource("5_tr")
-
-[node name="PhysicsGrabber" type="Node" parent="." unique_id=-367812494]
-script = ExtResource("9_pg")
-max_grab_range = 2.0
 
 [node name="PlayerGrapple" type="Node3D" parent="."]
 script = ExtResource("44_grapple")

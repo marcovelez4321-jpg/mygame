@@ -63,7 +63,10 @@ signal launch_timed
 ## is a big enemy you zip to. Small enemies are a miss.
 const BIG_GROUP := "grapple_big"
 
-enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS }
+## FETCH: an item flying into your right hand (PlayerHand). CARRY: a prop up
+## to MAX_CARRY kg hanging off the tentacle in front of you (left click
+## throws it, right click lets go). WHIP: the Tentacle whip mutation's lash.
+enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS, FETCH, CARRY, WHIP }
 ## Where the tendrils look: fanned ahead the way you're flying, or up and on.
 enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 
@@ -84,7 +87,7 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 ## How fast the tentacle flies out, m/s (the pull starts when it bites).
 @export var lash_speed: float = 150.0
 ## How long a miss takes to whip out and snap back.
-@export var miss_time: float = 0.45
+@export var miss_time: float = 0.25
 
 @export_group("Pull")
 ## Pull speed at full power, m/s; at the least charge, this share of it.
@@ -121,9 +124,10 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export var marker_aim_degrees: float = 4.0
 
 @export_group("Hold")
-## The meter drained a second while it holds you (1: a full 10 s meter lasts
-## 10 s; PlayerMovement.max_stamina).
-@export var drain_per_second: float = 1.0
+## Stamina bars drained a second while it's attached to anything -- you,
+## pulled or perched or hanging or riding; an item flying in; a prop on it
+## (the user's: a bar every 3.5 s). Firing it is free (it needs some left).
+@export var drain_per_second: float = 1.0 / 3.5
 ## How far off the wall you perch, and the line's speeds.
 @export var perch_standoff: float = 1.0
 @export var reel_speed: float = 3.0
@@ -142,6 +146,26 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 ## How far off the enemy's surface you hang while riding.
 @export var ride_standoff: float = 1.0
 
+@export_group("Props")
+## A prop (not an item) this heavy or lighter hangs off the tentacle; heavier
+## is an anchor (the user's).
+const MAX_CARRY := 15.0
+## How far in front of your eyes it hangs (the old F prop mover's), how fast
+## it can be dragged there, and the throw (the user's: 25 m/s).
+@export var carry_distance: float = 2.0
+@export var carry_max_speed: float = 90.0
+@export var throw_speed: float = 25.0
+
+@export_group("Whip")
+## The Tentacle whip mutation (the user's): double-tap right click within
+## whip_double_tap; a whip_time lash sweeping whip_reach in front of you,
+## whip_damage to everything the tentacle itself touches, one stamina bar.
+@export var whip_double_tap: float = 0.3
+@export var whip_time: float = 0.4
+@export var whip_reach: float = 5.0
+@export var whip_damage: float = 50.0
+@export var whip_sweep_degrees: float = 120.0
+
 @export_group("Sound")
 ## The timing rewards' sounds (empty: a generated chime).
 @export var charge_timed_sound: AudioStream
@@ -158,8 +182,9 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export var line_width: float = 0.04
 
 ## Testing: the grapple costs and drains no stamina (the pause menu's
-## "Infinite Grapples" switch, like Infinite Ammo).
-var infinite_charges: bool = true
+## "Infinite Grapples" switch, like Infinite Ammo). Off by default (the
+## user's, 2026-10-15: so the drain is felt).
+var infinite_charges: bool = false
 ## 0..1 how coiled the tentacle is right now (the arm animation reads this).
 var coil: float = 0.0
 
@@ -198,6 +223,22 @@ var _move := Vector2.ZERO
 var _spots: Array[Dictionary] = []
 var _spots_from := Vector3.ZERO
 var _spot_marks: Array[Node3D] = []
+## Seconds since the last right-click press (the whip's double tap).
+var _since_press := 99.0
+## What the bite is for: an item into your hand, a prop to carry (else
+## you're pulled).
+var _for_fetch := false
+var _for_carry := false
+## Your speed as you perched (given back when you let go: momentum kept).
+var _perch_kept := Vector3.ZERO
+## The whip: seconds into the lash, which way it faces, and what it's hit.
+var _whip_time := 0.0
+var _whip_aim := Vector3.FORWARD
+var _whip_hit: Array = []
+## Reused for every sweep of the lash (no allocations per tick).
+var _whip_query: PhysicsShapeQueryParameters3D
+var _whip_capsule: CapsuleShape3D
+var _carry_fire_prev := false
 
 var _line: MeshInstance3D
 var _tentacle: GrappleTentacle
@@ -230,11 +271,17 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 
 	var weapons := _player.weapons
 	var gun := weapons.current_weapon()
-	var hand_free := gun != null and gun.one_handed
+	# Something in your right hand (PlayerHand) leaves the left free too.
+	# (Or the gun's in the backpack: both hands are.)
+	var hand_free := _player.hand.is_holding() or weapons.gun_stowed or (gun != null and gun.one_handed)
+	_since_press += delta
+	var double_tap := pressed and _since_press <= whip_double_tap
+	if pressed:
+		_since_press = 0.0
 
 	# Out of the one-handed gun (picked a two-handed one): the left hand's
 	# needed on it, so the tentacle lets go.
-	if not hand_free and not _coiling and is_pulling():
+	if not hand_free and not _coiling and is_attached():
 		release()
 
 	if _rope == Rope.LASH or _rope == Rope.MISS:
@@ -245,12 +292,41 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			else:
 				_rope = Rope.NONE
 
-	if is_pulling() and not is_instance_valid(_anchor):
+	if _rope == Rope.WHIP:
+		_whip(delta, origin, aim)
+		return false
+
+	if is_attached() and not is_instance_valid(_anchor):
 		release()
+	# The item's in your hand: the tentacle comes back.
+	if _rope == Rope.FETCH and _player.hand.fetching() == null:
+		_rope = Rope.NONE
+		_anchor = null
 
 	if jump_pressed and is_pulling():
 		_let_go()
 		return true
+
+	# The Tentacle whip (a mutation): a quick second press lashes it.
+	if double_tap and _player.virus.has(Virus.WHIP) and hand_free and (_rope == Rope.NONE or _coiling) \
+			and (infinite_charges or _player.spend_stamina()):
+		_start_whip(aim)
+		return false
+
+	# A prop on the tentacle: right click again lets it drop.
+	if _rope == Rope.CARRY:
+		if pressed:
+			release()
+		else:
+			_carry(delta, origin, aim)
+	if is_attached() and not infinite_charges:
+		# Attached to anything costs stamina; out of it, it lets go (and you
+		# fall). A heavy pack drains it faster (Backpack.drain_scale()).
+		if not _player.drain_stamina(drain_per_second * delta * _player.backpack.drain_scale()):
+			release()
+			return false
+	if _rope == Rope.CARRY or _rope == Rope.FETCH:
+		return false
 
 	# Right on a tendril's marker: re-attach there, at once.
 	if pressed and not _spots.is_empty() and not _coiling and hand_free:
@@ -259,13 +335,6 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			if not infinite_charges:
 				_player.drain_stamina(reattach_cost)
 			_reattach(pick)
-			return false
-
-	# Holding on costs stamina; out of it, you fall.
-	if is_pulling() and not infinite_charges:
-		# (A heavy pack drains it faster: Backpack.drain_scale().)
-		if not _player.drain_stamina(drain_per_second * delta * _player.backpack.drain_scale()):
-			release()
 			return false
 
 	# Pulled at a big enemy, a press means "ride it" (held till you arrive);
@@ -314,6 +383,32 @@ func is_pulling() -> bool:
 	return _rope == Rope.PULL or _rope == Rope.PERCH or _rope == Rope.HANG or _rope == Rope.RIDE
 
 
+## Attached to anything: you (pulling, perched, hanging, riding), an item
+## flying in, or a prop on it. It drains stamina all the while.
+func is_attached() -> bool:
+	return is_pulling() or _rope == Rope.FETCH or _rope == Rope.CARRY
+
+
+## A prop hanging off it (left click throws: carry_fire()).
+func is_carrying() -> bool:
+	return _rope == Rope.CARRY
+
+
+## Left click (held: `fire`) while a prop's on the tentacle: thrown where
+## you look at throw_speed, on top of your own speed. True while carrying
+## (the click is the throw's, not the gun's).
+func carry_fire(fire: bool, aim: Vector3) -> bool:
+	var fire_pressed := fire and not _carry_fire_prev
+	_carry_fire_prev = fire
+	if _rope != Rope.CARRY:
+		return false
+	if fire_pressed and is_instance_valid(_anchor) and _anchor is RigidBody3D:
+		var prop := _anchor as RigidBody3D
+		release()
+		prop.linear_velocity = aim * throw_speed + _player.velocity
+	return true
+
+
 ## True while it moves you entirely itself (perched, riding): no steering in
 ## the air then. Pulled, or hanging on the line, you can still steer and sway.
 func holds_still() -> bool:
@@ -342,6 +437,11 @@ func apply_pull(delta: float) -> void:
 func release() -> void:
 	if is_pulling():
 		released.emit()
+	if _rope == Rope.FETCH:
+		_player.hand.cancel_fetch() # (out of stamina mid-flight: it drops)
+	if _rope == Rope.CARRY and is_instance_valid(_anchor) and _anchor is RigidBody3D:
+		var prop := _anchor as RigidBody3D
+		prop.linear_velocity = prop.linear_velocity.limit_length(6.0) # let go: a toss, not a throw
 	_rope = Rope.NONE
 	_coiling = false
 	_anchor = null
@@ -351,14 +451,14 @@ func release() -> void:
 func _fire(origin: Vector3, aim: Vector3) -> void:
 	if not infinite_charges and not _player.has_stamina():
 		_hold = 0.0
-		return # out of stamina: nothing to throw it with
+		return # out of stamina: nothing to throw it with (firing itself is free)
 	_power = clampf(_hold / charge_time, min_charge_share, 1.0)
 	_hold = 0.0
 	release()
 	_clear_spots() # a brand-new grapple: the old tendrils' spots go
 	if _charge_bonus:
 		charge_timed.emit()
-	var reach := max_range * _power
+	var reach := max_range * _power * _player.virus.reach_scale() # (Spinnerets: further)
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + aim * reach)
 	query.exclude = [_player.get_rid()]
 	query.collision_mask = 1
@@ -379,6 +479,11 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 	_anchor_local = target.global_transform.affine_inverse() * (hit.position as Vector3)
 	_normal_local = (target.global_basis.inverse() * (hit.normal as Vector3)).normalized()
 	_to_enemy = big != null
+	# An item: into your right hand. A light prop: onto the tentacle. Anything
+	# heavier (or fixed): you're pulled to it, as ever (the user's).
+	_for_fetch = big == null and PlayerHand.is_item(target)
+	_for_carry = big == null and not _for_fetch and target is RigidBody3D \
+			and not (target as RigidBody3D).freeze and (target as RigidBody3D).mass <= MAX_CARRY
 	_lash_end = hit.position
 	_lash_time = 0.0
 	_lash_total = origin.distance_to(hit.position) / lash_speed
@@ -389,6 +494,15 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 func _land() -> void:
 	if not is_instance_valid(_anchor):
 		_rope = Rope.NONE
+		return
+	if _for_fetch:
+		_rope = Rope.FETCH
+		_player.hand.fetch(_anchor)
+		attached.emit(false)
+		return
+	if _for_carry:
+		_rope = Rope.CARRY
+		attached.emit(false)
 		return
 	var power_t := inverse_lerp(min_charge_share, 1.0, _power) if min_charge_share < 1.0 else 1.0
 	_pull_speed = pull_speed * lerpf(min_speed_scale, 1.0, clampf(power_t, 0.0, 1.0))
@@ -534,6 +648,10 @@ func _perfect_release() -> void:
 
 
 func _start_perch() -> void:
+	# Arriving off the pull, your speed's kept for when you let go (the
+	# user's: momentum is never cut).
+	if _rope == Rope.PULL:
+		_perch_kept = _player.velocity
 	_rope = Rope.PERCH
 	_player.velocity = Vector3.ZERO
 
@@ -580,10 +698,112 @@ func _to_spot() -> Vector3:
 
 func _let_go() -> void:
 	var was_riding := _rope == Rope.RIDE
+	var was_perched := _rope == Rope.PERCH or _rope == Rope.HANG
 	release()
 	if was_riding:
 		_player.velocity = _ride_velocity
+	elif was_perched and _perch_kept != Vector3.ZERO:
+		# Off the wall with the speed you arrived at (on top of any sway).
+		_player.velocity += _perch_kept
+	_perch_kept = Vector3.ZERO
 	_player.velocity.y = maxf(_player.velocity.y, 0.0) + release_hop
+
+
+## A prop on the tentacle: kept carry_distance in front of your eyes, the
+## old F prop mover's way -- its velocity set to close the gap by the next
+## tick (no spring lag or swinging), capped; Jolt still collides it.
+func _carry(delta: float, origin: Vector3, aim: Vector3) -> void:
+	var prop := _anchor as RigidBody3D
+	if prop == null:
+		release()
+		return
+	var offset := origin + aim * carry_distance - prop.global_position
+	if offset.length() > carry_distance * 5.0:
+		release() # stuck behind something
+		return
+	prop.linear_velocity = (offset / maxf(delta, 0.001)).limit_length(carry_max_speed)
+	prop.angular_velocity = Vector3.ZERO
+
+
+# ---- The Tentacle whip (a mutation) ------------------------------------------------------
+
+## The lash: whip_time long, sweeping whip_sweep_degrees across in front
+## of you (right to left) out to whip_reach.
+func _start_whip(aim: Vector3) -> void:
+	_coiling = false
+	_hold = 0.0
+	_rope = Rope.WHIP
+	_whip_time = 0.0
+	_whip_aim = aim
+	_whip_hit.clear()
+
+
+## Each tick of the lash: its tip swings round, and the tentacle itself -- a
+## curve from your hand to the tip, trailing behind the swing -- is the
+## hitbox: everything it passes through takes whip_damage once.
+func _whip(delta: float, origin: Vector3, _aim: Vector3) -> void:
+	_whip_time += delta
+	var t := clampf(_whip_time / whip_time, 0.0, 1.0)
+	var points := whip_points(origin, t)
+	var space := get_world_3d().direct_space_state
+	if _whip_query == null:
+		_whip_query = PhysicsShapeQueryParameters3D.new()
+		_whip_capsule = CapsuleShape3D.new()
+		_whip_capsule.radius = 0.2
+		_whip_query.shape = _whip_capsule
+		_whip_query.collide_with_areas = false
+		_whip_query.exclude = [_player.get_rid()]
+	# One capsule laid along each piece of the tentacle.
+	for i in range(1, points.size()):
+		var from := points[i - 1]
+		var along := points[i] - from
+		var length := along.length()
+		if length < 0.01:
+			continue
+		_whip_capsule.height = length + _whip_capsule.radius * 2.0
+		var up := along / length
+		var side := up.cross(Vector3.UP if absf(up.y) < 0.99 else Vector3.RIGHT).normalized()
+		_whip_query.transform = Transform3D(Basis(side, up, side.cross(up)), from + along * 0.5)
+		for hit in space.intersect_shape(_whip_query, 8):
+			_whip_strike(hit.collider as Node, points[i])
+	if t >= 1.0:
+		_rope = Rope.NONE
+
+
+## The lash's shape at `t` (0..1 through it): hand, a bend trailing the
+## swing, and the tip -- the hitbox and what's drawn (rope_tip()).
+func whip_points(origin: Vector3, t: float) -> PackedVector3Array:
+	var flat := Vector3(_whip_aim.x, 0.0, _whip_aim.z).normalized()
+	if flat == Vector3.ZERO:
+		flat = -_player.global_basis.z
+	var half := deg_to_rad(whip_sweep_degrees) * 0.5
+	var angle := lerpf(-half, half, t) # right to left
+	var reach := whip_reach * sin(PI * minf(t * 1.3, 1.0)) # out, then back
+	var tip_dir := flat.rotated(Vector3.UP, angle)
+	tip_dir.y = _whip_aim.y
+	var tip := origin + tip_dir.normalized() * maxf(reach, 0.3)
+	var trail := origin + flat.rotated(Vector3.UP, angle - 0.6).normalized() * reach * 0.55
+	var points := PackedVector3Array()
+	for i in 6:
+		var u := i / 5.0
+		points.append(origin.lerp(trail, u).lerp(trail.lerp(tip, u), u)) # a bend
+	return points
+
+
+func _whip_strike(collider: Node, at: Vector3) -> void:
+	var node := collider
+	while node != null and node.get_node_or_null(^"Health") == null:
+		node = node.get_parent()
+	if node == null or node.is_in_group("player") or _whip_hit.has(node):
+		return # (never a teammate)
+	if Network.is_online() and not multiplayer.is_server():
+		return # the host's call, like all damage (it runs this tick too)
+	_whip_hit.append(node)
+	var health := node.get_node(^"Health") as Health
+	var direction := (at - _player.global_position).normalized()
+	health.take_damage(whip_damage, _attacker_id, direction, at, 6.0)
+	Factions.provoke(node, _player)
+	_player.weapons.hit_confirmed.emit(health.is_dead, WeaponController.HitKind.NORMAL)
 
 
 func _kick(direction: Vector3) -> void:
@@ -768,9 +988,16 @@ func rope_tip() -> Vector3:
 		Rope.MISS:
 			var t := clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0)
 			return _start_point().lerp(_lash_end, sin(t * PI)) # out and snaps back
-		Rope.PULL, Rope.PERCH, Rope.HANG, Rope.RIDE:
+		Rope.PULL, Rope.PERCH, Rope.HANG, Rope.RIDE, Rope.CARRY:
 			if is_instance_valid(_anchor):
 				return _anchor_point()
+		Rope.FETCH:
+			# The item as it flies in (the hand moves it, not its own body).
+			if is_instance_valid(_anchor):
+				return _anchor_point()
+		Rope.WHIP:
+			var points := whip_points(_start_point(), clampf(_whip_time / whip_time, 0.0, 1.0))
+			return points[points.size() - 1]
 	return Vector3.INF
 
 
@@ -790,7 +1017,9 @@ func _process(delta: float) -> void:
 	if mine:
 		_ensure_tentacle()
 		var normal := (_anchor.global_basis * _normal_local).normalized() if is_instance_valid(_anchor) else Vector3.UP
-		var stuck := is_pulling()
+		# Gripping: its tip splits into the little tendrils over whatever it
+		# holds -- a wall, an item flying in, a prop on it (the user's).
+		var stuck := is_attached()
 		var arm_points: Array[Vector3] = []
 		var arm_coil := 0.0
 		if is_instance_valid(arms) and arms.raise > 0.01:

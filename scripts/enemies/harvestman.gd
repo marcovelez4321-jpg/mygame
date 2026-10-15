@@ -400,6 +400,7 @@ func _ready() -> void:
 	_height = stand_height
 	_height_target = stand_height
 	health.died.connect(_on_died)
+	BigOnes.drops_meat(self, BigOnes.BOSS_MEAT, true) # a level boss: a boss chunk (+3)
 	health.damaged.connect(_on_hurt)
 	if model_scene:
 		_model = model_scene.instantiate() as Node3D

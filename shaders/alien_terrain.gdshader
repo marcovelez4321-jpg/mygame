@@ -87,6 +87,16 @@ uniform vec3 slime_color : source_color = vec3(0.22, 0.34, 0.05);        // toxi
 uniform vec3 sewer_rust_color : source_color = vec3(0.34, 0.15, 0.06);
 uniform float slime_amount : hint_range(0.0, 1.0) = 0.3;
 uniform float sewer_rust_amount : hint_range(0.0, 1.0) = 0.3;
+group_uniforms yard;
+// Grandma's yard: grass (the user's: TrenchBroom's Grass_01) in the flat
+// circle round the middle, fading into the alien ground over yard_soft.
+// TerrainLook sets the texture. grass_tile: metres one tile covers.
+uniform sampler2D yard_grass : source_color, filter_nearest_mipmap, repeat_enable;
+uniform vec2 yard_center = vec2(0.0, 0.0);
+uniform float yard_radius = 45.0;
+uniform float yard_soft = 10.0;
+uniform float grass_tile = 4.0;
+uniform bool yard_grass_on = false;
 group_uniforms paint;
 // Terrain3D's Color brush tints the ground on top of all this (its colour
 // map; white = untouched). How strongly it shows.
@@ -292,6 +302,13 @@ void fragment() {
 	// Which biome here (sampled per block too, so the border's blocky like the rest).
 	float reefness = texture(biome_map, (cell - biome_area.xy) / biome_area.zw).r;
 	vec3 color = mix(sewer, reef, reefness);
+	// Grandma's yard: grass, the true texture (not by block), fading out.
+	if (yard_grass_on) {
+		float yard = 1.0 - smoothstep(yard_radius, yard_radius + yard_soft, distance(v_vertex.xz, yard_center));
+		if (yard > 0.0) {
+			color = mix(color, texture(yard_grass, v_vertex.xz / grass_tile).rgb, yard);
+		}
+	}
 	// Hand-painted tint (Terrain3D's Color brush), blended across the four
 	// corners round this point like the normals above.
 	vec3 tint = texelFetch(_color_maps, index[0], 0).rgb * weights[0]

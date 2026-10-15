@@ -13,7 +13,9 @@ extends Node3D
 ## open; hold Left Alt and looking stops, a small cursor appears over the
 ## bag's opening and the mouse moves it over the items. Hold left click on
 ## one to grab it and move it about in the bag (it shoves the others aside);
-## double-click one to use it. Let go of Alt and you're looking again.
+## double-click one to take it into your right hand (PlayerHand; the user's,
+## 2026-10-15 -- it used to be used straight away). Let go of Alt and you're
+## looking again.
 ## How it's held -- the bag's place, the hand on it, the fist, the elbow,
 ## the unzip, each finger -- is BackpackHold (scenes/player/backpack_hold.tres),
 ## tuned in game with O while it's out (Viewmodel) and saved with F3.
@@ -338,6 +340,8 @@ const REAL_SIZE := {
 	Backpack.Kind.PILLS: 0.09, Backpack.Kind.BANDAGE: 0.1, Backpack.Kind.BULLETS: 0.09,
 	Backpack.Kind.SHELLS: 0.11, Backpack.Kind.ROCKETS: 0.26, Backpack.Kind.GRENADES: 0.22,
 	Backpack.Kind.SCRAP: 0.11, Backpack.Kind.SILK: 0.12, Backpack.Kind.CAMP_KIT: 0.3,
+	# Meat: a 2 kg chunk's size (CarryItem.world_size()).
+	Backpack.Kind.MEAT: 0.2, Backpack.Kind.ROTTEN_MEAT: 0.2, Backpack.Kind.COOKED_MEAT: 0.2,
 }
 
 var _bodies: Array[Dictionary] = [] # {key, kind, body: RigidBody3D, node: the prop, area: its click zone}
@@ -837,20 +841,31 @@ func _under_cursor(at: Vector2) -> Object:
 
 ## The prop for a stack (a fresh copy).
 func _model_for(stack: Dictionary) -> Node3D:
-	if stack.kind == Backpack.Kind.GUN:
-		var weapon: WeaponData = stack.weapon
+	if stack.kind == Backpack.Kind.MEAT:
+		return CarryItem.meat_model(false, false)
+	if stack.kind == Backpack.Kind.ROTTEN_MEAT:
+		return CarryItem.meat_model(false, true)
+	if stack.kind == Backpack.Kind.COOKED_MEAT:
+		return CarryItem.meat_model(true, false)
+	return model_of(stack.kind, stack.weapon, _player.weapons.grenade_weapon())
+
+
+## What a kind of thing looks like (a fresh copy): a gun's own model, the
+## grenade's, silk, or its prop (PROPS). Shared with CarryItem (a thing out
+## in the world or in your hand).
+static func model_of(kind: int, weapon: WeaponData, grenade: WeaponData) -> Node3D:
+	if kind == Backpack.Kind.GUN:
 		if weapon and weapon.viewmodel_scene:
 			var gun := weapon.viewmodel_scene.instantiate() as Node3D
 			gun.basis = Basis.from_euler(weapon.model_facing_degrees * (PI / 180.0))
 			return _wrapped(gun)
 		return null
-	if stack.kind == Backpack.Kind.SILK:
+	if kind == Backpack.Kind.SILK:
 		return _silk()
-	if stack.kind == Backpack.Kind.GRENADES:
-		var grenade := _player.weapons.grenade_weapon()
+	if kind == Backpack.Kind.GRENADES:
 		if grenade and grenade.viewmodel_scene:
 			return _wrapped(grenade.viewmodel_scene.instantiate() as Node3D)
-	var source: Variant = PROPS.get(stack.kind)
+	var source: Variant = PROPS.get(kind)
 	if source == null:
 		return null
 	if source is Array:
@@ -1043,10 +1058,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			var now := Time.get_ticks_msec()
 			if _last_click_body == hit and now - _last_click_msec <= DOUBLE_CLICK * 1000.0:
-				# Double-click: use it.
+				# Double-click: into your right hand (the user's; PlayerHand) --
+				# a gun into your hands, saying which (both can be in here).
 				_last_click_msec = -100000
 				_held = {}
-				_player.request_use(body.kind)
+				var code: int = body.kind
+				if body.kind == Backpack.Kind.GUN:
+					var key: String = body.key # "kind:res://..."
+					var path := key.substr(key.find(":") + 1)
+					var owned := _player.weapons.get_owned_weapons()
+					for i in owned.size():
+						if owned[i].resource_path == path:
+							code = PlayerHand.GUN_CODE + i
+				_player.request_use(code)
 				return
 			_last_click_msec = now
 			_last_click_body = hit

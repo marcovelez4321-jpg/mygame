@@ -74,7 +74,8 @@ func _looked_at() -> Node:
 			continue
 		var to_pickup := pickup.global_position - eye
 		var distance := to_pickup.length()
-		if distance > look_range or distance < 0.01:
+		# (A Flesh Tree pod can be read from as far as the grapple reaches.)
+		if distance > float(pickup.get_meta(&"highlight_range", look_range)) or distance < 0.01:
 			continue
 		var dot := forward.dot(to_pickup / distance)
 		if dot > best_dot and _can_see(eye, pickup):
@@ -95,3 +96,5 @@ func _set_outline(node: Node, on: bool) -> void:
 		(mesh as MeshInstance3D).material_overlay = _material if on else null
 	if node is MeshInstance3D:
 		(node as MeshInstance3D).material_overlay = _material if on else null
+	if node.has_method(&"set_highlighted"):
+		node.call(&"set_highlighted", on) # (a pod shows what it holds)

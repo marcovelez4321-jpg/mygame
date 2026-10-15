@@ -37,6 +37,11 @@ var _asleep := false
 var _check_left := 0.0
 
 
+## Most groups have one big one (BigOnes, the user's): made big as it joins.
+func _init() -> void:
+	BigOnes.watch(self)
+
+
 func _ready() -> void:
 	home = global_position
 	_check_left = 2.0 # its rats and spiders take a frame or two to arrive

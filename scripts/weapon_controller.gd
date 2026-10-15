@@ -70,6 +70,9 @@ signal leech_latched(on: bool)
 signal item_used(item: int, weapon: WeaponData, use_time: float, lower_time: float, recover_time: float, equipped: bool)
 ## Carried pills or bandages changed (picked up or used), for the HUD.
 signal items_changed
+## Something went into your right hand (its CarryItem data), or {} (the gun's
+## back) -- the viewmodel shows it (set_hand()).
+signal hand_changed(data: Dictionary)
 
 enum Item { PILLS, BANDAGE }
 ## Guns you can carry: one in your hands, one in the backpack (the user's).
@@ -245,6 +248,12 @@ var _fire_held_prev := false
 ## left until its heal lands.
 var pills := 0
 var bandages := 0
+## Something's in your right hand (set_hand()): the gun's away.
+var hand_busy := false
+## The gun's in the backpack and your hands are empty (stow_gun()).
+var gun_stowed := false
+## hand_changed's word for "nothing in the hand, no gun either".
+const EMPTY_HAND := {kind = -1, empty = true}
 var _item_using := -1
 var _item_left := 0.0
 var _pills_held_prev := false
@@ -538,7 +547,7 @@ func tick_items(use_pills: bool, use_bandage: bool, delta: float) -> void:
 		if _item_left <= 0.0:
 			_finish_item()
 		return
-	if has_leech() or _throw_left >= 0.0:
+	if has_leech() or _throw_left >= 0.0 or hand_busy or gun_stowed:
 		return
 	if pills_pressed and pills > 0:
 		_start_item(Item.PILLS)
@@ -628,6 +637,10 @@ func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon:
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_reload_blocked_left = maxf(_reload_blocked_left - delta, 0.0)
 	_time_since_shot += delta
+	if hand_busy or gun_stowed:
+		_aim = 0.0
+		_reload_time_left = 0.0
+		return # the gun's away: something's in your right hand (PlayerHand)
 
 	if select_weapon >= 0 and select_weapon < _owned.size():
 		_select(select_weapon)
@@ -712,6 +725,91 @@ func is_busy() -> bool:
 	return _item_using >= 0 or _throw_left >= 0.0 or has_leech()
 
 
+## Something in your right hand instead of the gun (PlayerHand): the gun's
+## away (tick() and the items do nothing), and the viewmodel shows the thing
+## (hand_changed: its CarryItem data; {} when the gun comes back; EMPTY_HAND
+## when the gun's in the backpack and the hand has nothing).
+func set_hand(data: Dictionary) -> void:
+	hand_busy = not data.is_empty()
+	if data.is_empty() and gun_stowed:
+		hand_changed.emit(EMPTY_HAND)
+		return
+	hand_changed.emit(data)
+
+
+## F with the gun in your hands (not looking at a button): it goes in the
+## backpack, both hands free (the user's: both guns can be in the bag).
+func stow_gun() -> bool:
+	if gun_stowed or hand_busy or is_busy() or not is_gun(current_weapon()):
+		return false
+	gun_stowed = true
+	_aim = 0.0
+	_reload_time_left = 0.0
+	hand_changed.emit(EMPTY_HAND)
+	inventory_changed.emit()
+	return true
+
+
+## A gun double-clicked in the backpack (its index in your weapons) into
+## your hands -- the one in them (if any) goes in the bag.
+func equip_gun(index: int) -> void:
+	if index < 0 or index >= _owned.size() or not is_gun(_owned[index]) or is_busy():
+		return
+	if index != _current:
+		_select(index) # (out of the bag, if it was stowed)
+	elif gun_stowed:
+		gun_stowed = false
+		var weapon := _owned[_current]
+		_cooldown = maxf(_cooldown, weapon.draw_time)
+		_reload_blocked_left = maxf(_reload_blocked_left, weapon.draw_time)
+		if not hand_busy:
+			hand_changed.emit({})
+	inventory_changed.emit()
+
+
+## The gun in your hands (null: it's in the backpack, or something else is
+## in your hand).
+func gun_in_hand() -> WeaponData:
+	return null if gun_stowed or hand_busy else current_weapon()
+
+
+## One pill packet or bandage out (into your hand); false if there's none.
+func take_item(item: int) -> bool:
+	if heal_count(item) <= 0 or _item_using >= 0:
+		return false
+	if item == Item.PILLS:
+		pills -= 1
+	else:
+		bandages -= 1
+	items_changed.emit()
+	_sync_item_slots()
+	return true
+
+
+## One grenade out (into your hand); false if there's none.
+func take_grenade() -> bool:
+	var grenade := grenade_weapon()
+	if grenade == null:
+		return false
+	if _ammo.get(grenade.ammo_type, 0) > 0:
+		_ammo[grenade.ammo_type] -= 1
+		return true
+	var loaded: int = _magazine.get(grenade, grenade.magazine_size)
+	if loaded > 0:
+		_magazine[grenade] = loaded - 1
+		return true
+	return false
+
+
+## All the spare rounds of a type out (the box you see in the backpack is
+## all of them); how many.
+func take_ammo(type: WeaponData.AmmoType) -> int:
+	var rounds: int = _ammo.get(type, 0)
+	_ammo[type] = 0
+	inventory_changed.emit()
+	return rounds
+
+
 ## E with a two-handed gun out (PlayerGrapple): switches to the one-handed
 ## gun you used last (or the first one you own). False if you own none.
 func switch_to_one_handed() -> bool:
@@ -774,6 +872,11 @@ func _swap_slot(weapon: WeaponData) -> void:
 
 ## Switches to the weapon at inventory `index`.
 func _select(index: int) -> void:
+	# Anything brought out comes out of the bag (stow_gun()).
+	if gun_stowed and index != _current:
+		gun_stowed = false
+		if not hand_busy:
+			hand_changed.emit({})
 	if index == _current:
 		return
 	# Switching away mid-throw keeps the grenade (back with the spares).

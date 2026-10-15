@@ -37,6 +37,9 @@ const BIG_RANGE := 900.0
 const SEND_INTERVAL := 0.05
 const INTERP_DELAY_MSEC := 100
 const PUPPET_HOLDER := "NetPuppets"
+## A spawn of something made in code: this, then its script's path (it's
+## made with .new() and handed its net_spawn_args() through net_restore()).
+const SCRIPT_PREFIX := "script:"
 ## How far back the host can rewind (Source's sv_maxunlag is 1 s).
 const HISTORY_MSEC := 1000
 
@@ -111,11 +114,18 @@ func _host_tick(delta: float) -> void:
 				continue
 			seen[id] = true
 			if not known.has(id):
-				if creature.scene_file_path.is_empty() and creature.owner == null:
-					continue # made in code, nothing to make it from
+				var made_from := creature.scene_file_path
+				var settings := _size_settings(creature)
+				if made_from.is_empty() and creature.owner == null:
+					# Made in code: only if it can say how to make it again
+					# (net_spawn_args(): a meat chunk, a pod -- CarryItem).
+					if not creature.has_method(&"net_spawn_args") or creature.get_script() == null:
+						continue
+					made_from = SCRIPT_PREFIX + (creature.get_script() as Script).resource_path
+					settings = creature.call(&"net_spawn_args")
 				known[id] = true
-				_spawn.rpc_id(peer, id, creature.scene_file_path, _path_in_scene(creature), creature.global_transform,
-						_size_settings(creature), _health_of(creature))
+				_spawn.rpc_id(peer, id, made_from, _path_in_scene(creature), creature.global_transform,
+						settings, _health_of(creature))
 			var snap := [id, creature.global_position, creature.global_basis.get_rotation_quaternion(), _health_of(creature)[0]]
 			if creature.has_method(&"net_state"):
 				snap.append(creature.call(&"net_state"))
@@ -252,6 +262,9 @@ func _path_in_scene(node: Node) -> String:
 ## (spiders, rats: their range pinned to it) or its size setting (roaches).
 static func _size_settings(node: Node) -> Dictionary:
 	var settings := {}
+	# One of the big ones (BigOnes): the puppet's made big too.
+	if node.has_meta(&"big"):
+		settings[&"__big"] = true
 	var size: Variant = node.get(&"size")
 	if size is float:
 		if node.get(&"size_min") is float:
@@ -281,13 +294,25 @@ func _spawn(id: int, scene_path: String, scene_node: String, at: Transform3D, se
 	if not scene_node.is_empty():
 		node = scene.get_node_or_null(NodePath(scene_node)) as Node3D
 	if node == null:
-		if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
-			return
-		node = (load(scene_path) as PackedScene).instantiate() as Node3D
-		if node == null:
-			return
-		for key: StringName in settings:
-			node.set(key, settings[key])
+		if scene_path.begins_with(SCRIPT_PREFIX):
+			var script_path := scene_path.trim_prefix(SCRIPT_PREFIX)
+			if not ResourceLoader.exists(script_path):
+				return
+			node = (load(script_path) as GDScript).new() as Node3D
+			if node == null:
+				return
+			node.call(&"net_restore", settings)
+		else:
+			if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+				return
+			node = (load(scene_path) as PackedScene).instantiate() as Node3D
+			if node == null:
+				return
+			for key: StringName in settings:
+				if key == &"__big":
+					BigOnes.make_puppet_big(node)
+				else:
+					node.set(key, settings[key])
 		node.set_meta(&"net_puppet", true)
 		node.name = "Net_%d" % id
 		_holder(scene).add_child(node)

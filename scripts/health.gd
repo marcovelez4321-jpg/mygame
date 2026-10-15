@@ -27,6 +27,9 @@ const HIT_MERGE_MSEC := 100
 
 var current_health: float
 var is_dead: bool = false
+## Every blow is scaled by this (the player's Chitin skin mutation: 0.65).
+## hurt_unscaled() skips it (eating raw meat isn't an attack).
+var damage_scale := 1.0
 
 ## Where and how hard the most recent blow landed. Only used for cosmetic
 ## reactions such as a ragdoll being knocked back; it has no effect on damage.
@@ -57,11 +60,20 @@ func take_damage(amount: float, attacker_id: int = NO_ATTACKER, hit_direction: V
 	if is_dead or amount <= 0.0:
 		return
 	_record_hit(hit_direction * impact_force, hit_position)
+	amount *= damage_scale
 	current_health = maxf(current_health - amount, 0.0)
 	damaged.emit(amount, attacker_id)
 	if current_health <= 0.0:
 		is_dead = true
 		died.emit(attacker_id, is_critical)
+
+
+## Damage that damage_scale doesn't touch (raw meat eaten). Host only.
+func hurt_unscaled(amount: float) -> void:
+	var scale := damage_scale
+	damage_scale = 1.0
+	take_damage(amount)
+	damage_scale = scale
 
 
 ## A wound that keeps bleeding (a headshot or artery hit): `total` damage
