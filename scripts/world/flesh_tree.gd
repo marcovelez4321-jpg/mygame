@@ -63,7 +63,8 @@ const POD_COUNT := 3
 ## Metres one repeat of the muscle texture covers.
 @export var texture_metres: float = 6.0
 @export_group("Creatures")
-@export var creatures: int = 20
+## (The user's: none for now -- the models came off the tree.)
+@export var creatures: int = 0
 @export var creature_size_min: float = 3.0
 @export var creature_size_max: float = 9.0
 @export var creature_seen_range: float = 1500.0
@@ -441,7 +442,13 @@ func _muscle_material() -> StandardMaterial3D:
 		_muscle = StandardMaterial3D.new()
 		_muscle.albedo_texture = load(MUSCLE_TEXTURE) as Texture2D if ResourceLoader.exists(MUSCLE_TEXTURE) else null
 		_muscle.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
-		_muscle.roughness = 0.45
+		# Fleshy, not shiny (the user's): matte, barely any highlight, and a dark
+		# red rim where it turns away from you, like thick tissue.
+		_muscle.roughness = 1.0
+		_muscle.metallic_specular = 0.08
+		_muscle.rim_enabled = true
+		_muscle.rim = 0.35
+		_muscle.rim_tint = 0.9
 		_muscle.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_muscle.albedo_color = muscle_tint
 	return _muscle
