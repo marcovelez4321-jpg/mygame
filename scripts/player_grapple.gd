@@ -62,7 +62,8 @@ const BIG_GROUP := "grapple_big"
 ## FETCH: an item flying into your right hand (PlayerHand). CARRY: a prop up
 ## to MAX_CARRY kg hanging off the tentacle in front of you (left click
 ## throws it, right click lets go). WHIP: the Tentacle whip mutation's lash.
-enum Rope { NONE, LASH, PULL, PERCH, RIDE, MISS, FETCH, CARRY, WHIP }
+## TOUCH: just hit the wall the pull brought you to -- a moment to kick off it.
+enum Rope { NONE, LASH, PULL, PERCH, RIDE, MISS, FETCH, CARRY, WHIP, TOUCH }
 ## Where the tendrils look: fanned ahead the way you're flying, or up and on.
 enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 
@@ -127,6 +128,21 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export var perch_standoff: float = 1.0
 ## Upward speed added when you let go with Space.
 @export var release_hop: float = 2.5
+
+@export_group("Wall Kick")
+## Pulled into a wall, you bounce off it along the natural path (the way
+## you'd glance off), never slamming to a stop (the user's, 2026-10-16):
+## Space in the last kick_window seconds before you hit (or up to
+## kick_grace after touching) kicks off at kick_keep of your speed; in the
+## last kick_perfect_window (or the moment you touch) it's kick_perfect_bonus
+## stronger still, with the chime. No press: a weak bounce, bounce_keep of it.
+@export var wall_reach: float = 1.2
+@export var kick_window: float = 0.4
+@export var kick_perfect_window: float = 0.2
+@export var kick_grace: float = 0.1
+@export var kick_keep: float = 1.2
+@export var kick_perfect_bonus: float = 1.3
+@export var bounce_keep: float = 0.3
 
 @export_group("Big Enemies")
 ## How close (to the grabbed spot) counts as arriving: kick or latch on.
@@ -226,6 +242,14 @@ var _perch_kept := Vector3.ZERO
 var _whip_time := 0.0
 var _whip_aim := Vector3.FORWARD
 var _whip_hit: Array = []
+## The wall kick: your speed going in (each pull tick), a Space press in
+## time (and whether it was perfect), and the bounce worked out on impact.
+var _pull_velocity := Vector3.ZERO
+var _kick_queued := false
+var _kick_perfect := false
+var _bounce_dir := Vector3.ZERO
+var _bounce_speed := 0.0
+var _touch_left := 0.0
 ## Reused for every sweep of the lash (no allocations per tick).
 var _whip_query: PhysicsShapeQueryParameters3D
 var _whip_capsule: CapsuleShape3D
@@ -294,6 +318,14 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 		_rope = Rope.NONE
 		_anchor = null
 
+	# Space on the way into a wall (or just as you touch it): a kick off it.
+	if jump_pressed and _rope == Rope.TOUCH:
+		_wall_kick(true) # the moment you touch: perfect
+		return true
+	if jump_pressed and _rope == Rope.PULL and not _to_enemy and _time_to_wall() <= kick_window:
+		_kick_queued = true
+		_kick_perfect = _time_to_wall() <= kick_perfect_window
+		return true
 	if jump_pressed and is_pulling():
 		_let_go()
 		return true
@@ -365,7 +397,7 @@ func is_out() -> bool:
 
 ## True while the line is holding you (gravity and ground movement change).
 func is_pulling() -> bool:
-	return _rope == Rope.PULL or _rope == Rope.PERCH or _rope == Rope.RIDE
+	return _rope == Rope.PULL or _rope == Rope.PERCH or _rope == Rope.RIDE or _rope == Rope.TOUCH
 
 
 ## Attached to anything: you (pulling, perched, riding), an item flying in,
@@ -397,7 +429,7 @@ func carry_fire(fire: bool, aim: Vector3) -> bool:
 ## True while it moves you entirely itself (perched, riding): no steering in
 ## the air then. Pulled, you can still steer.
 func holds_still() -> bool:
-	return _rope == Rope.PERCH or _rope == Rope.RIDE
+	return _rope == Rope.PERCH or _rope == Rope.RIDE or _rope == Rope.TOUCH
 
 
 ## No gravity while it pulls or holds you.
@@ -414,6 +446,8 @@ func apply_pull(delta: float) -> void:
 			_pull(delta)
 		Rope.PERCH:
 			_perch(delta)
+		Rope.TOUCH:
+			_touch(delta)
 
 
 ## Lets go without a hop (death, mantling, switching guns, out of stamina).
@@ -494,6 +528,9 @@ func _land() -> void:
 	_rope = Rope.PULL
 	_stalled = 0.0
 	_last_distance = INF
+	_kick_queued = false # (a fresh pull: no kick carried over)
+	_kick_perfect = false
+	_pull_velocity = Vector3.ZERO
 	attached.emit(_to_enemy)
 	if not _to_enemy and tendrils_enabled:
 		_sprout(_anchor_point(), (_anchor.global_basis * _normal_local).normalized())
@@ -507,16 +544,26 @@ func _land() -> void:
 func _pull(delta: float) -> void:
 	var to := _to_spot()
 	var distance := to.length()
-	var reach := kick_reach if _to_enemy else arrive_distance
-	if distance <= reach:
-		if _to_enemy:
+	if _to_enemy:
+		if distance <= kick_reach:
 			if _ride_wanted:
 				_start_ride()
 			else:
 				_kick(to / maxf(distance, 0.001))
-		else:
-			_start_perch()
-		return
+			return
+	else:
+		# Into the wall: bounce or kick off it, never a slam (the user's).
+		var hit := Vector3.ZERO
+		for i in _player.get_slide_collision_count():
+			var normal := _player.get_slide_collision(i).get_normal()
+			if _pull_velocity.length_squared() > 1.0 and normal.dot(_pull_velocity.normalized()) < -0.5:
+				hit = normal
+				break
+		if hit == Vector3.ZERO and distance <= wall_reach:
+			hit = (_anchor.global_basis * _normal_local).normalized()
+		if hit != Vector3.ZERO:
+			_hit_wall(hit)
+			return
 	# Up against a ledge or a beam, no closer: perch where you are.
 	var blocked := _player.get_slide_collision_count() > 0 and distance > _last_distance - 0.5 * delta
 	_stalled = _stalled + delta if blocked else 0.0
@@ -527,11 +574,51 @@ func _pull(delta: float) -> void:
 	var direction := to / distance
 	# A heavy pack: pulled slower, and building up slower (Backpack.pull_scale()).
 	var heavy := _player.backpack.pull_scale()
-	var speed := minf(_pull_speed * heavy, distance * arrive_slowdown)
+	# At a big enemy it eases in; into a wall it keeps its speed (you bounce).
+	var speed := minf(_pull_speed * heavy, distance * arrive_slowdown) if _to_enemy else _pull_speed * heavy
 	var along := _player.velocity.dot(direction)
 	if along < speed:
 		_player.velocity += direction * minf(pull_accel * heavy * delta, speed - along)
+	_pull_velocity = _player.velocity # (what it hits a wall with, next tick)
 
+
+## Seconds till the pull reaches the wall (INF if not pulled at one).
+func _time_to_wall() -> float:
+	if _rope != Rope.PULL or _to_enemy or not is_instance_valid(_anchor):
+		return INF
+	var to := _to_spot()
+	var closing := maxf(_player.velocity.dot(to.normalized()), 1.0)
+	return maxf(to.length() - wall_reach, 0.0) / closing
+
+
+## Hit the wall facing `normal`: the path you'd glance off along (your
+## speed reflected off it). Kicked already (Space in time): off you go;
+## otherwise a moment against it (kick_grace) to kick, then a weak bounce.
+func _hit_wall(normal: Vector3) -> void:
+	var v := _pull_velocity if _pull_velocity.length_squared() > 1.0 else _player.velocity
+	var into := v.dot(normal)
+	_bounce_dir = (v - 2.0 * into * normal if into < 0.0 else v + normal * v.length() * 0.3).normalized()
+	_bounce_speed = v.length()
+	if _kick_queued:
+		_wall_kick(_kick_perfect)
+		return
+	_rope = Rope.TOUCH
+	_touch_left = kick_grace
+	_player.velocity = Vector3.ZERO
+
+
+## Off the wall: kick_keep of your speed along the bounce (perfect: kick_
+## perfect_bonus more, and the chime); `weak`: just bounce_keep of it.
+func _wall_kick(perfect: bool, weak: bool = false) -> void:
+	var keep := bounce_keep if weak else kick_keep * (kick_perfect_bonus if perfect else 1.0)
+	var direction := _bounce_dir if _bounce_dir != Vector3.ZERO else -_to_spot().normalized()
+	var speed := maxf(_bounce_speed, pull_speed * 0.5) * keep
+	_kick_queued = false
+	_kick_perfect = false
+	release()
+	_player.velocity = direction * speed
+	if perfect and not weak:
+		launch_timed.emit() # the grapple's chime
 
 ## The three tendrils from a spot it bit (`at`, on a surface facing
 ## `normal`): fanned ahead the way you're flying (or up and onward), each to
@@ -628,6 +715,15 @@ func _perfect_release() -> void:
 	release()
 	_player.velocity *= perfect_boost
 	launch_timed.emit()
+
+
+## Against the wall a moment (kick_grace) for a Space kick; none, and it's a
+## weak bounce off it.
+func _touch(delta: float) -> void:
+	_player.velocity = Vector3.ZERO
+	_touch_left -= delta
+	if _touch_left <= 0.0:
+		_wall_kick(false, true)
 
 
 func _start_perch() -> void:
@@ -944,7 +1040,7 @@ func rope_tip() -> Vector3:
 		Rope.MISS:
 			var t := clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0)
 			return _start_point().lerp(_lash_end, sin(t * PI)) # out and snaps back
-		Rope.PULL, Rope.PERCH, Rope.RIDE, Rope.CARRY:
+		Rope.PULL, Rope.PERCH, Rope.RIDE, Rope.CARRY, Rope.TOUCH:
 			if is_instance_valid(_anchor):
 				return _anchor_point()
 		Rope.FETCH:
