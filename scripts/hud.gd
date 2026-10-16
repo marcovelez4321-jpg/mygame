@@ -68,6 +68,7 @@ var _use_prompt_label: Label
 ## The rip-the-leech-off meter (_build_leech_meter()).
 var _leech_box: VBoxContainer
 var _leech_bar: ProgressBar
+var _leech_label: Label
 
 
 func _ready() -> void:
@@ -124,6 +125,7 @@ func _process(_delta: float) -> void:
 	_leech_box.visible = leeched
 	if leeched:
 		_leech_bar.value = player.weapons.leech_progress() * 100.0
+		_leech_label.text = player.weapons.leech_text()
 	var horiz_speed := Vector2(player.velocity.x, player.velocity.z).length()
 	speed_label.text = "Speed: %.1f m/s" % horiz_speed
 	var weapon: WeaponData = player.weapons.current_weapon()
@@ -194,6 +196,7 @@ func _build_leech_meter() -> void:
 	_leech_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_leech_box.visible = false
 	var label := Label.new()
+	_leech_label = label
 	label.text = "LEECH! SPAM CLICK TO RIP IT OFF!"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 22)

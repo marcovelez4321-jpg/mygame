@@ -609,6 +609,13 @@ func leech_progress() -> float:
 	return float(_leeches[0].call("progress")) if has_leech() else 0.0
 
 
+## What the meter says (a Harvestman's grab has its own words).
+func leech_text() -> String:
+	if has_leech() and (_leeches[0] as Object).has_method(&"meter_text"):
+		return _leeches[0].call(&"meter_text")
+	return "LEECH! SPAM CLICK TO RIP IT OFF!"
+
+
 func has_leech() -> bool:
 	if _leeches.is_empty():
 		return false

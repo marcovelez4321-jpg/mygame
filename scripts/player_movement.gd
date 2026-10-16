@@ -390,6 +390,9 @@ var _mantle_cooldown_left: float = 0.0
 var _last_mantle_ledge_position: Vector3 = Vector3.ZERO
 var _mantle_grace_left: float = 0.0
 
+## Held on a Harvestman's proboscis tip (it sets this; INF = free).
+var held_point := Vector3.INF
+
 ## Where this body first came in: where it comes back if nobody's alive to
 ## come back beside (co-op).
 var spawn_position := Vector3.ZERO
@@ -583,6 +586,7 @@ func respawn(at: Vector3) -> void:
 	stamina = float(max_stamina_charges)
 	_sync_stamina()
 	flying = false
+	held_point = Vector3.INF
 	bag_open = false
 	velocity = Vector3.ZERO
 	global_position = at
@@ -673,6 +677,14 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	head.rotation.x = _pitch
 	_net_look = Vector2(rotation.y, _pitch)
 	_absorb_recoil_compensation(input.look_delta)
+
+	# On a Harvestman's proboscis (Harvestman grab): carried on its tip -- look
+	# about, click to break free, nothing else.
+	if held_point.is_finite():
+		velocity = ((held_point - Vector3.UP * 0.9 - global_position) / maxf(delta, 0.001)).limit_length(40.0)
+		move_and_slide()
+		_finish_tick(input, delta)
+		return
 
 	_mantle_cooldown_left = maxf(_mantle_cooldown_left - delta, 0.0)
 

@@ -51,7 +51,7 @@ extends Node3D
 ## it is (its position/heading still need syncing, like every creature).
 
 enum State { PATROL, LISTEN, HUNT, SEARCH, ATTACK, FEED, COLLAPSED, DEAD, STUNNED }
-enum Attack { NONE, SKEWER, SLAM, HOSE, BROOD, RUSH }
+enum Attack { NONE, SKEWER, SLAM, HOSE, BROOD, RUSH, GRAB }
 
 const LEECH_SEGMENT_MESH := "res://art/worm_boss/worm_segment_mesh.res"
 const LEECH_TEXTURE := "res://art/props/PSX Creatures/Textures/tape_worm.png"
@@ -217,6 +217,23 @@ const SEGMENT_MESH_LENGTH := 1.55
 ## Off: the user didn't want it to rush (it walks at you and uses its other
 ## attacks). On brings the charge below back.
 @export var can_rush: bool = false
+@export_group("Grab")
+## The proboscis grab (the user's, 2026-10-16): with its proboscis already
+## out, it rushes you and snatches you on its tip within grab_range. Stuck
+## there, you spam left click (grab_clicks to break free; it slips back
+## grab_decay a second) while it slowly reels you in over grab_reel_time --
+## break free and you drop; don't, and it lunges and flings you at
+## grab_throw_speed for grab_throw_damage. Then not again for grab_cooldown.
+@export var grab_range: float = 2.5
+@export var grab_clicks: int = 16
+@export var grab_decay: float = 0.1
+@export var grab_reel_time: float = 3.5
+@export var grab_throw_speed: float = 35.0
+@export var grab_throw_damage: float = 30.0
+@export var grab_cooldown: float = 12.0
+## How long it chases you with its proboscis out before giving up.
+@export var grab_chase_time: float = 4.0
+@export_group("Rush")
 @export var rush_min_range: float = 16.0
 @export_range(0.0, 1.0, 0.05) var rush_chance: float = 0.5
 @export var rush_speed: float = 9.0
@@ -310,6 +327,13 @@ class HLeg:
 
 var _state := State.PATROL
 var _state_time := 0.0
+## The grab: whoever's held, the reel's time, the break-free meter, where it
+## caught them, and how long till it may grab again.
+var _held_player: PlayerMovement
+var _grab_time := 0.0
+var _grab_progress := 0.0
+var _grab_from := Vector3.ZERO
+var _grab_left := 0.0
 var _attack := Attack.NONE
 var _attack_time := 0.0
 var _attack_leg: HLeg
@@ -770,6 +794,7 @@ func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
 	_cooldown -= delta
+	_grab_left -= delta
 	_brood_left -= delta
 	_exposed = maxf(_exposed - delta, 0.0)
 	_think_left -= delta
@@ -898,6 +923,11 @@ func _hunt(delta: float) -> void:
 	else:
 		_walk_to(global_position, 0.0, delta)
 		_face_toward(target.global_position, delta)
+	# Its proboscis already out (the hunt, a hose): it goes for the grab.
+	if _grab_left <= 0.0 and not collapsed and target is PlayerMovement and _tube_reach >= 2.0 \
+			and distance < proboscis_length + 8.0 and not (target as PlayerMovement).is_dead():
+		_start_attack(Attack.GRAB, null)
+		return
 	if _cooldown > 0.0:
 		return
 	var leg := _ready_leg()
@@ -1110,6 +1140,9 @@ func _start_attack(attack: Attack, leg: HLeg) -> void:
 
 
 func _end_attack() -> void:
+	if _held_player:
+		_let_player_go(false)
+	_tube_feeding = false
 	if _attack_leg:
 		_attack_leg.driven = false
 		_attack_leg.planted = _attack_leg.foot
@@ -1142,6 +1175,8 @@ func _attack_step(delta: float) -> void:
 			_brood_step(delta)
 		Attack.RUSH:
 			_rush_step(delta)
+		Attack.GRAB:
+			_grab_step(delta)
 		_:
 			_end_attack()
 
@@ -1190,6 +1225,109 @@ func _impale(at: Vector3) -> void:
 		BloodFX.spawn_impact(world, at + Vector3.UP * 0.6, Vector3.UP, BloodFX.BLOOD_COLOR, 3.0)
 	Explosion.launch_ragdolls(self, at + Vector3.UP, 2.0, 6.0)
 
+
+## Grab: proboscis out, it rushes you (barely turning, like the rush) with
+## the tip reaching for you; within grab_range you're snatched onto it. Then
+## the slow reel back (rearing up, the tip drawing you toward its maw) while
+## you spam click to break free; held to the end, it lunges and flings you.
+## _attack_fired: 0 reaching, 1 holding you, 2 the lunge.
+func _grab_step(delta: float) -> void:
+	var player := target as PlayerMovement
+	if player == null or not is_instance_valid(player) or player.is_dead() or _mouth == null:
+		_grab_left = grab_cooldown
+		_end_attack()
+		return
+	var mouth := _mouth.global_position
+	var forward := Vector3(-sin(_yaw), 0.0, -cos(_yaw))
+	match _attack_fired:
+		0:
+			var to := player.global_position - global_position
+			_yaw = rotate_toward(_yaw, atan2(-to.x, -to.z), rush_turn_speed * 2.0 * delta)
+			_speed = move_toward(_speed, rush_speed, rush_speed * 2.0 * delta)
+			_move_forward(_speed, delta, sack_radius + 0.6)
+			_tube_feeding = true
+			_tube_feed_point = Factions.aim_point(player)
+			if _tube_tip_toward(_tube_feed_point).distance_to(_tube_feed_point) <= grab_range:
+				_snatch(player)
+			elif _attack_time > grab_chase_time:
+				_grab_left = grab_cooldown * 0.5
+				_end_attack()
+		1:
+			_speed = 0.0
+			_grab_time += delta
+			var t := clampf(_grab_time / grab_reel_time, 0.0, 1.0)
+			# The reel: rearing up and back, the tip drawn in toward its maw.
+			_height_target = stand_height + 1.2 * t
+			_sway_vel -= forward * 0.6 * delta
+			var in_close := mouth + (_grab_from - mouth).normalized() * 3.0
+			_tube_feed_point = _grab_from.lerp(in_close, t * t)
+			player.held_point = _tube_tip_toward(_tube_feed_point)
+			_grab_progress = maxf(_grab_progress - grab_decay * delta, 0.0)
+			if _grab_progress >= 1.0:
+				_let_player_go(false) # broke free: just drops
+				_grab_left = grab_cooldown
+				_end_attack()
+			elif t >= 1.0:
+				_attack_fired = 2
+				_grab_time = 0.0
+				_sway_vel += forward * 7.0 # the lunge
+				_height_target = stand_height - 0.5
+		2:
+			_grab_time += delta
+			_tube_feed_point = mouth + (forward + Vector3.UP * 0.2).normalized() * proboscis_length
+			player.held_point = _tube_tip_toward(_tube_feed_point)
+			if _grab_time >= 0.22:
+				_let_player_go(true)
+				_grab_left = grab_cooldown
+				_end_attack()
+
+
+## On the end of the proboscis.
+func _snatch(player: PlayerMovement) -> void:
+	_held_player = player
+	_attack_fired = 1
+	_grab_time = 0.0
+	_grab_progress = 0.0
+	_grab_from = _tube_feed_point
+	player.grapple.release()
+	player.held_point = _tube_tip_toward(_tube_feed_point)
+	player.weapons.latch_leech(self) # clicks are tugs (tug()), its meter shows (progress())
+	_shake_near(player.global_position, 3.0, 12.0)
+	SoundPlayer.play_3d(hurt_sound, _body.global_position, get_tree().current_scene)
+
+
+## Off the tip: dropped (broke free), or flung (`thrown`).
+func _let_player_go(thrown: bool) -> void:
+	var player := _held_player
+	_held_player = null
+	if not is_instance_valid(player):
+		return
+	player.held_point = Vector3.INF
+	player.weapons.unlatch_leech(self)
+	if thrown:
+		var forward := Vector3(-sin(_yaw), 0.0, -cos(_yaw))
+		player.shove((forward + Vector3.UP * 0.35).normalized() * grab_throw_speed)
+		player.health.take_damage(grab_throw_damage, Health.NO_ATTACKER, forward, player.global_position, 1.0)
+		_shake_near(player.global_position, 4.0, 15.0)
+
+
+## The leech meter's hooks (WeaponController): a click, and how close to free.
+func tug() -> void:
+	_grab_progress = minf(_grab_progress + 1.0 / maxf(grab_clicks, 1), 1.0)
+
+
+func progress() -> float:
+	return _grab_progress
+
+
+func meter_text() -> String:
+	return "GRABBED! SPAM CLICK TO BREAK FREE!"
+
+
+## Where the proboscis tip is, reaching toward `point` (as far as it's out).
+func _tube_tip_toward(point: Vector3) -> Vector3:
+	var start := _mouth.global_position
+	return start + (point - start).normalized() * maxf(_tube_reach, 0.5)
 
 ## Rush (the Antlion Guard's charge): it rears up and blasts its horn (the
 ## tell), then sprints at you leaning forward, legs scrambling, barely able
@@ -1608,6 +1746,8 @@ func _broken_legs() -> int:
 
 
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
+	if _held_player:
+		_let_player_go(false) # dead: whoever it held drops
 	if _state == State.ATTACK:
 		_end_attack()
 	if _state == State.FEED:
@@ -2089,3 +2229,9 @@ func _shake_near(at: Vector3, strength: float, within: float) -> void:
 		var distance := player.global_position.distance_to(at)
 		if distance < within and player.get("camera") is CameraJuice:
 			(player.get("camera") as CameraJuice).shake(strength * (1.0 - distance / within))
+
+
+## Gone (freed, unloaded) while holding someone: they drop.
+func _exit_tree() -> void:
+	if _held_player:
+		_let_player_go(false)
