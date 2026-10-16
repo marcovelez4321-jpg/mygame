@@ -35,11 +35,19 @@ var home := Vector3.ZERO
 var _destination := Vector3.ZERO
 var _asleep := false
 var _check_left := 0.0
+## Awake through a fight: till this (msec), after any member's hurt.
+const FIGHT_AWAKE := 10.0
+var _fighting_until := 0
 
 
 ## Most groups have one big one (BigOnes, the user's): made big as it joins.
 func _init() -> void:
 	BigOnes.watch(self)
+	# Hear when any member's hurt (awake through the fight).
+	child_entered_tree.connect(func(member: Node) -> void:
+		var health := member.get_node_or_null(^"Health") as Health
+		if health and not health.damaged.is_connected(_on_member_hurt):
+			health.damaged.connect(_on_member_hurt))
 
 
 func _ready() -> void:
@@ -77,7 +85,9 @@ func _physics_process(delta: float) -> void:
 			member.call("set_home", home)
 		elif "home" in member:
 			member.set("home", home)
-	var near := nearest_player_distance() < sleep_distance
+	# Never asleep mid-fight (the user's bug: a gang froze -- unhittable, walk
+	# through them -- right after one of them was killed).
+	var near := nearest_player_distance() < sleep_distance or Time.get_ticks_msec() < _fighting_until
 	if near == _asleep:
 		_set_asleep(not near, members)
 
@@ -117,12 +127,29 @@ func bodies() -> Array[Node3D]:
 	return found
 
 
+## How far the nearest player is from its nearest LIVING member (not the
+## middle of every body, the dead too: corpses and a body being removed
+## dragged that away, so a gang mid-fight went to sleep). Bad positions are
+## skipped.
 func nearest_player_distance() -> float:
-	var centre := _centre()
+	var players := get_tree().get_nodes_in_group("player")
+	var points: Array[Vector3] = []
+	for body in bodies():
+		if is_instance_valid(body) and body.is_inside_tree() and Factions.is_alive_target(body) and body.global_position.is_finite():
+			points.append(body.global_position)
+	if points.is_empty():
+		points.append(home)
 	var best := INF
-	for node in get_tree().get_nodes_in_group("player"):
-		best = minf(best, (node as Node3D).global_position.distance_to(centre))
+	for node in players:
+		var at := (node as Node3D).global_position
+		for point in points:
+			best = minf(best, at.distance_to(point))
 	return best
+
+
+## A member was hurt: the group stays awake for FIGHT_AWAKE seconds.
+func _on_member_hurt(_amount: float, _attacker: int) -> void:
+	_fighting_until = Time.get_ticks_msec() + int(FIGHT_AWAKE * 1000.0)
 
 
 ## Gone: every body it's responsible for, and itself (EncounterDirector,
