@@ -1565,3 +1565,4 @@ them:
   - **CPU profile, headless:**
     - **Physics:** 6.45 ms a tick (of 16.7). Enemies take about 3.3 ms of it (83 creatures), world-chunk streaming about 1 ms, and the player about 1 ms. Everything added today is within the noise (±1 ms).
     - **Nodes:** 24.4k, including 5.8k MultiMeshes, 5k meshes, 872 barnacles, 151 particle systems and 81 lights. Rendering isn't measurable headless (frames are paced there).
+- **Grapple: half a bar a throw, no drain, no rappelling (2026-10-16).** The user's. `PlayerGrapple.fire_cost` 0.5 bars is spent when it's thrown; nothing drains while it's out or holding (the drain while attached is gone). Rappelling (S lets line out, hanging on it) and reeling (W back up) are removed with everything tied to them (the HANG state, the line length, `reel_speed`/`rappel_speed`); a perch now lasts till you jump off. Not compiled or run (the user's testing).

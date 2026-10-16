@@ -755,7 +755,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	else:
 		# Falling pulls harder than rising (Fall.MULTIPLIER): no floaty drop.
 		velocity.y -= gravity * (Fall.MULTIPLIER if velocity.y < 0.0 else 1.0) * grapple.gravity_scale() * delta
-		# Launching or perched, the grapple moves you; hanging, you can sway.
+		# Launching or perched, the grapple moves you.
 		if not grapple.holds_still():
 			var before := Vector2(velocity.x, velocity.z).length()
 			_air_move(wishdir, delta)

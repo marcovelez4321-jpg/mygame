@@ -8,8 +8,8 @@ extends Node3D
 ## Charge it, then it pulls you (docs/CLIMB_VISION.md):
 ##   CHARGE: hold right mouse; the ring shows where it'll bite. It only fires
 ##   once held at least min_charge_share of charge_time (no spamming), and
-##   only with some of the player's stamina meter left (it costs nothing to
-##   fire; holding on drains it -- the user's single meter, 2026-10-14).
+##   each throw costs fire_cost (half a stamina bar, the user's 2026-10-16);
+##   nothing drains while it's out or holding.
 ##   Let go right as it fills (good_window): a tiny extra boost, and a sound.
 ##   PULL (the user's: back to the original, Titanfall 2 style -- the straight
 ##   launch didn't feel natural): once it bites it hauls you toward the spot,
@@ -19,13 +19,9 @@ extends Node3D
 ##   boost and a second sound, flying on past.
 ##   PERCH: arriving (or pressed against something on the way, getting no
 ##   closer), you stick to the wall there.
-##   RAPPEL (back, S) lets line out and down -- you hang on it under the spot
-##   and can sway; REEL (forward, W) climbs back up it to the spot.
-##   Space lets go (with a hop). One grapple at a time: a new one only once
-##   this one's let go.
-##   While it holds you (pulling, perched, hanging, riding) the meter drains
-##   (drain_per_second: 1 a second, 10 s on a full one); empty, it lets go
-##   and you fall.
+##   You stay perched till Space lets go (with a hop). (No rappelling or
+##   reeling any more: the user's, 2026-10-16.) One grapple at a time: a new
+##   one only once this one's let go.
 ## TENDRILS (the user's, 2026-10-14; switched off for now -- tendrils_enabled
 ## -- to come back to): where it bites (on the level, not a
 ## creature), three tendrils shoot on from the spot -- fanned out ahead the
@@ -66,7 +62,7 @@ const BIG_GROUP := "grapple_big"
 ## FETCH: an item flying into your right hand (PlayerHand). CARRY: a prop up
 ## to MAX_CARRY kg hanging off the tentacle in front of you (left click
 ## throws it, right click lets go). WHIP: the Tentacle whip mutation's lash.
-enum Rope { NONE, LASH, PULL, PERCH, HANG, RIDE, MISS, FETCH, CARRY, WHIP }
+enum Rope { NONE, LASH, PULL, PERCH, RIDE, MISS, FETCH, CARRY, WHIP }
 ## Where the tendrils look: fanned ahead the way you're flying, or up and on.
 enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 
@@ -124,14 +120,11 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export var marker_aim_degrees: float = 4.0
 
 @export_group("Hold")
-## Stamina bars drained a second while it's attached to anything -- you,
-## pulled or perched or hanging or riding; an item flying in; a prop on it
-## (the user's: a bar every 3.5 s). Firing it is free (it needs some left).
-@export var drain_per_second: float = 1.0 / 3.5
-## How far off the wall you perch, and the line's speeds.
+## Stamina bars a throw costs (the user's, 2026-10-16: half a bar; nothing
+## drains while it's out or holding any more).
+@export var fire_cost: float = 0.5
+## How far off the wall you perch.
 @export var perch_standoff: float = 1.0
-@export var reel_speed: float = 3.0
-@export var rappel_speed: float = 4.5
 ## Upward speed added when you let go with Space.
 @export var release_hop: float = 2.5
 
@@ -200,8 +193,6 @@ var _pull_speed := 0.0
 ## How long the pull has made no headway against something (perch there).
 var _stalled := 0.0
 var _last_distance := INF
-## The line's length while hanging.
-var _rope_length := 0.0
 ## What it's stuck to, and where on it (in its own space, so a moving enemy
 ## or prop carries the spot along).
 var _anchor: Node3D
@@ -216,7 +207,7 @@ var _ride_wanted := false
 var _ride_prev := Vector3.ZERO
 var _ride_velocity := Vector3.ZERO
 var _attacker_id := 0
-## This tick's move input (x = strafe, y = back(+)/forward(-)): reel/rappel.
+## This tick's move input (x = strafe, y = back(+)/forward(-)).
 var _move := Vector2.ZERO
 ## The tendrils' spots: {at (world), normal, collider (what it's on)}, and
 ## where they came from (for drawing them).
@@ -319,12 +310,6 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			release()
 		else:
 			_carry(delta, origin, aim)
-	if is_attached() and not infinite_charges:
-		# Attached to anything costs stamina; out of it, it lets go (and you
-		# fall). A heavy pack drains it faster (Backpack.drain_scale()).
-		if not _player.drain_stamina(drain_per_second * delta * _player.backpack.drain_scale()):
-			release()
-			return false
 	if _rope == Rope.CARRY or _rope == Rope.FETCH:
 		return false
 
@@ -359,7 +344,7 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			if _hold >= charge_time * min_charge_share:
 				_charge_bonus = _hold >= charge_time and _hold <= charge_time + good_window
 				_fire(origin, aim)
-	elif pressed and _rope == Rope.NONE and not weapons.is_busy() and (infinite_charges or _player.has_stamina()):
+	elif pressed and _rope == Rope.NONE and not weapons.is_busy() and (infinite_charges or _player.stamina >= fire_cost):
 		if hand_free or weapons.switch_to_one_handed():
 			_coiling = true
 			_hold = 0.0
@@ -380,11 +365,11 @@ func is_out() -> bool:
 
 ## True while the line is holding you (gravity and ground movement change).
 func is_pulling() -> bool:
-	return _rope == Rope.PULL or _rope == Rope.PERCH or _rope == Rope.HANG or _rope == Rope.RIDE
+	return _rope == Rope.PULL or _rope == Rope.PERCH or _rope == Rope.RIDE
 
 
-## Attached to anything: you (pulling, perched, hanging, riding), an item
-## flying in, or a prop on it. It drains stamina all the while.
+## Attached to anything: you (pulling, perched, riding), an item flying in,
+## or a prop on it.
 func is_attached() -> bool:
 	return is_pulling() or _rope == Rope.FETCH or _rope == Rope.CARRY
 
@@ -410,12 +395,12 @@ func carry_fire(fire: bool, aim: Vector3) -> bool:
 
 
 ## True while it moves you entirely itself (perched, riding): no steering in
-## the air then. Pulled, or hanging on the line, you can still steer and sway.
+## the air then. Pulled, you can still steer.
 func holds_still() -> bool:
 	return _rope == Rope.PERCH or _rope == Rope.RIDE
 
 
-## No gravity while it pulls or holds you; hanging on the line, full.
+## No gravity while it pulls or holds you.
 func gravity_scale() -> float:
 	return 0.0 if holds_still() or _rope == Rope.PULL else 1.0
 
@@ -429,8 +414,6 @@ func apply_pull(delta: float) -> void:
 			_pull(delta)
 		Rope.PERCH:
 			_perch(delta)
-		Rope.HANG:
-			_hang(delta)
 
 
 ## Lets go without a hop (death, mantling, switching guns, out of stamina).
@@ -449,9 +432,9 @@ func release() -> void:
 
 
 func _fire(origin: Vector3, aim: Vector3) -> void:
-	if not infinite_charges and not _player.has_stamina():
+	if not infinite_charges and not _player.spend_bars(fire_cost):
 		_hold = 0.0
-		return # out of stamina: nothing to throw it with (firing itself is free)
+		return # out of stamina: nothing to throw it with
 	_power = clampf(_hold / charge_time, min_charge_share, 1.0)
 	_hold = 0.0
 	release()
@@ -656,39 +639,12 @@ func _start_perch() -> void:
 	_player.velocity = Vector3.ZERO
 
 
-## Stuck to the wall at the spot. Back (S) lets the line out: hanging under it.
+## Stuck to the wall at the spot, till you jump off (Space). (Rappelling down
+## the line and reeling back up are gone: the user's, 2026-10-16.)
 func _perch(delta: float) -> void:
 	var normal := (_anchor.global_basis * _normal_local).normalized()
 	var spot := _anchor_point() + normal * perch_standoff - Vector3.UP * 0.9
 	_player.velocity = ((spot - _player.global_position) / maxf(delta, 0.001)).limit_length(20.0)
-	if _move.y > 0.1:
-		_rope = Rope.HANG
-		_rope_length = maxf(_to_spot().length(), arrive_distance)
-
-
-## On the line under the spot: gravity and a little sway, but never further
-## than the line's length. Back (S) rappels down, forward (W) reels up --
-## all the way up, and you're perched again.
-func _hang(delta: float) -> void:
-	if _move.y > 0.1:
-		_rope_length = minf(_rope_length + rappel_speed * delta, max_range)
-	elif _move.y < -0.1:
-		_rope_length -= reel_speed * delta
-		if _rope_length <= arrive_distance:
-			_start_perch()
-			return
-	var point := _anchor_point()
-	var chest := _player.global_position + Vector3.UP * 0.9
-	var next := chest + _player.velocity * delta
-	var out := next - point
-	var stretch := out.length() - _rope_length
-	if stretch > 0.0:
-		# Taut: no more moving outward, and pulled back in to the line's length.
-		var along := out / out.length()
-		var outward := _player.velocity.dot(along)
-		if outward > 0.0:
-			_player.velocity -= along * outward
-		_player.velocity -= along * (stretch / maxf(delta, 0.001)) * 0.5
 
 
 ## From the chest to the spot it's stuck to.
@@ -698,7 +654,7 @@ func _to_spot() -> Vector3:
 
 func _let_go() -> void:
 	var was_riding := _rope == Rope.RIDE
-	var was_perched := _rope == Rope.PERCH or _rope == Rope.HANG
+	var was_perched := _rope == Rope.PERCH
 	release()
 	if was_riding:
 		_player.velocity = _ride_velocity
@@ -988,7 +944,7 @@ func rope_tip() -> Vector3:
 		Rope.MISS:
 			var t := clampf(_lash_time / maxf(_lash_total, 0.001), 0.0, 1.0)
 			return _start_point().lerp(_lash_end, sin(t * PI)) # out and snaps back
-		Rope.PULL, Rope.PERCH, Rope.HANG, Rope.RIDE, Rope.CARRY:
+		Rope.PULL, Rope.PERCH, Rope.RIDE, Rope.CARRY:
 			if is_instance_valid(_anchor):
 				return _anchor_point()
 		Rope.FETCH:

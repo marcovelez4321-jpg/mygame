@@ -129,8 +129,10 @@ before the game starts).
 
 ### Stamina back to the dash
 The dash and the **4 bars** are back exactly as before the wings (wings are
-a mutation now). The grapple drains **1 bar every 3.5 s** for as long as it's
-attached to anything.
+a mutation now). **The grapple costs half a bar a throw**, and nothing drains
+while it's out or holding (the user's, 2026-10-16, replacing the drain of a
+bar every 3.5 s). Rappelling and reeling are gone; a perch lasts till you
+jump off.
 
 **Momentum is never cut (the user's):** the dash adds 16 m/s on top of your
 speed for 0.3 s (twice as far as the old dash) with 30% more lift, then leaves
