@@ -13,6 +13,8 @@ extends RefCounted
 const CHANCE := 0.75
 const SIZE := 2.0
 const HEALTH := 2.0
+## Big spiders on top of that (the user's, 2026-10-16: 25% more).
+const BIG_SPIDER_HEALTH := 1.25
 const SPEED := 0.8
 const DAMAGE := 1.5
 const SMALL_MEAT := 1.0
@@ -104,7 +106,7 @@ static func big_spider(spider: Spider, added: bool) -> void:
 		spider.leap_damage *= DAMAGE
 		drops_meat(spider, SMALL_MEAT, false)
 		return
-	spider.health.max_health *= HEALTH / (SIZE * SIZE)
+	spider.health.max_health *= HEALTH / (SIZE * SIZE) * BIG_SPIDER_HEALTH
 	spider.health.current_health = spider.health.max_health
 	spider.speed_scale *= SPEED * sqrt(SIZE)
 
