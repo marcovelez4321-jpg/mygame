@@ -69,6 +69,10 @@ var _fungus_material: StandardMaterial3D
 var _decoys: Array[Node3D] = []
 
 
+## Its pieces are drawn only this close.
+const SEEN_RANGE := 250.0
+
+
 func _ready() -> void:
 	add_to_group(GROUP)
 	_grow.call_deferred() # once the level around it exists
@@ -144,6 +148,14 @@ func _grow() -> void:
 		var hit := _surface_near(up, radius * 1.3)
 		if not hit.is_empty():
 			_add_decoy(hit.position, hit.normal)
+	# Drawn only within SEEN_RANGE (small things: invisible further off; a
+	# few hundred of these, drawn from anywhere, added up -- the user's frame
+	# drops by the Stack).
+	for node in find_children("*", "GeometryInstance3D", true, false):
+		var geometry := node as GeometryInstance3D
+		if geometry.visibility_range_end <= 0.0:
+			geometry.visibility_range_end = SEEN_RANGE
+			geometry.visibility_range_end_margin = SEEN_RANGE * 0.1
 
 
 ## A look-only barnacle: just the model, in the PS1 look, the nest's skin.

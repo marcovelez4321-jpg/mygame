@@ -131,15 +131,14 @@ func _process(_delta: float) -> void:
 		_data = terrain.call("get_data")
 		if _data == null:
 			return
-	var started := Time.get_ticks_usec()
-	while not _jobs.is_empty():
+	# Shares the frame's budget with everything else that spawns (FrameBudget):
+	# at least one job a frame, never past the budget.
+	while not _jobs.is_empty() and not FrameBudget.over():
 		var job: Array = _jobs.pop_front()
 		var root: Node3D = job[1] if is_instance_valid(job[1]) else null
 		if root == null or not root.is_inside_tree():
 			continue # the chunk's already gone again
 		_grow(species[job[2]], job[2], job[0], job[3], root, _blocked_areas(root), _buildings(root))
-		if Time.get_ticks_usec() - started > grow_budget_ms * 1000.0:
-			return
 
 
 ## Places one kind's groups and loners in a quarter of `chunk` and draws them.

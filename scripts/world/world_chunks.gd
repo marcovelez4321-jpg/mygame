@@ -61,8 +61,10 @@ func _process(_delta: float) -> void:
 			ResourceLoader.load_threaded_request(path, "PackedScene")
 			_chunks[chunk] = path
 		else:
+			# Empty land: still a chunk (procedural content goes in) -- queued like
+			# the rest, so a run of them never lands in one frame.
 			_chunks[chunk] = ""
-			_add_chunk(chunk, null) # empty land: still a chunk (procedural content goes in)
+			_ready_to_add.append(chunk)
 	# Notice loads that finished.
 	for chunk in _chunks:
 		var held: Variant = _chunks[chunk]
@@ -76,11 +78,15 @@ func _process(_delta: float) -> void:
 				_add_chunk(chunk, null)
 	# Add a few, nearest-first is not needed at this size; oldest first.
 	var added := 0
-	while added < max_adds_per_frame and not _ready_to_add.is_empty():
+	# Within the shared frame budget too (FrameBudget), at least one a frame.
+	while added < max_adds_per_frame and not _ready_to_add.is_empty() and not FrameBudget.over():
 		var chunk: Vector2i = _ready_to_add.pop_front()
 		var path: Variant = _chunks.get(chunk)
 		if path is String and path != "":
 			_add_chunk(chunk, ResourceLoader.load_threaded_get(path) as PackedScene)
+			added += 1
+		elif path is String:
+			_add_chunk(chunk, null) # empty land
 			added += 1
 	# Drop chunks no player's near any more.
 	for chunk in _chunks.keys():

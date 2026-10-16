@@ -35,6 +35,9 @@ const GROWTH_SHADER := preload("res://shaders/alien_growth.gdshader")
 const LID_OPEN := 1.25
 
 static var _material: ShaderMaterial
+## Drawn (and animated, unless someone's near) only this close.
+const SEEN_RANGE := 150.0
+var _unseen := false
 static var _socket_mesh: ArrayMesh
 static var _lid_mesh: ArrayMesh
 static var _ball_meshes := {}
@@ -81,6 +84,14 @@ func _ready() -> void:
 		_material.set_shader_parameter("sway_amount", 0.0)
 	for i in eye_count:
 		_eyes.append(_grow_eye(random, i))
+	# Drawn only within SEEN_RANGE (they're half a metre at most: invisible
+	# further off). There were ~2000 eye meshes drawn from anywhere -- most of
+	# the Stack's draw calls (the user's frame drops by it).
+	for node in find_children("*", "GeometryInstance3D", true, false):
+		var geometry := node as GeometryInstance3D
+		geometry.visibility_range_end = SEEN_RANGE
+		geometry.visibility_range_end_margin = SEEN_RANGE * 0.1
+		geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 ## One eye: a flesh socket on the ground, the ball sitting up out of it, its
@@ -144,6 +155,10 @@ func _process(delta: float) -> void:
 	if _scan_left <= 0.0:
 		_scan_left = 0.25
 		_target = _nearest_player()
+		var camera := get_viewport().get_camera_3d()
+		_unseen = camera == null or camera.global_position.distance_squared_to(global_position) > SEEN_RANGE * SEEN_RANGE
+	if _unseen and _target == null:
+		return # not drawn and nobody near: nothing to animate
 	var look := Factions.aim_point(_target) + Vector3.UP * 0.5 if _target else Vector3.INF # their face
 	if Time.get_ticks_msec() < _stare_until and global_position.distance_to(_stare_point) < _stare_reach:
 		look = _stare_point
