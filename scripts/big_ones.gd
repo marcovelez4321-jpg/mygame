@@ -55,7 +55,7 @@ static func _big_person(person: Enemy) -> void:
 	person.attack_damage *= DAMAGE
 	_grow_person(person)
 	_more_health(person)
-	drops_meat(person, HUMAN_MEAT, false)
+	drops_meat(person, HUMAN_MEAT, false, true) # bursts, no ragdoll (the user's)
 
 
 static func _grow_person(person: Node) -> void:
@@ -72,6 +72,12 @@ static func make_puppet_big(node: Node) -> void:
 	node.set_meta(&"big", true)
 	if node is Enemy:
 		_grow_person(node)
+		# It bursts on the client's screen too (no ragdoll there either).
+		node.ready.connect(func() -> void:
+			var health := node.get_node_or_null(^"Health") as Health
+			if health:
+				health.died.connect(func(_a: int, _c: bool) -> void: _burst(node), CONNECT_ONE_SHOT)
+		, CONNECT_ONE_SHOT)
 
 
 ## A roach twice the size (FlyingRoach._apply_size() does its look), before
@@ -139,8 +145,10 @@ static func _grow_shape(shape: CollisionShape3D) -> void:
 
 
 ## When `body` dies, a meat chunk of `weight` kg lands where it died (a
-## boss's where the last blow landed: its body is long).
-static func drops_meat(body: Node, weight: float, boss: bool) -> void:
+## boss's where the last blow landed: its body is long). `burst` (a big
+## person, the user's): no ragdoll -- it bursts in its own blood and the
+## chunk is thrown out with the blast.
+static func drops_meat(body: Node, weight: float, boss: bool, burst: bool = false) -> void:
 	if not boss:
 		body.set_meta(&"big", true) # (NetEntities makes its puppet big too)
 	var connect_it := func() -> void:
@@ -148,14 +156,37 @@ static func drops_meat(body: Node, weight: float, boss: bool) -> void:
 		if health == null:
 			return
 		health.died.connect(func(_attacker: int, _critical: bool) -> void:
-			if body.has_meta(&"culled") or NetEntities.is_puppet(body) or (Network.is_online() and not body.multiplayer.is_server()):
+			var culled := body.has_meta(&"culled")
+			if burst and not culled:
+				_burst(body)
+			if culled or NetEntities.is_puppet(body) or (Network.is_online() and not body.multiplayer.is_server()):
 				return # the host's chunk is the one (it reaches clients as a puppet)
-			var at := (body as Node3D).global_position + Vector3.UP * 0.5
+			var at := (body as Node3D).global_position + Vector3.UP * (1.2 if burst else 0.5)
 			if boss and health.last_hit_position != Vector3.ZERO:
 				at = health.last_hit_position + Vector3.UP * 0.5
-			CarryItem.spawn_meat.call_deferred(body, at, weight, boss)
+			_spawn_chunk.call_deferred(body.get_tree().current_scene, at, weight, boss, burst)
 		, CONNECT_ONE_SHOT)
 	if body.is_node_ready():
 		connect_it.call()
 	else:
 		body.ready.connect(connect_it, CONNECT_ONE_SHOT)
+
+
+## Gone in a burst of its own blood: hidden at once (no ragdoll shows) and
+## freed next frame. On every machine (a puppet bursts too).
+static func _burst(body: Node) -> void:
+	var at := (body as Node3D).global_position + Vector3.UP * 1.2
+	var blood: Variant = body.get(&"blood_color")
+	BloodFX.spawn_mutation_explosion(body.get_tree().current_scene, at, blood if blood is Color else BloodFX.BLOOD_COLOR)
+	(body as Node3D).visible = false
+	body.process_mode = Node.PROCESS_MODE_DISABLED
+	body.queue_free.call_deferred()
+
+
+static func _spawn_chunk(world: Node, at: Vector3, weight: float, boss: bool, thrown: bool) -> void:
+	if world == null:
+		return
+	var chunk := CarryItem.spawn_meat(world, at, weight, boss)
+	if thrown:
+		var out := Vector2.from_angle(randf() * TAU) * randf_range(2.0, 4.0)
+		chunk.linear_velocity = Vector3(out.x, randf_range(5.0, 7.0), out.y)

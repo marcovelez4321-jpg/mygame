@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="BackpackHold" format=3 uid="uid://bpyueokfnd010"]
+[gd_resource type="Resource" script_class="BackpackHold" format=3]
 
-[ext_resource type="Script" uid="uid://byy4mh5ga72iy" path="res://scripts/backpack_hold.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/backpack_hold.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
@@ -14,11 +14,11 @@ fist = 0.8090409878787908
 finger_curl = PackedFloat32Array(0, 0, 0, 0, 0)
 elbow_direction = Vector3(-0.22675006, -0.3614198, 0.9044115)
 item_scales = {
-"BULLETS": 1.5513282159785162,
-"CAMP_KIT": 1.2762815625000004,
-"GRENADES": 0.613913253540759,
+"BULLETS": 1.4071004226562505,
+"CAMP_KIT": 1.2155062500000002,
+"GRENADES": 0.5303213506452943,
 "GUN": 3.0,
-"PILLS": 1.4071004226562505,
-"ROCKETS": 0.3957339570166503,
-"SHELLS": 1.2155062500000002
+"PILLS": 1.0,
+"ROCKETS": 3.0,
+"SHELLS": 0.9070294784580498
 }

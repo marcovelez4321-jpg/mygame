@@ -46,6 +46,7 @@ var look_values: Dictionary = {}
 
 
 func _ready() -> void:
+	GameFont.apply() # every text's font (res://ui/game_font.tres)
 	load_settings()
 	apply_all()
 	PS1Look.watch_enemies(get_tree()) # every enemy through the PS1 shader

@@ -20,6 +20,13 @@ extends RigidBody3D
 
 func _ready() -> void:
 	add_to_group(InteractHighlight.GROUP) # outlined when you look at it
+	# Twice as big as before (the user's: easy to spot), body and all.
+	for child in get_children():
+		if child is CollisionShape3D:
+			BigOnes._grow_shape(child as CollisionShape3D)
+		elif child is Node3D and child != _pickup_area:
+			(child as Node3D).scale *= 2.0
+			(child as Node3D).position *= 2.0
 	_pickup_area.body_entered.connect(_on_body_entered)
 
 

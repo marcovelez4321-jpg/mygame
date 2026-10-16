@@ -324,6 +324,8 @@ func _ready() -> void:
 ## per look and kept (_hand_looks), so picking things up never rebuilds.
 const HAND_TEMPLATE := preload("res://weapons/pills.tres")
 const HAND_MAX_SIZE := 0.3
+## Where a held kind sits until it has a placement of its own: the RPG round's.
+const HAND_DEFAULT := "res://weapons/hand/rockets.tres"
 var _hand_weapon: WeaponData
 var _hands_empty := false
 ## Starving (HungerCues sets it, 0..1): the hands shake, TREMBLE_AMOUNT (m).
@@ -342,7 +344,13 @@ func _on_hand_changed(data: Dictionary) -> void:
 		_hands_empty = true
 		if is_instance_valid(_model):
 			_model.visible = false
+		if is_instance_valid(_left_model):
+			_left_model.visible = false # (the second Uzi goes too)
 		if _fp_arms:
+			# Dual wielding off while they're stowed: the left hand mirrors the
+			# right in it, and the right's away -- the left (grapple, bag) is its
+			# own again (the user's). _pose_arms() sets it back when a gun's out.
+			_fp_arms.set_dual(false)
 			_fp_arms.set_right_hidden(true)
 		return
 	_hands_empty = false
@@ -363,8 +371,19 @@ func _hand_look(data: Dictionary) -> WeaponData:
 	var key := "%d|%s|%s|%s" % [data.get("kind", -1), CarryItem.is_rotten_data(data), data.get("weapon", ""), data.get("mutation", "")]
 	if _hand_looks.has(key):
 		return _hand_looks[key]
-	var look := HAND_TEMPLATE.duplicate() as WeaponData
-	look.weapon_name = "Hand"
+	# Its own placement file per kind (the user's: tune where ammo, pills... sit
+	# in the hand with the same keys as a gun -- F2, then F3 saves it there).
+	var kind_index: int = data.get("kind", -1)
+	var kind_name: String = "pod" if kind_index == CarryItem.POD else (Backpack.Kind.keys()[kind_index + 1] as String).to_lower()
+	var path := "res://weapons/hand/%s.tres" % kind_name
+	var path_to_load := path
+	# None of its own yet: where the RPG round sits (the user's tuned one).
+	if not ResourceLoader.exists(path) and ResourceLoader.exists(HAND_DEFAULT):
+		path_to_load = HAND_DEFAULT
+	var saved := load(path_to_load) as WeaponData if ResourceLoader.exists(path_to_load) else null
+	var look := (saved if saved else HAND_TEMPLATE).duplicate() as WeaponData
+	look.take_over_path(path)
+	look.weapon_name = "Hand: %s" % kind_name
 	look.heal_item = -1
 	look.one_handed = true
 	look.viewmodel_scene = _hand_scene(data)
@@ -375,16 +394,40 @@ func _hand_look(data: Dictionary) -> WeaponData:
 ## The thing as a little scene of its own, sized for the hand.
 func _hand_scene(data: Dictionary) -> PackedScene:
 	var root := Node3D.new()
-	var model := CarryItem.model_for(data, _weapons.grenade_weapon())
-	if model == null:
-		model = Node3D.new()
+	var source := CarryItem.model_for(data, _weapons.grenade_weapon())
+	# Flattened into plain mesh copies (the user's bug: ammo, grenades and pills
+	# -- whole imported scenes -- were lost packing them; the RPG round, a
+	# plain mesh, showed).
+	var model := Node3D.new()
 	root.add_child(model)
+	if source:
+		var holder := Node3D.new()
+		holder.add_child(source)
+		for node in holder.find_children("*", "MeshInstance3D", true, false):
+			var part := node as MeshInstance3D
+			if part.mesh == null:
+				continue
+			var copy := MeshInstance3D.new()
+			copy.mesh = part.mesh
+			copy.material_override = part.material_override
+			for surface in part.mesh.get_surface_count():
+				copy.set_surface_override_material(surface, part.get_active_material(surface))
+			var place := Transform3D.IDENTITY
+			var walk: Node = part
+			while walk and walk != holder:
+				place = (walk as Node3D).transform * place
+				walk = walk.get_parent()
+			copy.transform = place
+			model.add_child(copy)
+		holder.free()
 	var box := BackpackView._bounds(model)
 	var longest := maxf(box.size.x, maxf(box.size.y, box.size.z))
 	var size := minf(CarryItem.size_of(data), HAND_MAX_SIZE)
 	model.scale *= size / maxf(longest, 0.0001)
 	for node in root.find_children("*", "", true, false):
 		node.owner = root
+		if node is GeometryInstance3D:
+			(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # (no shadow from your hand)
 	var scene := PackedScene.new()
 	scene.pack(root)
 	root.free()
@@ -1938,7 +1981,16 @@ func _save_weapon() -> void:
 	# Keep the file's uid: other scenes may point at the weapon by it, and a
 	# plain save hands the file a new one.
 	var uid := ResourceLoader.get_resource_uid(weapon.resource_path)
+	# A hand placement (weapons/hand/): saved without the model it was shown
+	# with (made fresh each time from the item).
+	var hand_scene: PackedScene = null
+	if weapon.resource_path.begins_with("res://weapons/hand/"):
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://weapons/hand"))
+		hand_scene = weapon.viewmodel_scene
+		weapon.viewmodel_scene = null
 	var result := ResourceSaver.save(weapon, weapon.resource_path)
+	if hand_scene:
+		weapon.viewmodel_scene = hand_scene
 	if result == OK and uid != ResourceUID.INVALID_ID:
 		ResourceSaver.set_uid(weapon.resource_path, uid)
 	_update_label("Saved to %s" % weapon.resource_path if result == OK else "SAVE FAILED (error %d)" % result)

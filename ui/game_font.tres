@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="GameFont" format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/game_font.gd" id="1_font"]
+
+[resource]
+script = ExtResource("1_font")

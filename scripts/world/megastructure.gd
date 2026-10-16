@@ -77,6 +77,13 @@ extends Node3D
 @export var fire_spots := PackedVector3Array()
 @export var fire_outs := PackedVector3Array()
 @export var fire_reach: float = 1200.0
+## Every lit window room's box (same order as fire_spots).
+@export var room_boxes: Array[AABB] = []
+## Each time it's played, each room rolls these (the user's: 50% each):
+## a barrel, a radio, a pill bottle -- the host's roll, the same for everyone.
+@export_range(0.0, 1.0, 0.05) var fire_chance: float = 0.5
+@export_range(0.0, 1.0, 0.05) var radio_chance: float = 0.5
+@export_range(0.0, 1.0, 0.05) var pill_chance: float = 0.5
 ## (Kept short: each gang is 6-12 people with ragdolls; only the ones round
 ## you are there.)
 @export var gang_reach: float = 100.0
@@ -119,6 +126,11 @@ var _web_hordes := {}
 var _gangs := {}
 ## Fire index (fire_spots, then gang_spots after them) -> its barrel.
 var _fires := {}
+## This play's roll (-1: not known yet -- a client waits for the host's),
+## and the rooms it gave a barrel.
+var _room_seed := -1
+var _fire_rooms := {}
+const PILLS_SCENE := preload("res://scenes/pills_pickup.tscn")
 
 
 func _ready() -> void:
@@ -138,6 +150,10 @@ func _ready() -> void:
 		lair.set_meta(&"hunger_scale", 2.0) # its home: it gets hungry here twice as fast
 	if multiplayer.is_server() and barnacle_nests > 0:
 		_grow_nests.call_deferred()
+	if not Network.is_online() or multiplayer.is_server():
+		_roll_rooms(randi() % 1000000 + 1)
+	else:
+		_net_ask_rooms.rpc_id(1)
 
 
 ## Barnacle nests on it: rays from outside in at the walls (half), and from
@@ -227,6 +243,60 @@ func _update_floor_nests() -> void:
 			_floor_nests.erase(i)
 
 
+## This play's rooms (the user's: random each time): each lit window room
+## rolls a barrel, a radio and a pill bottle (fire_chance, radio_chance,
+## pill_chance). The radios and pills are made now; the barrels as players
+## come near (_update_fires).
+func _roll_rooms(seed_value: int) -> void:
+	if _room_seed != -1:
+		return
+	_room_seed = seed_value
+	var dice := RandomNumberGenerator.new()
+	dice.seed = seed_value
+	var radios := Node3D.new()
+	radios.name = "RoomRadios"
+	add_child(radios)
+	for i in fire_spots.size():
+		var box: AABB = room_boxes[i] if i < room_boxes.size() else AABB(fire_spots[i] - Vector3(3, 0, 3), Vector3(6, 3, 6))
+		if dice.randf() < fire_chance:
+			_fire_rooms[i] = true
+		var radio_roll := dice.randf()
+		var radio_at := _on_room_floor(dice, box)
+		var radio_turn := dice.randf() * TAU
+		var radio_model := dice.randi()
+		if radio_roll < radio_chance:
+			var radio := Radio.new()
+			radio.model_index = radio_model % Radio.MODELS.size()
+			radio.position = radio_at + Vector3.UP * 0.8
+			radio.rotation.y = radio_turn
+			radios.add_child(radio)
+		var pill_roll := dice.randf()
+		var pill_at := _on_room_floor(dice, box)
+		if pill_roll < pill_chance:
+			var pills := PILLS_SCENE.instantiate() as Node3D
+			pills.position = pill_at + Vector3.UP * 0.5
+			add_child(pills)
+
+
+## A random point on a room's floor, clear of its walls (local).
+static func _on_room_floor(dice: RandomNumberGenerator, box: AABB) -> Vector3:
+	var inset := minf(2.5, minf(box.size.x, box.size.z) * 0.3)
+	return Vector3(dice.randf_range(box.position.x + inset, box.end.x - inset), box.position.y,
+			dice.randf_range(box.position.z + inset, box.end.z - inset))
+
+
+## A client asks the host for this play's roll.
+@rpc("any_peer", "call_remote", "reliable")
+func _net_ask_rooms() -> void:
+	if multiplayer.is_server() and _room_seed != -1:
+		_net_rooms.rpc_id(multiplayer.get_remote_sender_id(), _room_seed)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_rooms(seed_value: int) -> void:
+	_roll_rooms(seed_value)
+
+
 ## The barrels near a player lit; the ones nobody's near put out (every
 ## machine, once a second: squared distances only).
 func _update_fires() -> void:
@@ -236,6 +306,8 @@ func _update_fires() -> void:
 	for i in count:
 		var local: Vector3
 		var out := Vector3.ZERO
+		if i < fire_spots.size() and not _fire_rooms.has(i):
+			continue # not one of this play's barrel rooms
 		if i < fire_spots.size():
 			local = fire_spots[i]
 			out = fire_outs[i] if i < fire_outs.size() else Vector3.ZERO

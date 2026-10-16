@@ -151,6 +151,7 @@ func take_mutation(mutation: StringName) -> void:
 	mutations.append(mutation)
 	points = maxi(points - POINTS_TO_MUTATE, 0)
 	FleshTree.grow(1)
+	FleshTree.mutation_eaten() # the other pods shrivel now
 	_announce_trip(false)
 	_changed()
 	if points >= POINTS_TO_MUTATE:

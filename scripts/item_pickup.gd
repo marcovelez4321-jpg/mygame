@@ -49,7 +49,7 @@ func _build() -> void:
 	if model_scene == null:
 		return
 	var model := model_scene.instantiate() as Node3D
-	model.scale = Vector3.ONE * model_scale
+	model.scale = Vector3.ONE * model_scale * 2.0 # (twice as big again: the user's)
 	add_child(model)
 	var bounds := AABB()
 	var has_bounds := false

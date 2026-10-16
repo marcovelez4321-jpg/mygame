@@ -121,13 +121,21 @@ static func ripen_for(player: PlayerMovement) -> void:
 	_tree._net_ripened.rpc()
 
 
-## A pod was grappled off: the others shrivel and fade.
+## A pod was grappled off: the others stay till one's eaten (the user's:
+## you read it in your hand first -- mutation_eaten()).
 static func pod_taken(pod: CarryItem) -> void:
 	if _tree == null:
 		return
 	pod.remove_meta(&"on_tree") # (the hand flies it in; it stays frozen till then)
+	_tree._pods.erase(pod)
+
+
+## A pod was eaten: the ones left on the tree shrivel and fade.
+static func mutation_eaten() -> void:
+	if _tree == null:
+		return
 	for other in _tree._pods:
-		if is_instance_valid(other) and other != pod:
+		if is_instance_valid(other):
 			other.shrivel()
 	_tree._pods.clear()
 

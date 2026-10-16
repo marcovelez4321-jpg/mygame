@@ -250,6 +250,8 @@ var pills := 0
 var bandages := 0
 ## Something's in your right hand (set_hand()): the gun's away.
 var hand_busy := false
+## The click that used the item in your hand is still held: no shooting.
+var _block_fire := false
 ## The gun's in the backpack and your hands are empty (stow_gun()).
 var gun_stowed := false
 ## hand_changed's word for "nothing in the hand, no gun either".
@@ -624,6 +626,11 @@ func add_ammo(type: WeaponData.AmmoType, amount: int, emit_signal: bool = true) 
 ## select_weapon is an inventory index, or -1 for "no change". aim = right
 ## mouse held, quick_throw = Q held.
 func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon: int, delta: float, origin: Vector3, direction: Vector3, attacker_id: int) -> void:
+	if _block_fire:
+		if fire:
+			fire = false # still the click that used the item in hand
+		else:
+			_block_fire = false
 	var fire_pressed := fire and not _fire_held_prev
 	_fire_held_prev = fire
 	if has_leech():
@@ -730,6 +737,14 @@ func is_busy() -> bool:
 ## (hand_changed: its CarryItem data; {} when the gun comes back; EMPTY_HAND
 ## when the gun's in the backpack and the hand has nothing).
 func set_hand(data: Dictionary) -> void:
+	if hand_busy and data.is_empty():
+		# Back from using what was in the hand (the user's): the gun comes up
+		# with a draw, and the click that used it never fires it -- not till
+		# the button's let go and pressed again.
+		_block_fire = true
+		var gun := current_weapon()
+		if gun:
+			_cooldown = maxf(_cooldown, gun.draw_time)
 	hand_busy = not data.is_empty()
 	if data.is_empty() and gun_stowed:
 		hand_changed.emit(EMPTY_HAND)
@@ -766,6 +781,37 @@ func equip_gun(index: int) -> void:
 			hand_changed.emit({})
 	inventory_changed.emit()
 
+
+## G with nothing in your right hand (the user's): the gun in your hands
+## drops at your feet with the rounds in it; your other gun comes out, or
+## your hands are empty. `spawn`: make the pickup (the host's call).
+func drop_gun(spawn: bool) -> void:
+	var gun := gun_in_hand()
+	if gun == null or not is_gun(gun) or is_busy():
+		return
+	var loaded: int = _magazine.get(gun, gun.magazine_size)
+	var index := _current
+	_owned.remove_at(index)
+	_magazine.erase(gun)
+	_pairs.erase(gun)
+	if spawn:
+		var pickup := WeaponPickup.drop(gun, _body as Node3D)
+		if pickup:
+			pickup.ammo_amount = loaded
+	_current = 0
+	var other := -1
+	for i in _owned.size():
+		if is_gun(_owned[i]):
+			other = i
+			break
+	inventory_changed.emit()
+	if other >= 0:
+		_current = -1 # so _select() treats it as a fresh draw
+		_select(other)
+	else:
+		_current = 0
+		gun_stowed = true
+		hand_changed.emit(EMPTY_HAND)
 
 ## The gun in your hands (null: it's in the backpack, or something else is
 ## in your hand).

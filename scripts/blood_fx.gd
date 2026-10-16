@@ -308,8 +308,9 @@ static func _get_trail_mesh(settings: BloodTrailSettings) -> TubeTrailMesh:
 ## read as something violently bursting, not just a bigger version of a
 ## normal kill's spray. Called once, from enemy_ragdoll.gd's
 ## _explode_and_spawn_mutant().
-static func spawn_mutation_explosion(world: Node, center: Vector3) -> void:
-	_spawn_blast_core(world, center)
+## color: the body's own blood (a big one bursting: BigOnes).
+static func spawn_mutation_explosion(world: Node, center: Vector3, color: Color = Color(0, 0, 0, 0)) -> void:
+	_spawn_blast_core(world, center, color)
 	for i in MUTATION_ARC_COUNT:
 		# Evenly spaced base angle with random jitter mixed in, so the arcs
 		# fan out in every direction but don't look like a perfect,
@@ -317,14 +318,14 @@ static func spawn_mutation_explosion(world: Node, center: Vector3) -> void:
 		var angle: float = (TAU / MUTATION_ARC_COUNT) * i + randf_range(-0.4, 0.4)
 		var horizontal := Vector3(cos(angle), 0.0, sin(angle))
 		var distance := randf_range(MUTATION_ARC_MIN_DISTANCE, MUTATION_ARC_MAX_DISTANCE)
-		_spawn_blood_arc(world, center, horizontal, distance)
+		_spawn_blood_arc(world, center, horizontal, distance, color)
 
 
 ## The central flash: bigger and brighter than a normal impact spray, thrown
 ## in every direction (spread 180, no single surface normal to kick off of)
 ## instead of one directional cone -- this is what reads as "burst" rather
 ## than "sprayed".
-static func _spawn_blast_core(world: Node, center: Vector3) -> void:
+static func _spawn_blast_core(world: Node, center: Vector3, color: Color = Color(0, 0, 0, 0)) -> void:
 	var particles := GPUParticles3D.new()
 	particles.amount = 60
 	particles.lifetime = 0.6
@@ -340,7 +341,7 @@ static func _spawn_blast_core(world: Node, center: Vector3) -> void:
 	mat.gravity = Vector3(0.0, -9.8, 0.0)
 	mat.scale_min = 0.4
 	mat.scale_max = 0.9
-	mat.color = MUTATION_BLAST_COLOR
+	mat.color = MUTATION_BLAST_COLOR if color.a <= 0.0 else color
 	particles.process_material = mat
 
 	world.add_child(particles)
@@ -356,7 +357,7 @@ static func _spawn_blast_core(world: Node, center: Vector3) -> void:
 ## "approximate, not a true per-particle trace" technique _pool_landing_spot()
 ## uses, just a single check since this is one one-shot burst, not a
 ## sustained spray to keep re-checking.
-static func _spawn_blood_arc(world: Node, center: Vector3, horizontal: Vector3, distance: float) -> void:
+static func _spawn_blood_arc(world: Node, center: Vector3, horizontal: Vector3, distance: float, color: Color = Color(0, 0, 0, 0)) -> void:
 	var particles := GPUParticles3D.new()
 	particles.amount = 14
 	particles.lifetime = 0.9
@@ -372,7 +373,7 @@ static func _spawn_blood_arc(world: Node, center: Vector3, horizontal: Vector3, 
 	mat.gravity = Vector3(0.0, -14.0, 0.0)
 	mat.scale_min = 0.25
 	mat.scale_max = 0.55
-	mat.color = BLOOD_COLOR
+	mat.color = BLOOD_COLOR if color.a <= 0.0 else color
 	particles.process_material = mat
 
 	world.add_child(particles)
@@ -390,7 +391,7 @@ static func _spawn_blood_arc(world: Node, center: Vector3, horizontal: Vector3, 
 	down_query.collision_mask = EnemyRagdoll.WORLD_MASK
 	var down_result := space.intersect_ray(down_query)
 	if not down_result.is_empty():
-		spawn_splatter(world, down_result.position, down_result.normal, randf_range(0.7, 1.1))
+		spawn_splatter(world, down_result.position, down_result.normal, randf_range(0.7, 1.1), BLOOD_COLOR if color.a <= 0.0 else color)
 
 
 ## A blood decal stuck to whatever surface is at `position`, facing away

@@ -26,6 +26,11 @@ const COOK_EVERY := 1.0
 const AGE_EVERY := 120.0
 ## Meat's density (water's): a chunk's size from its weight.
 const MEAT_DENSITY := 1000.0
+## How much bigger than life a chunk is in the world (the user's: 3x).
+const MEAT_SIZE := 3.0
+## Every other thing out in the world, how much bigger than life (the user's:
+## twice, so they're easy to spot -- guns stay real size).
+const ITEM_SIZE := 2.0
 ## Seen (and its flies) out to this far.
 const SEEN_RANGE := 60.0
 const FLIES_RANGE := 15.0
@@ -59,7 +64,10 @@ var mutation: StringName
 var _model: Node3D
 var _shape: CollisionShape3D
 var _flies: GPUParticles3D
-var _label: Label3D
+## Whoever just dropped it: ignored till they've stepped off it.
+var ignore: Node
+## Walk into it and it's in your bag (the user's: like the old pickups).
+const PICKUP_RADIUS := 1.0
 var _shown := -1
 var _cook_left := 0.0
 var _age_left := AGE_EVERY
@@ -90,8 +98,22 @@ static func spawn(where: Node, at: Vector3, data: Dictionary) -> CarryItem:
 func _place(where: Node, at: Vector3) -> CarryItem:
 	var level := where.get_tree().current_scene if where.is_inside_tree() else null
 	(level if level else where).add_child(self)
-	global_position = at
+	global_position = _above_ground(at)
 	return self
+
+
+## Never made inside the ground (the user's: chunks clipped through the
+## terrain): lifted onto it if t is below it.
+func _above_ground(at: Vector3) -> Vector3:
+	if kind == POD:
+		return at # (hangs off a limb: never moved)
+	var query := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 3.0, at + Vector3.DOWN * 3.0)
+	query.collision_mask = 1
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return at
+	var floor_y := (hit.position as Vector3).y + world_size() * 0.5
+	return Vector3(at.x, maxf(at.y, floor_y), at.z)
 
 
 ## What it is, as plain data (the hand, the backpack, the network).
@@ -143,6 +165,7 @@ func _ready() -> void:
 	can_sleep = true
 	_cook_left = randf() * COOK_EVERY # a pile of them don't all look at once
 	_refresh_look()
+	_make_pickup_zone()
 	# Only fresh meat on the host has anything to do (age, cook).
 	set_physics_process(kind == Backpack.Kind.MEAT and not NetEntities.is_puppet(self) \
 			and (not Network.is_online() or multiplayer.is_server()))
@@ -209,6 +232,44 @@ static func cook(target: Variant, step: float, at: Vector3) -> bool:
 	return false
 
 
+## Walking into it puts it in your backpack (the host's; pods are grapple
+## only). A thing just dropped waits till its dropper steps off it.
+func _make_pickup_zone() -> void:
+	if kind == POD or NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
+		return
+	var zone := Area3D.new()
+	zone.collision_layer = 0
+	zone.monitorable = false
+	var shape := CollisionShape3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = PICKUP_RADIUS
+	shape.shape = sphere
+	zone.add_child(shape)
+	add_child(zone)
+	zone.body_entered.connect(_on_walked_into)
+	zone.body_exited.connect(func(body: Node3D) -> void:
+		if body == ignore:
+			ignore = null)
+
+
+func _on_walked_into(body: Node3D) -> void:
+	var player := body as PlayerMovement
+	if player == null or body == ignore or player.is_dead() or has_meta(&"on_tree") or has_meta(&"fetched"):
+		return
+	var item := to_data()
+	if not player.hand.store(item):
+		return # no room: it stays
+	player.hand.tell_owner_stored(item)
+	if player.is_multiplayer_authority():
+		MapIO.show_pickup(get_tree(), "+ %s" % _pickup_name())
+	queue_free()
+
+
+func _pickup_name() -> String:
+	if kind == POD:
+		return "Pod"
+	return (Backpack.Kind.keys()[kind + 1] as String).capitalize()
+
 ## A pod left on the Flesh Tree when another was taken: it withers and goes.
 func shrivel() -> void:
 	remove_from_group(InteractHighlight.GROUP)
@@ -219,26 +280,10 @@ func shrivel() -> void:
 	fade.tween_callback(queue_free)
 
 
-## Outlined (InteractHighlight): a pod also says what it holds.
-func set_highlighted(on: bool) -> void:
-	if kind != POD:
-		return
-	if on and _label == null:
-		var info: Array = Virus.MUTATIONS.get(mutation, ["?", ""])
-		_label = Label3D.new()
-		_label.text = "%s\n%s" % [info[0], info[1]]
-		_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_label.no_depth_test = false # (hidden behind the tree, not seen through it)
-		_label.fixed_size = false # world-sized: small, and smaller further off
-		_label.pixel_size = 0.003
-		_label.font_size = 24
-		_label.outline_size = 8
-		_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.85)
-		_label.render_priority = 10
-		_label.position = Vector3.UP * 1.1 # above the pod, not over it
-		add_child(_label)
-	if _label:
-		_label.visible = on
+## Outlined (InteractHighlight). (A pod used to say what it holds here; now
+## you read it once it's in your hand -- the user's.)
+func set_highlighted(_on: bool) -> void:
+	pass
 
 
 # ---- Look -------------------------------------------------------------------------------
@@ -283,14 +328,15 @@ static func size_of(data: Dictionary) -> float:
 	var item_kind: int = data.get("kind", Backpack.Kind.NONE)
 	match item_kind:
 		Backpack.Kind.MEAT, Backpack.Kind.COOKED_MEAT:
-			return pow(float(data.get("meat_weight", 1.0)) / MEAT_DENSITY, 1.0 / 3.0) * 1.6 # a lump's longest side
+			# A lump's longest side, three times life size (the user's: easy to see).
+			return pow(float(data.get("meat_weight", 1.0)) / MEAT_DENSITY, 1.0 / 3.0) * 1.6 * MEAT_SIZE
 		POD:
 			return 1.0
 		Backpack.Kind.GUN:
 			var path: String = data.get("weapon", "")
 			var gun := load(path) as WeaponData if path != "" and ResourceLoader.exists(path) else null
 			return gun.backpack_length if gun and gun.backpack_length > 0.0 else WeaponPickup.LONG_GUN
-	return float(BackpackView.REAL_SIZE.get(item_kind, 0.12))
+	return float(BackpackView.REAL_SIZE.get(item_kind, 0.12)) * ITEM_SIZE
 
 
 func _player_grenade() -> WeaponData:

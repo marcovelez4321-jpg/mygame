@@ -10,7 +10,7 @@
 [ext_resource type="Script" uid="uid://blpts7jbv0f5n" path="res://scripts/world/eye_scatter.gd" id="8_22031"]
 [ext_resource type="Script" uid="uid://b1vfe5trujhmp" path="res://scripts/world/worm_director.gd" id="9_wnu4w"]
 [ext_resource type="Script" uid="uid://k5ol8htogvp2" path="res://scripts/world/encounter_director.gd" id="10_v085t"]
-[ext_resource type="PackedScene" uid="uid://dgi2jnnhqhfsr" path="res://scenes/megastructures/the_stack.scn" id="11_ykgsn"]
+[ext_resource type="PackedScene" path="res://scenes/megastructures/the_stack.scn" id="11_ykgsn"]
 [ext_resource type="Script" uid="uid://cku7pyx3p03gi" path="res://scripts/world/cloud_deck.gd" id="13_c2v4b"]
 [ext_resource type="Script" uid="uid://8l5laalbjcbl" path="res://scripts/world/skyline_layer.gd" id="14_oysqe"]
 [ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="15_25kst"]
@@ -32,7 +32,7 @@
 [ext_resource type="Resource" uid="uid://brnsy2rrq6n3b" path="res://weapons/machine_gun.tres" id="31_wnu4w"]
 [ext_resource type="Script" uid="uid://b6c6fwaffk3y6" path="res://scripts/world/loadout.gd" id="32_ldemw"]
 [ext_resource type="Resource" uid="uid://cd1tqnoroiq4t" path="res://weapons/sniper.tres" id="32_v085t"]
-[ext_resource type="Script" path="res://scripts/world/flesh_tree.gd" id="40_fleshtree"]
+[ext_resource type="Script" uid="uid://c657pav6cgvj" path="res://scripts/world/flesh_tree.gd" id="40_fleshtree"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
 _shader_parameters = {
@@ -42,6 +42,7 @@ _shader_parameters = {
 &"blotches": null,
 &"color_steps": null,
 &"flat_terrain_normals": null,
+&"grass_tile": null,
 &"height_gradient": null,
 &"high_color": null,
 &"high_height": null,
@@ -73,7 +74,13 @@ _shader_parameters = {
 &"speckle_amount": null,
 &"speckle_size": null,
 &"texel_size": null,
-&"valley_color": null
+&"valley_color": null,
+&"yard": null,
+&"yard_center": null,
+&"yard_grass": null,
+&"yard_grass_on": null,
+&"yard_radius": null,
+&"yard_soft": null
 }
 shader_override_enabled = true
 shader_override = ExtResource("1_k6tl3")
@@ -302,6 +309,65 @@ directional_shadow_max_distance = 90.0
 
 [node name="Player" parent="." unique_id=1710340998 instance=ExtResource("29_fyxt2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
+mouse_sensitivity = null
+gravity = null
+jump_velocity = null
+ground_max_speed = null
+ground_accel = null
+ground_friction = null
+stop_speed = null
+auto_bhop = null
+speed_cap = null
+bhop_gain = null
+wall_jump_gain = null
+wall_jump_min_speed = null
+wall_jump_buffer = null
+wall_coyote_time = null
+air_accel = null
+air_cap_speed = null
+step_height = null
+respawn_delay = null
+max_stamina_charges = null
+stamina_recharge_time = null
+stamina_recharge_delay = null
+dash_speed = null
+dash_duration = null
+dash_cooldown = null
+dash_up_boost = null
+fall_safe_speed = null
+fall_damage_per_speed = null
+wing_style = null
+wing_burst_speed = null
+wing_cruise_speed = null
+wing_burst_time = null
+wing_drain = null
+wing_turn_rate = null
+wing_bank_rate = null
+glide_speed = null
+glide_turn_rate = null
+glide_gravity = null
+wall_check_distance = null
+wall_behind_angle = null
+wall_jump_look_speed = null
+wall_jump_hit_stop_scale = null
+wall_jump_hit_stop_time = null
+mantle_enabled = null
+mantle_forward_distance = null
+mantle_min_height = null
+mantle_max_height = null
+mantle_probe_angle = null
+mantle_probe_ray_count = null
+mantle_grace_time = null
+mantle_duration = null
+mantle_cooldown = null
+stomp_min_speed = null
+stomp_speed_boost = null
+stomp_jump_velocity = null
+stomp_impact_force = null
+stomp_hit_stop_scale = null
+stomp_hit_stop_time = null
+use_range = null
+wind_grip = null
 
 [node name="HUD" parent="." unique_id=1218208162 instance=ExtResource("30_0goju")]
 
@@ -309,6 +375,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
 script = ExtResource("32_ldemw")
 weapons = Array[ExtResource("23_k6tl3")]([ExtResource("24_5vhu7"), ExtResource("25_lludv"), ExtResource("26_y826p"), ExtResource("27_u65ls"), ExtResource("28_rsl8k"), ExtResource("29_6n4eo"), ExtResource("30_22031"), ExtResource("31_wnu4w"), ExtResource("32_v085t"), null])
 
-[node name="FleshTree" type="Node3D" parent="."]
+[node name="FleshTree" type="Node3D" parent="." unique_id=34791758]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 40)
 script = ExtResource("40_fleshtree")

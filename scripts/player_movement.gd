@@ -49,6 +49,8 @@ signal respawned
 ## kicks off it, and a wall you were next to this long ago still counts.
 @export var wall_jump_buffer: float = 0.15
 @export var wall_coyote_time: float = 0.15
+## Stamina bars a wall jump costs (the user's: half a bar).
+@export var wall_jump_cost: float = 0.5
 
 @export_group("Air Movement (Quake 3 PM_AirAccelerate)")
 ## How much speed you gain per strafe cycle in the air.
@@ -95,11 +97,11 @@ signal respawned
 @export var dash_up_boost: float = 6.5
 
 @export_group("Fall Damage")
-## The user's (softer than HL2's): landing faster than fall_safe_speed (m/s,
-## straight down -- about a 7 m drop at 1.7x falling gravity) hurts
+## The user's: landing faster than fall_safe_speed (m/s, straight down --
+## 44, twice the first 22: about a 28 m drop at 1.7x falling gravity) hurts
 ## fall_damage_per_speed for every m/s over it. Chitin skin takes 35% off,
 ## Mantis legs half (Virus).
-@export var fall_safe_speed: float = 22.0
+@export var fall_safe_speed: float = 44.0
 @export var fall_damage_per_speed: float = 3.0
 
 ## How the wings fly (the user's: burst and strafe-steer; burst and glide
@@ -118,13 +120,14 @@ enum WingStyle { BURST_AND_STRAFE, BURST_AND_GLIDE }
 ## wing_drain bars a second (4 s on full bars, as with the old meter). Not
 ## while grappling.
 @export var wing_style: WingStyle = WingStyle.BURST_AND_STRAFE
-@export var wing_burst_speed: float = 34.0
-@export var wing_cruise_speed: float = 26.0
+## (The user's: half what they were -- 34 and 26.)
+@export var wing_burst_speed: float = 17.0
+@export var wing_cruise_speed: float = 13.0
 @export var wing_burst_time: float = 0.6
 @export var wing_drain: float = 1.0
 @export var wing_turn_rate: float = 150.0
 @export var wing_bank_rate: float = 80.0
-@export var glide_speed: float = 22.0
+@export var glide_speed: float = 11.0
 @export var glide_turn_rate: float = 70.0
 ## How much of everyone's gravity a glide sinks with.
 @export_range(0.0, 1.0, 0.05) var glide_gravity: float = 0.3
@@ -778,7 +781,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_look_for_wall(delta)
 		if fresh_jump:
 			_wall_jump_buffer_left = wall_jump_buffer
-		if _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0: # free (the user's)
+		if _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0 and spend_bars(wall_jump_cost): # (the user's: half a bar)
 			_wall_jump(_last_wall_normal)
 			_wall_jump_buffer_left = 0.0
 			_wall_seen_left = 0.0
@@ -801,7 +804,11 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	var pre_slide_fall := -velocity.y
 
 	move_and_slide()
-	_airborne_prev = not is_on_floor() # (a jump the tick you land is a bhop)
+	# Whether we came into this tick's move in the air: the tick after a landing
+	# sees it, so a jump then is a bhop (no friction, speed kept and gained).
+	# (It was read after the move -- already on the ground -- so bhops never
+	# counted and friction slowed you: the user's bug.)
+	_airborne_prev = was_airborne
 
 	if was_airborne:
 		_check_enemy_stomp(pre_slide_speed)
@@ -986,6 +993,16 @@ func _update_stamina(delta: float) -> void:
 
 ## Spends one bar if there's a whole one (a dash, the tentacle whip), so
 ## "can I afford this" and "pay for it" never drift apart.
+## Spends ars if there's that much (a wall jump: half a bar).
+func spend_bars(bars: float) -> bool:
+	if stamina < bars:
+		return false
+	stamina -= bars
+	_stamina_regen_timer = stamina_recharge_delay
+	_sync_stamina()
+	return true
+
+
 func spend_stamina() -> bool:
 	if stamina < 1.0:
 		return false
@@ -1105,8 +1122,7 @@ func _open_wings() -> void:
 	_flight_floor = velocity.length()
 	velocity = _flight_dir * maxf(velocity.length(), wing_burst_speed)
 	camera.shake(2.0)
-	camera.kick_fov(10.0)
-	dashed.emit() # (the old dash's sound, for now)
+	camera.kick_fov(10.0) # (no dash sound: the user's)
 
 
 ## `from` turned toward `to` by at most `most` radians.

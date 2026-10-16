@@ -33,7 +33,7 @@ const PROMPTS := {
 	Backpack.Kind.SHELLS: "left click to load",
 	Backpack.Kind.ROCKETS: "left click to load",
 	Backpack.Kind.GRENADES: "left click to ready",
-	Backpack.Kind.CAMP_KIT: "left click to set up camp",
+	# (The camp kit: nothing yet -- camps come at step 7.)
 }
 
 ## What's in it (CarryItem.to_data()); {} = nothing.
@@ -81,6 +81,7 @@ func fetch(body: Node3D) -> void:
 		_drop()
 	cancel_fetch()
 	incoming = body
+	body.set_meta(&"fetched", true) # (not walked into on its way: it's coming to the hand)
 	if body is RigidBody3D:
 		var rigid := body as RigidBody3D
 		rigid.set_meta(&"fetch_layers", [rigid.collision_layer, rigid.collision_mask])
@@ -104,6 +105,10 @@ func tick(fire: bool, drop: bool, stow: bool, delta: float) -> void:
 	_fire_prev = fire
 	_drop_prev = drop
 	_fly_in(delta)
+	if drop_pressed and not is_holding() and not is_busy():
+		# Nothing in the hand: G drops the gun in your hands (the user's).
+		_player.weapons.drop_gun(_decides())
+		return
 	if not is_holding() or not _decides():
 		return
 	_cook(delta)
@@ -123,7 +128,7 @@ func prompt() -> String:
 	var kind: int = data.kind
 	if kind == CarryItem.POD:
 		var mutation: Array = Virus.MUTATIONS.get(data.mutation, ["?", ""])
-		return "left click to mutate: %s" % mutation[0]
+		return "%s\n%s\nleft click to mutate" % [mutation[0], mutation[1]]
 	return PROMPTS.get(kind, "")
 
 
@@ -221,6 +226,8 @@ func cancel_fetch() -> void:
 		rigid.collision_layer = layers[0]
 		rigid.collision_mask = layers[1]
 		rigid.freeze = false
+	if incoming.has_meta(&"fetched"):
+		incoming.remove_meta(&"fetched")
 	incoming = null
 
 
@@ -294,29 +301,29 @@ func _use() -> void:
 			_stow_grenade(amount)
 			weapons.equip_grenades()
 		Backpack.Kind.CAMP_KIT:
-			_empty()
-			_player.backpack.add(Backpack.Kind.CAMP_KIT, amount)
-			_player.backpack.use(Backpack.Kind.CAMP_KIT)
+			pass # camps aren't built yet (step 7): it stays in your hand
 
 
-## F: into the backpack. False (and still in your hand) if it doesn't fit.
-func _stow() -> bool:
+## Something into the backpack (or, a gun, your weapons): F stowing what's in
+## your hand, or walking over a thing lying about (CarryItem). False if it
+## doesn't fit (a pod never does). A partly taken stack keeps what's left.
+func store(item: Dictionary) -> bool:
 	var weapons := _player.weapons
 	var backpack := _player.backpack
-	var kind: int = data.kind
-	var amount: int = data.get("amount", 1)
+	var kind: int = item.kind
+	var amount: int = item.get("amount", 1)
 	match kind:
 		Backpack.Kind.MEAT, Backpack.Kind.COOKED_MEAT:
-			if not backpack.add_meat(data):
+			if not backpack.add_meat(item):
 				return false
 		Backpack.Kind.PILLS, Backpack.Kind.BANDAGE:
-			var item := WeaponController.Item.PILLS if kind == Backpack.Kind.PILLS else WeaponController.Item.BANDAGE
-			var taken := weapons.add_item(item, amount)
+			var heal := WeaponController.Item.PILLS if kind == Backpack.Kind.PILLS else WeaponController.Item.BANDAGE
+			var taken := weapons.add_item(heal, amount)
 			if taken < amount:
-				data.amount = amount - taken
+				item.amount = amount - taken
 				return false
 		Backpack.Kind.GUN:
-			var gun := _gun_of(data)
+			var gun := _gun_of(item)
 			if gun == null or (not weapons.get_owned_weapons().has(gun) and weapons.is_gun(gun) and weapons.gun_count() >= WeaponController.MAX_GUNS):
 				return false
 			weapons.pickup_weapon(gun, amount)
@@ -330,6 +337,13 @@ func _stow() -> bool:
 				return false
 		_:
 			return false # a pod: it won't go in the bag
+	return true
+
+
+## F: what's in your hand into the backpack.
+func _stow() -> bool:
+	if not store(data):
+		return false
 	_empty()
 	return true
 
@@ -342,11 +356,27 @@ func _stow_grenade(amount: int) -> bool:
 	return true
 
 
-## G: at your feet, a CarryItem.
+## G: at your feet, a CarryItem (not picked straight back up: you're
+## ignored till you step off it).
 func _drop() -> void:
 	var at := _player.global_position + Vector3.UP * 0.6 - _player.global_basis.z * 0.5
-	CarryItem.spawn(_player, at, data)
+	var dropped := CarryItem.spawn(_player, at, data)
+	dropped.ignore = _player
 	_empty()
+
+
+## Co-op: the host stored something the owner walked into; their own copy of
+## the inventory gets it too (meat comes with the backpack's own sync).
+func tell_owner_stored(item: Dictionary) -> void:
+	if Network.is_online() and multiplayer.is_server() and not _player.is_multiplayer_authority() \
+			and int(item.get("kind", -1)) not in [Backpack.Kind.MEAT, Backpack.Kind.COOKED_MEAT]:
+		_net_store.rpc_id(_player.get_multiplayer_authority(), item)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_store(item: Dictionary) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		store(item)
 
 
 static func _gun_of(item: Dictionary) -> WeaponData:

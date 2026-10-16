@@ -91,10 +91,10 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 
 @export_group("Pull")
 ## Pull speed at full power, m/s; at the least charge, this share of it.
-@export var pull_speed: float = 17.0
+@export var pull_speed: float = 20.0
 @export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
 ## How hard it pulls you up to that speed, m/s per second.
-@export var pull_accel: float = 60.0
+@export var pull_accel: float = 70.0
 ## Slows the pull near the spot so you settle onto it (speed is capped at
 ## distance x this).
 @export var arrive_slowdown: float = 1.0
@@ -103,7 +103,7 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export var perfect_window: float = 0.3
 @export var perfect_boost: float = 1.16
 ## How close to the spot counts as arriving.
-@export var arrive_distance: float = 4.0
+@export var arrive_distance: float = 0.5
 
 @export_group("Tendrils")
 ## Off for now (the user's, 2026-10-14: to come back to).

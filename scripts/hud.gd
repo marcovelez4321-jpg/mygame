@@ -297,6 +297,15 @@ func _update_hand_prompt() -> void:
 	var prompt: String = player.hand.prompt() if player.hand else ""
 	_hand_label.visible = prompt != "" and not player.bag_open and not player.controls_locked
 	_hand_label.text = prompt
+	# A pod in hand (the user's): what it'll do, centred above the crosshair,
+	# clear of the arms. Anything else: to the left of what you hold.
+	var pod: bool = player.hand != null and player.hand.is_holding() and int(player.hand.data.get("kind", -1)) == CarryItem.POD
+	_hand_label.anchor_left = 0.2 if pod else 0.3
+	_hand_label.anchor_right = 0.8 if pod else 0.66
+	_hand_label.anchor_top = 0.28 if pod else 0.74
+	_hand_label.anchor_bottom = 0.28 if pod else 0.74
+	_hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if pod else HORIZONTAL_ALIGNMENT_RIGHT
+	_hand_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM if pod else VERTICAL_ALIGNMENT_TOP
 
 func _refresh_wheel() -> void:
 	weapon_wheel.set_weapons(player.weapons.get_owned_weapons(), player.weapons.get_current_index())

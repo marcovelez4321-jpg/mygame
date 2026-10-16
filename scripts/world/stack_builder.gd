@@ -1756,29 +1756,29 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	return root
 
 
-## Burning barrels in FIRE_ROOM_CHANCE of the (lit) window rooms (the
-## user's: half), FIRE_INSET in from the window so their smoke pours out of
-## it. Their own random (seeded), so the rest of the Stack's unchanged.
-const FIRE_ROOM_CHANCE := 0.5
+## Every lit window room, for what the Stack rolls into them each time it's
+## played (the user's: barrels, radios and pill bottles in random rooms --
+## Megastructure): a spot FIRE_INSET in from the window (a barrel's smoke
+## pours out of it), the way out, and the room's box.
 const FIRE_INSET := 5.0
 
 
 func _fire_spots(root: Megastructure) -> void:
-	var dice := RandomNumberGenerator.new()
-	dice.seed = SEED + 7177
 	var spots := PackedVector3Array()
 	var outs := PackedVector3Array()
+	var boxes: Array[AABB] = []
 	for w in window_rooms:
-		if not w.lit or dice.randf() >= FIRE_ROOM_CHANCE:
+		if not w.lit:
 			continue
 		var out: Vector3 = w.normal
 		var floor_y: float = (w.at as Vector3).y - (w.size as Vector2).y * 0.5
 		var spot: Vector3 = (w.at as Vector3) - out * FIRE_INSET
 		spots.append(Vector3(spot.x, floor_y, spot.z))
 		outs.append(out)
+		boxes.append(w.room)
 	root.fire_spots = spots
 	root.fire_outs = outs
-
+	root.room_boxes = boxes
 
 func _own(root: Node, node: Node, parent: Node) -> void:
 	parent.add_child(node)
@@ -2225,13 +2225,11 @@ func _radios(root: Node, parent: Node) -> void:
 	var holder := Node3D.new()
 	holder.name = "Radios"
 	_own(root, holder, parent)
+	# The radios are rolled into random rooms each time it's played now
+	# (Megastructure, the user's); the same numbers are still drawn here so the
+	# rest of the Stack comes out exactly as before.
 	for i in radio_spots.size():
-		var radio := Radio.new()
-		radio.name = "Radio_%d" % i
-		radio.model_index = random.randi() % Radio.MODELS.size()
-		radio.position = radio_spots[i][0]
-		radio.rotation.y = radio_spots[i][1]
-		_own(root, radio, holder)
+		random.randi()
 
 
 ## The cobwebs: a quad each, a still, pale web (shaders/cobweb.gdshader:
