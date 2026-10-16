@@ -204,8 +204,7 @@ func _make_camp(shape: CollisionShape3D, player: Node3D) -> RoamingGroup:
 	camp.anchor_radius = reach + 30.0
 	camp.drift_speed = 1.0
 	get_tree().current_scene.add_child(camp)
-	for i in randi_range(camp_min, camp_max):
-		_add(camp, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), i)
+	_fill(camp, randi_range(camp_min, camp_max))
 	# Their burning barrel at the hangout (the user's: one a gang), seen by
 	# clients through NetEntities; out when the camp goes.
 	var barrel := BurningBarrel.place(get_tree().current_scene, spot)
@@ -245,8 +244,7 @@ func _start_band(player: Node3D) -> void:
 	get_tree().current_scene.add_child(group)
 	match band:
 		Band.TWEAKERS:
-			for i in randi_range(gang_min, gang_max):
-				_add(group, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), i)
+			_fill(group, randi_range(gang_min, gang_max))
 		Band.RATS:
 			var nest := RAT_NEST.instantiate() as RatNest
 			nest.rat_count = randi_range(5, 9)
@@ -262,6 +260,17 @@ func _start_band(player: Node3D) -> void:
 		Band.HARVESTMEN:
 			_add(group, HARVESTMEN[randi() % HARVESTMEN.size()].instantiate(), 0)
 	_groups.append(group)
+
+
+## A gang's people added one at a time within the frame budget (FrameBudget:
+## a whole gang in one frame -- bodies, skeletons, guns -- was a stutter).
+func _fill(group: RoamingGroup, count: int) -> void:
+	for i in count:
+		while FrameBudget.over():
+			await get_tree().process_frame
+		if not is_instance_valid(group) or not group.is_inside_tree():
+			return
+		_add(group, TWEAKERS[randi() % TWEAKERS.size()].instantiate(), i)
 
 
 func _add(group: RoamingGroup, member: Node, index: int, lift: float = 0.0) -> void:

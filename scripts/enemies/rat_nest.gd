@@ -32,6 +32,18 @@ func _ready() -> void:
 	# Room to breed back up to its full size, at least.
 	swarm.feed_limit = maxi(swarm.feed_limit, rats + guards)
 	if multiplayer.is_server():
-		swarm.spawn_rats.call_deferred(rats, global_position)
-		swarm.spawn_rats.call_deferred(guards, global_position, -1.0, -1.0,
-				bodyguard_scale, bodyguard_health, bodyguard_damage)
+		_hatch.call_deferred(rats, guards)
+
+
+## Its rats, then its bodyguards, one at a time within the frame budget
+## (FrameBudget: a whole swarm in one frame was a stutter).
+func _hatch(rats: int, guards: int) -> void:
+	for i in rats + guards:
+		while FrameBudget.over():
+			await get_tree().process_frame
+		if not is_inside_tree() or not is_instance_valid(swarm):
+			return
+		if i < rats:
+			swarm.spawn_rats(1, global_position)
+		else:
+			swarm.spawn_rats(1, global_position, -1.0, -1.0, bodyguard_scale, bodyguard_health, bodyguard_damage)

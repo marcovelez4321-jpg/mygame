@@ -93,6 +93,10 @@ func _grow() -> void:
 			get_tree().current_scene.add_child(pack)
 			
 		for i in count:
+			while FrameBudget.over(): # (spread over frames: no stutter)
+				await get_tree().process_frame
+			if not is_inside_tree():
+				return
 			var hit := _surface_near(up, 0.0 if i == 0 else radius)
 			if hit.is_empty():
 				continue
@@ -113,6 +117,10 @@ func _grow() -> void:
 		_spawn_guard_pack()
 		
 		for i in (leech_count if spawn_leeches else 0):
+			while FrameBudget.over():
+				await get_tree().process_frame
+			if not is_inside_tree():
+				return
 			var flat := Vector2.from_angle(randf() * TAU) * randf_range(radius, radius * 1.8)
 			var leech := leech_scene.instantiate() as Node3D
 			if leech:
@@ -120,11 +128,19 @@ func _grow() -> void:
 				leech.global_position = global_position + global_basis * Vector3(flat.x, 0.0, flat.y) + up * 0.4
 				
 	for i in fungus_count:
+		while FrameBudget.over():
+			await get_tree().process_frame
+		if not is_inside_tree():
+			return
 		var hit := _surface_near(up, radius * 1.2)
 		if not hit.is_empty():
 			_add_fungus(hit.position, hit.normal)
 			
 	for i in decoy_count:
+		while FrameBudget.over():
+			await get_tree().process_frame
+		if not is_inside_tree():
+			return
 		var hit := _surface_near(up, radius * 1.3)
 		if not hit.is_empty():
 			_add_decoy(hit.position, hit.normal)

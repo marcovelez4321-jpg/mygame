@@ -150,6 +150,11 @@ func _ready() -> void:
 		lair.set_meta(&"hunger_scale", 2.0) # its home: it gets hungry here twice as fast
 	if multiplayer.is_server() and barnacle_nests > 0:
 		_grow_nests.call_deferred()
+	# Its lines between towers and lamp posts in its halls (StackDressing).
+	if not inside_zones.is_empty():
+		var dressing := StackDressing.new()
+		dressing.name = "Dressing"
+		add_child(dressing)
 	if not Network.is_online() or multiplayer.is_server():
 		_roll_rooms(randi() % 1000000 + 1)
 	else:
@@ -431,15 +436,25 @@ func _update_infestation() -> void:
 		_infestation.clear()
 
 
+## Each group within the frame budget (FrameBudget: the whole infestation in
+## one frame was the worst stutter by the Stack, ~87 ms).
 func _infest() -> void:
 	for i in roach_swarms:
+		while FrameBudget.over():
+			await get_tree().process_frame
 		var group := _floor_group("Roaches")
 		if group:
 			for r in randi_range(6, 12):
+				while FrameBudget.over():
+					await get_tree().process_frame
+				if not is_instance_valid(group):
+					break
 				var roach := ROACH.instantiate() as FlyingRoach
 				roach.size = infest_magnify
 				_member(group, roach, r, 1.5 * infest_magnify)
 	for i in spider_hordes:
+		while FrameBudget.over():
+			await get_tree().process_frame
 		var group := _floor_group("Spiders")
 		if group:
 			var pack := SPIDER_PACK.instantiate() as SpiderPack
@@ -447,6 +462,8 @@ func _infest() -> void:
 			pack.spider_scale = infest_magnify
 			_member(group, pack, 0)
 	for i in rat_hordes:
+		while FrameBudget.over():
+			await get_tree().process_frame
 		var group := _floor_group("Rats")
 		if group:
 			var nest := RAT_NEST.instantiate() as RatNest

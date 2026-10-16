@@ -196,9 +196,17 @@ func _ready() -> void:
 		_hatch_start.call_deferred()
 
 
+## Hatched one at a time within the frame budget (FrameBudget: a whole
+## horde in one frame was a stutter).
 func _hatch_start() -> void:
-	if multiplayer.is_server():
-		spawn_spiders(start_count, global_position)
+	if not multiplayer.is_server():
+		return
+	for i in start_count:
+		while FrameBudget.over():
+			await get_tree().process_frame
+		if not is_inside_tree():
+			return
+		spawn_spiders(1, global_position)
 
 
 func count() -> int:
