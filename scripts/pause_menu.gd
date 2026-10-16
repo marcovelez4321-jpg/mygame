@@ -32,7 +32,7 @@ extends CanvasLayer
 const AUDIO_BUS_LABELS := {
 	"Master": "Master",
 	"Body": "Bodies",
-	"Surface": "Footsteps & Surfaces",
+	"Surface": "Footsteps & Movement", # (jumps, lands, dashes, mantles too: the user's)
 	"Gore": "Gore",
 	"Props": "Props",
 	"Weapons": "Weapons",

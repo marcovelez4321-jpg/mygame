@@ -70,7 +70,8 @@ func setup(player: PlayerMovement, in_first_person: bool) -> void:
 		buzz.unit_size = 6.0
 		_buzz = buzz
 	_buzz.set("stream", _make_buzz())
-	_buzz.set("bus", &"Player" if AudioServer.get_bus_index(&"Player") != -1 else &"Master")
+	# With the footsteps and the rest of moving (the user's).
+	_buzz.set("bus", &"Surface" if AudioServer.get_bus_index(&"Surface") != -1 else &"Master")
 	_buzz.set("volume_db", -80.0)
 	add_child(_buzz)
 	visible = false

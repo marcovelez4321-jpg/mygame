@@ -2015,7 +2015,7 @@ func _update_label(message: String) -> void:
 		_tune_label.text = ("TUNING THE RIGHT HAND'S GRIP (%s)\nhand %.2f   fingers: thumb %+.2f  index %+.2f  middle %+.2f  ring %+.2f  pinky %+.2f\n"
 				+ "wrist turned (%.1f, %.1f, %.1f)   [ ] now curls: %s\n\n"
 				+ "[ ] = curl   1-5 = pick a finger   0 = whole hand\nShift + arrows/PgUp,PgDn = turn the wrist (the gun turns with it)\n"
-				+ "Ctrl = finer   F3 = save onto the gun   Y = done\n%s") % [gun.weapon_name, gun.right_grip_cup,
+				+ "Ctrl = finer   F3 = save (onto this gun, or this held item's kind)   Y = done\n%s") % [gun.weapon_name, gun.right_grip_cup,
 				curls[0], curls[1], curls[2], curls[3], curls[4], gun.right_wrist_degrees.x, gun.right_wrist_degrees.y,
 				gun.right_wrist_degrees.z, "whole hand" if _grip_finger < 0 else ["thumb", "index", "middle", "ring", "pinky"][_grip_finger], message]
 		return

@@ -8,4 +8,4 @@ clips = Array[AudioStream]([null])
 clip_folder = "res://audio/sfx/player"
 clip_prefix = "jump"
 pitch_variance = 0.05
-bus = "Player"
+bus = "Surface"

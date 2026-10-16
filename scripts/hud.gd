@@ -105,6 +105,11 @@ func _find_player() -> void:
 		var cues := HungerCues.new()
 		cues.name = "HungerCues"
 		player.add_child(cues)
+	# First-use shader hitches compiled away behind a short black cover.
+	if player.is_multiplayer_authority() and not has_node(^"ShaderWarmup"):
+		var warmup := ShaderWarmup.new()
+		warmup.name = "ShaderWarmup"
+		add_child(warmup)
 	if player.get_node_or_null("TripFlash") == null:
 		var trip := TripFlash.new()
 		trip.name = "TripFlash"

@@ -32,7 +32,7 @@ death_sound = ExtResource("5_death")
 
 [node name="Health" type="Node" parent="." unique_id=1756338270]
 script = ExtResource("2_health")
-max_health = 12.0
+max_health = 6.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1505250338]
 shape = SubResource("SpiderShape")

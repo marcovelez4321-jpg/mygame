@@ -95,6 +95,16 @@ func _grow() -> void:
 			pack.free_when_empty = false # more are coming
 			pack.position = global_position # the level's root sits at the origin
 			get_tree().current_scene.add_child(pack)
+			# Gone with its nest (its ground unloading), spiders and all -- not left
+			# behind to pile up.
+			tree_exiting.connect(func() -> void:
+				if not is_instance_valid(pack):
+					return
+				for spider in pack.spiders:
+					if is_instance_valid(spider):
+						spider.queue_free()
+				pack.queue_free()
+			, CONNECT_ONE_SHOT)
 			
 		for i in count:
 			while FrameBudget.over(): # (spread over frames: no stutter)
@@ -263,6 +273,34 @@ func _add_fungus(at: Vector3, normal: Vector3) -> void:
 	mound.global_transform = Transform3D(mound_basis, at)
 
 
+## Its Deepmaw guards: dormant (not processing at all) till a player's
+## within DEFENDER_WAKE of the nest -- checked once a second. Lurking
+## underground, nobody can tell; 70 of them by the Stack were its biggest
+## creature cost.
+const DEFENDER_WAKE := 60.0
+var _defenders: Array = []
+var _wake_left := 0.0
+
+
+func _physics_process(delta: float) -> void:
+	if _defenders.is_empty():
+		return
+	_wake_left -= delta
+	if _wake_left > 0.0:
+		return
+	_wake_left = 1.0
+	var near := false
+	for node in get_tree().get_nodes_in_group("player"):
+		if (node as Node3D).global_position.distance_squared_to(global_position) < DEFENDER_WAKE * DEFENDER_WAKE:
+			near = true
+			break
+	var mode := Node.PROCESS_MODE_INHERIT if near else Node.PROCESS_MODE_DISABLED
+	for defender: Variant in _defenders:
+		if is_instance_valid(defender) and (defender as Node).process_mode != mode:
+			(defender as Node).process_mode = mode
+	_defenders = _defenders.filter(func(d: Variant) -> bool: return is_instance_valid(d))
+
+
 func _spawn_defenders() -> void:
 	if defender_scene == null or defender_count <= 0:
 		return
@@ -277,6 +315,13 @@ func _spawn_defenders() -> void:
 			var around := Vector2.from_angle(randf() * TAU) * randf_range(1.0, radius * 1.5)
 			defender.position = floor_at + Vector3(around.x, 0.0, around.y) # the level's root sits at the origin
 			get_tree().current_scene.add_child(defender)
+			# It goes when its nest goes (its ground unloading): they were left
+			# behind and piled up as you travelled -- 100+ by the Stack.
+			tree_exiting.connect(func() -> void:
+				if is_instance_valid(defender) and defender.is_inside_tree():
+					defender.queue_free()
+			, CONNECT_ONE_SHOT)
+			_defenders.append(defender)
 
 
 func _spawn_guard_pack() -> void:

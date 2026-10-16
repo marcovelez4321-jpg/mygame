@@ -200,6 +200,14 @@ var _fang_rest: Array[Basis] = []
 var _fang_open := 0.0
 var _looks_ready := false
 var _time := 0.0
+## Movement LOD: no player within SIM_NEAR, it crawls every SIM_FAR_EVERY
+## ticks (with that many ticks' time).
+const SIM_NEAR := 40.0
+const SIM_FAR_EVERY := 3
+var _sim_far := false
+var _sim_check_left := randf() * 0.5
+var _sim_saved := 0.0
+var _sim_tick := randi() % 3
 var _lod_timer := 0.0
 var _lod := 0 # 0 full, 1 every other frame, 2 frozen
 var _frame := 0
@@ -313,6 +321,21 @@ func _physics_process(delta: float) -> void:
 		else:
 			_start_corpse()
 		return
+	# Movement LOD (the user's frame drops in the Stack's halls: spiders were
+	# the biggest physics cost): crawling with no player within SIM_NEAR, it
+	# moves every SIM_FAR_EVERY ticks with that many ticks' time -- the same
+	# path, just fewer steps where nobody's close enough to see them.
+	_sim_check_left -= delta
+	if _sim_check_left <= 0.0:
+		_sim_check_left = 0.5
+		_sim_far = _nearest_player_distance() > SIM_NEAR
+	if _sim_far and _state == State.CRAWL:
+		_sim_saved += delta
+		_sim_tick = (_sim_tick + 1) % SIM_FAR_EVERY
+		if _sim_tick != 0:
+			return
+		delta = _sim_saved
+	_sim_saved = 0.0
 	_bite_cooldown = maxf(_bite_cooldown - delta, 0.0)
 	_leap_cooldown = maxf(_leap_cooldown - delta, 0.0)
 	_wall_cooldown = maxf(_wall_cooldown - delta, 0.0)
@@ -335,6 +358,13 @@ func _physics_process(delta: float) -> void:
 ## down keeps it stuck to its surface, and if that finds nothing it has
 ## walked off an edge -- a ray back under the edge wraps it round the corner
 ## onto the far face. Nothing there either: it falls.
+func _nearest_player_distance() -> float:
+	var best := INF
+	for node in get_tree().get_nodes_in_group("player"):
+		best = minf(best, (node as Node3D).global_position.distance_to(global_position))
+	return best
+
+
 func _crawl(delta: float) -> void:
 	var up := _normal
 	var wanted := desired_velocity - up * desired_velocity.dot(up)
