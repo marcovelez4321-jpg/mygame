@@ -348,6 +348,7 @@ func _ready() -> void:
 	floor_snap_length = maxf(floor_snap_length, 0.5)
 	health.damaged.connect(_on_damaged)
 	health.died.connect(_on_died)
+	Drops.on_death(self, Backpack.Kind.SCRAP, Drops.SCRAP_CHANCE) # (the user's: for camp kits)
 	_apply_tint()
 	_set_home.call_deferred() # once whoever spawned it has put it in place
 	_gang_timer = randf() * 0.5 # spread the gang's checks out

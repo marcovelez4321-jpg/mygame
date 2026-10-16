@@ -264,6 +264,7 @@ func _ready() -> void:
 	sync_to_physics = false
 	_roll_variety()
 	health.died.connect(_on_died)
+	Drops.on_death(self, Backpack.Kind.SILK, Drops.SILK_CHANCE) # (the user's: for camp kits)
 	health.damaged.connect(_on_damaged)
 	for player in get_tree().get_nodes_in_group("player"):
 		add_collision_exception_with(player as PhysicsBody3D)

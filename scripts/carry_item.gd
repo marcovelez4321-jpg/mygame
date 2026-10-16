@@ -26,8 +26,9 @@ const COOK_EVERY := 1.0
 const AGE_EVERY := 120.0
 ## Meat's density (water's): a chunk's size from its weight.
 const MEAT_DENSITY := 1000.0
-## How much bigger than life a chunk is in the world (the user's: 3x).
-const MEAT_SIZE := 3.0
+## How much bigger than life a chunk is in the world (the user's: 3x, then
+## twice that).
+const MEAT_SIZE := 6.0
 ## Every other thing out in the world, how much bigger than life (the user's:
 ## twice, so they're easy to spot -- guns stay real size).
 const ITEM_SIZE := 2.0

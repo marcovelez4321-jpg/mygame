@@ -132,6 +132,10 @@ func stacks() -> Array[Dictionary]:
 		if pair[1] > 0:
 			found.append({kind = pair[0], count = pair[1], weapon = null})
 	var meats := {}
+	# Enough for a camp kit and none on you: it shows, ready to craft (the
+	# user's: double-click it).
+	if camp_kits == 0 and scrap >= KIT_SCRAP and silk >= KIT_SILK:
+		found.append({kind = Kind.CAMP_KIT, count = 0, weapon = null, craftable = true})
 	for chunk in meat:
 		var meat_kind := _meat_kind(chunk)
 		meats[meat_kind] = int(meats.get(meat_kind, 0)) + 1
@@ -205,6 +209,68 @@ func add(kind: Kind, amount: int) -> int:
 			return 0
 	changed.emit()
 	return amount
+
+
+## A camp kit's recipe (the user's).
+const KIT_SCRAP := 4
+const KIT_SILK := 2
+
+
+## Crafts a camp kit from KIT_SCRAP scrap and KIT_SILK silk; false if short
+## (or one's already on you).
+func craft_camp_kit() -> bool:
+	if camp_kits >= MAX_CAMP_KITS or scrap < KIT_SCRAP or silk < KIT_SILK:
+		return false
+	scrap -= KIT_SCRAP
+	silk -= KIT_SILK
+	camp_kits += 1
+	changed.emit()
+	return true
+
+
+## Everything you carry -- the pack and your weapons -- taken off you (dying
+## near a camp: DeathPack). The host tells the owner's copy too.
+func take_all() -> Dictionary:
+	var gear := _player.weapons.take_all()
+	gear.scrap = scrap
+	gear.silk = silk
+	gear.camp_kits = camp_kits
+	gear.meat = meat.duplicate(true)
+	scrap = 0
+	silk = 0
+	camp_kits = 0
+	meat.clear()
+	placing_camp = false
+	changed.emit()
+	_tell_owner(gear, false)
+	return gear
+
+
+## take_all()'s gear back (the DeathPack picked up).
+func give_all(gear: Dictionary) -> void:
+	_player.weapons.give_all(gear, not Network.is_online() or multiplayer.is_server())
+	scrap += int(gear.get("scrap", 0))
+	silk += int(gear.get("silk", 0))
+	camp_kits = mini(camp_kits + int(gear.get("camp_kits", 0)), MAX_CAMP_KITS)
+	for chunk: Dictionary in gear.get("meat", []):
+		meat.append(chunk)
+	changed.emit()
+	_tell_owner(gear, true)
+
+
+func _tell_owner(gear: Dictionary, back: bool) -> void:
+	if Network.is_online() and multiplayer.is_server() and not _player.is_multiplayer_authority():
+		_net_gear.rpc_id(_player.get_multiplayer_authority(), gear, back)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_gear(gear: Dictionary, back: bool) -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return
+	if back:
+		give_all(gear)
+	else:
+		take_all()
 
 
 ## Takes materials away (crafting); false (and nothing taken) if short.

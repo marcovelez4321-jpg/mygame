@@ -282,6 +282,8 @@ var backpack: Backpack
 ## What's in your right hand instead of the gun (PlayerHand), and the virus
 ## in you -- points, mutations, hunger (Virus). Both made in _ready().
 var hand: PlayerHand
+## Placing a camp (the camp kit in your hand).
+var camp_builder: CampBuilder
 var virus: Virus
 ## The backpack held out (Tab). Yours: your own toggle; someone else's (on
 ## the host): from their input packet.
@@ -451,6 +453,9 @@ func _ready() -> void:
 	hand = PlayerHand.new()
 	hand.name = "PlayerHand"
 	add_child(hand)
+	camp_builder = CampBuilder.new()
+	camp_builder.name = "CampBuilder"
+	add_child(camp_builder)
 	# Your own body looks through its camera; everyone else's is just seen.
 	if is_multiplayer_authority():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -552,22 +557,52 @@ func is_dead() -> bool:
 ## Rule 1: reloading the whole scene only makes sense offline. In co-op this
 ## becomes "respawn at a spawn point" (and the level keeps running for the
 ## other player), so it's kept in this one small function.
+## Camps (the user's, 2026-10-16): with one built you wake at the one nearest
+## where you fell, your gear left behind in a backpack (DeathPack); with none,
+## offline restarts the level as ever.
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	_is_dead = true
 	velocity = Vector3.ZERO
 	grapple.release()
+	if Network.is_online() and not multiplayer.is_server():
+		return
+	_wake_camp = Camp.nearest(get_tree(), global_position)
+	_wakes_at_camp = _wake_camp != null
+	if _wakes_at_camp:
+		DeathPack.drop(self)
 	if not Network.is_online():
-		get_tree().create_timer(respawn_delay).timeout.connect(_restart_level)
-	elif multiplayer.is_server():
+		get_tree().create_timer(respawn_delay).timeout.connect(_wake_at_camp if _wakes_at_camp else _restart_level)
+	else:
 		# Co-op: the level goes on for everyone else; the host brings you back.
 		get_tree().create_timer(respawn_delay).timeout.connect(_respawn_everywhere)
 
 
-## Host: back beside someone still alive, on every machine.
+## The camp you'll wake at (the host's), and whether you died with one.
+var _wake_camp: Camp
+var _wakes_at_camp := false
+
+
+## Offline: back at the camp (another if that one's gone; none: restart).
+func _wake_at_camp() -> void:
+	var camp := _wake_camp if is_instance_valid(_wake_camp) else Camp.nearest(get_tree(), global_position)
+	_wake_camp = null
+	_wakes_at_camp = false
+	if camp == null:
+		_restart_level()
+		return
+	respawn(camp.wake_point())
+
+
+## Host: back at your camp, or beside someone still alive, on every machine.
 func _respawn_everywhere() -> void:
 	if not is_instance_valid(self) or not Network.is_online():
 		return
-	var at := Network.respawn_point(self)
+	var camp: Camp = null
+	if _wakes_at_camp:
+		camp = _wake_camp if is_instance_valid(_wake_camp) else Camp.nearest(get_tree(), global_position)
+	var at := camp.wake_point() if camp else Network.respawn_point(self)
+	_wake_camp = null
+	_wakes_at_camp = false
 	respawn(at)
 	_net_respawn.rpc(at)
 
@@ -651,6 +686,9 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_F)
 	input.grapple = (right and not right_aims) or (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_E))
+	# Placing a camp: right click puts the kit away (CampBuilder), no grapple.
+	if camp_builder.is_placing():
+		input.grapple = false
 	input.toggle_dual = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_V)
 

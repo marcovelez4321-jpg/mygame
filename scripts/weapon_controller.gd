@@ -863,6 +863,72 @@ func take_ammo(type: WeaponData.AmmoType) -> int:
 	return rounds
 
 
+## Everything you carry, taken off you (dying near a camp leaves it in a
+## DeathPack): {weapons, magazines, pairs (paths), ammo, pills, bandages}.
+func take_all() -> Dictionary:
+	var gear := {weapons = [], magazines = {}, pairs = [], ammo = {}, pills = pills, bandages = bandages}
+	for weapon in _owned:
+		if weapon.heal_item >= 0:
+			continue # the pills / bandage slots come back with the counts
+		gear.weapons.append(weapon.resource_path)
+		if _magazine.has(weapon):
+			gear.magazines[weapon.resource_path] = _magazine[weapon]
+	for weapon: WeaponData in _pairs:
+		gear.pairs.append(weapon.resource_path)
+	for type: int in _ammo:
+		gear.ammo[type] = _ammo[type]
+		_ammo[type] = 0
+	_owned.clear()
+	_magazine.clear()
+	_pairs.clear()
+	pills = 0
+	bandages = 0
+	_current = 0
+	_previous = 0
+	_reload_time_left = 0.0
+	_throw_left = -1.0
+	gun_stowed = true
+	inventory_changed.emit()
+	items_changed.emit()
+	hand_changed.emit(EMPTY_HAND)
+	return gear
+
+
+## take_all()'s gear back (a DeathPack picked up). Guns past MAX_GUNS drop at
+## your feet (`spawn`: the host's call, as drop_gun()).
+func give_all(gear: Dictionary, spawn: bool) -> void:
+	for path: String in gear.get("weapons", []):
+		var weapon := load(path) as WeaponData if ResourceLoader.exists(path) else null
+		if weapon == null or _owned.has(weapon):
+			continue
+		if is_gun(weapon) and gun_count() >= MAX_GUNS:
+			if spawn:
+				var pickup := WeaponPickup.drop(weapon, _body as Node3D)
+				if pickup:
+					pickup.ammo_amount = gear.get("magazines", {}).get(path, weapon.magazine_size)
+			continue
+		_owned.append(weapon)
+		if gear.get("magazines", {}).has(path):
+			_magazine[weapon] = gear.magazines[path]
+	for path: String in gear.get("pairs", []):
+		var weapon := load(path) as WeaponData if ResourceLoader.exists(path) else null
+		if weapon and _owned.has(weapon):
+			_pairs[weapon] = true
+	var ammo: Dictionary = gear.get("ammo", {})
+	for type: int in ammo:
+		_ammo[type] = _ammo.get(type, 0) + int(ammo[type])
+	pills = mini(pills + int(gear.get("pills", 0)), max_pills)
+	bandages = mini(bandages + int(gear.get("bandages", 0)), max_bandages)
+	inventory_changed.emit()
+	items_changed.emit()
+	_sync_item_slots()
+	if gun_in_hand() == null:
+		for i in _owned.size():
+			if is_gun(_owned[i]):
+				_current = -1 # so _select() treats it as a fresh draw
+				_select(i)
+				break
+
 ## E with a two-handed gun out (PlayerGrapple): switches to the one-handed
 ## gun you used last (or the first one you own). False if you own none.
 func switch_to_one_handed() -> bool:

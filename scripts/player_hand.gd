@@ -33,7 +33,7 @@ const PROMPTS := {
 	Backpack.Kind.SHELLS: "left click to load",
 	Backpack.Kind.ROCKETS: "left click to load",
 	Backpack.Kind.GRENADES: "left click to ready",
-	# (The camp kit: nothing yet -- camps come at step 7.)
+	Backpack.Kind.CAMP_KIT: "left click to place the camp",
 }
 
 ## What's in it (CarryItem.to_data()); {} = nothing.
@@ -69,13 +69,16 @@ func is_busy() -> bool:
 ## Whether `body` goes in a hand (an item, not a prop): a CarryItem, a gun,
 ## ammo or pills lying about.
 static func is_item(body: Node) -> bool:
-	return body is CarryItem or body is WeaponPickup or body is AmmoPickup or body is ItemPickup
+	return body is CarryItem or body is WeaponPickup or body is AmmoPickup or body is ItemPickup or body is DeathPack
 
 
 ## The grapple bit an item: it flies in. Whatever's in your hand already goes
 ## in the backpack (or, with no room, drops) -- the user's.
 func fetch(body: Node3D) -> void:
 	if not _decides() or not is_instance_valid(body):
+		return
+	if body is DeathPack:
+		(body as DeathPack).claim(_player) # your gear: straight back into the pack
 		return
 	if is_holding() and not _stow():
 		_drop()
@@ -168,6 +171,8 @@ func take_from_backpack(code: int) -> void:
 			if rounds > 0:
 				taken = {kind = kind, amount = rounds}
 		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT:
+			if kind == Backpack.Kind.CAMP_KIT and backpack.camp_kits == 0:
+				backpack.craft_camp_kit() # crafted from scrap and silk (the user's)
 			if backpack.take(kind, 1):
 				taken = {kind = kind, amount = 1}
 		Backpack.Kind.MEAT, Backpack.Kind.ROTTEN_MEAT, Backpack.Kind.COOKED_MEAT:
@@ -301,7 +306,7 @@ func _use() -> void:
 			_stow_grenade(amount)
 			weapons.equip_grenades()
 		Backpack.Kind.CAMP_KIT:
-			pass # camps aren't built yet (step 7): it stays in your hand
+			pass # placed by its ghost (CampBuilder takes the clicks)
 
 
 ## Something into the backpack (or, a gun, your weapons): F stowing what's in
@@ -354,6 +359,17 @@ func _stow_grenade(amount: int) -> bool:
 		return false
 	_player.weapons.add_ammo(grenade.ammo_type, amount, false)
 	return true
+
+
+## The camp kit built (CampBuilder): gone from the hand.
+func use_up() -> void:
+	_empty()
+
+
+## Back in the bag (right click while placing a camp); dropped if no room.
+func put_away() -> void:
+	if is_holding() and not _stow():
+		_drop()
 
 
 ## G: at your feet, a CarryItem (not picked straight back up: you're
