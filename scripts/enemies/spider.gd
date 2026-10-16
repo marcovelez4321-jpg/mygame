@@ -59,7 +59,9 @@ const WALL_DOT := 0.7
 @export var bite_damage: float = 6.0
 @export var bite_interval: float = 0.7
 ## How close (in meters, times its size) to the target's middle it bites from.
-@export var bite_reach: float = 1.4
+## How close (metres from the edge of its body, so the same for every size:
+## the user's, 2026-10-16) it has to be to bite -- right next to you.
+@export var bite_reach: float = 0.6
 
 @export_group("Leap")
 ## On the floor, it leaps at prey this far away (like a rat)...
@@ -208,6 +210,8 @@ var _sim_far := false
 var _sim_check_left := randf() * 0.5
 var _sim_saved := 0.0
 var _sim_tick := randi() % 3
+## Its body's radius (its collision sphere, at its size).
+var _body_radius := 0.3
 var _lod_timer := 0.0
 var _lod := 0 # 0 full, 1 every other frame, 2 frozen
 var _frame := 0
@@ -280,11 +284,11 @@ func _roll_variety() -> void:
 	_span = leg_span * size
 	health.max_health *= variety * variety
 	health.current_health = health.max_health
-	bite_reach *= size
 	var shape := $CollisionShape3D as CollisionShape3D
 	var sphere := (shape.shape as SphereShape3D).duplicate() as SphereShape3D
 	sphere.radius *= size
 	shape.shape = sphere
+	_body_radius = sphere.radius
 
 
 func is_crawling() -> bool:
@@ -419,7 +423,7 @@ func _fly(delta: float) -> void:
 	var gravity := Fall.GRAVITY if _state == State.LEAP else Fall.pull(_velocity.y)
 	_velocity += Vector3.DOWN * gravity * delta
 	if _state == State.LEAP and not _leap_bit and pack and is_instance_valid(pack.target):
-		if global_position.distance_to(Factions.aim_point(pack.target)) < bite_reach:
+		if _gap_to(pack.target) < bite_reach:
 			_leap_bit = true
 			_bite(pack.target, leap_damage)
 			_velocity = Vector3(-_velocity.x * 0.3, 2.0, -_velocity.z * 0.3) # bounce off them
@@ -443,11 +447,19 @@ func _launch(velocity: Vector3, state: State) -> void:
 	_air_time = 0.0
 
 
+## How far the edge of its body is from 	arget (its middle, or its feet:
+## whichever's nearer). Bites and leaps go by this, so a big spider bites
+## and pounces from the same gap as a small one.
+func _gap_to(target: Node3D) -> float:
+	var to_middle := global_position.distance_to(Factions.aim_point(target))
+	var to_feet := global_position.distance_to(target.global_position)
+	return minf(to_middle, to_feet) - _body_radius
+
+
 func _try_bite() -> void:
 	if dragging or _bite_cooldown > 0.0 or pack == null or not is_instance_valid(pack.target):
 		return
-	if global_position.distance_to(Factions.aim_point(pack.target)) > bite_reach \
-			and global_position.distance_to(pack.target.global_position) > bite_reach:
+	if _gap_to(pack.target) > bite_reach:
 		return
 	_bite_cooldown = bite_interval
 	_bite(pack.target, bite_damage)
@@ -468,7 +480,7 @@ func _maybe_leap(delta: float) -> void:
 	if dragging or _leap_cooldown > 0.0 or pack == null or pack.order != SpiderPack.Order.HUNT or not is_instance_valid(pack.target):
 		return
 	var target := pack.target
-	var distance := global_position.distance_to(Factions.aim_point(target))
+	var distance := _gap_to(target) # (from its body's edge: the same for every size)
 	var high := on_wall()
 	var in_range := distance <= wall_leap_range if high else (distance >= leap_range_min and distance <= leap_range_max)
 	if in_range and randf() < (wall_leap_chance if high else leap_chance) * delta and _sees(target):
