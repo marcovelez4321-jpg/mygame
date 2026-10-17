@@ -1604,3 +1604,4 @@ them:
 - **Mutation pods: newest first (2026-10-17).** The user's. The Flesh Tree offers the most recently made mutations first (`Virus.MUTATIONS` order, reversed) instead of at random.
 - **Tentacle Whip slung like a real whip (2026-10-17).** The user's: less wriggling. Drawn back behind you to the right, then the arm sweeps right to left as a loop rolls down from the hand to the tip; the part past the loop lies back where it was. Once it's straight out, the tip snaps 8% past full length (the crack), then the whip goes slack and comes back in. It's drawn along that exact shape with no writhe (`GrappleTentacle.show_rope` path), and only hurts while it's slung.
 - Not compiled or run (the user's testing).
+- **Taking a mutation heals and feeds you (2026-10-17).** The user's: eating a pod heals to full health and fills hunger (`Virus.take_mutation`; the host's, sent with the usual virus sync). Not compiled or run (the user's testing).

@@ -160,6 +160,9 @@ func take_mutation(mutation: StringName) -> void:
 		return
 	mutations.append(mutation)
 	points = maxi(points - POINTS_TO_MUTATE, 0)
+	# Taking one heals you to full and fills you up (the user's).
+	_player.health.heal(_player.health.max_health)
+	hunger = 1.0
 	FleshTree.grow(1)
 	FleshTree.mutation_eaten() # the other pods shrivel now
 	_announce_trip(false)
