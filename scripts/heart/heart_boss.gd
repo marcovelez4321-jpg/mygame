@@ -24,6 +24,19 @@ const CHAIN_MODEL := "res://art/heart_boss/chain/chain.FBX"
 ## this many more off random spots on it, every way.
 @export var aim_at_players: bool = true
 @export var random_beams: int = 5
+## And one at where they're heading (the user's), led the way the flying
+## roaches lead their spit (FlyingRoach._spit_at) with the same values: their
+## sideways speed fully (x PREDICTION), toward/away only PREDICTION_TOWARD of
+## it, a random GUESS share of that lead each time plus up to GUESS_SIDEWAYS m
+## across their way, AIM_PAST beyond them, SCATTER of a miss -- carried on
+## for the time till it blasts (the glow).
+@export var predicting_beam: bool = true
+const PREDICTION := 0.8
+const PREDICTION_TOWARD := 0.3
+const GUESS := Vector2(0.4, 1.3)
+const GUESS_SIDEWAYS := 1.2
+const AIM_PAST := 0.4
+const SCATTER := 0.25
 ## Chains: this many to the walls round it, this many up to the ceiling.
 @export var wall_chains: int = 6
 @export var ceiling_chains: int = 6
@@ -41,6 +54,14 @@ const THUMP_RISE := 60.0
 const THUMP_FALL := 9.0
 const GLOW := 12.0
 const DRIP_EVERY := 0.6
+## A kick (the user's): the cathedral's walls, columns and mezzanines judder
+## (their meshes only -- the floor you stand on doesn't move) this far, for
+## about this long; its lamps flicker and dim, then come back.
+const JUDDER := 0.45
+const JUDDER_TIME := 0.45
+const JUDDER_RATE := 38.0
+const FLICKER_TIME := 0.35
+const ROOM_MESHES := ["Cathedral_plain", "Tower_5_concrete"]
 ## Its looks only run with someone this close (m).
 const NEAR := 700.0
 
@@ -54,6 +75,11 @@ var _beat_age := 10.0
 var _next_beat := 0.0
 var _next_beam := 0
 var _drip_left := 0.0
+var _room_meshes: Array[Node3D] = []
+var _room_rests: Array[Vector3] = []
+var _lamps: Array[Light3D] = []
+var _lamp_energy: Array[float] = []
+var _quake_age := 10.0
 var _active := false
 var _player: AudioStreamPlayer
 ## The map it's playing (yours if you've picked one: PlayerMovement.heart_song).
@@ -75,6 +101,7 @@ func _ready() -> void:
 	_player = AudioStreamPlayer.new()
 	add_child(_player)
 	_build_chains.call_deferred() # once the cathedral's walls are in the physics
+	_find_room.call_deferred()
 
 
 func _process(delta: float) -> void:
@@ -90,6 +117,7 @@ func _process(delta: float) -> void:
 	_beat_age += delta
 	if _active:
 		_tick(delta)
+	_shake_room(delta)
 	# One thump, and the light pulsing with it.
 	var thump := (1.0 - exp(-_beat_age * THUMP_RISE)) * exp(-_beat_age * THUMP_FALL)
 	_model.scale = Vector3.ONE * _base_scale * (1.0 + THUMP * thump)
@@ -172,7 +200,43 @@ func _kick() -> void:
 
 ## Network.send_heart_kick, on every game.
 func quake(spots: PackedVector3Array, decides: bool) -> void:
+	_quake_age = 0.0
 	HeartQuake.hit(self, _room_world(), spots, decides)
+
+
+## The cathedral's own meshes (to judder) and its lamps (to flicker).
+func _find_room() -> void:
+	var stack := get_parent()
+	if stack == null:
+		return
+	for name: String in ROOM_MESHES:
+		var mesh := stack.find_child(name, true, false) as Node3D
+		if mesh:
+			_room_meshes.append(mesh)
+			_room_rests.append(mesh.position)
+	var box := _room_world()
+	for light in stack.find_children("*", "Light3D", true, false):
+		if not is_ancestor_of(light) and box.has_point((light as Node3D).global_position):
+			_lamps.append(light as Light3D)
+			_lamp_energy.append((light as Light3D).light_energy)
+
+
+## The kick's judder and flicker, easing off.
+func _shake_room(delta: float) -> void:
+	_quake_age += delta
+	var left := clampf(1.0 - _quake_age / JUDDER_TIME, 0.0, 1.0)
+	for i in _room_meshes.size():
+		if not is_instance_valid(_room_meshes[i]):
+			continue
+		var offset := Vector3.ZERO
+		if left > 0.0:
+			var t := _quake_age * JUDDER_RATE
+			offset = Vector3(sin(t * 1.3 + i), sin(t * 0.9 + 2.0 * i) * 0.5, cos(t * 1.1 + i)) * JUDDER * left * left
+		_room_meshes[i].position = _room_rests[i] + offset
+	var flicker := _quake_age < FLICKER_TIME
+	for i in _lamps.size():
+		if is_instance_valid(_lamps[i]):
+			_lamps[i].light_energy = _lamp_energy[i] * (randf_range(0.05, 0.5) if flicker else 1.0)
 
 
 func _song_time() -> float:
@@ -191,7 +255,14 @@ func _fire(warn: float) -> void:
 			if player and not player.is_dead() and _room_world().has_point(player.global_position + Vector3.UP):
 				inside.append(player)
 		if not inside.is_empty():
-			target = inside[randi() % inside.size()].global_position + Vector3.UP
+			var chosen := inside[randi() % inside.size()] as PlayerMovement
+			target = chosen.global_position + Vector3.UP
+			if predicting_beam:
+				# Where they'll be by the blast (the roaches' lead).
+				var lead := _predict(chosen, global_position, warn)
+				var lead_way := (lead - global_position).normalized()
+				var lead_from := global_position + lead_way * _radii * 0.85
+				Network.send_blood_beam(lead_from, (lead - lead_from).normalized(), maxf(warn, 0.05))
 	var way := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 0.5), randf_range(-1.0, 1.0)).normalized()
 	if target.is_finite():
 		way = (target - global_position).normalized().slerp(way, 0.3).normalized()
@@ -202,6 +273,22 @@ func _fire(warn: float) -> void:
 	for i in random_beams:
 		var out := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized()
 		Network.send_blood_beam(global_position + out * _radii * 0.85, out, maxf(warn, 0.05))
+
+
+## Where `target` will be in `time` seconds, as the roaches guess it.
+func _predict(target: PlayerMovement, from_point: Vector3, time: float) -> Vector3:
+	var aim := Factions.aim_point(target)
+	var to_target := Vector3(aim.x - from_point.x, 0.0, aim.z - from_point.z)
+	var line := to_target.normalized() if to_target.length_squared() > 0.0001 else Vector3.FORWARD
+	var ground := Vector3(target.velocity.x, 0.0, target.velocity.z)
+	var toward_away := line * ground.dot(line)
+	var sideways := ground - toward_away
+	var lead := (sideways + toward_away * PREDICTION_TOWARD) * PREDICTION * randf_range(GUESS.x, GUESS.y)
+	var sideways_guess := Vector3.ZERO
+	if ground.length_squared() > 1.0:
+		sideways_guess = ground.normalized().cross(Vector3.UP) * randf_range(-GUESS_SIDEWAYS, GUESS_SIDEWAYS)
+	var scatter := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)).limit_length(1.0) * SCATTER
+	return aim + line * AIM_PAST + sideways_guess + lead * time + scatter
 
 
 # ---- Who's here -----------------------------------------------------------------

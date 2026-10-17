@@ -20,6 +20,11 @@ const SHAKE := 2.0
 ## Dust bursts on the floor and crumbling spots on the walls, each kick.
 const FLOOR_DUST := 6
 const WALL_CRUMBLES := 8
+## Curtains of dust and grit pouring down from high up across the room
+## (the user's), this many a kick, from this high, this long.
+const DUST_SHEETS := 4
+const SHEET_HEIGHT := Vector2(60.0, 150.0)
+const SHEET_LENGTH := Vector2(12.0, 30.0)
 ## Chunks fall from this high over the floor (out of the dark overhead, the
 ## user's: in the arena, not off at the walls): half scattered round the
 ## players (within NEAR_PLAYER), half anywhere in the arena round the heart
@@ -92,6 +97,10 @@ static func hit(heart: Node3D, room: AABB, spots: PackedVector3Array, decides: b
 			3: at.z = room.end.z - 1.0
 		dust(world, at, randf_range(2.0, 4.0))
 		rubble(world, at, 0.6)
+	for i in DUST_SHEETS:
+		var at := Vector3(randf_range(room.position.x + 10.0, room.end.x - 10.0), room.position.y + randf_range(SHEET_HEIGHT.x, SHEET_HEIGHT.y),
+				randf_range(room.position.z + 10.0, room.end.z - 10.0))
+		sheet(world, at, randf_range(SHEET_LENGTH.x, SHEET_LENGTH.y), randf() * PI)
 	for spot in spots:
 		var drift := Vector3(randf_range(-1.5, 1.5), -randf_range(4.0, 8.0), randf_range(-1.5, 1.5))
 		FallingChunk.drop(world, spot, drift, randf_range(CHUNK_SIZE.x, CHUNK_SIZE.y), decides)
@@ -105,6 +114,30 @@ static func hit(heart: Node3D, room: AABB, spots: PackedVector3Array, decides: b
 		if player.is_on_floor() or player.is_on_wall() or player.grapple.is_perched():
 			player.health.take_damage(DAMAGE, Health.NO_ATTACKER, Vector3.UP, player.global_position, 1.0)
 			player.launch(Vector3.UP * LAUNCH)
+
+
+## A curtain of dust pouring down from `at`: a long thin strip of it
+## (`length` across, turned `turn`), grit falling through it.
+static func sheet(world: Node, at: Vector3, length: float, turn: float) -> void:
+	var holder := Node3D.new()
+	world.add_child(holder)
+	holder.global_position = at
+	holder.rotation.y = turn
+	var dust_fall := dust_particles(70, 5.0, Vector2(1.0, 3.0), 3.0)
+	var process := dust_fall.process_material as ParticleProcessMaterial
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	process.emission_box_extents = Vector3(length * 0.5, 0.5, 1.0)
+	process.direction = Vector3.DOWN
+	process.spread = 8.0
+	process.gravity = Vector3(0.0, -7.0, 0.0)
+	dust_fall.one_shot = true
+	dust_fall.explosiveness = 0.6
+	dust_fall.local_coords = false
+	dust_fall.visibility_aabb = AABB(Vector3(-length, -200.0, -length), Vector3(length * 2.0, 210.0, length * 2.0))
+	holder.add_child(dust_fall)
+	dust_fall.emitting = true
+	rubble(holder, at, 1.5)
+	dust_fall.finished.connect(holder.queue_free)
 
 
 ## A puff of dust (billboards spreading and settling).

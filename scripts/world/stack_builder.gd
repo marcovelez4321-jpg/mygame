@@ -1753,6 +1753,9 @@ const CATHEDRAL_SLIT := Vector2(3.0, 60.0) # wide, tall
 const CATHEDRAL_SLIT_UP := 10.0
 ## How high the heart hangs over the cathedral floor (m).
 const HEART_HANG := 100.0
+## More lamps scattered round the cathedral (the user's), warm low and cold
+## high in turn.
+const CATHEDRAL_LAMPS := 5
 ## Its song's beat map (the beat mapper's), if it's there.
 const HEART_MAP := "res://audio/music/Project_34.beats.tres"
 ## The room (floor to ceiling, local), once built; empty before.
@@ -1906,6 +1909,12 @@ func _cathedral() -> void:
 			kinds = HALL_GROWTH, density = 2.0 * HIVE_GROWTH, shaft = 0.0})
 	# Up from the hive's top hall: its panic stairs carry on, through the floor.
 	var stairs := _panic_up(panic_tangles.get(top_hall.name, {}), top_hall.name, base_y, floor_y, room)
+	for i in CATHEDRAL_LAMPS:
+		var warm := i % 2 == 0
+		var lamp_at := Vector3(cathedral_random.randf_range(room.position.x + 20.0, room.end.x - 20.0),
+				floor_y + (cathedral_random.randf_range(8.0, 40.0) if warm else cathedral_random.randf_range(60.0, 160.0)),
+				cathedral_random.randf_range(room.position.z + 20.0, room.end.z - 20.0))
+		lamps.append([lamp_at, Color(1.0, 0.6, 0.3) if warm else Color(0.75, 0.85, 1.0), 3.0, 80.0 if warm else 140.0])
 	halls.append({tower = HIVE, box = room, name = "Cathedral"})
 	if cathedral_entry.origin == Vector3.ZERO:
 		# (No way up through the floor: by the -Z wall, facing in.)

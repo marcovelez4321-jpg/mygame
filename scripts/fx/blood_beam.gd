@@ -45,6 +45,14 @@ const SHAKE := 2.5
 const SHAKE_RANGE := 45.0
 
 const SHADER := preload("res://shaders/blood_beam.gdshader")
+## Its sounds (the user's: heard when you're near one): a rising whine while
+## the hole glows, a roar while it blasts -- placeholders made here
+## (_make_sounds) till there are real ones. The roar sits at the point on the
+## beam nearest you, so you hear any beam you're close to, all along it.
+const SOUND_RANGE := 90.0
+const SOUND_UNIT := 14.0
+const CHARGE_DB := -4.0
+const ROAR_DB := 2.0
 
 var _from := Vector3.ZERO
 var _direction := Vector3.FORWARD
@@ -69,8 +77,12 @@ var _light: OmniLight3D
 var _impact_light: OmniLight3D
 var _spray: GPUParticles3D
 var _mist: GPUParticles3D
+var _charge: AudioStreamPlayer3D
+var _roar: AudioStreamPlayer3D
 
 static var _glow_texture: GradientTexture2D
+static var _charge_sound: AudioStreamWAV
+static var _roar_sound: AudioStreamWAV
 static var _hole_texture: GradientTexture2D
 
 
@@ -111,6 +123,13 @@ func _ready() -> void:
 	_light.shadow_enabled = false
 	add_child(_light)
 	_light.position = _direction * 2.0
+	_make_sounds()
+	_charge = _voice(_charge_sound, CHARGE_DB)
+	_roar = _voice(_roar_sound, ROAR_DB)
+	if not _ricochet and _warn > 0.05:
+		# The whine, timed to peak as it blasts.
+		_charge.pitch_scale = clampf(0.75 / _warn, 0.6, 2.5)
+		_charge.play()
 
 
 func _process(delta: float) -> void:
@@ -129,6 +148,7 @@ func _process(delta: float) -> void:
 		return
 	if not _fired:
 		_fire()
+	_follow_listener()
 	var thick := clampf(blast / SNAP_IN, 0.0, 1.0)
 	var fade := 1.0
 	if blast > BLAST_TIME:
@@ -198,6 +218,10 @@ func _fire() -> void:
 	if _length < MAX_REACH:
 		BloodFX.spawn_splatter(world, reach, _hit_normal, THICKNESS * 0.9)
 	_light.light_color = Color(1.0, 0.18, 0.12)
+	_charge.stop()
+	_roar.pitch_scale = randf_range(0.85, 1.15)
+	_follow_listener()
+	_roar.play()
 	var camera := get_viewport().get_camera_3d() as CameraJuice
 	if camera:
 		var at := camera.global_position
@@ -210,6 +234,67 @@ func _fire() -> void:
 
 
 # ---- Looks ---------------------------------------------------------------------
+
+func _voice(stream: AudioStream, db: float) -> AudioStreamPlayer3D:
+	var voice := AudioStreamPlayer3D.new()
+	voice.stream = stream
+	voice.volume_db = db
+	voice.unit_size = SOUND_UNIT
+	voice.max_distance = SOUND_RANGE
+	voice.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+	add_child(voice)
+	return voice
+
+
+## The roar onto the point of the beam nearest whoever's listening.
+func _follow_listener() -> void:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null or _roar == null:
+		return
+	var along := clampf((camera.global_position - _from).dot(_direction), 0.0, _length)
+	_roar.global_position = _from + _direction * along
+
+
+## The placeholder sounds, made once: the charge (a whine sweeping up through
+## a hiss, 0.75 s) and the roar (a low boom under a tearing, gushing noise
+## and a sizzle, 0.7 s).
+static func _make_sounds() -> void:
+	if _charge_sound != null:
+		return
+	_charge_sound = _wav(22050, 0.75, _charge_shape)
+	_roar_sound = _wav(22050, 0.7, _roar_shape)
+
+
+static func _charge_shape(t: float, noise: float) -> float:
+	var sweep := 180.0 + 900.0 * t * t / 0.5625
+	var swell := t / 0.75
+	return (sin(TAU * sweep * t) * 0.5 + sin(TAU * sweep * 2.01 * t) * 0.2 + noise * 0.25) * swell * swell
+
+
+static func _roar_shape(t: float, noise: float) -> float:
+	var hit := exp(-t * 6.0)
+	var boom := sin(TAU * (70.0 - 30.0 * t) * t) * exp(-t * 4.0)
+	var gush := noise * (0.6 + 0.4 * sin(TAU * 13.0 * t)) * minf(t * 40.0, 1.0) * (1.0 - t / 0.7)
+	var sizzle := sin(TAU * 2400.0 * t + noise * 3.0) * 0.12 * hit
+	return boom * 0.9 + gush * 0.7 + sizzle
+
+
+static func _wav(rate: int, seconds: float, shape: Callable) -> AudioStreamWAV:
+	var count := int(rate * seconds)
+	var data := PackedByteArray()
+	data.resize(count * 2)
+	var smooth := 0.0
+	for i in count:
+		# Noise a little smoothed (less fizz, more rush).
+		smooth = lerpf(smooth, randf_range(-1.0, 1.0), 0.35)
+		var value: float = shape.call(float(i) / rate, smooth)
+		data.encode_s16(i * 2, int(clampf(value, -1.0, 1.0) * 30000.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.data = data
+	return wav
+
 
 ## The hole: glowing white-hot from inside, on whatever surface it's on (a
 ## decal pressed onto the heart there), and a flare of light over it.
