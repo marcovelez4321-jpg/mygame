@@ -67,6 +67,11 @@ const BACKSTAGE_TO := Vector2(44.0, 69.0)
 var _leash_for := 0.0
 var _stuck_for := 0.0
 var _stuck_best := INF
+## Indoors, how long it's had no way through to them (another floor, a wall).
+var _cut_for := 0.0
+## How long it's been heading for its hiding spot (never there by STUCK_TIME:
+## it waits where it is -- not hiding for ever, never stalking or staging).
+var _hiding_for := 0.0
 ## Up the walls, like a spider (the user's): it stalks from a PERCH -- a
 ## spot PERCH_HEIGHT up a wall near where it means to be, or indoors (half
 ## the time) on the ceiling -- picked again every PERCH_EVERY; and it hides
@@ -120,6 +125,9 @@ const FEAR_FLEE := 0.20
 const FEAR_SPIN := 0.10
 const FEAR_HELP := 1.0
 const FEAR_DRAIN_TIME := 300.0
+## Full, it stays full this long (seconds) if it hasn't had you -- then the
+## slow drain again (the user's).
+const FEAR_HOLD := 120.0
 const INVESTIGATE_RADIUS := 20.0
 const INVESTIGATE_TIME := 10.0
 ## Looked straight at (degrees off centre): a watching one's cue to go.
@@ -169,6 +177,7 @@ var _freed_by_others := 0.0
 
 ## The shared fear meter, 0..1 (the host's).
 var fear := 0.0
+var _full_for := 0.0
 var _stunt := Stunt.RATTLE
 var _stunt_phase := 0
 var _stunt_target: PlayerMovement
@@ -381,6 +390,8 @@ func _physics_process(delta: float) -> void:
 func _think(delta: float) -> void:
 	_fear_tick(delta)
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
+	if state == State.APPROACH and is_instance_valid(_victim) and _cut_off_tick(delta, _victim):
+		return
 	if state == State.APPROACH or state == State.LUNGE or state == State.DRAG:
 		_strike_tick(delta)
 		return
@@ -424,6 +435,8 @@ func _think(delta: float) -> void:
 		return
 	# Backstage: too far behind, or hung up and not closing in -- and nobody
 	# watching -- it slips round and turns up closer.
+	if state == State.STALK and _cut_off_tick(delta, nearest):
+		return
 	if state == State.STALK:
 		_leash_for = _leash_for + delta if distance > LEASH else 0.0
 		if distance < _stuck_best - STUCK_GAIN:
@@ -456,7 +469,8 @@ func _think(delta: float) -> void:
 				if _run_off_left <= 0.0:
 					_hide_to = _hiding_spot()
 				return
-			if not _hide_to.is_finite() or global_position.distance_to(_hide_to) < 1.5:
+			_hiding_for += delta
+			if not _hide_to.is_finite() or global_position.distance_to(_hide_to) < 1.5 or _hiding_for > STUCK_TIME:
 				_hide_fast = false
 				state = State.WAIT
 				_state_left = WAIT_TIME
@@ -480,11 +494,20 @@ func _think(delta: float) -> void:
 				_stunt_left_every = randf_range(STUNT_EVERY.x, STUNT_EVERY.y)
 				if _start_stunt():
 					return
+				_stunt_left_every = 2.0 # none fit here: tries again shortly, not a whole wait later
 			# Round to a spot STALK_DISTANCE from them, on the side it's on.
 			var away := global_position - nearest.global_position
 			away.y = 0.0
 			away = away.normalized() if away.length_squared() > 0.01 else Vector3.BACK
 			var spot := nearest.global_position + away * STALK_DISTANCE
+			if HallEcho.inside(nearest.global_position):
+				# Indoors: on their side of the walls (in their room, on their floor).
+				var eye := nearest.head.global_position
+				var wall := _ray(eye, eye + away * STALK_DISTANCE)
+				if not wall.is_empty():
+					var floor_hit := _ground_at(eye + away * maxf(eye.distance_to(wall.position) - SPAN, 2.0) + Vector3.DOWN * 5.0)
+					if not floor_hit.is_empty() and absf((floor_hit.position as Vector3).y - nearest.global_position.y) < 4.0:
+						spot = floor_hit.position
 			# Up a wall or on a ceiling near there, rather than on the ground.
 			_perch_left -= delta
 			if _perch_left <= 0.0 or not _perch.is_finite() or _perch.distance_to(spot) > PERCH_REACH * 2.0:
@@ -624,7 +647,8 @@ func _reacting(kind: String) -> bool:
 ## Every tick: the meter drains; players whipping round or running off after
 ## a stunt fill it; a help scream's spot, investigated, fills half.
 func _fear_tick(delta: float) -> void:
-	if fear < 1.0:
+	_full_for = _full_for + delta if fear >= 1.0 else 0.0
+	if fear < 1.0 or _full_for > FEAR_HOLD:
 		fear = maxf(fear - delta / FEAR_DRAIN_TIME, 0.0)
 	_hook_left -= delta
 	if _hook_left <= 0.0:
@@ -725,6 +749,7 @@ func _start_hide(fast: bool) -> void:
 	_hide_fast = fast
 	_hide_to = Vector3.INF
 	_run_off_left = RUN_OFF_TIME
+	_hiding_for = 0.0
 	state = State.HIDE
 
 
@@ -885,6 +910,28 @@ func _go_away() -> void:
 
 ## Back, somewhere out of sight RELOCATE_TO from one of the players (behind
 ## them, on the ground).
+## In a megastructure, the straight crawl to someone can be no way at all --
+## they're a floor up, or through a wall it'd only climb about on. Cut off
+## that long (STUCK_TIME, nobody watching), it slips round and turns up on
+## their floor, out of sight -- the Left 4 Dead director's way (its special
+## infected never path across the map: they turn up near you, unseen). True
+## if it did.
+func _cut_off_tick(delta: float, p: PlayerMovement) -> bool:
+	if not (HallEcho.inside(p.global_position) or HallEcho.inside(global_position)):
+		_cut_for = 0.0
+		return false
+	var me := global_position + global_basis.y * BODY_HEIGHT
+	var blocked := not _ray(me, p.head.global_position).is_empty()
+	_cut_for = _cut_for + delta if blocked else 0.0
+	if _cut_for > STUCK_TIME and not _seen():
+		_cut_for = 0.0
+		_stuck_for = 0.0
+		_stuck_best = INF
+		_turn_up(BACKSTAGE_TO)
+		return true
+	return false
+
+
 func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
 	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
@@ -895,8 +942,26 @@ func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
 	for attempt in 16:
 		var behind := player.head.global_basis.z.rotated(Vector3.UP, randf_range(-1.2, 1.2))
 		behind.y = 0.0
-		var spot := player.global_position + behind.normalized() * randf_range(how_far.x, how_far.y)
-		var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 300.0, spot + Vector3.DOWN * 400.0, 1, [get_rid()]))
+		behind = behind.normalized()
+		var ground := {}
+		if HallEcho.inside(player.global_position):
+			# Indoors: behind them in their own room, on their floor -- never
+			# dropped onto the roof or another storey (rays from high above
+			# land there).
+			var eye := player.head.global_position
+			var reach := randf_range(how_far.x, how_far.y)
+			var wall := _ray(eye, eye + behind * reach)
+			if not wall.is_empty():
+				reach = eye.distance_to(wall.position) - SPAN
+			if reach < LUNGE_FROM:
+				continue
+			var over := eye + behind * reach
+			ground = _ray(over, over + Vector3.DOWN * (eye.y - player.global_position.y + 4.0))
+		else:
+			# Outdoors: from not far over their head, so not up on a bridge or a
+			# tower's roof.
+			var spot := player.global_position + behind * randf_range(how_far.x, how_far.y)
+			ground = space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(spot.x, player.global_position.y + 60.0, spot.z), spot + Vector3.DOWN * 400.0, 1, [get_rid()]))
 		if ground.is_empty():
 			continue
 		var at: Vector3 = ground.position
@@ -1188,8 +1253,12 @@ func _place(at: Vector3, normal: Vector3, toward: Vector3, hidden: bool) -> bool
 	return true
 
 
+## The ground under `point` -- from just under the ceiling if there's one
+## within 6 m (indoors: else the ray starts over it and finds the floor above).
 func _ground_at(point: Vector3) -> Dictionary:
-	return _ray(point + Vector3.UP * 6.0, point + Vector3.DOWN * 40.0)
+	var ceiling := _ray(point, point + Vector3.UP * 6.0)
+	var top := (ceiling.position as Vector3) + Vector3.DOWN * 0.2 if not ceiling.is_empty() else point + Vector3.UP * 6.0
+	return _ray(top, point + Vector3.DOWN * 40.0)
 
 
 static func _flat(v: Vector3) -> Vector3:
@@ -1422,7 +1491,7 @@ func _update_skitter(camera: Camera3D) -> void:
 		_skitter.stream = SpiderSound.skitter(7)
 		_skitter.unit_size = SpiderSound.UNIT_SIZE * 1.4
 		_skitter.max_distance = SpiderSound.HEAR_DISTANCE
-		_skitter.pitch_scale = 0.55
+		_skitter.pitch_scale = 0.45 # (the user's: lower, heavier)
 		_skitter.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
 		_visual.add_child(_skitter)
 		_skitter.play(randf())

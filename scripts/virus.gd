@@ -30,6 +30,8 @@ const WHIP := &"whip"
 const SEEDED := &"seeded_growth"
 
 ## The pool (the user's): name, and what it does (shown on a pod's highlight).
+## (Tendrils is out of it -- the user's, 2026-10-17: it didn't work well;
+## its code stays, switched off.)
 const MUTATIONS := {
 	WINGS: ["Insect Wings", "Shift in the air flies (it replaces the dash)"],
 	CHITIN: ["Chitin Skin", "35% less damage from attacks and falls"],
@@ -37,7 +39,6 @@ const MUTATIONS := {
 	RAT_LUNGS: ["Rat Lungs", "Stamina refills 50% faster"],
 	MANTIS: ["Mantis Legs", "Jump 50% higher, half fall damage"],
 	SPINNERETS: ["Spinnerets", "The grapple reaches 25% further"],
-	TENDRILS: ["Tendrils", "Where the grapple bites, three tendrils reach on to re-attach to"],
 	WHIP: ["Tentacle Whip", "Double-tap right click: lash the tentacle (50, 5 m, 1 bar)"],
 	SEEDED: ["Seeded Growth", "Tap right click: five tentacles burst from the ground where you aim (40, then 10/s for 2 s; 1 bar, 4 s)"],
 }
@@ -88,6 +89,7 @@ func _ready() -> void:
 	if not kept.is_empty():
 		points = kept.points
 		mutations.assign(kept.mutations)
+	mutations.assign(mutations.filter(func(m: StringName) -> bool: return MUTATIONS.has(m))) # (none out of the pool)
 	_player.health.died.connect(_on_died)
 	_player.respawned.connect(func() -> void: hunger = 1.0)
 	_apply()
@@ -209,7 +211,7 @@ func _apply() -> void:
 	if _player == null:
 		return
 	_player.health.damage_scale = 0.65 if has(CHITIN) else 1.0
-	_player.grapple.tendrils_enabled = has(TENDRILS)
+	_player.grapple.tendrils_enabled = false # (Tendrils: out of the pool)
 
 
 ## The trip flash, on the screen of whoever owns this body.

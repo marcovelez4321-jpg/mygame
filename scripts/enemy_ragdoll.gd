@@ -741,7 +741,7 @@ func _apply_hit_impulse_deferred() -> void:
 		# Not a shot: a plain shove away from where the enemy was facing.
 		var push := _enemy.global_transform.basis.z * death_push
 		for bone in _bones:
-			if is_instance_valid(bone) and bone.is_inside_tree():
+			if _in_space(bone):
 				bone.apply_central_impulse(push)
 		return
 		
@@ -754,4 +754,12 @@ func _apply_hit_impulse_deferred() -> void:
 		if bone.global_position.distance_to(health.last_hit_position) < nearest.global_position.distance_to(health.last_hit_position):
 			nearest = bone
 	for bone in _bones:
-		bone.apply_central_impulse(impulse if bone == nearest else impulse * body_share)
+		if _in_space(bone):
+			bone.apply_central_impulse(impulse if bone == nearest else impulse * body_share)
+
+
+## A bone the physics can push: in the tree AND in a physics space. A body
+## switched off (process disabled -- a tendril's grab, a sleeping group, a
+## burst) is taken out of the space, and Jolt errors on any push to it.
+static func _in_space(bone: PhysicalBone3D) -> bool:
+	return is_instance_valid(bone) and bone.is_inside_tree() and PhysicsServer3D.body_get_space(bone.get_rid()).is_valid()
