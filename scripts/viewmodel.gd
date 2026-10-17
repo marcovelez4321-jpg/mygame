@@ -351,6 +351,10 @@ func _on_hand_changed(data: Dictionary) -> void:
 			# right in it, and the right's away -- the left (grapple, bag) is its
 			# own again (the user's). _pose_arms() sets it back when a gun's out.
 			_fp_arms.set_dual(false)
+			# A two-handed gun stowed: no support pose holding up nothing -- the
+			# left arm's out of sight till you grapple, then in its normal
+			# grapple animation (the user's).
+			_fp_arms.set_support(false)
 			_fp_arms.set_right_hidden(true)
 		return
 	_hands_empty = false
@@ -1910,7 +1914,7 @@ func _tick_left_arm(delta: float) -> void:
 			if _shown_weapon:
 				_apply_arm_offsets(_shown_weapon)
 		_bag_was_out = out
-	var free_hand := _shown_weapon != null and _shown_weapon.one_handed and _arms.visible
+	var free_hand := _arms.visible and (_hands_empty or (_shown_weapon != null and _shown_weapon.one_handed))
 	_fp_arms.tick(delta, _grapple.is_coiling(), _grapple.coil, _grapple.is_out(), free_hand)
 
 
