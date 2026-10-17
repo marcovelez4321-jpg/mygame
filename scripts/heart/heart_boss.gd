@@ -258,6 +258,11 @@ func _clear_of(heart: AABB, i: int, from: Vector3, to: Vector3) -> bool:
 	return true
 
 
+## Whether `point` is in its cathedral (the Stalker keeps out of it).
+func room_contains(point: Vector3) -> bool:
+	return _room_world().grow(5.0).has_point(point)
+
+
 ## Network.send_heart_shift, on every game: where they head now.
 func shift(spots: PackedVector3Array) -> void:
 	for i in mini(spots.size(), _piece_to.size()):

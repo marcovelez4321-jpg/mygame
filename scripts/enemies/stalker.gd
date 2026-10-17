@@ -402,6 +402,15 @@ func _physics_process(delta: float) -> void:
 
 func _think(delta: float) -> void:
 	_fear_tick(delta)
+	# The heart's cathedral is off limits (the user's): it never follows you
+	# in -- caught in there, it slips out unseen and waits below.
+	if state != State.DRAG and _in_cathedral(global_position) and not _seen():
+		_leave_cathedral()
+		return
+	if (state == State.APPROACH or state == State.LUNGE) and is_instance_valid(_victim) and _in_cathedral(_victim.global_position):
+		_victim = null
+		_start_hide(false) # (they got in there: it lets them go, for now)
+		return
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	if state == State.APPROACH and is_instance_valid(_victim) and _cut_off_tick(delta, _victim):
 		return
@@ -537,7 +546,7 @@ func _think(delta: float) -> void:
 func _exposed_player() -> PlayerMovement:
 	for node in get_tree().get_nodes_in_group("player"):
 		var p := node as PlayerMovement
-		if p == null or p.is_dead() or p.drag != null:
+		if p == null or p.is_dead() or p.drag != null or _in_cathedral(p.global_position):
 			continue
 		if _off_guard(p):
 			return p
@@ -703,12 +712,35 @@ func _on_player_fired() -> void:
 		_add_fear(FEAR_FIRE, "panic fired")
 
 
+## In the heart's cathedral (HeartBoss.room_contains).
+func _in_cathedral(point: Vector3) -> bool:
+	var heart := get_tree().get_first_node_in_group(&"heart_boss")
+	return heart != null and bool(heart.call(&"room_contains", point))
+
+
+## Out of the cathedral, unseen: down in the hall under it, by the foot of
+## the stairs up -- waiting for whoever's up there to come down.
+func _leave_cathedral() -> void:
+	var entry := get_tree().get_first_node_in_group(&"cathedral_spawn") as Node3D
+	if entry == null:
+		_go_away()
+		return
+	var below := _ray(entry.global_position + Vector3.DOWN * 30.0, entry.global_position + Vector3.DOWN * 400.0)
+	if below.is_empty() or _visible_from_any(_body_points(below.position, Basis.IDENTITY)):
+		return # (try again next tick)
+	global_position = (below.position as Vector3) + (below.normal as Vector3) * RIDE
+	_normal = below.normal
+	_velocity = Vector3.ZERO
+	state = State.WAIT
+	_state_left = WAIT_TIME
+
+
 func _nearest_player() -> PlayerMovement:
 	var best: PlayerMovement = null
 	var best_distance := INF
 	for node in get_tree().get_nodes_in_group("player"):
 		var player := node as PlayerMovement
-		if player == null or player.is_dead():
+		if player == null or player.is_dead() or _in_cathedral(player.global_position):
 			continue
 		var distance := player.global_position.distance_squared_to(global_position)
 		if distance < best_distance:
@@ -946,7 +978,7 @@ func _cut_off_tick(delta: float, p: PlayerMovement) -> bool:
 
 
 func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
-	var players := get_tree().get_nodes_in_group("player")
+	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool: return not _in_cathedral((n as Node3D).global_position))
 	if players.is_empty():
 		_state_left = 2.0
 		return
@@ -995,7 +1027,8 @@ func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
 ## across the towers by preference when they're climbing a megastructure's
 ## outside). False if none could be staged this time.
 func _start_stunt() -> bool:
-	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool: return n is PlayerMovement and not (n as PlayerMovement).is_dead())
+	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool:
+		return n is PlayerMovement and not (n as PlayerMovement).is_dead() and not _in_cathedral((n as Node3D).global_position))
 	if players.is_empty():
 		return false
 	_stunt_target = players[randi() % players.size()] as PlayerMovement
