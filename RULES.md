@@ -1653,3 +1653,4 @@ them:
   - **Out of sight (Left 4 Dead's rule):** a roaming swarm or climbing horde only spawns where no player could see it, meaning outside a 65-degree cone of where they're looking or behind a wall, and never within 25 m. If there's no hidden spot when it's rolled, it keeps trying each second until there is.
   - **Fix:** a roaming band's patrol anchor was in the Stack's local space, not the world's.
   - Not run (the user's testing).
+- **Camp fire: no more flame pictures (2026-10-17).** The user's: the crossed fire images were still there. In the forest props the part named "Fire" IS the crossed flame cards (a 1 m cube of pictures, hung off the "Bonfire"), and the logs are "Bonfire". The camp now uses "Bonfire" and leaves out any mesh named Fire or Flame (`Camp._is_card`); the old flat-card guess is gone (it also took the pot's food).

@@ -130,7 +130,7 @@ static func make_look(tent_variant: int) -> Node3D:
 	if _survival_scene == null and ResourceLoader.exists(SURVIVAL):
 		_survival_scene = load(SURVIVAL) as PackedScene
 	_part(root, _forest_scene, TENTS[tent_variant % TENTS.size()], Vector3.ZERO, TENT_LENGTH, null)
-	_part(root, _forest_scene, "Fire", FIRE_AT, FIRE_SIZE, null)
+	_part(root, _forest_scene, "Bonfire", FIRE_AT, FIRE_SIZE, null) # (its logs: the pack's "Fire" is only the flame cards)
 	_part(root, _forest_scene, "Campfire crane", FIRE_AT, FIRE_SIZE * 1.3, null)
 	_part(root, _forest_scene, "Pot", FIRE_AT + Vector3.UP * 0.7, 0.35, null)
 	_part(root, _survival_scene, "sleeping_bag", BED_AT, BED_LENGTH, _bed_material())
@@ -181,13 +181,11 @@ static func _part(root: Node3D, pack: PackedScene, name: String, at: Vector3, si
 	root.add_child(holder)
 
 
-## A flat picture card (the Fire's crossed flame planes -- they showed as
-## pictures in a plus over it): left out, the camp's own flames burn there.
+## The forest pack's flame cards (its "Fire" -- crossed pictures of a fire,
+## the plus the user saw -- and "Flame"): left out wherever they hang off a
+## part (the Bonfire carries the Fire); the camp's own flames burn there.
 static func _is_card(mesh: MeshInstance3D) -> bool:
-	if String(mesh.name).to_lower().contains("flame"):
-		return true
-	var size := mesh.get_aabb().size
-	return minf(size.x, minf(size.y, size.z)) < maxf(size.x, maxf(size.y, size.z)) * 0.02
+	return String(mesh.name) in ["Fire", "Flame"]
 
 
 static var _bed_look: StandardMaterial3D
