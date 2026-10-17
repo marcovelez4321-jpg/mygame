@@ -4,9 +4,10 @@ extends Node3D
 ## The heart boss (docs/HEART_BOSS.md), first pass: the real heart hanging in
 ## its cathedral (the Stack puts it there: StackBuilder.build_scene), chained
 ## up from every side, beating, dripping blood. While anyone's in the
-## cathedral it beats to its song's map (beat_map: a hole opens a beat before
-## each snare and blasts a BloodBeam on it; the kicks make it beat) -- or,
-## with no map yet, to test_bpm, a beam every beat.
+## cathedral it plays its song's map (beat_map): on every snare its holes
+## glow open and a beat later the volley blasts (BloodBeam); on every kick it
+## beats and the whole cathedral shakes (HeartQuake). With no map yet:
+## test_bpm, kick and snare taking turns.
 ## Values here are first picks (the user: "put the heart in"), all to change.
 ## Rule 1 (co-op): the host fires the beams (Network.send_blood_beam); its
 ## beating, chains and drips are looks, every game its own.
@@ -55,6 +56,7 @@ var _player: AudioStreamPlayer
 
 
 func _ready() -> void:
+	add_to_group(&"heart_boss")
 	_build_heart()
 	_build_drips()
 	_light = OmniLight3D.new()
@@ -119,21 +121,42 @@ func _stop() -> void:
 func _tick(delta: float) -> void:
 	_time = _song_time() if _player and _player.playing else _time + delta
 	if beat_map and beat_map.song:
-		# Its map: the kicks beat it; a hole opens a beat before each snare.
+		# Its map: every kick, the quake; every snare, the holes glow open
+		# (on the beat) and blast a beat later.
 		var beat := beat_map.beat()
 		if not beat_map.between(BeatMap.Drum.KICK, _time - delta, _time).is_empty():
-			_beat_age = 0.0
-		for at in beat_map.between(BeatMap.Drum.SNARE, _time - delta + beat, _time + beat):
-			_fire(at - _time)
+			_kick()
+		if not beat_map.between(BeatMap.Drum.SNARE, _time - delta, _time).is_empty():
+			_fire(beat)
 		if not _player.playing:
 			_start() # the song's over: round again
 		return
-	# No map: test_bpm, a beat and a beam every beat.
+	# No map: test_bpm, kick and snare taking turns.
 	var beat := 60.0 / maxf(test_bpm, 1.0)
 	if _time >= _next_beat:
 		_next_beat += beat
-		_beat_age = 0.0
-		_fire(beat)
+		if _next_beam % 2 == 0:
+			_kick()
+		else:
+			_fire(beat)
+		_next_beam += 1
+
+
+## A kick: it beats, and (the host's call) the cathedral quakes.
+func _kick() -> void:
+	_beat_age = 0.0
+	if Network.is_online() and not multiplayer.is_server():
+		return
+	var inside: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group("player"):
+		if _room_world().has_point((node as Node3D).global_position + Vector3.UP):
+			inside.append(node as Node3D)
+	Network.send_heart_kick(HeartQuake.pick_chunks(_room_world(), inside))
+
+
+## Network.send_heart_kick, on every game.
+func quake(spots: PackedVector3Array, decides: bool) -> void:
+	HeartQuake.hit(self, _room_world(), spots, decides)
 
 
 func _song_time() -> float:

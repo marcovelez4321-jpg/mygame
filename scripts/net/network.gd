@@ -229,6 +229,25 @@ func _net_blood_beam(from: Vector3, direction: Vector3, warn: float) -> void:
 	BloodBeam.fire(get_tree().current_scene, from, direction, maxf(warn - half_ping(), 0.0), false)
 
 
+## Host: the heart's kick (HeartQuake) -- the shake, dust and chunks
+## (breaking off at `spots`) on every machine; only the host's launches.
+func send_heart_kick(spots: PackedVector3Array) -> void:
+	_heart_kick(spots, true)
+	if is_online():
+		_net_heart_kick.rpc(spots)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_heart_kick(spots: PackedVector3Array) -> void:
+	_heart_kick(spots, false)
+
+
+func _heart_kick(spots: PackedVector3Array, decides: bool) -> void:
+	var heart := get_tree().get_first_node_in_group(&"heart_boss") as Node3D
+	if heart:
+		heart.call(&"quake", spots, decides)
+
+
 ## Host: words on one player's screen (the bottom-middle message), wherever
 ## they are.
 func send_message(peer_id: int, text: String) -> void:

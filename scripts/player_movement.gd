@@ -1059,6 +1059,21 @@ func _net_shove(push: Vector3) -> void:
 		_pending_shove += push
 
 
+## Thrown clear of whatever's holding you (the heart's kick): off any perch,
+## then the shove -- on the body's own game too, so it lets go there as well.
+func launch(push: Vector3) -> void:
+	grapple.release()
+	shove(push)
+	if Network.is_online() and multiplayer.is_server() and not is_multiplayer_authority():
+		_net_let_go.rpc_id(get_multiplayer_authority())
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_let_go() -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		grapple.release()
+
+
 ## Cancels whatever speed you had heading INTO the shove (running at the
 ## enemy doesn't eat the push), then adds the shove itself.
 func _apply_pending_shove() -> void:

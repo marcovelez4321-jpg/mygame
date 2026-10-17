@@ -513,6 +513,11 @@ func holds_still() -> bool:
 	return _rope == Rope.PERCH or _rope == Rope.RIDE or _rope == Rope.TOUCH
 
 
+## Perched on (or held against) a wall by it.
+func is_perched() -> bool:
+	return _rope == Rope.PERCH or _rope == Rope.TOUCH
+
+
 ## No gravity while it pulls or holds you.
 func gravity_scale() -> float:
 	return 0.0 if holds_still() or _rope == Rope.PULL else 1.0
