@@ -248,11 +248,13 @@ func _build_stamina_pips(count: int) -> void:
 		back.color = back_color
 		back.position = Vector2(x, 0.0)
 		back.size = Vector2(PIP_WIDTH, 8.0)
+		back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bar.add_child(back)
 		var fill := ColorRect.new()
 		fill.color = fill_color
 		fill.position = Vector2(x, 0.0)
 		fill.size = Vector2(0.0, 8.0)
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bar.add_child(fill)
 		stamina_pips.append(fill)
 	var hunger_x := (width - HUNGER_WIDTH) * 0.5
@@ -260,11 +262,13 @@ func _build_stamina_pips(count: int) -> void:
 	hunger_back.color = back_color
 	hunger_back.position = Vector2(hunger_x, 8.0 + PIP_GAP)
 	hunger_back.size = Vector2(HUNGER_WIDTH, HUNGER_HEIGHT)
+	hunger_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(hunger_back)
 	_hunger_fill = ColorRect.new()
 	_hunger_fill.color = HUNGER_COLOR
 	_hunger_fill.position = hunger_back.position
 	_hunger_fill.size = hunger_back.size
+	_hunger_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(_hunger_fill)
 
 

@@ -36,7 +36,7 @@ static var _red: StandardMaterial3D
 func _ready() -> void:
 	_player = get_parent() as PlayerMovement
 	set_process(_player.is_multiplayer_authority())
-	set_process_unhandled_input(_player.is_multiplayer_authority())
+	set_process_input(_player.is_multiplayer_authority())
 
 
 ## The kit's out to place (your own view).
@@ -70,7 +70,7 @@ func _process(_delta: float) -> void:
 			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton) or not event.is_pressed() or not is_placing() \
 			or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return

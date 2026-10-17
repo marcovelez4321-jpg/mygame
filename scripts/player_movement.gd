@@ -502,15 +502,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		bag_open = not bag_open
 		get_viewport().set_input_as_handled()
 		return
-	# Mouse capture/recapture is owned entirely by PauseMenu -- this stays
-	# local presentation only, buffering raw look motion for the next
-	# physics tick, so all rotation still happens inside the deterministic
-	# simulation step.
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+
+
+## Mouse look. Read in _input, before the UI sees it (the user's bug: the
+## crosshair froze at random -- a HUD rect under the hidden, captured cursor
+## was taking the motion, so _unhandled_input never got it). Mouse capture
+## is owned by PauseMenu; this only buffers raw look motion for the next
+## physics tick, so all rotation still happens in the simulation step.
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and is_multiplayer_authority():
 		var motion: Vector2 = event.relative
 		if bag_open and look_filter.is_valid():
 			motion = look_filter.call(motion)
 		_pending_look_delta += motion
+
+
+## Back in the window (an overlay, a notification, alt-tab): the OS can drop
+## the mouse capture while Godot still thinks it's held -- grab it again.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_inside_tree() and is_multiplayer_authority() \
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 ## Called by the weapon wheel (HUD) when the player picks a weapon.
