@@ -1678,3 +1678,4 @@ them:
   - **Co-op:** a NetEntities puppet whose transform carries the surface it's on.
   - Stunts, the fear meter and the strike are stages 2-3.
   - Not compiled or run (the user's testing).
+- **The high wind, everywhere (2026-10-17).** The user's: the procedural Stacks' wind now blows in every world (`WorldWind`): in the open air from 4 km up, building to 4 m/s by 12 km, gusting to 7, a prevailing wind wandering slowly round. None indoors (a megastructure's halls and rooms). `PlayerMovement._blow` pulls you along it while you're in the air, using a world's own wind if it has one (the procedural Stacks' still), else this. In the open world that's the top kilometre of the Stack. Not run (the user's testing).

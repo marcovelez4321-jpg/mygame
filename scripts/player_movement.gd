@@ -1173,9 +1173,10 @@ func _update_wings(input: PlayerInput, delta: float) -> void:
 
 ## The world's wind, in the air: pulled toward its speed along it.
 func _blow(delta: float) -> void:
-	if not wind_at.is_valid() or is_on_floor():
+	if is_on_floor():
 		return
-	var wind: Vector3 = wind_at.call(global_position)
+	# A world's own wind (the procedural Stacks'), else the wind everywhere.
+	var wind: Vector3 = wind_at.call(global_position) if wind_at.is_valid() else WorldWind.at(global_position)
 	var speed := wind.length()
 	if speed < 0.01:
 		return
