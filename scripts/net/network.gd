@@ -215,6 +215,29 @@ func send_stalker_sound(kind: int, at: Vector3) -> void:
 		_stalker_sound.rpc(kind, at)
 
 
+## Host: a player taken by the Stalker (or let go), here and everywhere.
+func send_stalker_drag(peer_id: int, on: bool) -> void:
+	_stalker_drag(peer_id, on)
+	if is_online():
+		_net_stalker_drag.rpc(peer_id, on)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_stalker_drag(peer_id: int, on: bool) -> void:
+	_stalker_drag(peer_id, on)
+
+
+func _stalker_drag(peer_id: int, on: bool) -> void:
+	var stalker := get_tree().get_first_node_in_group("stalker") as Node3D
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player and player.get_multiplayer_authority() == peer_id:
+			if on and stalker:
+				StalkerDrag.begin(player, stalker)
+			elif not on:
+				StalkerDrag.finish(player)
+
+
 @rpc("authority", "call_remote", "reliable")
 func _stalker_sound(kind: int, at: Vector3) -> void:
 	StalkerSound.play(kind, at, get_tree().current_scene)

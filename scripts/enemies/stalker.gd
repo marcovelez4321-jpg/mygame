@@ -24,7 +24,7 @@ extends AnimatableBody3D
 ## (NetEntities: its transform carries the surface it's on), and works the
 ## body out from that.
 
-enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT }
+enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
 enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP }
 
@@ -89,6 +89,27 @@ const SPIN_RATE := 4.7 # rad/s: whipping round
 const FLEE_SPEED := 7.0
 const DRAG_SPEED := 5.0
 const CORPSE := preload("res://scenes/enemy/enemy.tscn")
+
+## STAGE 3 (the user's): the fear full, it goes for a player caught off guard
+## (any one: looking away, reloading or hands busy, alone -- no teammate
+## within ALONE_RANGE -- or grappling): closes in unseen behind them, lunges
+## (LUNGE), and on reaching them drags them off by a foot (StalkerDrag) at
+## DRAG_PULL for DRAG_TIME. Loose (spam clicks, or TEAMMATE_FREES damage from
+## someone else): it scrambles off, the fear spent. Not loose in time:
+## DRAG_DAMAGE, dropped there in the dark, and it's gone for GONE_AFTER.
+const LUNGE := 25.0
+const LUNGE_FROM := 12.0
+const LUNGE_TIME := 2.5
+const APPROACH_BEHIND := 8.0
+const ALONE_RANGE := 25.0
+const DRAG_PULL := 8.0
+const DRAG_TIME := 15.0
+const DRAG_DAMAGE := 70.0
+const TEAMMATE_FREES := 30.0
+const GONE_AFTER := Vector2(120.0, 180.0)
+var _victim: PlayerMovement
+var _drag_way := Vector3.FORWARD
+var _freed_by_others := 0.0
 
 ## The shared fear meter, 0..1 (the host's).
 var fear := 0.0
@@ -156,6 +177,8 @@ static func ensure(tree: SceneTree) -> void:
 func _ready() -> void:
 	add_to_group("stalker")
 	add_to_group(NetEntities.GROUP)
+	# Past the fog, never culled for distance: always there for everyone (the user's).
+	set_meta(&"net_always", true)
 	sync_to_physics = false
 	collision_layer = 1
 	collision_mask = 0
@@ -215,6 +238,9 @@ func _physics_process(delta: float) -> void:
 
 func _think(delta: float) -> void:
 	_fear_tick(delta)
+	if state == State.APPROACH or state == State.LUNGE or state == State.DRAG:
+		_strike_tick(delta)
+		return
 	# Seen? Hide (a stunt plays out first).
 	_look_check -= delta
 	if _look_check <= 0.0:
@@ -261,6 +287,13 @@ func _think(delta: float) -> void:
 			if _state_left <= 0.0:
 				state = State.STALK
 		State.STALK:
+			# The fear's full: someone caught off guard is taken.
+			if fear >= 1.0:
+				var exposed := _exposed_player()
+				if exposed:
+					_victim = exposed
+					state = State.APPROACH
+					return
 			_stunt_left_every -= delta
 			if _stunt_left_every <= 0.0:
 				_stunt_left_every = randf_range(STUNT_EVERY.x, STUNT_EVERY.y)
@@ -274,6 +307,107 @@ func _think(delta: float) -> void:
 			var to := spot - global_position
 			_desired = to.normalized() * CRAWL * clampf(to.length() / 4.0, 0.0, 1.0) if to.length() > 2.0 else Vector3.ZERO
 
+
+# ---- Stage 3: the strike, the drag ------------------------------------------------------
+
+## A player caught off guard (any one: looking away from it, reloading or
+## hands busy, alone, grappling), or null.
+func _exposed_player() -> PlayerMovement:
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p == null or p.is_dead() or p.drag != null:
+			continue
+		if _off_guard(p):
+			return p
+	return null
+
+
+func _off_guard(p: PlayerMovement) -> bool:
+	var to := (global_position - p.head.global_position).normalized()
+	if (-p.head.global_basis.z).dot(to) < cos(deg_to_rad(70.0)):
+		return true # looking away from it
+	if p.weapons.is_reloading() or p.weapons.is_busy() or p.hand.is_busy() or p.bag_open:
+		return true
+	if p.grapple.is_out():
+		return true
+	for node in get_tree().get_nodes_in_group("player"):
+		if node != p and (node as Node3D).global_position.distance_to(p.global_position) < ALONE_RANGE:
+			return false
+	return true # alone
+
+
+func _strike_tick(delta: float) -> void:
+	var p := _victim
+	if not is_instance_valid(p) or p.is_dead():
+		_let_go(false)
+		return
+	match state:
+		State.APPROACH:
+			# In unseen behind them; seen, it hides as ever (and tries again).
+			if _seen():
+				state = State.SPOTTED
+				_state_left = SPOTTED_FREEZE
+				_moment()
+				return
+			var behind := p.global_position - _flat(-p.head.global_basis.z) * APPROACH_BEHIND
+			var to := behind - global_position
+			_desired = to.normalized() * SPRINT if to.length() > 1.0 else Vector3.ZERO
+			if global_position.distance_to(p.global_position) < LUNGE_FROM and _off_guard(p):
+				state = State.LUNGE
+				_state_left = LUNGE_TIME
+				Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * BODY_HEIGHT)
+		State.LUNGE:
+			var to := p.global_position - global_position
+			_desired = to.normalized() * LUNGE
+			if to.length() < 1.8:
+				_grab(p)
+			elif _state_left <= 0.0:
+				_let_go(false) # missed: off into hiding
+		State.DRAG:
+			_desired = _drag_way * DRAG_PULL
+			if _state_left <= 0.0:
+				# Not loose in time: badly hurt, left there in the dark; it's gone.
+				p.health.hurt_unscaled(DRAG_DAMAGE)
+				_let_go(true)
+
+
+func _grab(p: PlayerMovement) -> void:
+	state = State.DRAG
+	_state_left = DRAG_TIME
+	_freed_by_others = 0.0
+	# Off away from the others (toward the dark), dragging them behind.
+	var away := Vector3.ZERO
+	for node in get_tree().get_nodes_in_group("player"):
+		if node != p:
+			away += _flat(p.global_position - (node as Node3D).global_position)
+	_drag_way = _flat(away) if away.length_squared() > 0.01 else _flat(global_position - p.global_position).rotated(Vector3.UP, randf_range(-0.6, 0.6))
+	_drag_way = -_drag_way if _drag_way.dot(_flat(global_position - p.global_position)) < -0.5 else _drag_way
+	if p.hand.is_holding():
+		p.hand.put_away()
+	Network.send_stalker_drag(p.get_multiplayer_authority(), true)
+	_moment()
+
+
+## The drag broken: by their clicks (StalkerDrag.tug(), the host's), or a
+## teammate's shots.
+func drag_broken() -> void:
+	if state == State.DRAG:
+		_let_go(false)
+
+
+## Lets go of whoever it has: `gone` -- the drag ran its course: it vanishes;
+## else it scrambles off into hiding. The fear's spent either way.
+func _let_go(gone: bool) -> void:
+	if is_instance_valid(_victim):
+		Network.send_stalker_drag(_victim.get_multiplayer_authority(), false)
+	_victim = null
+	fear = 0.0
+	if gone:
+		_go_away()
+		_state_left = randf_range(GONE_AFTER.x, GONE_AFTER.y)
+		return
+	_hide_to = _hiding_spot()
+	state = State.HIDE
 
 # ---- Stage 2: the fear meter ----------------------------------------------------------
 
@@ -432,12 +566,20 @@ func _away_from_players() -> Vector3:
 	return _flat_perpendicular(_normal, away if away.length_squared() > 0.0001 else -global_basis.z)
 
 
-func _on_damaged(amount: float, _attacker: int) -> void:
+func _on_damaged(amount: float, attacker: int) -> void:
 	_health.current_health = _health.max_health # never killed
 	if state == State.FLEE or state == State.AWAY:
 		return
 	_hurt += amount
+	# Shot off the one it's dragging by someone else.
+	if state == State.DRAG and is_instance_valid(_victim) and attacker != _victim.get_multiplayer_authority():
+		_freed_by_others += amount
+		if _freed_by_others >= TEAMMATE_FREES and _hurt < DRIVE_OFF:
+			_let_go(false)
+			return
 	if _hurt >= DRIVE_OFF:
+		if state == State.DRAG or state == State.LUNGE or state == State.APPROACH:
+			_let_go(false) # (driven off mid-strike: whoever it had is let go)
 		state = State.FLEE
 		_state_left = FLEE_TIME
 		_airborne = false

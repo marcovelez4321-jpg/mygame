@@ -291,6 +291,9 @@ var backpack: Backpack
 var hand: PlayerHand
 ## Placing a camp (the camp kit in your hand).
 var camp_builder: CampBuilder
+## Taken by the Stalker (StalkerDrag): carried where the ragdoll is, no
+## control but clicking free.
+var drag: Node3D
 var virus: Virus
 ## The backpack held out (Tab). Yours: your own toggle; someone else's (on
 ## the host): from their input packet.
@@ -736,6 +739,17 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	_net_look = Vector2(rotation.y, _pitch)
 	_absorb_recoil_compensation(input.look_delta)
 
+	# Taken by the Stalker (StalkerDrag): limp, dragged off by a foot; only
+	# clicks get through (tugs at its grip).
+	if drag != null and is_instance_valid(drag):
+		velocity = Vector3.ZERO
+		global_position = drag.call(&"hips_position")
+		input.drop = false
+		input.grab = false
+		input.use_item = -1
+		input.select_weapon = -1
+		_finish_tick(input, delta)
+		return
 	# On a Harvestman's proboscis (Harvestman grab): carried on its tip -- look
 	# about, click to break free, nothing else.
 	if held_point.is_finite():

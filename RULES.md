@@ -1701,3 +1701,14 @@ them:
   - **Sounds** (`StalkerSound`, made in code until the user's files): a dry throat rattle (4 of them), a shriek when it's driven off (with the halls' echo), and a heavier, slower skitter while it crawls. The help scream is the user's mp3. The host's are relayed to every machine (`Network.send_stalker_sound`).
   - Not run (the user's testing).
 - **Twice the keys lying about in the Stack (2026-10-17).** The user's: `StackSecrets.HALL_KEYS` 14 -> 28 (from the same 60 spots).
+- **The Stalker, stage 3: the strike and the drag (2026-10-17).** The user's: every detail below.
+  - **The strike:** once the fear is full, it goes for a player caught off guard (any one: looking away from it, reloading or hands busy, alone with no teammate within 25 m, or grappling). It closes in unseen to 8 m behind them at 18 m/s; seen, it hides as ever. Within 12 m, it rattles and lunges at 25 m/s (2.5 s, then it gives up into hiding).
+  - **The drag:** it grabs them and drags them off by the left foot at 8 m/s for 15 s, away from the other players (`StalkerDrag`, on every machine).
+    - The player goes limp: a ragdoll of their own character (`RagdollBuilder`), on their back, their real body hidden and the player carried at its hips.
+    - Their camera rides the ragdoll's head, just in front of the face, out of their control. The gun and arms are hidden.
+  - **Getting loose:** spam click (20 clicks, slipping back 0.15/s: the Harvestman grab's meter, 'IT'S GOT YOU! SPAM CLICK TO BREAK FREE!'), or 30 damage to it from a teammate. Then it scrambles off into hiding.
+  - **Not loose in 15 s:** 70 damage, left where it dropped them, and it's gone for 2-3 min. The fear is spent either way.
+  - **Driven off mid-strike** (200 damage): it lets go and flees as before.
+  - **Co-op:** the host starts and ends the drag (`Network.send_stalker_drag`).
+- **The Stalker is never culled (2026-10-17).** The user's: past the fog it carries on, kept for every player however far (`net_always` in NetEntities).
+- Not run (the user's testing).

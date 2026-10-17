@@ -109,7 +109,8 @@ func _host_tick(delta: float) -> void:
 		var snaps := []
 		for creature in creatures:
 			var id: int = creature.get_meta(&"net_id")
-			var reach := BIG_RANGE if creature.has_meta(&"net_big") else RELEVANT_RANGE
+			# (net_always: kept for everyone however far -- the Stalker, the user's.)
+			var reach := INF if creature.has_meta(&"net_always") else (BIG_RANGE if creature.has_meta(&"net_big") else RELEVANT_RANGE)
 			if creature.global_position.distance_to(body.global_position) > reach:
 				continue
 			seen[id] = true
