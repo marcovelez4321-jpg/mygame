@@ -77,11 +77,12 @@ const STANDING_HEIGHT := 1.9 * SIZE
 ## and once it's full it stays full: the strike (stage 3) can come.
 const STUNT_EVERY := Vector2(30.0, 60.0)
 const REACT_WINDOW := 3.0
-const FEAR_SEEN := 0.15
-const FEAR_FIRE := 0.10
-const FEAR_FLEE := 0.10
-const FEAR_SPIN := 0.05
-const FEAR_HELP := 0.5
+## (Doubled, the user's: 15/10/10/5/50 % before.)
+const FEAR_SEEN := 0.30
+const FEAR_FIRE := 0.20
+const FEAR_FLEE := 0.20
+const FEAR_SPIN := 0.10
+const FEAR_HELP := 1.0
 const FEAR_DRAIN_TIME := 300.0
 const INVESTIGATE_RADIUS := 20.0
 const INVESTIGATE_TIME := 10.0
@@ -222,6 +223,15 @@ func net_spawn_args() -> Dictionary:
 
 func net_restore(_data: Dictionary) -> void:
 	pass
+
+
+## The fear meter, sent with each update (for the HUD's meter everywhere).
+func net_state() -> int:
+	return int(round(fear * 1000.0))
+
+
+func net_apply(value: int) -> void:
+	fear = value / 1000.0
 
 
 # ---- Host: the brain ---------------------------------------------------------------

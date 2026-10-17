@@ -341,6 +341,8 @@ func _build_graphics_panel() -> void:
 	_add_toggle(vbox, "Grime & Wet Floors", GameSettings.grime, func(on: bool) -> void: GameSettings.grime = on)
 	_add_toggle(vbox, "Ground Fog", GameSettings.ground_fog, func(on: bool) -> void: GameSettings.ground_fog = on)
 	_add_toggle(vbox, "PS1 Texture Warp", GameSettings.texture_warp, func(on: bool) -> void: GameSettings.texture_warp = on)
+	# The Stalker's fear meter, shown (the user's: to see how it's working).
+	_add_toggle(vbox, "Player Fear Meter", GameSettings.show_fear_meter, func(on: bool) -> void: GameSettings.show_fear_meter = on)
 	_add_heading(vbox, "Look Values")
 	for entry in SewerLook.VALUES:
 		_add_look_slider(vbox, entry[0], entry[1], entry[2], entry[3], entry[4])

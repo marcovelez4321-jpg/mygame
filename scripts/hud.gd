@@ -46,6 +46,10 @@ const HUNGER_WIDTH := 65.0
 const HUNGER_HEIGHT := 4.0
 const HUNGER_COLOR := Color(0.85, 0.55, 0.2, 0.95)
 var _hunger_fill: ColorRect
+## The Stalker's fear meter (Graphics > Player Fear Meter), under the hunger bar.
+const FEAR_COLOR := Color(0.62, 0.3, 0.95, 0.95)
+var _fear_back: ColorRect
+var _fear_fill: ColorRect
 ## What you're holding in your right hand says what left click does, to its
 ## left (the user's: "left click to feed off the virus").
 var _hand_label: Label
@@ -273,6 +277,18 @@ func _build_stamina_pips(count: int) -> void:
 	_hunger_fill.size = hunger_back.size
 	_hunger_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(_hunger_fill)
+	_fear_back = ColorRect.new()
+	_fear_back.color = back_color
+	_fear_back.position = hunger_back.position + Vector2(0.0, HUNGER_HEIGHT + PIP_GAP)
+	_fear_back.size = hunger_back.size
+	_fear_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(_fear_back)
+	_fear_fill = ColorRect.new()
+	_fear_fill.color = FEAR_COLOR
+	_fear_fill.position = _fear_back.position
+	_fear_fill.size = Vector2(0.0, HUNGER_HEIGHT)
+	_fear_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(_fear_fill)
 
 
 ## Each pip is full (PIP_WIDTH) if that charge is available, empty if it
@@ -292,6 +308,13 @@ func _update_stamina_bar() -> void:
 		stamina_pips[i].size.x = PIP_WIDTH * fraction
 	if _hunger_fill and player.virus:
 		_hunger_fill.size.x = HUNGER_WIDTH * clampf(player.virus.hunger, 0.0, 1.0)
+	if _fear_fill:
+		_fear_back.visible = GameSettings.show_fear_meter
+		_fear_fill.visible = GameSettings.show_fear_meter
+		if GameSettings.show_fear_meter:
+			var stalker := get_tree().get_first_node_in_group("stalker")
+			var fear: float = stalker.get("fear") if stalker else 0.0
+			_fear_fill.size.x = HUNGER_WIDTH * clampf(fear, 0.0, 1.0)
 
 
 ## What left click does with what's in your right hand, to the left of it

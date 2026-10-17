@@ -1719,3 +1719,4 @@ them:
   - **Too close:** one that still gets within 5 m is grabbed and dragged off, always (not mid-stunt, not during its cooldown).
   - **After any drag** (broken free, freed by a teammate, or run its course): it runs flat out to cover, then waits 2-3 min before staging or striking again, stalking meanwhile. It no longer vanishes after a full drag.
   - Not run (the user's testing).
+- **Player Fear Meter setting; reactions doubled (2026-10-17).** The user's, for tuning the Stalker. Settings > Graphics > Player Fear Meter (saved; off by default) shows a purple bar right under the hunger bar, filled to the Stalker's shared fear meter. It's sent to every machine with its updates (`Stalker.net_state`/`net_apply`). Every reaction counts double now: seen 30%, panic firing 20%, running off 20%, whipping round 10%, investigating the help scream 100%. Not run (the user's testing).

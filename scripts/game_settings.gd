@@ -44,6 +44,8 @@ var color_grade: bool = true
 var grime: bool = true
 var ground_fog: bool = true
 var texture_warp: bool = true
+## The Stalker's fear meter on the HUD (Graphics; the user's, for tuning it).
+var show_fear_meter: bool = false
 ## The player's tweaks to the look's values (SewerLook.VALUES/COLORS), by key.
 var look_values: Dictionary = {}
 
@@ -180,6 +182,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "grime", grime)
 	config.set_value("graphics", "ground_fog", ground_fog)
 	config.set_value("graphics", "texture_warp", texture_warp)
+	config.set_value("graphics", "fear_meter", show_fear_meter)
 	for key in look_values:
 		config.set_value("look", key, look_values[key])
 	config.save(SETTINGS_PATH)
@@ -206,6 +209,7 @@ func load_settings() -> void:
 	grime = config.get_value("graphics", "grime", grime)
 	ground_fog = config.get_value("graphics", "ground_fog", ground_fog)
 	texture_warp = config.get_value("graphics", "texture_warp", texture_warp)
+	show_fear_meter = config.get_value("graphics", "fear_meter", show_fear_meter)
 	if config.has_section("look"):
 		for key in config.get_section_keys("look"):
 			look_values[key] = config.get_value("look", key)
