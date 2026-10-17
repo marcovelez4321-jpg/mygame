@@ -76,6 +76,9 @@ signal respawned
 ## Start (and restart) in the heart's cathedral, where the hive's stairs come
 ## up through its floor -- no climbing every time (the user's). Off to play.
 @export var spawn_in_cathedral: bool = false
+## Which song the heart plays (a beat map from the beat mapper, a .beats.tres
+## -- drop one in to switch). Empty: the heart's own (StackBuilder.HEART_MAP).
+@export var heart_song: BeatMap
 
 @export_group("Death")
 ## Seconds between dying and the level restarting.

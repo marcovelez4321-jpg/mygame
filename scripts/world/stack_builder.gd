@@ -1754,7 +1754,7 @@ const CATHEDRAL_SLIT_UP := 10.0
 ## How high the heart hangs over the cathedral floor (m).
 const HEART_HANG := 100.0
 ## Its song's beat map (the beat mapper's), if it's there.
-const HEART_MAP := "res://audio/music/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).beats.tres"
+const HEART_MAP := "res://audio/music/Project_34.beats.tres"
 ## The room (floor to ceiling, local), once built; empty before.
 var cathedral := AABB()
 ## Where the stairs come up onto its floor, facing in (local): a marker in

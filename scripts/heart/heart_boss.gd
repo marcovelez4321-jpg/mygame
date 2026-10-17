@@ -53,6 +53,8 @@ var _next_beam := 0
 var _drip_left := 0.0
 var _active := false
 var _player: AudioStreamPlayer
+## The map it's playing (yours if you've picked one: PlayerMovement.heart_song).
+var _map: BeatMap
 
 
 func _ready() -> void:
@@ -65,10 +67,8 @@ func _ready() -> void:
 	_light.light_energy = 0.0
 	_light.shadow_enabled = false
 	add_child(_light)
-	if beat_map and beat_map.song:
-		_player = AudioStreamPlayer.new()
-		_player.stream = beat_map.song
-		add_child(_player)
+	_player = AudioStreamPlayer.new()
+	add_child(_player)
 	_build_chains.call_deferred() # once the cathedral's walls are in the physics
 
 
@@ -108,25 +108,35 @@ func _start() -> void:
 	_time = 0.0
 	_next_beat = 0.0
 	_next_beam = 0
-	if _player:
+	_map = _chosen_map()
+	_player.stream = _map.song if _map else null
+	if _player.stream:
 		_player.play()
 
 
 func _stop() -> void:
 	_active = false
-	if _player:
-		_player.stop()
+	_player.stop()
+
+
+## Your pick (the heart_song in your player's inspector), else its own.
+func _chosen_map() -> BeatMap:
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player and player.is_multiplayer_authority() and player.heart_song and player.heart_song.song:
+			return player.heart_song
+	return beat_map if beat_map and beat_map.song else null
 
 
 func _tick(delta: float) -> void:
-	_time = _song_time() if _player and _player.playing else _time + delta
-	if beat_map and beat_map.song:
+	_time = _song_time() if _player.playing else _time + delta
+	if _map:
 		# Its map: every kick, the quake; every snare, the holes glow open
 		# (on the beat) and blast a beat later.
-		var beat := beat_map.beat()
-		if not beat_map.between(BeatMap.Drum.KICK, _time - delta, _time).is_empty():
+		var beat := _map.beat()
+		if not _map.between(BeatMap.Drum.KICK, _time - delta, _time).is_empty():
 			_kick()
-		if not beat_map.between(BeatMap.Drum.SNARE, _time - delta, _time).is_empty():
+		if not _map.between(BeatMap.Drum.SNARE, _time - delta, _time).is_empty():
 			_fire(beat)
 		if not _player.playing:
 			_start() # the song's over: round again
