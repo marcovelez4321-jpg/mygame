@@ -33,12 +33,13 @@ const CHAIN_MODEL := "res://art/heart_boss/chain/chain.FBX"
 ## The cathedral (in the Stack's space), set by the Stack's bake.
 @export var room := AABB()
 
-## The beat: how much it swells on the lub and the dub (doubled, the user's),
-## and how bright its glow pulses.
-const LUB := 0.14
-const DUB := 0.09
+## The beat (the user's): one big thump a kick -- swelling THUMP in a snap,
+## easing back fast (THUMP_FALL a second) so quick kicks each land their own;
+## its glow pulsing GLOW bright with it.
+const THUMP := 0.2
+const THUMP_RISE := 60.0
+const THUMP_FALL := 9.0
 const GLOW := 12.0
-const DUB_AFTER := 0.2
 const DRIP_EVERY := 0.6
 ## Its looks only run with someone this close (m).
 const NEAR := 700.0
@@ -89,12 +90,11 @@ func _process(delta: float) -> void:
 	_beat_age += delta
 	if _active:
 		_tick(delta)
-	# Lub-dub, and the light pulsing with it.
-	var lub := exp(-_beat_age * 12.0)
-	var dub := exp(-maxf(_beat_age - DUB_AFTER, 0.0) * 12.0) if _beat_age > DUB_AFTER else 0.0
-	_model.scale = Vector3.ONE * _base_scale * (1.0 + LUB * lub + DUB * dub)
-	_light.light_energy = 1.0 + GLOW * (lub + dub * 0.6)
-	_update_chains(lub + dub * 0.6)
+	# One thump, and the light pulsing with it.
+	var thump := (1.0 - exp(-_beat_age * THUMP_RISE)) * exp(-_beat_age * THUMP_FALL)
+	_model.scale = Vector3.ONE * _base_scale * (1.0 + THUMP * thump)
+	_light.light_energy = 1.0 + GLOW * thump
+	_update_chains(thump)
 	# Dripping on the floor below.
 	_drip_left -= delta
 	if _drip_left <= 0.0:
