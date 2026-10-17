@@ -1450,7 +1450,7 @@ func _update_limbs(delta: float) -> void:
 				limb.planted = limb.to
 				limb.foot = limb.planted
 				# Planted: a jolt up through it to the head.
-				var kick := (up * randf_range(0.6, 1.0) + xf.basis.x * randf_range(-0.5, 0.5)) * STEP_KICK * SIZE
+				var kick := (up * randf_range(0.6, 1.0) + xf.basis.x.normalized() * randf_range(-0.5, 0.5)) * STEP_KICK * SIZE
 				_neck_velocity += kick
 				_head_velocity += kick * 1.3
 			else:
