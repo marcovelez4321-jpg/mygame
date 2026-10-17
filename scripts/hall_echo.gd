@@ -1,6 +1,29 @@
 class_name HallEcho
 extends RefCounted
 
+## Places sound echoes in (each Megastructure adds itself): their `inside`
+## box and `inside_zones`. Untyped on purpose: this file loads nothing, so
+## anything can use it without a load cycle.
+static var places: Array[Node3D] = []
+
+
+## Whether `point` (global) is inside one of them (a hall, a room, its body).
+static func inside(point: Vector3) -> bool:
+	for place in places:
+		if not is_instance_valid(place):
+			continue
+		var at := place.to_local(point)
+		var box: Variant = place.get("inside")
+		if box is AABB and (box as AABB).size != Vector3.ZERO and (box as AABB).has_point(at):
+			return true
+		var zones: Variant = place.get("inside_zones")
+		if zones is Array:
+			for zone: AABB in zones:
+				if zone.has_point(at):
+					return true
+	return false
+
+
 ## A sound heard through the halls the way a radio is (the user's: exactly
 ## the same -- Radio's three voices on its buses and its mix): clear up
 ## close, the tinny one further off, and far away a muffled echo rolling

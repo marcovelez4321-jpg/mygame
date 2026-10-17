@@ -62,7 +62,7 @@ func _on_shot_fired() -> void:
 	if weapon:
 		SoundPlayer.play_for_owner(weapon.fire_sound, _owner_body)
 		# Inside the Stack: it echoes on through the halls, as a radio does.
-		if weapon.fire_sound and Megastructure.contains(_owner_body.global_position):
+		if weapon.fire_sound and HallEcho.inside(_owner_body.global_position):
 			HallEcho.tail(weapon.fire_sound.pick_clip(), _owner_body.global_position, _owner_body.get_tree().current_scene, weapon.fire_sound.roll_pitch_scale())
 
 

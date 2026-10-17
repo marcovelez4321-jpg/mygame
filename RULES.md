@@ -1661,3 +1661,4 @@ them:
   - **Gunshot echo:** fired inside the Stack, every gunshot, yours and the gunners', also rolls on through the halls on the radio's echo bus with its long reverb (`HallEcho.tail`, `Megastructure.contains`).
   - The door's radio-style sound now goes through `HallEcho` too.
   - Not run (the user's testing).
+- **Crash fix: empty roach scene (2026-10-17).** The user's crash: `Megastructure._infest` got a null roach (its preloaded roach scene came out empty: 'node count is 0'). The gunshot echo made the weapon and enemy sound scripts load Megastructure, which preloads the creature scenes, so a load cycle ran through roach.tscn. Now `HallEcho` (which loads nothing) keeps the list of places sound echoes in (each Megastructure adds itself), and the sound scripts ask `HallEcho.inside()`. Nothing in the player's or enemies' scripts names Megastructure.

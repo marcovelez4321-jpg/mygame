@@ -147,31 +147,15 @@ var _fire_rooms := {}
 const PILLS_SCENE := preload("res://scenes/pills_pickup.tscn")
 
 
-## Every megastructure in the world (for contains()).
-static var _all: Array[Megastructure] = []
-
-
-## Whether `point` (global) is inside any megastructure: its inside box, or
-## one of its halls and rooms (gunshots echo there: HallEcho).
-static func contains(point: Vector3) -> bool:
-	for stack in _all:
-		if not is_instance_valid(stack):
-			continue
-		var at := stack.to_local(point)
-		if stack.inside.size != Vector3.ZERO and stack.inside.has_point(at):
-			return true
-		for zone in stack.inside_zones:
-			if zone.has_point(at):
-				return true
-	return false
-
-
+## Known to HallEcho as a place sound echoes in (HallEcho.inside()) -- that
+## way round, so the sound scripts never load this one (and its preloaded
+## creature scenes): that made a load cycle that left the roach scene empty.
 func _enter_tree() -> void:
-	_all.append(self)
+	HallEcho.places.append(self)
 
 
 func _exit_tree() -> void:
-	_all.erase(self)
+	HallEcho.places.erase(self)
 
 
 func _ready() -> void:
