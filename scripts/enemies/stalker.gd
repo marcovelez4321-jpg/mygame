@@ -821,6 +821,8 @@ func _away_from_players() -> Vector3:
 
 func _on_damaged(amount: float, attacker: int) -> void:
 	_health.current_health = _health.max_health # never killed
+	if _visual:
+		HitFlash.flash(_visual) # (so a hit reads as one: it never bleeds out)
 	if state == State.FLEE or state == State.AWAY:
 		return
 	_hurt += amount
