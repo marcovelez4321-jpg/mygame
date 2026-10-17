@@ -16,17 +16,17 @@ const HEART_MODEL := "res://art/heart_boss/realistic-human-heart/source/Heart.fb
 const CHAIN_MODEL := "res://art/heart_boss/chain/chain.FBX"
 
 ## How tall the heart is (m).
-@export var size: float = 30.0
+@export var size: float = 40.0
 ## Its map: when its drums land. None: test_bpm, a beam every beat.
 @export var beat_map: BeatMap
 @export var test_bpm: float = 80.0
 ## Each snare's volley: one beam mainly at a player inside (the user's), and
 ## this many more off random spots on it, every way.
 @export var aim_at_players: bool = true
-@export var random_beams: int = 4
+@export var random_beams: int = 5
 ## Chains: this many to the walls round it, this many up to the ceiling.
-@export var wall_chains: int = 4
-@export var ceiling_chains: int = 4
+@export var wall_chains: int = 6
+@export var ceiling_chains: int = 6
 ## How long one chain link is (m), and how far a chain sags (share of its length).
 @export var link_length: float = 1.6
 @export var sag: float = 0.06
