@@ -33,9 +33,11 @@ const CHAIN_MODEL := "res://art/heart_boss/chain/chain.FBX"
 ## The cathedral (in the Stack's space), set by the Stack's bake.
 @export var room := AABB()
 
-## The beat: how much it swells on the lub and the dub.
-const LUB := 0.07
-const DUB := 0.045
+## The beat: how much it swells on the lub and the dub (doubled, the user's),
+## and how bright its glow pulses.
+const LUB := 0.14
+const DUB := 0.09
+const GLOW := 12.0
 const DUB_AFTER := 0.2
 const DRIP_EVERY := 0.6
 ## Its looks only run with someone this close (m).
@@ -89,7 +91,7 @@ func _process(delta: float) -> void:
 	var lub := exp(-_beat_age * 12.0)
 	var dub := exp(-maxf(_beat_age - DUB_AFTER, 0.0) * 12.0) if _beat_age > DUB_AFTER else 0.0
 	_model.scale = Vector3.ONE * _base_scale * (1.0 + LUB * lub + DUB * dub)
-	_light.light_energy = 1.0 + 6.0 * (lub + dub * 0.6)
+	_light.light_energy = 1.0 + GLOW * (lub + dub * 0.6)
 	_update_chains(lub + dub * 0.6)
 	# Dripping on the floor below.
 	_drip_left -= delta
