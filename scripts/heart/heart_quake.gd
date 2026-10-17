@@ -162,7 +162,7 @@ static func rubble(world: Node, at: Vector3, size: float) -> void:
 		material.albedo_color = RUBBLE_COLOR
 		_rubble_mesh.material = material
 	var particles := GPUParticles3D.new()
-	particles.amount = 14
+	particles.amount = 7 # (halved, the user's: was 14)
 	particles.lifetime = 2.5
 	particles.one_shot = true
 	particles.explosiveness = 0.9
