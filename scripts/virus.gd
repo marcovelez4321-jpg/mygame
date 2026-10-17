@@ -27,6 +27,7 @@ const MANTIS := &"mantis_legs"
 const SPINNERETS := &"spinnerets"
 const TENDRILS := &"tendrils"
 const WHIP := &"whip"
+const SEEDED := &"seeded_growth"
 
 ## The pool (the user's): name, and what it does (shown on a pod's highlight).
 const MUTATIONS := {
@@ -38,6 +39,7 @@ const MUTATIONS := {
 	SPINNERETS: ["Spinnerets", "The grapple reaches 25% further"],
 	TENDRILS: ["Tendrils", "Where the grapple bites, three tendrils reach on to re-attach to"],
 	WHIP: ["Tentacle Whip", "Double-tap right click: lash the tentacle (50, 5 m, 1 bar)"],
+	SEEDED: ["Seeded Growth", "Tap right click: five tentacles burst from the ground where you aim (40, then 10/s for 2 s; 1 bar, 4 s)"],
 }
 
 const POINTS_TO_MUTATE := 14

@@ -97,7 +97,7 @@ func _ready() -> void:
 
 	# PS1 look: through the PS1 shader (vertex snap, per-vertex lighting) with
 	# a tiny nearest-filtered texture.
-	_symbiote_material = PS1Look.material(_symbiote_texture(), Color.WHITE, true)
+	_symbiote_material = PS1Look.material(symbiote_texture(), Color.WHITE, true)
 
 	_worm_material = StandardMaterial3D.new()
 	_worm_material.albedo_texture = load(WORM_TEXTURE) as Texture2D
@@ -110,7 +110,9 @@ func _ready() -> void:
 ## (pulled taut); `normal` = the grabbed surface's facing. `arm` = the left
 ## arm's [elbow, wrist, palm, finger direction] (empty while it's down) and
 ## `coil` how much of it is wrapped round the forearm (0..1).
-func show_rope(showing: bool, start: Vector3, tip: Vector3, normal: Vector3, stuck: bool, arm: Array[Vector3], coil: float, delta: float) -> void:
+## `path`: a shape of its own to draw (the whip's), with no writhe on top.
+func show_rope(showing: bool, start: Vector3, tip: Vector3, normal: Vector3, stuck: bool, arm: Array[Vector3], coil: float, delta: float,
+		path: PackedVector3Array = PackedVector3Array()) -> void:
 	_time += delta
 	_immediate.clear_surfaces()
 	if _horde:
@@ -124,7 +126,10 @@ func show_rope(showing: bool, start: Vector3, tip: Vector3, normal: Vector3, stu
 			_wobble = writhe # each new lash starts out writhing
 		_was_showing = true
 		_wobble = move_toward(_wobble, writhe_taut if stuck else writhe, settle_speed * delta * writhe)
-		_build_curve(start, tip, length)
+		if path.size() >= 2:
+			_points = path
+		else:
+			_build_curve(start, tip, length)
 	var coiled := arm.size() == 4 and coil > 0.01
 	if coiled:
 		_build_coil(arm, coil)
@@ -185,16 +190,24 @@ func _coil_radius_at(s: float) -> float:
 ## A tiny 8 x 16 texture (nearest-filtered by the PS1 shader): wet black with
 ## a lighter sheen streak down one side and a few glints, so the vertex-lit
 ## tube still reads as glossy.
-func _symbiote_texture() -> Texture2D:
+## Shared (made once): the grapple's and Seeded Growth's.
+static var _shared_texture: Texture2D
+const SYMBIOTE_SHADE := Color(0.015, 0.015, 0.02)
+
+
+static func symbiote_texture() -> Texture2D:
+	if _shared_texture:
+		return _shared_texture
 	var image := Image.create(8, 16, false, Image.FORMAT_RGB8)
-	var shade := symbiote_color
+	var shade := SYMBIOTE_SHADE
 	for y in 16:
 		for x in 8:
 			var sheen := 0.09 if x == 2 else (0.04 if x == 1 or x == 3 else 0.0)
 			var glint := 0.12 if (x * 7 + y * 3) % 11 == 0 else 0.0
 			var value := shade.r + sheen + glint
 			image.set_pixel(x, y, Color(value, value, value * 1.15))
-	return ImageTexture.create_from_image(image)
+	_shared_texture = ImageTexture.create_from_image(image)
+	return _shared_texture
 
 
 ## The rope's centre line, start to tip, writhing side to side (most in the

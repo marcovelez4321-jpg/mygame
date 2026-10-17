@@ -1589,3 +1589,18 @@ them:
 - **Hills: skim and boost (2026-10-17).** The user's, Source's ramp rules. Moving up faster than `skim_speed` 2.7 m/s you don't count as landed (`PlayerMovement._on_ground`), so you skim up and over a hill instead of re-jumping on it every few frames. Landing on a downhill turns the speed that went into the slope into speed along it, times `slope_landing_boost` 1.1, up to `speed_cap` (`_land_on_slope`). Uphill and flat landings are as before. Jump sounds closer together than 0.6 s play once (`PlayerSound.JUMP_SOUND_GAP_MSEC`). Not compiled or run (the user's testing).
 - **Skim sound (2026-10-17).** The user's. Skimming up a hill plays a loop while it lasts. It starts somewhere new in the file each time, fades in over 0.08 s and out over 0.3 s, and is held on for 0.15 s through flickering touches. It gets louder (60-100%) and higher (0.9-1.2x) with speed, on the Surface (Footsteps & Movement) bus at footstep level. Settings > Audio > Skim Sound picks Wet glide (the user's `universfield-worm-movement-277577.mp3`, the default), Chitin skate or Wing flutter. The last two are greyed out until their files are added to `PlayerSound.SKIM_FILES`. Saved in settings.cfg. Not compiled or run (the user's testing).
 - **Jump sound gap 0.4 s (2026-10-17).** The user's: `PlayerSound.JUMP_SOUND_GAP_MSEC` 600 -> 400. Landings keep their own 0.6 s gap (`LAND_SOUND_GAP_MSEC`).
+- **Seeded Growth mutation (2026-10-17).** The user's.
+  - **Trigger:** tap right click (released within 0.2 s; holding still winds up the grapple). With the Tentacle Whip too, a tap waits out the 0.3 s double-tap first, and a double-tap whips.
+  - **Where:** five tentacles burst out of the surface where you aim, spread over a 4 m circle. Range is the grapple's reach, on anything it could grab (not when the ring would be red); aimed at a big enemy, they burst from the ground under it.
+  - **The tentacles:** black symbiote, 4 m tall, 0.35 m thick (`SeededGrowth`). Squid-style: a fast straight thrust with a little overshoot, then 2 s of lashing, with bends running base to tip on two axes and curling tips, then sucked back into the ground in 0.35 s.
+  - **Damage:** 40 on bursting out, then 10/s to everything in the circle while they're out.
+  - **Small enemies** (rats, roaches, spiders, people): 50/50 flung at 18 m/s along the tentacle, or grabbed. A grabbed one is wrapped (0.6 s) and slowly reeled under (3 s); it's gone with no drops and no meat, and that tentacle goes with it.
+  - **Big enemies** (big ones, bosses): hurt and flung where they can be. Harvestmen only take the damage.
+  - **You:** standing within 1.5 m of a tentacle as it bursts, you're launched along it at 20 m/s.
+  - **Cost:** 1 bar, 4 s cooldown. The left arm pushes out as it goes.
+  - **Cheap:** one ImmediateMesh for all five, one sphere query at the burst and one every 0.25 s.
+  - **Co-op:** the host decides everything; other peers get the look by rpc. A client's own copy doesn't show the wrap.
+  - **Pod look:** a seed with five shoots.
+- **Mutation pods: newest first (2026-10-17).** The user's. The Flesh Tree offers the most recently made mutations first (`Virus.MUTATIONS` order, reversed) instead of at random.
+- **Tentacle Whip slung like a real whip (2026-10-17).** The user's: less wriggling. Drawn back behind you to the right, then the arm sweeps right to left as a loop rolls down from the hand to the tip; the part past the loop lies back where it was. Once it's straight out, the tip snaps 8% past full length (the crack), then the whip goes slack and comes back in. It's drawn along that exact shape with no writhe (`GrappleTentacle.show_rope` path), and only hurts while it's slung.
+- Not compiled or run (the user's testing).

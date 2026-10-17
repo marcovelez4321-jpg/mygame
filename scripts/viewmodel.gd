@@ -1915,7 +1915,7 @@ func _tick_left_arm(delta: float) -> void:
 				_apply_arm_offsets(_shown_weapon)
 		_bag_was_out = out
 	var free_hand := _arms.visible and (_hands_empty or (_shown_weapon != null and _shown_weapon.one_handed))
-	_fp_arms.tick(delta, _grapple.is_coiling(), _grapple.coil, _grapple.is_out(), free_hand)
+	_fp_arms.tick(delta, _grapple.is_coiling(), _grapple.coil, _grapple.arm_out(), free_hand)
 
 
 ## Holds the viewmodel in the healing animation's top pose -- `weapon` (an

@@ -115,7 +115,9 @@ static func ripen_for(player: PlayerMovement) -> void:
 			pool.append(mutation)
 	if pool.is_empty():
 		return
-	pool.shuffle()
+	# The newest mutations first (the user's): the pool is in the order they
+	# were made (Virus.MUTATIONS), so the last made come up first.
+	pool.reverse()
 	for i in mini(POD_COUNT, pool.size()):
 		_tree._grow_pod(pool[i], i)
 	_tree._net_ripened.rpc()
@@ -542,6 +544,9 @@ static func _inside_of(mutation: StringName) -> Node3D:
 			coil.inner_radius = 0.12
 			coil.outer_radius = 0.16
 			parts = [[coil, Vector3.ZERO, 70.0]]
+		Virus.SEEDED:
+			# A seed with five shoots.
+			parts = [[_ball(0.1), Vector3(0.0, -0.08, 0.0), 0.0], [_stick(0.3, 0.02), Vector3(-0.08, 0.06, 0.0), 25.0], [_stick(0.32, 0.02), Vector3(-0.04, 0.08, 0.0), 10.0], [_stick(0.34, 0.02), Vector3(0.0, 0.09, 0.0), 0.0], [_stick(0.32, 0.02), Vector3(0.04, 0.08, 0.0), -10.0], [_stick(0.3, 0.02), Vector3(0.08, 0.06, 0.0), -25.0]]
 	for part: Array in parts:
 		var shape := MeshInstance3D.new()
 		shape.mesh = part[0]

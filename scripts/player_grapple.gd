@@ -175,6 +175,15 @@ const MAX_CARRY := 15.0
 @export var whip_damage: float = 50.0
 @export var whip_sweep_degrees: float = 120.0
 
+@export_group("Seeded Growth")
+## The Seeded Growth mutation (the user's, SeededGrowth): a tap of right
+## click (let go within seed_tap_time) bursts five tentacles out of the
+## ground where you aim -- as far as the grapple reaches, on anything it
+## could grab (the ring's not red). seed_cost bars, seed_cooldown seconds.
+@export var seed_tap_time: float = 0.2
+@export var seed_cost: float = 1.0
+@export var seed_cooldown: float = 4.0
+
 @export_group("Sound")
 ## The timing rewards' sounds (empty: a generated chime).
 @export var charge_timed_sound: AudioStream
@@ -232,6 +241,12 @@ var _spots_from := Vector3.ZERO
 var _spot_marks: Array[Node3D] = []
 ## Seconds since the last right-click press (the whip's double tap).
 var _since_press := 99.0
+## Seeded Growth: a tap waiting out the whip's double tap (s; -1 none), where
+## it was aimed, the cooldown, and the arm's push out for it.
+var _seed_wait := -1.0
+var _seed_aim := Vector3.FORWARD
+var _seed_cooldown_left := 0.0
+var _seed_arm := 0.0
 ## What the bite is for: an item into your hand, a prop to carry (else
 ## you're pulled).
 var _for_fetch := false
@@ -293,6 +308,14 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 	var double_tap := pressed and _since_press <= whip_double_tap
 	if pressed:
 		_since_press = 0.0
+	_seed_cooldown_left = maxf(_seed_cooldown_left - delta, 0.0)
+	_seed_arm = maxf(_seed_arm - delta, 0.0)
+	if _seed_wait >= 0.0:
+		_seed_wait -= delta
+		if _rope == Rope.WHIP or (_coiling and _hold > seed_tap_time):
+			_seed_wait = -1.0 # the second tap whipped, or it's a grapple hold now
+		elif _seed_wait < 0.0:
+			_seed_burst(origin, _seed_aim)
 
 	# Out of the one-handed gun (picked a two-handed one): the left hand's
 	# needed on it, so the tentacle lets go.
@@ -373,7 +396,15 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			_hold += delta
 		else:
 			_coiling = false
-			if _hold >= charge_time * min_charge_share:
+			if _hold < seed_tap_time and _player.virus.has(Virus.SEEDED):
+				# A tap: Seeded Growth. With the whip too, it waits a beat for a
+				# second tap (the user's: that one's the whip).
+				if _player.virus.has(Virus.WHIP):
+					_seed_wait = whip_double_tap
+					_seed_aim = aim
+				else:
+					_seed_burst(origin, aim)
+			elif _hold >= charge_time * min_charge_share:
 				_charge_bonus = _hold >= charge_time and _hold <= charge_time + good_window
 				_fire(origin, aim)
 	elif pressed and _rope == Rope.NONE and not weapons.is_busy() and (infinite_charges or _player.stamina >= fire_cost):
@@ -393,6 +424,56 @@ func is_coiling() -> bool:
 ## The tentacle is out (flying, stuck, or snapping back from a miss).
 func is_out() -> bool:
 	return _rope != Rope.NONE
+
+
+## The left arm pushed out: the tentacle's out, or Seeded Growth just went.
+func arm_out() -> bool:
+	return is_out() or _seed_arm > 0.0
+
+
+## Seeded Growth: where you aim, on what the grapple could grab, within its
+## reach -- the ground under a big enemy aimed at -- five tentacles burst.
+func _seed_burst(origin: Vector3, aim: Vector3) -> void:
+	if _seed_cooldown_left > 0.0:
+		return
+	var space := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + aim * max_range * _player.virus.reach_scale())
+	query.exclude = [_player.get_rid()]
+	query.collision_mask = 1
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return # out of reach (the ring's red)
+	var target := hit.collider as Node3D
+	var big := _big_enemy(target)
+	if target and big == null and _is_small_enemy(target):
+		return # (red too)
+	var at: Vector3 = hit.position
+	var normal: Vector3 = hit.normal
+	if big != null or (target and target.get_node_or_null(^"Health") != null):
+		var down := PhysicsRayQueryParameters3D.create(at, at + Vector3.DOWN * 30.0, 1)
+		if target is CollisionObject3D:
+			down.exclude = [(target as CollisionObject3D).get_rid()]
+		var ground := space.intersect_ray(down)
+		if ground.is_empty():
+			return
+		at = ground.position
+		normal = ground.normal
+	if not infinite_charges and not _player.spend_bars(seed_cost):
+		return
+	_seed_cooldown_left = seed_cooldown
+	_seed_arm = 0.35
+	var decides := not Network.is_online() or multiplayer.is_server()
+	SeededGrowth.burst(get_tree().current_scene, at, normal, decides, _player)
+	if Network.is_online() and multiplayer.is_server():
+		for peer in multiplayer.get_peers():
+			if peer != _player.get_multiplayer_authority():
+				_net_seed.rpc_id(peer, at, normal)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_seed(at: Vector3, normal: Vector3) -> void:
+	if multiplayer.get_remote_sender_id() == 1:
+		SeededGrowth.burst(get_tree().current_scene, at, normal, false, _player)
 
 
 ## True while the line is holding you (gravity and ground movement change).
@@ -790,12 +871,15 @@ func _start_whip(aim: Vector3) -> void:
 	_whip_hit.clear()
 
 
-## Each tick of the lash: its tip swings round, and the tentacle itself -- a
-## curve from your hand to the tip, trailing behind the swing -- is the
-## hitbox: everything it passes through takes whip_damage once.
+## Each tick of the lash: while it's slung (whip_points()), the whip itself
+## is the hitbox: everything it passes through takes whip_damage once.
 func _whip(delta: float, origin: Vector3, _aim: Vector3) -> void:
 	_whip_time += delta
 	var t := clampf(_whip_time / whip_time, 0.0, 1.0)
+	if t < WHIP_WINDUP or t > WHIP_THROW_END + 0.05:
+		if t >= 1.0:
+			_rope = Rope.NONE
+		return # drawn back behind you, or gone slack: it hurts only as it's slung
 	var points := whip_points(origin, t)
 	var space := get_world_3d().direct_space_state
 	if _whip_query == null:
@@ -822,23 +906,57 @@ func _whip(delta: float, origin: Vector3, _aim: Vector3) -> void:
 		_rope = Rope.NONE
 
 
-## The lash's shape at `t` (0..1 through it): hand, a bend trailing the
-## swing, and the tip -- the hitbox and what's drawn (rope_tip()).
+## The lash, slung the way a real whip is (the user's: less wriggling). Drawn
+## back behind you to the right (to WHIP_WINDUP); then the arm sweeps across
+## and a loop rolls down the whip from the hand to the tip -- the part past
+## the loop still lying back where it was -- till it's all straight out and
+## the tip snaps past full length (to WHIP_THROW_END); then it goes slack,
+## the tip dropping, and draws back in. The hitbox and what's drawn.
+const WHIP_WINDUP := 0.18
+const WHIP_THROW_END := 0.7
+const WHIP_POINTS := 12
+
+
 func whip_points(origin: Vector3, t: float) -> PackedVector3Array:
 	var flat := Vector3(_whip_aim.x, 0.0, _whip_aim.z).normalized()
 	if flat == Vector3.ZERO:
 		flat = -_player.global_basis.z
 	var half := deg_to_rad(whip_sweep_degrees) * 0.5
-	var angle := lerpf(-half, half, t) # right to left
-	var reach := whip_reach * sin(PI * minf(t * 1.3, 1.0)) # out, then back
-	var tip_dir := flat.rotated(Vector3.UP, angle)
-	tip_dir.y = _whip_aim.y
-	var tip := origin + tip_dir.normalized() * maxf(reach, 0.3)
-	var trail := origin + flat.rotated(Vector3.UP, angle - 0.6).normalized() * reach * 0.55
+	var length := whip_reach
+	var back_dir := (flat.rotated(Vector3.UP, -half - 1.2) + Vector3.DOWN * 0.35).normalized()
 	var points := PackedVector3Array()
-	for i in 6:
-		var u := i / 5.0
-		points.append(origin.lerp(trail, u).lerp(trail.lerp(tip, u), u)) # a bend
+	if t < WHIP_WINDUP:
+		var u := t / WHIP_WINDUP
+		for i in WHIP_POINTS:
+			var s := float(i) / (WHIP_POINTS - 1)
+			points.append(origin + back_dir * s * length * lerpf(0.5, 1.0, u) + Vector3.DOWN * s * s * 0.4)
+		return points
+	if t < WHIP_THROW_END:
+		var u := (t - WHIP_WINDUP) / (WHIP_THROW_END - WHIP_WINDUP)
+		var unroll := 1.0 - pow(1.0 - minf(u * 1.4, 1.0), 2.0) # the loop rolls out fast
+		var direction := flat.rotated(Vector3.UP, lerpf(-half, half, u)) # right to left
+		direction.y = _whip_aim.y
+		direction = direction.normalized()
+		var fold := unroll * length
+		var fold_at := origin + direction * fold
+		var loop_lift := Vector3.UP * 0.35 * (1.0 - unroll)
+		var tip_home := origin + back_dir * length
+		var trail := (tip_home - fold_at).normalized()
+		var snap := 1.0 + 0.08 * sin(clampf((u - 0.6) / 0.4, 0.0, 1.0) * PI) # the crack
+		for i in WHIP_POINTS:
+			var s := float(i) / (WHIP_POINTS - 1) * length
+			if s <= fold:
+				points.append(origin + direction * s * (snap if unroll >= 1.0 else 1.0))
+			else:
+				points.append(fold_at + loop_lift + trail * (s - fold))
+		return points
+	var slack := (t - WHIP_THROW_END) / (1.0 - WHIP_THROW_END)
+	var end := flat.rotated(Vector3.UP, half)
+	end.y = _whip_aim.y
+	end = end.normalized()
+	for i in WHIP_POINTS:
+		var s := float(i) / (WHIP_POINTS - 1)
+		points.append(origin + end * s * length * (1.0 - slack * 0.85) + Vector3.DOWN * s * s * 1.2 * slack)
 	return points
 
 
@@ -1077,7 +1195,8 @@ func _process(delta: float) -> void:
 		if is_instance_valid(arms) and arms.raise > 0.01:
 			arm_points = arms.left_arm_points()
 			arm_coil = arms.coil
-		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, arm_points, arm_coil, delta)
+		var path := whip_points(_start_point(), clampf(_whip_time / whip_time, 0.0, 1.0)) if _rope == Rope.WHIP else PackedVector3Array()
+		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, arm_points, arm_coil, delta, path)
 		_update_indicator(delta)
 		_light_spot_in_sight()
 		if _line:
