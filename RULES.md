@@ -1623,3 +1623,4 @@ them:
   - **Keys:** a backpack item (`Backpack.Kind.KEY`, `key_mp_1`). Walk into one or grapple it. They drop with the rest of your gear when you die at a camp.
   - **How it's built:** `StackBuilder._secrets()`, with its own dice so nothing else in the Stack moved. Re-baked: 30 doors, 15 with buttons.
   - Not compiled or run in game (the user's testing). The bake's editor scan showed no script errors.
+- **Speed effects from 32 to 40 m/s (2026-10-17).** The user's: the camera's speed juice (FOV widening, strafe/turn roll lean, sway, the rattle) starts lightly at 32 m/s and is full at 40 (`CameraJuice.speed_floor`/`speed_top`; was 7 to 28). That's past the 28 m/s bhop cap, so it comes from grapple kicks, launches and downhill boosts.

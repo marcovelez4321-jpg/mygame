@@ -9,8 +9,8 @@ extends Camera3D
 ##
 ## Speed (the user's: Vholume-style juice as momentum builds, set_motion()
 ## from your own body every frame): the camera rolls into strafes and turns
-## and sways and the view widens -- all from a run (speed_floor) up to the
-## speed cap (speed_top), with a light rattle near the top. (No speed lines
+## and sways and the view widens -- all from speed_floor up to speed_top,
+## with a light rattle near the top. (No speed lines
 ## or wind rush: the user took them out.)
 ##
 ## Rule 1 (co-op): purely cosmetic, generated locally from each client's own
@@ -21,9 +21,10 @@ extends Camera3D
 @export var fov_decay: float = 90.0   ## degrees/second an FOV kick settles at
 
 @export_group("Speed")
-## Speed (horizontal m/s) where the effects start, and where they're full.
-@export var speed_floor: float = 7.0
-@export var speed_top: float = 28.0
+## Speed (horizontal m/s) where the effects start, lightly, and where they're
+## full (the user's: 32 to 40, past the bhop cap -- grapple kicks, launches).
+@export var speed_floor: float = 32.0
+@export var speed_top: float = 40.0
 ## Degrees the view widens at full speed.
 @export var speed_fov: float = 12.0
 ## Camera roll: into a strafe (degrees, full sideways speed), into a turn
