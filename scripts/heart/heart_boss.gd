@@ -64,10 +64,14 @@ const FLICKER_TIME := 0.35
 const ROOM_MESHES := ["Cathedral_plain", "Tower_5_concrete"]
 ## Its structures shift about (the user's), so there's no hiding behind the
 ## same wall: every SHIFT_EVERY kicks each one (a mezzanine with its ramps, a
-## column, the pyramid, the slab, the stairs) heads for a new spot within
-## SHIFT_RANGE m of where it was built, at 1 m a beat; never into the open
-## middle (ARENA) or out of the room. The host picks; everyone moves them.
+## column, the pyramid, the slab, the stairs) picks a new spot within
+## SHIFT_RANGE m of where it was built -- never into the open middle (ARENA)
+## or out of the room -- and gets there in LURCHES lurches, one on each of
+## the next kicks (a fifth of the way each, snapping over LURCH_TIME), then
+## holds there till the next shift. The host picks; everyone lurches them.
 const SHIFT_EVERY := 10
+const LURCHES := 5
+const LURCH_TIME := 0.25
 const SHIFT_RANGE := 25.0
 const ARENA := 80.0
 ## Kept this far clear of the heart (its bounds swollen by a full thump), the
@@ -96,6 +100,10 @@ var _piece_home: Array[Vector3] = []
 var _piece_to: Array[Vector3] = []
 var _piece_extent: Array[AABB] = [] # each piece's own shape, round its origin
 var _kicks := 0
+var _piece_from: Array[Vector3] = [] # where this shift started
+var _lurch_start: Array[Vector3] = [] # where this lurch started
+var _lurches_done := LURCHES
+var _lurch_age := 10.0
 var _active := false
 var _player: AudioStreamPlayer
 ## The map it's playing (yours if you've picked one: PlayerMovement.heart_song).
@@ -266,24 +274,35 @@ func room_contains(point: Vector3) -> bool:
 ## Network.send_heart_shift, on every game: where they head now.
 func shift(spots: PackedVector3Array) -> void:
 	for i in mini(spots.size(), _piece_to.size()):
+		_piece_from[i] = _pieces[i].global_position if is_instance_valid(_pieces[i]) else _piece_to[i]
 		_piece_to[i] = spots[i]
+	_lurches_done = 0 # (lurching from the next kick)
 
 
-## Sliding them on toward their spots, 1 m a beat.
+## Each lurch: a snap a fifth of the way on, fast then settling.
 func _physics_process(delta: float) -> void:
-	if _pieces.is_empty():
+	if _pieces.is_empty() or _lurch_age > LURCH_TIME:
 		return
-	var beat := _map.beat() if _map else 60.0 / maxf(test_bpm, 1.0)
-	var step := delta / maxf(beat, 0.05)
+	_lurch_age += delta
+	var t := clampf(_lurch_age / LURCH_TIME, 0.0, 1.0)
+	var snap := 1.0 - pow(1.0 - t, 3.0)
+	var share := float(_lurches_done) / LURCHES
 	for i in _pieces.size():
-		var piece := _pieces[i]
-		if is_instance_valid(piece) and not piece.global_position.is_equal_approx(_piece_to[i]):
-			piece.global_position = piece.global_position.move_toward(_piece_to[i], step)
+		if is_instance_valid(_pieces[i]):
+			var goal := _piece_from[i].lerp(_piece_to[i], share)
+			_pieces[i].global_position = _lurch_start[i].lerp(goal, snap)
 
 
 ## Network.send_heart_kick, on every game.
 func quake(spots: PackedVector3Array, decides: bool) -> void:
 	_quake_age = 0.0
+	# A shift under way: this kick's lurch.
+	if _lurches_done < LURCHES and not _pieces.is_empty():
+		_lurches_done += 1
+		_lurch_age = 0.0
+		for i in _pieces.size():
+			if is_instance_valid(_pieces[i]):
+				_lurch_start[i] = _pieces[i].global_position
 	HeartQuake.hit(self, _room_world(), spots, decides)
 
 
@@ -304,6 +323,8 @@ func _find_room() -> void:
 				_pieces.append(node)
 				_piece_home.append((node as Node3D).global_position)
 				_piece_to.append((node as Node3D).global_position)
+				_piece_from.append((node as Node3D).global_position)
+				_lurch_start.append((node as Node3D).global_position)
 				var extent := AABB()
 				var first := true
 				for shape_node in node.get_children():
