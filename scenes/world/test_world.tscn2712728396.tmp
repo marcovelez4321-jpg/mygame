@@ -1,0 +1,332 @@
+[gd_scene format=3 uid="uid://8csi35th24b5"]
+
+[ext_resource type="Shader" uid="uid://dkm5q24etjal" path="res://shaders/alien_terrain.gdshader" id="1_k6tl3"]
+[ext_resource type="Script" uid="uid://bdy1lul7nr03o" path="res://scripts/world/world_navigation.gd" id="2_5vhu7"]
+[ext_resource type="Script" uid="uid://udb4fv61c1q5" path="res://scripts/world/world_chunks.gd" id="3_lludv"]
+[ext_resource type="Script" uid="uid://b5kdycf53rthc" path="res://scripts/world/terrain_look.gd" id="4_y826p"]
+[ext_resource type="Resource" path="res://worlds/test_world/biomes.res" id="5_u65ls"]
+[ext_resource type="Script" uid="uid://cd6q03pxw5dko" path="res://scripts/world/growth_scatter.gd" id="6_rsl8k"]
+[ext_resource type="Script" uid="uid://c5mvcdsfkfeog" path="res://scripts/world/chunk_barnacles.gd" id="7_6n4eo"]
+[ext_resource type="Script" uid="uid://blpts7jbv0f5n" path="res://scripts/world/eye_scatter.gd" id="8_22031"]
+[ext_resource type="Script" uid="uid://b1vfe5trujhmp" path="res://scripts/world/worm_director.gd" id="9_wnu4w"]
+[ext_resource type="Script" uid="uid://k5ol8htogvp2" path="res://scripts/world/encounter_director.gd" id="10_v085t"]
+[ext_resource type="PackedScene" path="res://scenes/megastructures/the_stack.scn" id="11_ykgsn"]
+[ext_resource type="Script" uid="uid://cku7pyx3p03gi" path="res://scripts/world/cloud_deck.gd" id="13_c2v4b"]
+[ext_resource type="Script" uid="uid://8l5laalbjcbl" path="res://scripts/world/skyline_layer.gd" id="14_oysqe"]
+[ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="15_25kst"]
+[ext_resource type="Resource" path="res://audio/music/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).beats.tres" id="21_lludv"]
+[ext_resource type="PackedScene" uid="uid://dwh531b4rtkwn" path="res://scenes/enemy/spider_pack.tscn" id="22_3nfe5"]
+[ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="23_k6tl3"]
+[ext_resource type="Resource" uid="uid://4o8gxqlvnutb" path="res://weapons/starter_gun.tres" id="24_5vhu7"]
+[ext_resource type="PackedScene" uid="uid://cwqrqy7cuat8c" path="res://scenes/enemy/rat.tscn" id="24_prvl0"]
+[ext_resource type="Resource" uid="uid://c5cnojtgl7uns" path="res://weapons/shotgun.tres" id="25_lludv"]
+[ext_resource type="Environment" path="res://worlds/test_world/environment.tres" id="26_8sgms"]
+[ext_resource type="Resource" uid="uid://dt6eiug7x3mql" path="res://weapons/grenade.tres" id="26_y826p"]
+[ext_resource type="Script" uid="uid://dyxx8s0555h3a" path="res://scripts/world/biome_atmosphere.gd" id="27_0bcx0"]
+[ext_resource type="Resource" uid="uid://bjfayi7xo4rw8" path="res://weapons/pkm.tres" id="27_u65ls"]
+[ext_resource type="Script" uid="uid://g1ouk8chgse1" path="res://scripts/world/alien_atmosphere.gd" id="28_h1i0h"]
+[ext_resource type="Resource" uid="uid://bpjpjn7wvra10" path="res://weapons/ppsh.tres" id="28_rsl8k"]
+[ext_resource type="Resource" uid="uid://cm8emkwg5001e" path="res://weapons/rpg.tres" id="29_6n4eo"]
+[ext_resource type="PackedScene" uid="uid://djmeis3phxch8" path="res://scenes/player/player.tscn" id="29_fyxt2"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="30_0goju"]
+[ext_resource type="Resource" uid="uid://e3410hmw0eai" path="res://weapons/revolver.tres" id="30_22031"]
+[ext_resource type="Resource" uid="uid://brnsy2rrq6n3b" path="res://weapons/machine_gun.tres" id="31_wnu4w"]
+[ext_resource type="Script" uid="uid://b6c6fwaffk3y6" path="res://scripts/world/loadout.gd" id="32_ldemw"]
+[ext_resource type="Resource" uid="uid://cd1tqnoroiq4t" path="res://weapons/sniper.tres" id="32_v085t"]
+[ext_resource type="Script" uid="uid://c657pav6cgvj" path="res://scripts/world/flesh_tree.gd" id="40_fleshtree"]
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
+_shader_parameters = {
+&"biome_area": null,
+&"biome_map": null,
+&"blotch_size": null,
+&"blotches": null,
+&"color_steps": null,
+&"flat_terrain_normals": null,
+&"grass_tile": null,
+&"height_gradient": null,
+&"high_color": null,
+&"high_height": null,
+&"low_color": null,
+&"low_height": null,
+&"moss_amount": null,
+&"moss_color": null,
+&"paint": null,
+&"paint_strength": null,
+&"ps1": null,
+&"ridge_color": null,
+&"rust_amount": null,
+&"rust_color": null,
+&"sewer": null,
+&"sewer_high_color": null,
+&"sewer_low_color": null,
+&"sewer_ridge_color": null,
+&"sewer_rust_amount": null,
+&"sewer_rust_color": null,
+&"sewer_slope_color": null,
+&"sewer_valley_color": null,
+&"slime_amount": null,
+&"slime_color": null,
+&"slope": null,
+&"slope_color": null,
+&"slope_end": null,
+&"slope_start": null,
+&"snap_resolution": null,
+&"speckle_amount": null,
+&"speckle_size": null,
+&"texel_size": null,
+&"valley_color": null,
+&"yard": null,
+&"yard_center": null,
+&"yard_grass": null,
+&"yard_grass_on": null,
+&"yard_radius": null,
+&"yard_soft": null
+}
+shader_override_enabled = true
+shader_override = ExtResource("1_k6tl3")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0kkto"]
+transparency = 4
+cull_mode = 2
+vertex_color_use_as_albedo = true
+backlight_enabled = true
+backlight = Color(0.5, 0.5, 0.5, 1)
+distance_fade_mode = 1
+distance_fade_min_distance = 128.0
+distance_fade_max_distance = 96.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_gxank"]
+generated_type = 1
+height_offset = 0.5
+material_override = SubResource("StandardMaterial3D_0kkto")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 128.0
+
+[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_pb6gh"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_gxank")])
+
+[sub_resource type="PhysicsMaterial" id="RatFeet"]
+friction = 0.3
+
+[sub_resource type="Resource" id="Resource_axar3"]
+script = ExtResource("28_h1i0h")
+
+[sub_resource type="Resource" id="Resource_sshxm"]
+script = ExtResource("28_h1i0h")
+fog_color = Color(0.27, 0.29, 0.16, 1)
+fog_start = 22.0
+fog_end = 192.5
+haze_height = 14.0
+haze_density = 0.081
+ambient_color = Color(0.32, 0.31, 0.2, 1)
+ambient_energy = 0.4
+sun_color = Color(1, 0.93, 0.72, 1)
+sun_energy = 1.25
+
+[node name="TestWorld" type="Node3D" unique_id=386100729]
+
+[node name="Terrain3D" type="Terrain3D" parent="." unique_id=673048924]
+data_directory = "res://worlds/test_world/terrain"
+material = SubResource("Terrain3DMaterial_fxg6t")
+assets = SubResource("Terrain3DAssets_pb6gh")
+collision_mode = 3
+vertex_spacing = 4.0
+top_level = true
+metadata/_edit_lock_ = true
+
+[node name="WorldNavigation" type="Node" parent="." unique_id=737261783]
+script = ExtResource("2_5vhu7")
+tiles_dir = "res://worlds/test_world/navigation"
+
+[node name="WorldChunks" type="Node3D" parent="." unique_id=1930744865]
+script = ExtResource("3_lludv")
+chunks_dir = "res://worlds/test_world/chunks"
+
+[node name="TerrainLook" type="Node" parent="." unique_id=1309111274 node_paths=PackedStringArray("terrain")]
+script = ExtResource("4_y826p")
+terrain = NodePath("../Terrain3D")
+biomes = ExtResource("5_u65ls")
+
+[node name="GrowthScatter" type="Node" parent="." unique_id=372329832]
+script = ExtResource("6_rsl8k")
+high_ground = 50.248306
+biomes = ExtResource("5_u65ls")
+
+[node name="ChunkBarnacles" type="Node" parent="." unique_id=814946183]
+script = ExtResource("7_6n4eo")
+
+[node name="EyeScatter" type="Node" parent="." unique_id=66001472]
+script = ExtResource("8_22031")
+biomes = ExtResource("5_u65ls")
+
+[node name="WormDirector" type="Node" parent="." unique_id=1154112874]
+script = ExtResource("9_wnu4w")
+
+[node name="EncounterDirector" type="Node" parent="." unique_id=479524623]
+script = ExtResource("10_v085t")
+biomes = ExtResource("5_u65ls")
+
+[node name="TheStack" parent="." unique_id=1618061883 instance=ExtResource("11_ykgsn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 250, 31.5, -1450)
+interior_distance = 450.0
+inside_zones = Array[AABB]([AABB(-94, 0, -94, 188, 400, 188), AABB(-69.56953, 900, -67.35257, 139.13905, 500, 134.70514), AABB(-40.41888, 3000, -46.235783, 80.83776, 400, 92.471565), AABB(-28.713057, 4650, -28.32765, 57.426113, 310, 56.6553), AABB(-56.5233, 1900, -47.76266, 113.0466, 500, 95.52532), AABB(-96.75485, 440, -74.77099, 193.5097, 160, 149.54198), AABB(224.98645, 900, 27.312569, 70.02711, 450, 65.37486), AABB(244.81259, 3300, 40.143044, 30.37482, 260, 39.713913), AABB(234.19724, 1950, 29.973625, 51.605545, 450, 60.05275), AABB(-233.38727, 950, 146.23848, 66.774536, 450, 87.52304), AABB(-223.42537, 2350, 166.88422, 46.85074, 370, 46.231552), AABB(-227.4989, 1650, 165.38214, 54.997818, 350, 49.235703), AABB(59.461105, 900, -295.3295, 41.07779, 450, 50.658974), AABB(67.10171, 1650, -285.7641, 25.796589, 280, 31.528229), AABB(43.603153, 300, -311.14005, 72.79369, 300, 82.28011), AABB(-281.01202, 200, -200.24886, 62.024025, 360, 60.49772), AABB(-266.35474, 950, -184.92545, 32.709484, 390, 29.850906), AABB(243.79974, 250, -296.0376, 152.4005, 310, 112.07521), AABB(264.87442, 780, -306.43594, 110.251175, 320, 132.87187), AABB(273.9403, 1320, -290.20264, 92.11936, 320, 100.40526), AABB(273.71942, 1860, -285.26505, 92.56116, 320, 90.53008), AABB(282.8883, 2400, -285.26505, 74.22341, 320, 90.53008), AABB(286.5342, 2940, -276.15338, 66.93157, 320, 72.30677), AABB(288.9611, 3480, -272.81863, 62.077805, 320, 65.63728), AABB(291.4362, 4000, -273.1493, 57.127617, 300, 66.29859), AABB(-202.03784, 440, -42.2, 84.07567, 160, 84.4)])
+nest_height = 5000.0
+nest_columns = PackedVector3Array(0, 5000, 0, 260, 3600, 60, -200, 2800, 190, 80, 2000, -270, -250, 1400, -170, 320, 4500, -240, -160, 600, 0)
+floor_nests = PackedVector3Array(46.851704, 40, -46.80737, 32.539474, 160, -51.61978, 18.156006, 240, 47.88225, -32.980896, 360, -26.766724, -25.23777, 1150, 50.514427, -21.72968, 1275, -50.514427, -38.68433, 900, -14.947823, -30.31416, 3100, 13.696045, 30.31416, 3200, 7.7383175, -30.31416, 3300, 17.75431, -16.804745, 3000, -32.355465, -21.534792, 4727.5, 3.694394, -21.534792, 4805, -3.9860802, -21.534792, 4805, -1.0518656, -5.6766586, 4882.5, 21.245737, -6.3852425, 2025, 35.821995, 42.392475, 2150, -7.5878706, -19.600473, 2275, -35.821995, -27.381834, 504, -56.07824, 38.30786, 552, -56.07824, 50.5298, 440, 61.74331, 286.26016, 1012.5, 50.728085, 244.15274, 900, 54.78659, 266.15298, 3365, 45.107285, 263.78293, 3430, 74.892715, 256.20953, 3495, 45.107285, 257.27954, 3300, 56.406326, 258.48267, 3300, 56.915707, 267.03555, 2175, 82.51978, 264.84927, 2287.5, 37.480217, 258.75406, 1950, 56.076622, -208.06322, 1175, 222.82114, -199.85533, 950, 185.61943, -200.6661, 2535, 207.33684, -197.94112, 2627.5, 207.33684, -195.50336, 2350, 180.15656, -198.94586, 2350, 188.84401, -179.37582, 1825, 181.41391, -201.46242, 1650, 193.52315, 77.13964, 1012.5, -251.00288, 75.24727, 1237.5, -288.99713, 85.84522, 900, -261.3109, 89.67372, 1720, -275.2281, 83.12448, 1790, -281.8231, 89.67372, 1860, -267.12408, 79.64164, 1650, -273.2657, 52.702366, 375, -260.58267, 107.29764, 450, -288.1072, 96.85303, 525, -300.85504, 73.30868, 300, -251.82535, -243.7713, 380, -147.31335, -273.25903, 470, -160.14551, -231.60764, 200, -178.64934, -255.082, 1242.5, -181.19409, -247.69424, 950, -170.08928, 261.7391, 250, -238.21446, 334.70862, 780, -208.99866, 315.57996, 1860, -242.99312, 308.55032, 2400, -264.58844, 313.22165, 2400, -238.94614, 334.77216, 2940, -248.95059, 326.02655, 3480, -225.05466, 317.5995, 4000, -240.11783, 305.96225, 4000, -225.29587, -128.47162, 552, -8.428137)
+inner_nest_objects = Array[AABB]([])
+inner_nest_shafts = Array[AABB]([])
+secret_rooms = Array[AABB]([AABB(396.8532, 1320, -210.46497, 12.200012, 8, 12), AABB(299.1131, 2940, -323.95306, 12, 8, 12.200012), AABB(-50.71306, 4650, -11.52675, 12.200001, 8, 12), AABB(79.36953, 900, -43.99151, 12.199997, 8, 12), AABB(324.8639, 1860, -164.65205, 12, 8, 12.199997), AABB(419.59406, 780, -234.43727, 12.200012, 8, 12), AABB(251.42639, 4000, -258.89868, 12.200012, 8, 12), AABB(-29.847668, 900, 77.15257, 12, 8, 12.199997), AABB(373.0361, 3480, -257.54297, 12.200012, 8, 12), AABB(383.00754, 2940, -260.87067, 12.200012, 8, 12), AABB(-37.715065, 440, 85.68612, 12, 8, 12.199997), AABB(359.06262, 780, -328.43594, 12, 8, 12.200012), AABB(324.6338, 2940, -184.4086, 12, 8, 12.199997), AABB(293.0949, 2400, -184.93495, 12, 8, 12.199997)])
+secret_keys = PackedVector3Array(335.01978, 1860, -267.17322, 319.97192, 4000, -229.60767, 318.58435, 1860, -207.2394, 25.973755, 1900, -19.433615, 332.9136, 3480, -225.12668, 290.27768, 1860, -256.30246, 345.40182, 2400, -255.12468, 274.9477, 250, -264.56583, 308.0168, 2940, -247.2544, 341.13916, 2940, -217.67816, 324.93073, 1860, -265.78613, 291.16156, 1320, -224.0053, 305.9252, 1860, -273.25787, 44.816475, 900, 19.365494, 94.74823, 300, -241.61887, 310.23737, 1860, -229.53719, 294.13608, 2400, -249.45604, 329.64, 1320, -211.07043, 42.364983, 900, -56.642754, -132.08319, 440, 4.1638985, 51.059418, 440, 36.98188, 297.10193, 2940, -264.02127, 321.20798, 4000, -221.85925, 340.4624, 250, -256.76868, -0.38674164, 440, 62.242653, -6.2378216, 3000, 26.454945, 21.716026, 900, 20.955475, -31.694584, 440, 38.58548, 307.46283, 2940, -227.572, 342.44113, 1320, -206.53508, 326.3432, 2400, -221.56587, -29.61732, 1900, 5.7143974, 290.8571, 1320, -243.88225, 41.553665, 440, 37.273415, 330.82828, 2400, -205.50702, 309.85724, 2400, -222.20337, -137.2438, 440, -22.667953, 14.660732, 1900, -21.086226, 295.57193, 1860, -233.80554, 324.9917, 780, -238.84683, 332.27823, 780, -288.77292, 370.9317, 250, -208.41821, 302.6556, 1860, -241.29004, 326.72864, 1860, -254.02463, 311.3548, 780, -185.73666, 298.578, 780, -282.21265, 68.53736, 300, -268.50732, 79.13652, 440, -13.144287, 332.20972, 4000, -224.8659, 315.96014, 4000, -261.5145, 317.28244, 2400, -262.65936, 332.7644, 2400, -264.8652, 292.50778, 1320, -264.81708, 292.99536, 250, -204.23557, 39.58461, 440, -60.17025, 347.14862, 1320, -242.81888, 308.65274, 1860, -214.40454, 331.74756, 1320, -273.92343, 324.52878, 1320, -243.0761, -23.358824, 1900, -16.078608)
+secret_climbers = PackedVector3Array(346.7559, 2400, -216.54102, 344.35135, 780, -190.77423, 286.36124, 1320, -266.7228, 307.777, 1860, -267.21283, 337.298, 4000, -241.45053, 37.216423, 1900, -20.285604, 303.65393, 2400, -213.94806, -27.39375, 1900, -32.51846, 292.95886, 1860, -243.67046, 305.36066, 2940, -251.93405, 375.87628, 250, -260.94144, -15.389942, 900, -37.248154, -23.781242, 900, 51.767166, 336.42044, 780, -188.74037, 300.63547, 780, -280.3349, 344.7868, 2400, -269.4321)
+webs = Array[Dictionary]([{
+&"at": Vector3(104.48445, 1010.25, -253.94556),
+&"indoors": true,
+&"radius": 20.7222432749612,
+&"size": 2.6740937
+}, {
+&"at": Vector3(-25.073263, 3378.25, -57.44142),
+&"indoors": true,
+&"radius": 23.695266587393625,
+&"size": 5.4489155
+}, {
+&"at": Vector3(-52.172203, 1900, 43.411568),
+&"indoors": true,
+&"radius": 21.951040370123728,
+&"size": 3.820971
+}, {
+&"at": Vector3(361.18814, 1860, -199.8274),
+&"indoors": true,
+&"radius": 24.197336775915964,
+&"size": 5.9175143
+}, {
+&"at": Vector3(57.85128, 1658.25, -273.80075),
+&"indoors": true,
+&"radius": 21.49091022355216,
+&"size": 3.3915162
+}, {
+&"at": Vector3(6.2376003, 4786.25, -32.56525),
+&"indoors": true,
+&"radius": 21.607143878936768,
+&"size": 3.500001
+}, {
+&"at": Vector3(72.87512, 2234.25, -9.202993),
+&"indoors": true,
+&"radius": 23.302179404667445,
+&"size": 5.082034
+}, {
+&"at": Vector3(42.096127, 2018.25, -55.211285),
+&"indoors": true,
+&"radius": 20.59592911175319,
+&"size": 2.5562005
+}, {
+&"at": Vector3(33.04125, 2044.0227, 57.88018),
+&"indoors": false,
+&"radius": 8.691004,
+&"size": 21.027931
+}, {
+&"at": Vector3(-36.10527, 1405.0862, -64.30522),
+&"indoors": false,
+&"radius": 4.013664,
+&"size": 25.497845
+}, {
+&"at": Vector3(292.66922, 715.7634, 8.160564),
+&"indoors": false,
+&"radius": 8.071987,
+&"size": 28.207275
+}, {
+&"at": Vector3(206.87016, 1945.5579, 60.697193),
+&"indoors": false,
+&"radius": 8.685808,
+&"size": 16.74915
+}, {
+&"at": Vector3(-220.02536, 1055.9249, 260.90668),
+&"indoors": false,
+&"radius": 4.935116,
+&"size": 25.319834
+}, {
+&"at": Vector3(-270.94183, 143.12866, 181.37837),
+&"indoors": false,
+&"radius": 5.0674896,
+&"size": 20.709011
+}, {
+&"at": Vector3(66.562, 1607.4034, -238.87065),
+&"indoors": false,
+&"radius": 5.019886,
+&"size": 29.512005
+}, {
+&"at": Vector3(130.0428, 777.0453, -251.19218),
+&"indoors": false,
+&"radius": 7.0742207,
+&"size": 22.140198
+}, {
+&"at": Vector3(-213.36713, 778.947, -193.08763),
+&"indoors": false,
+&"radius": 10.709105,
+&"size": 21.934303
+}, {
+&"at": Vector3(-286.4812, 210.6962, -115.654144),
+&"indoors": false,
+&"radius": 10.849934,
+&"size": 18.475363
+}, {
+&"at": Vector3(363.50378, 3890.275, -234.70009),
+&"indoors": false,
+&"radius": 4.927845,
+&"size": 29.378864
+}, {
+&"at": Vector3(352.11987, 2105.276, -182.7159),
+&"indoors": false,
+&"radius": 8.141447,
+&"size": 24.933556
+}])
+
+[node name="CloudDeck" type="MeshInstance3D" parent="." unique_id=433324838]
+script = ExtResource("13_c2v4b")
+height = 650.0
+
+[node name="SkylineLayer" type="Node3D" parent="." unique_id=2100368034]
+script = ExtResource("14_oysqe")
+
+[node name="HarvestmanLeech" parent="." unique_id=1040049696 instance=ExtResource("15_25kst")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 18.25733, 60)
+
+[node name="SpiderPack" parent="." unique_id=1532828836 instance=ExtResource("22_3nfe5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70, 22.390194, 50)
+
+[node name="Rat" parent="." unique_id=1837523022 instance=ExtResource("24_prvl0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 20.045486, -70)
+physics_material_override = SubResource("RatFeet")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=112085740]
+environment = ExtResource("26_8sgms")
+metadata/own_look = true
+
+[node name="BiomeAtmosphere" type="Node" parent="." unique_id=1690203013]
+script = ExtResource("27_0bcx0")
+biomes = ExtResource("5_u65ls")
+reef_air = SubResource("Resource_axar3")
+sewer_air = SubResource("Resource_sshxm")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1081362477]
+transform = Transform3D(0.8660254, -0.38302222, 0.32139382, 0, 0.64278764, 0.76604444, -0.5, -0.66341394, 0.5566704, 0, 0, 0)
+light_energy = 1.15
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 90.0
+
+[node name="Player" parent="." unique_id=1710340998 instance=ExtResource("29_fyxt2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
+spawn_in_cathedral = true
+heart_song = ExtResource("21_lludv")
+
+[node name="HUD" parent="." unique_id=1218208162 instance=ExtResource("30_0goju")]
+
+[node name="Loadout" type="Node" parent="." unique_id=904333592]
+script = ExtResource("32_ldemw")
+weapons = Array[ExtResource("23_k6tl3")]([ExtResource("24_5vhu7"), ExtResource("25_lludv"), ExtResource("26_y826p"), ExtResource("27_u65ls"), ExtResource("28_rsl8k"), ExtResource("29_6n4eo"), ExtResource("30_22031"), ExtResource("31_wnu4w"), ExtResource("32_v085t"), null])
+
+[node name="FleshTree" type="Node3D" parent="." unique_id=34791758]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 40)
+script = ExtResource("40_fleshtree")

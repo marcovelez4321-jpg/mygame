@@ -12,7 +12,7 @@ extends RefCounted
 ## launching and hurting (Network.send_heart_kick); every game shakes and
 ## draws it all.
 
-const DAMAGE := 50.0
+const DAMAGE := 15.0 # (the user's: was 50)
 const LAUNCH := 30.0
 const CHUNKS := 4
 ## Everyone inside's screen: a bit of a shake (the user's), degrees.
@@ -24,7 +24,10 @@ const WALL_CRUMBLES := 8
 ## user's: in the arena, not off at the walls): half scattered round the
 ## players (within NEAR_PLAYER), half anywhere in the arena round the heart
 ## (its open middle, ARENA across).
-const CHUNK_HEIGHT := Vector2(40.0, 70.0)
+const CHUNK_HEIGHT := Vector2(100.0, 150.0)
+## At most this many falling at once (the user's): a kick drops only as many
+## as there's room for.
+const MAX_CHUNKS := 5
 const NEAR_PLAYER := 12.0
 const ARENA := StackBuilder.CATHEDRAL_CLEAR
 const CHUNK_SIZE := Vector2(1.2, 2.6)
@@ -41,7 +44,8 @@ static var _rubble_mesh: BoxMesh
 ## round the heart (`centre`); high over the floor either way.
 static func pick_chunks(room: AABB, players: Array[Node3D], centre: Vector3) -> PackedVector3Array:
 	var spots := PackedVector3Array()
-	for i in CHUNKS:
+	var room_for := MAX_CHUNKS - FallingChunk.alive
+	for i in mini(CHUNKS, room_for):
 		var over: Vector3
 		if i % 2 == 0 and not players.is_empty():
 			over = players[randi() % players.size()].global_position + _scatter(NEAR_PLAYER)

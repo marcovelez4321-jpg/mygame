@@ -3,18 +3,19 @@ extends Node3D
 
 ## A chunk of concrete shaken loose by the heart's kick (the user's): it
 ## breaks off a wall, tumbles down, and bursts into dust and rubble where it
-## lands. Landing on you: DAMAGE (the host's game decides; every game draws it).
+## lands -- it keeps falling till it does. Landing on you: DAMAGE (the host's
+## game decides; every game draws it).
 
 const GRAVITY := 22.0
 const DAMAGE := 20.0
-const LIFETIME := 12.0
+## How many are falling right now (HeartQuake caps it).
+static var alive := 0
 const CONCRETE := "res://art/megastructures/stack_plain.res"
 
 var _velocity := Vector3.ZERO
 var _spin := Vector3.ZERO
 var _size := 2.0
 var _decides := false
-var _age := 0.0
 var _done := false
 
 static var _material: StandardMaterial3D
@@ -28,6 +29,14 @@ static func drop(world: Node, at: Vector3, push: Vector3, size: float, decides: 
 	world.add_child(chunk)
 	chunk.global_position = at
 	return chunk
+
+
+func _enter_tree() -> void:
+	alive += 1
+
+
+func _exit_tree() -> void:
+	alive -= 1
 
 
 func _ready() -> void:
@@ -56,8 +65,9 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _done:
 		return
-	_age += delta
-	if _age > LIFETIME:
+	# Falling till it lands (the user's) -- unless it's dropped clean out of
+	# the world.
+	if global_position.y < -1000.0:
 		queue_free()
 		return
 	_velocity += Vector3.DOWN * GRAVITY * delta
