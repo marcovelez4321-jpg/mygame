@@ -63,10 +63,10 @@ static func begin(who: PlayerMovement, by: Node3D) -> StalkerDrag:
 
 
 ## Ends it for `player` (here), if it's on: they get up (release()).
-static func finish(who: PlayerMovement) -> void:
+static func finish(who: PlayerMovement, throw: Vector3 = Vector3.ZERO) -> void:
 	var existing: Variant = who.get_meta(&"stalker_drag", null)
 	if existing is StalkerDrag and is_instance_valid(existing):
-		(existing as StalkerDrag).release()
+		(existing as StalkerDrag).release(throw)
 
 
 func _ready() -> void:
@@ -156,7 +156,9 @@ func _ready() -> void:
 ## Let go: back on their feet where they lie, facing the way they lay; the
 ## view eases up from the ragdoll's head to their eyes over OUT_TIME, then
 ## it's all theirs again.
-func release() -> void:
+## `throw` (the user's: broke out of its grip): flung that way at once,
+## yours to control again straight away (the view still eases up).
+func release(throw: Vector3 = Vector3.ZERO) -> void:
 	if _releasing:
 		return
 	_releasing = true
@@ -169,6 +171,11 @@ func release() -> void:
 		player.rotation.y = atan2(-facing.x, -facing.z)
 	player.velocity = Vector3.ZERO
 	player.set("_pitch", 0.0)
+	if throw != Vector3.ZERO:
+		player.drag = null
+		player.collision_layer = _saved_layers.x
+		player.collision_mask = _saved_layers.y
+		player.shove(throw)
 
 
 static func _flat(v: Vector3) -> Vector3:

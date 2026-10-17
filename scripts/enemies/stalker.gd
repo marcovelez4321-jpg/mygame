@@ -148,6 +148,10 @@ const DRAG_PULL := 8.0
 const DRAG_TIME := 15.0
 const DRAG_DAMAGE := 70.0
 const TEAMMATE_FREES := 30.0
+## Broke out of its grip yourself (the user's): flung off in a random way at
+## THROW_SPEED (a little up), THROW_DAMAGE.
+const THROW_SPEED := 25.0
+const THROW_DAMAGE := 15.0
 ## After a drag (the user's): off to cover, then COOLDOWN before it stages
 ## or strikes again -- it keeps stalking meanwhile.
 const COOLDOWN := Vector2(120.0, 180.0)
@@ -558,16 +562,21 @@ func _grab(p: PlayerMovement) -> void:
 ## The drag broken: by their clicks (StalkerDrag.tug(), the host's), or a
 ## teammate's shots.
 func drag_broken() -> void:
-	if state == State.DRAG:
-		_let_go(false)
+	if state != State.DRAG or not is_instance_valid(_victim):
+		return
+	# Thrown off, any which way.
+	var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	var throw := (way * cos(0.35) + Vector3.UP * sin(0.35)) * THROW_SPEED
+	_victim.health.hurt_unscaled(THROW_DAMAGE)
+	_let_go(false, throw)
 
 
 ## Lets go of whoever it has (`dragged`: it had them) and runs flat out to
 ## cover; after a drag, a COOLDOWN before it stages or strikes again (it
 ## keeps stalking). The fear's spent.
-func _let_go(dragged: bool) -> void:
+func _let_go(dragged: bool, throw: Vector3 = Vector3.ZERO) -> void:
 	if is_instance_valid(_victim):
-		Network.send_stalker_drag(_victim.get_multiplayer_authority(), false)
+		Network.send_stalker_drag(_victim.get_multiplayer_authority(), false, throw)
 	_victim = null
 	fear = 0.0
 	if dragged or state == State.DRAG:

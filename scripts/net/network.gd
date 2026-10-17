@@ -230,18 +230,19 @@ func _net_message(text: String) -> void:
 
 
 ## Host: a player taken by the Stalker (or let go), here and everywhere.
-func send_stalker_drag(peer_id: int, on: bool) -> void:
-	_stalker_drag(peer_id, on)
+## `throw`: let go with a fling (broke out of its grip), else zero.
+func send_stalker_drag(peer_id: int, on: bool, throw: Vector3 = Vector3.ZERO) -> void:
+	_stalker_drag(peer_id, on, throw)
 	if is_online():
-		_net_stalker_drag.rpc(peer_id, on)
+		_net_stalker_drag.rpc(peer_id, on, throw)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _net_stalker_drag(peer_id: int, on: bool) -> void:
-	_stalker_drag(peer_id, on)
+func _net_stalker_drag(peer_id: int, on: bool, throw: Vector3) -> void:
+	_stalker_drag(peer_id, on, throw)
 
 
-func _stalker_drag(peer_id: int, on: bool) -> void:
+func _stalker_drag(peer_id: int, on: bool, throw: Vector3 = Vector3.ZERO) -> void:
 	var stalker := get_tree().get_first_node_in_group("stalker") as Node3D
 	for node in get_tree().get_nodes_in_group("player"):
 		var player := node as PlayerMovement
@@ -249,7 +250,7 @@ func _stalker_drag(peer_id: int, on: bool) -> void:
 			if on and stalker:
 				StalkerDrag.begin(player, stalker)
 			elif not on:
-				StalkerDrag.finish(player)
+				StalkerDrag.finish(player, throw)
 
 
 @rpc("authority", "call_remote", "reliable")
