@@ -215,6 +215,20 @@ func send_stalker_sound(kind: int, at: Vector3) -> void:
 		_stalker_sound.rpc(kind, at)
 
 
+## Host: one of the heart's blood beams (BloodBeam), on every machine -- only
+## the host's deals hits. `exclude`: what it passes through here (the heart).
+func send_blood_beam(from: Vector3, direction: Vector3, warn: float, exclude: Array[RID] = []) -> void:
+	BloodBeam.fire(get_tree().current_scene, from, direction, warn, true, exclude)
+	if is_online():
+		_net_blood_beam.rpc(from, direction, warn)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_blood_beam(from: Vector3, direction: Vector3, warn: float) -> void:
+	# Late by the trip here: its warning's that much shorter, so it fires with the host's.
+	BloodBeam.fire(get_tree().current_scene, from, direction, maxf(warn - half_ping(), 0.0), false)
+
+
 ## Host: words on one player's screen (the bottom-middle message), wherever
 ## they are.
 func send_message(peer_id: int, text: String) -> void:
