@@ -342,6 +342,7 @@ const REAL_SIZE := {
 	Backpack.Kind.SCRAP: 0.11, Backpack.Kind.SILK: 0.12, Backpack.Kind.CAMP_KIT: 0.3,
 	# Meat: a 2 kg chunk's size (CarryItem.world_size()).
 	Backpack.Kind.MEAT: 0.2, Backpack.Kind.ROTTEN_MEAT: 0.2, Backpack.Kind.COOKED_MEAT: 0.2,
+	Backpack.Kind.GLUED_MEAT: 0.3, Backpack.Kind.GLUED_COOKED: 0.3,
 }
 
 var _bodies: Array[Dictionary] = [] # {key, kind, body: RigidBody3D, node: the prop, area: its click zone}
@@ -645,7 +646,7 @@ func _sync_bodies(stacks: Array[Dictionary]) -> void:
 	_hovered = -1
 	var wanted := {} # "kind:weapon" -> copies
 	for stack in stacks:
-		var copies := 1 if stack.kind in [Backpack.Kind.GUN, Backpack.Kind.CAMP_KIT] else mini(stack.count, MAX_COPIES)
+		var copies := 1 if stack.kind in [Backpack.Kind.GUN, Backpack.Kind.CAMP_KIT] or stack.get("craftable", false) else mini(stack.count, MAX_COPIES)
 		wanted["%d:%s" % [stack.kind, stack.weapon.resource_path if stack.weapon else ""]] = [stack, copies]
 	var kept: Array[Dictionary] = []
 	var have := {}
@@ -847,6 +848,8 @@ func _model_for(stack: Dictionary) -> Node3D:
 		return CarryItem.meat_model(false, true)
 	if stack.kind == Backpack.Kind.COOKED_MEAT:
 		return CarryItem.meat_model(true, false)
+	if stack.kind in [Backpack.Kind.GLUED_MEAT, Backpack.Kind.GLUED_COOKED]:
+		return CarryItem.glued_model(stack.kind == Backpack.Kind.GLUED_COOKED, false)
 	return model_of(stack.kind, stack.weapon, _player.weapons.grenade_weapon())
 
 

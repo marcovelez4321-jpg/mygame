@@ -132,6 +132,8 @@ func prompt() -> String:
 	if kind == CarryItem.POD:
 		var mutation: Array = Virus.MUTATIONS.get(data.mutation, ["?", ""])
 		return "%s\n%s\nleft click to mutate" % [mutation[0], mutation[1]]
+	if data.get("glued", false):
+		return "Glued meat\n" + PROMPTS.get(kind, "")
 	return PROMPTS.get(kind, "")
 
 
@@ -177,6 +179,10 @@ func take_from_backpack(code: int) -> void:
 				taken = {kind = kind, amount = 1}
 		Backpack.Kind.MEAT, Backpack.Kind.ROTTEN_MEAT, Backpack.Kind.COOKED_MEAT:
 			taken = backpack.take_meat(kind)
+		Backpack.Kind.GLUED_MEAT, Backpack.Kind.GLUED_COOKED:
+			taken = backpack.take_meat(kind)
+			if taken.is_empty() and backpack.craft_glued(kind):
+				taken = backpack.take_meat(kind) # crafted (two chunks and a silk: the user's)
 	if taken.is_empty():
 		return
 	if is_holding() and not _stow():
@@ -281,10 +287,11 @@ func _use() -> void:
 		Backpack.Kind.MEAT:
 			var held := data
 			_empty()
-			_player.virus.eat_raw(CarryItem.is_rotten_data(held), held.get("boss", false))
+			_player.virus.eat_raw(CarryItem.is_rotten_data(held), held.get("boss", false), held.get("glued", false))
 		Backpack.Kind.COOKED_MEAT:
+			var glued: bool = data.get("glued", false)
 			_empty()
-			_player.virus.eat_cooked()
+			_player.virus.eat_cooked(glued)
 		CarryItem.POD:
 			var mutation: StringName = data.mutation
 			_empty()

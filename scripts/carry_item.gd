@@ -60,6 +60,9 @@ var meat_weight := 1.0
 var boss := false
 var age := 0.0
 var cooked_for := 0.0
+## Meat: two chunks stuck together with silk (Backpack.craft_glued(); the
+## user's: more food, more healing cooked, a virus point more raw).
+var glued := false
 ## A pod: its mutation (Virus).
 var mutation: StringName
 
@@ -121,7 +124,7 @@ func _above_ground(at: Vector3) -> Vector3:
 ## What it is, as plain data (the hand, the backpack, the network).
 func to_data() -> Dictionary:
 	return {kind = kind, amount = amount, weapon = weapon.resource_path if weapon else "", meat_weight = meat_weight,
-			boss = boss, age = age, cooked_for = cooked_for, mutation = mutation}
+			boss = boss, age = age, cooked_for = cooked_for, mutation = mutation, glued = glued}
 
 
 func from_data(data: Dictionary) -> void:
@@ -134,6 +137,7 @@ func from_data(data: Dictionary) -> void:
 	age = data.get("age", 0.0)
 	cooked_for = data.get("cooked_for", 0.0)
 	mutation = data.get("mutation", &"")
+	glued = data.get("glued", false)
 
 
 # ---- Co-op (NetEntities) --------------------------------------------------------------
@@ -271,6 +275,8 @@ func _on_walked_into(body: Node3D) -> void:
 func _pickup_name() -> String:
 	if kind == POD:
 		return "Pod"
+	if glued:
+		return "Glued cooked meat" if kind == Backpack.Kind.COOKED_MEAT else "Glued meat"
 	return (Backpack.Kind.keys()[kind + 1] as String).capitalize()
 
 ## A pod left on the Flesh Tree when another was taken: it withers and goes.
@@ -354,8 +360,12 @@ static func model_for(data: Dictionary, grenade: WeaponData = null) -> Node3D:
 	var item_kind: int = data.get("kind", Backpack.Kind.NONE)
 	match item_kind:
 		Backpack.Kind.MEAT:
+			if data.get("glued", false):
+				return glued_model(false, is_rotten_data(data))
 			return meat_model(false, is_rotten_data(data))
 		Backpack.Kind.COOKED_MEAT:
+			if data.get("glued", false):
+				return glued_model(true, false)
 			return meat_model(true, false)
 		POD:
 			return FleshTree.pod_model(data.get("mutation", &""))
@@ -378,6 +388,29 @@ static func meat_model(cooked: bool, rotten: bool) -> Node3D:
 			for surface in mesh.mesh.get_surface_count():
 				mesh.set_surface_override_material(surface, material)
 	return BackpackView._wrapped(model)
+
+
+## Glued meat: two chunks pressed together, a ball of silk between them.
+static func glued_model(cooked: bool, rotten: bool) -> Node3D:
+	var holder := Node3D.new()
+	var width := 0.0
+	for side in [-1.0, 1.0]:
+		var chunk := meat_model(cooked, rotten)
+		if chunk == null:
+			continue
+		var box := BackpackView._bounds(chunk)
+		width = maxf(width, box.size.x)
+		chunk.position = Vector3(side * box.size.x * 0.4, 0.0, 0.0) - box.get_center()
+		chunk.rotation = Vector3(0.0, 0.0, side * 0.35)
+		holder.add_child(chunk)
+	var silk := BackpackView._silk()
+	if silk and width > 0.0:
+		var silk_box := BackpackView._bounds(silk)
+		var fit := width * 0.55 / maxf(silk_box.get_longest_axis_size(), 0.0001)
+		silk.scale = Vector3.ONE * fit
+		silk.position = -silk_box.get_center() * fit
+		holder.add_child(silk)
+	return holder
 
 
 static func _meat_material(which: int) -> StandardMaterial3D:

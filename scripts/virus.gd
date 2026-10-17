@@ -53,6 +53,12 @@ const GUT_ROTTEN_DAMAGE := 50.0
 const RAW_FOOD := 0.25
 const ROTTEN_FOOD := 0.15
 const COOKED_FOOD := 0.45
+## Cooked meat heals this (the user's); raw never does.
+const COOKED_HEAL := 35.0
+## Glued meat (CarryItem.glued, the user's): this much more food, and
+## healing cooked, than one chunk; raw, a virus point more.
+const GLUED_BONUS := 1.2
+const GLUED_POINTS := 1
 
 const HUNGER_TIME := 1200.0
 const STARVE_DAMAGE := 1.0
@@ -121,13 +127,13 @@ func _physics_process(delta: float) -> void:
 
 ## Raw meat eaten (PlayerHand): it hurts (it can kill you), feeds you, and
 ## feeds the virus.
-func eat_raw(rotten: bool, boss: bool) -> void:
+func eat_raw(rotten: bool, boss: bool, glued: bool = false) -> void:
 	if not _decides():
 		return
 	var gut := has(ROACH_GUT)
 	var damage := (GUT_ROTTEN_DAMAGE if gut else ROTTEN_DAMAGE) if rotten else (GUT_RAW_DAMAGE if gut else RAW_DAMAGE)
-	hunger = minf(hunger + (ROTTEN_FOOD if rotten else RAW_FOOD), 1.0)
-	points += BOSS_POINTS if boss else (ROTTEN_POINTS if rotten else FRESH_POINTS)
+	hunger = minf(hunger + (ROTTEN_FOOD if rotten else RAW_FOOD) * (GLUED_BONUS if glued else 1.0), 1.0)
+	points += (BOSS_POINTS if boss else (ROTTEN_POINTS if rotten else FRESH_POINTS)) + (GLUED_POINTS if glued else 0)
 	_announce_trip(true)
 	# Meat's damage isn't an attack: Chitin doesn't help (the user's).
 	_player.health.hurt_unscaled(damage)
@@ -136,11 +142,13 @@ func eat_raw(rotten: bool, boss: bool) -> void:
 		FleshTree.ripen_for(_player)
 
 
-## Cooked meat eaten: food, nothing else.
-func eat_cooked() -> void:
+## Cooked meat eaten: food, and it heals (glued: more of both).
+func eat_cooked(glued: bool = false) -> void:
 	if not _decides():
 		return
-	hunger = minf(hunger + COOKED_FOOD, 1.0)
+	var bonus := GLUED_BONUS if glued else 1.0
+	hunger = minf(hunger + COOKED_FOOD * bonus, 1.0)
+	_player.health.heal(COOKED_HEAL * bonus)
 	_changed()
 
 

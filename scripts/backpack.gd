@@ -23,7 +23,7 @@ signal changed
 
 ## What a stack is.
 enum Kind { NONE = -1, GUN, BULLETS, SHELLS, ROCKETS, GRENADES, PILLS, BANDAGE, SCRAP, SILK, CAMP_KIT,
-		MEAT, ROTTEN_MEAT, COOKED_MEAT }
+		MEAT, ROTTEN_MEAT, COOKED_MEAT, GLUED_MEAT, GLUED_COOKED }
 
 const MAX_STACKS := 12
 ## Camp kits: only one on you at a time (the user's).
@@ -141,14 +141,68 @@ func stacks() -> Array[Dictionary]:
 		meats[meat_kind] = int(meats.get(meat_kind, 0)) + 1
 	for meat_kind: int in meats:
 		found.append({kind = meat_kind, count = meats[meat_kind], weapon = null})
+	# Glued meat: with none glued yet and the makings there, it shows ready
+	# to craft, like the camp kit (the user's: double-click it).
+	for glued_kind: Kind in [Kind.GLUED_MEAT, Kind.GLUED_COOKED]:
+		if not meats.has(glued_kind) and can_glue(glued_kind):
+			found.append({kind = glued_kind, count = 0, weapon = null, craftable = true})
 	return found
 
 
 ## Which stack a chunk's in: fresh, rotten (by now) or cooked.
 static func _meat_kind(chunk: Dictionary) -> Kind:
+	var glued: bool = chunk.get("glued", false)
 	if chunk.kind == Kind.COOKED_MEAT:
-		return Kind.COOKED_MEAT
-	return Kind.ROTTEN_MEAT if CarryItem.is_rotten_data(chunk) else Kind.MEAT
+		return Kind.GLUED_COOKED if glued else Kind.COOKED_MEAT
+	if CarryItem.is_rotten_data(chunk):
+		return Kind.ROTTEN_MEAT
+	return Kind.GLUED_MEAT if glued else Kind.MEAT
+
+
+## Glued meat's recipe (the user's): two fresh chunks (raw with raw, cooked
+## with cooked; never rotten, never already glued) and a silk.
+const GLUE_CHUNKS := 2
+const GLUE_SILK := 1
+
+
+## Whether there's the makings of a glued chunk of `glued_kind`.
+func can_glue(glued_kind: Kind) -> bool:
+	return silk >= GLUE_SILK and _glue_picks(glued_kind).size() >= GLUE_CHUNKS
+
+
+## The chunks that would go in (the freshest first).
+func _glue_picks(glued_kind: Kind) -> Array[int]:
+	var plain := Kind.COOKED_MEAT if glued_kind == Kind.GLUED_COOKED else Kind.MEAT
+	var picks: Array[int] = []
+	for i in meat.size():
+		if _meat_kind(meat[i]) == plain:
+			picks.append(i)
+	picks.sort_custom(func(a: int, b: int) -> bool: return float(meat[a].age) < float(meat[b].age))
+	return picks
+
+
+## Two chunks stuck together with silk (CarryItem: glued): their weight
+## together, a boss's if either was, as old as the older. False if short.
+func craft_glued(glued_kind: Kind) -> bool:
+	if not can_glue(glued_kind):
+		return false
+	var picks := _glue_picks(glued_kind).slice(0, GLUE_CHUNKS)
+	var glued := (meat[picks[0]] as Dictionary).duplicate()
+	glued.glued = true
+	for i in picks.slice(1):
+		var other: Dictionary = meat[i]
+		glued.meat_weight = float(glued.meat_weight) + float(other.meat_weight)
+		glued.boss = bool(glued.boss) or bool(other.get("boss", false))
+		glued.age = maxf(float(glued.age), float(other.age))
+		glued.cooked_for = minf(float(glued.get("cooked_for", 0.0)), float(other.get("cooked_for", 0.0)))
+	picks.sort()
+	picks.reverse()
+	for i in picks:
+		meat.remove_at(i)
+	silk -= GLUE_SILK
+	meat.append(glued)
+	changed.emit()
+	return true
 
 
 ## A meat chunk (CarryItem.to_data()) in, if there's room.
@@ -300,7 +354,7 @@ func weight() -> float:
 	for stack in stacks():
 		if stack.kind == Kind.GUN:
 			total += (stack.weapon as WeaponData).carry_weight if stack.weapon else 3.5
-		elif stack.kind not in [Kind.MEAT, Kind.ROTTEN_MEAT, Kind.COOKED_MEAT]:
+		elif stack.kind not in [Kind.MEAT, Kind.ROTTEN_MEAT, Kind.COOKED_MEAT, Kind.GLUED_MEAT, Kind.GLUED_COOKED]:
 			total += float(WEIGHTS.get(stack.kind, 0.0)) * stack.count
 	for chunk in meat:
 		total += float(chunk.meat_weight)
