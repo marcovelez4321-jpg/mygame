@@ -19,6 +19,14 @@ const ESCAPE_SLIP := 0.15
 const PULL := 10.0
 const RAGDOLL_LAYER := 1 << 3
 const VIEW_AHEAD := 0.14
+## Smooth both ways (the user's: never immersion-breaking): the ragdoll
+## starts in the very pose the body was in and is toppled by the pull; the
+## view eases into its head over INTO_TIME and follows it a touch smoothed
+## (VIEW_FOLLOW); let go, the view eases back up to your eyes over OUT_TIME
+## (getting up), facing the way you lay, and your gun comes back up drawn.
+const INTO_TIME := 0.35
+const OUT_TIME := 0.5
+const VIEW_FOLLOW := 18.0
 
 var player: PlayerMovement
 var stalker: Node3D
@@ -34,6 +42,12 @@ var _head: PhysicalBone3D
 var _body_model: Node3D
 var _saved_layers := Vector2i.ZERO
 var _saved_head := Transform3D.IDENTITY
+var _start_view := Transform3D.IDENTITY
+var _view := Transform3D.IDENTITY
+var _time := 0.0
+var _releasing := false
+var _release_time := 0.0
+var _release_from := Transform3D.IDENTITY
 
 
 ## Starts it for `player` (here), dragged by `stalker`.
@@ -48,11 +62,11 @@ static func begin(who: PlayerMovement, by: Node3D) -> StalkerDrag:
 	return drag
 
 
-## Ends it for `player` (here), if it's on.
+## Ends it for `player` (here), if it's on: they get up (release()).
 static func finish(who: PlayerMovement) -> void:
 	var existing: Variant = who.get_meta(&"stalker_drag", null)
 	if existing is StalkerDrag and is_instance_valid(existing):
-		(existing as StalkerDrag).queue_free()
+		(existing as StalkerDrag).release()
 
 
 func _ready() -> void:
@@ -68,16 +82,26 @@ func _ready() -> void:
 	add_child(_model)
 	for node in _model.find_children("*", "AnimationPlayer", true, false):
 		(node as AnimationPlayer).stop()
-	# On its back, feet toward the Stalker, head trailing away from it.
 	var trail := player.global_position - stalker.global_position
 	trail.y = 0.0
 	trail = trail.normalized() if trail.length_squared() > 0.01 else Vector3.BACK
-	var lying := Basis.looking_at(-trail, Vector3.UP) * Basis(Vector3.RIGHT, -PI * 0.5)
-	_model.global_transform = Transform3D(lying.scaled(Vector3.ONE * scale_by), player.global_position + Vector3.UP * 0.3)
 	var skeletons := _model.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
 		return
-	_simulator = RagdollBuilder.build(skeletons[0] as Skeleton3D)
+	var skeleton := skeletons[0] as Skeleton3D
+	# Exactly where and how the body stood (no pop): its place, its pose.
+	var source_model: Variant = _body_model.get("_model") if _body_model else null
+	if source_model is Node3D:
+		_model.global_transform = (source_model as Node3D).global_transform
+		var source_skeletons := (source_model as Node3D).find_children("*", "Skeleton3D", true, false)
+		if not source_skeletons.is_empty():
+			var source := source_skeletons[0] as Skeleton3D
+			for i in mini(skeleton.get_bone_count(), source.get_bone_count()):
+				skeleton.set_bone_pose_position(i, source.get_bone_pose_position(i))
+				skeleton.set_bone_pose_rotation(i, source.get_bone_pose_rotation(i))
+	else:
+		_model.global_transform = Transform3D(Basis.looking_at(-trail, Vector3.UP).scaled(Vector3.ONE * scale_by), player.global_position)
+	_simulator = RagdollBuilder.build(skeleton)
 	for node in _simulator.get_children():
 		var bone := node as PhysicalBone3D
 		if bone == null:
@@ -99,6 +123,13 @@ func _ready() -> void:
 		bone.can_sleep = false
 	if _foot == null:
 		_foot = _shin
+	# Toppled backward as the foot's yanked out from under them.
+	for bone in _bones:
+		var named := String(bone.bone_name)
+		if named in ["Chest", "UpperChest", "Head", "Neck", "Spine"]:
+			bone.apply_central_impulse((trail * 2.5 + Vector3.DOWN * 1.0) * bone.mass)
+		elif named in ["LeftFoot", "LeftLowerLeg", "RightFoot", "RightLowerLeg"]:
+			bone.apply_central_impulse((-trail * 3.0 + Vector3.UP * 1.5) * bone.mass)
 	# Their own body hidden, out of the way; the gun and arms gone.
 	if _body_model:
 		_body_model.visible = false
@@ -106,12 +137,43 @@ func _ready() -> void:
 	player.collision_layer = 0
 	player.collision_mask = 0
 	_saved_head = player.head.transform
+	_start_view = player.head.global_transform
+	_view = _start_view
+	# The gun drops out of view a beat after the grab; a jolt as it hits.
 	var viewmodel := player.get_node_or_null(^"Head/Camera3D/Viewmodel") as Node3D
 	if viewmodel:
-		viewmodel.visible = false
+		get_tree().create_timer(0.12).timeout.connect(func() -> void:
+			if is_instance_valid(viewmodel) and not _releasing:
+				viewmodel.visible = false)
+	if player.is_multiplayer_authority() and player.camera:
+		player.camera.shake(3.5)
+		player.camera.kick_fov(8.0)
 	player.grapple.release()
 	if player.is_multiplayer_authority() or not Network.is_online() or multiplayer.is_server():
 		player.weapons.latch_leech(self) # clicks are tugs; its meter shows
+
+
+## Let go: back on their feet where they lie, facing the way they lay; the
+## view eases up from the ragdoll's head to their eyes over OUT_TIME, then
+## it's all theirs again.
+func release() -> void:
+	if _releasing:
+		return
+	_releasing = true
+	_release_time = 0.0
+	_release_from = _view
+	player.weapons.unlatch_leech(self)
+	if _hips:
+		var facing := _flat(_release_from.basis * Vector3.FORWARD)
+		player.global_position = _hips.global_position + Vector3.UP * 0.6
+		player.rotation.y = atan2(-facing.x, -facing.z)
+	player.velocity = Vector3.ZERO
+	player.set("_pitch", 0.0)
+
+
+static func _flat(v: Vector3) -> Vector3:
+	var flat := Vector3(v.x, 0.0, v.z)
+	return flat.normalized() if flat.length_squared() > 0.0001 else Vector3.FORWARD
 
 
 func _exit_tree() -> void:
@@ -129,15 +191,15 @@ func _exit_tree() -> void:
 	var viewmodel := player.get_node_or_null(^"Head/Camera3D/Viewmodel") as Node3D
 	if viewmodel:
 		viewmodel.visible = true
-	# Back on their feet where they were left.
-	if _hips:
-		player.global_position = _hips.global_position + Vector3.UP * 0.6
-	player.velocity = Vector3.ZERO
+	# The gun comes back up, drawn.
+	var gun := player.weapons.current_weapon()
+	if gun and not player.weapons.gun_stowed:
+		player.weapons.weapon_switched.emit(gun, maxf(gun.draw_time, 0.3))
 
 
 func _physics_process(delta: float) -> void:
 	escape = maxf(escape - ESCAPE_SLIP * delta, 0.0)
-	if not is_instance_valid(stalker) or _foot == null:
+	if _releasing or not is_instance_valid(stalker) or _foot == null:
 		return
 	# Hauled by the foot toward its hold: just behind it, low.
 	var hold := stalker.global_position + stalker.global_basis.z * 0.8 + stalker.global_basis.y * 0.35
@@ -149,7 +211,18 @@ func _physics_process(delta: float) -> void:
 
 ## Your view: the ragdoll's head, a touch in front of the face, looking where
 ## the face looks -- yours only, and out of your hands.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_time += delta
+	if _releasing:
+		_release_time += delta
+		if player.is_multiplayer_authority():
+			# Up from where the ragdoll's head was to your own eyes.
+			var eyes := player.global_transform * _saved_head
+			var t := smoothstep(0.0, 1.0, clampf(_release_time / OUT_TIME, 0.0, 1.0))
+			player.head.global_transform = _release_from.interpolate_with(eyes, t)
+		if _release_time >= OUT_TIME:
+			queue_free()
+		return
 	if _head == null or not player.is_multiplayer_authority():
 		return
 	var face := _head.global_basis
@@ -157,7 +230,12 @@ func _process(_delta: float) -> void:
 	var up := face.y.normalized()
 	if absf(forward.dot(up)) > 0.99:
 		up = Vector3.UP
-	player.head.global_transform = Transform3D(Basis.looking_at(forward, up), _head.global_position + forward * VIEW_AHEAD)
+	var target := Transform3D(Basis.looking_at(forward, up), _head.global_position + forward * VIEW_AHEAD)
+	# Followed a touch smoothed (the violence comes through, not the jitter),
+	# eased into from where you were looking.
+	_view = _view.interpolate_with(target, 1.0 - exp(-VIEW_FOLLOW * delta))
+	var into := smoothstep(0.0, 1.0, clampf(_time / INTO_TIME, 0.0, 1.0))
+	player.head.global_transform = _start_view.interpolate_with(_view, into)
 
 
 ## Where the player is now (the ragdoll's hips).
