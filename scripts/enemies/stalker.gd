@@ -221,6 +221,20 @@ var _body_roll := 0.0
 ## real one): a capsule per part, moved onto its bones every physics tick.
 ## [shape, from bone, to bone (-1: a ball at `from`), radius].
 var _hitboxes: Array = []
+## The neck and head bobble as it goes (the user's: the Harvestmen's jiggle
+## limbs, JiggleLimb -- Half-Life 2's $jigglebone): each a point on a spring
+## pulling back to its own shape, gravity dragging, damped; the body's moves
+## swing them and every hand or foot planting gives the head a little kick.
+## The head still locks on you, the bobble laid over it.
+const JIGGLE_STIFFNESS := 9.0
+const JIGGLE_DAMPING := 2.4
+const JIGGLE_GRAVITY := 6.0
+const STEP_KICK := 1.2
+var _neck_point := Vector3.INF
+var _neck_velocity := Vector3.ZERO
+var _head_point := Vector3.INF
+var _head_velocity := Vector3.ZERO
+var _head_wobble := Quaternion.IDENTITY
 
 
 ## The one Stalker (the host's): made once, near the players but hidden.
@@ -1390,6 +1404,7 @@ func _process(delta: float) -> void:
 	_reset_pose()
 	for limb in _limbs:
 		_two_bone(limb)
+	_jiggle_neck(delta)
 	_aim_head(delta, camera)
 
 
@@ -1434,6 +1449,10 @@ func _update_limbs(delta: float) -> void:
 				limb.stepping = false
 				limb.planted = limb.to
 				limb.foot = limb.planted
+				# Planted: a jolt up through it to the head.
+				var kick := (up * randf_range(0.6, 1.0) + xf.basis.x * randf_range(-0.5, 0.5)) * STEP_KICK * SIZE
+				_neck_velocity += kick
+				_head_velocity += kick * 1.3
 			else:
 				# In jerks: three snatches, each with a catch at its end.
 				var t: float = limb.t
@@ -1536,6 +1555,59 @@ func _turn_bone(bone: int, was: Vector3, wants: Vector3) -> void:
 	_skeleton.set_bone_pose_rotation(bone, (parent_basis.inverse() * turned).get_rotation_quaternion())
 
 
+## The neck on its spring (its end, where the head sits, lags, swings and
+## settles), then the head's own spring -- kept as a wobble for _aim_head.
+func _jiggle_neck(delta: float) -> void:
+	var neck: int = _bones.get("Neck", -1)
+	var head: int = _bones.get("Head", -1)
+	if neck < 0 or head < 0 or delta <= 0.0:
+		return
+	delta = minf(delta, 0.05)
+	_skeleton.set_bone_pose_rotation(neck, _skeleton.get_bone_rest(neck).basis.get_rotation_quaternion())
+	var to_world := _skeleton.global_transform
+	var to_skeleton := to_world.affine_inverse()
+	var neck_pose := _skeleton.get_bone_global_pose(neck)
+	var neck_offset := _skeleton.get_bone_rest(head).origin
+	var want := to_world * (neck_pose.origin + neck_pose.basis * neck_offset)
+	var joint := to_world * neck_pose.origin
+	if not _neck_point.is_finite():
+		_neck_point = want
+	var spring := _spring(joint, want, _neck_point, _neck_velocity, delta)
+	_neck_point = spring[0]
+	_neck_velocity = spring[1]
+	var was := neck_pose.basis * neck_offset
+	var wants := to_skeleton * _neck_point - neck_pose.origin
+	if was.length_squared() > 0.0000001 and wants.length_squared() > 0.0000001:
+		var turned := Basis(Quaternion(was.normalized(), wants.normalized())) * neck_pose.basis
+		var parent := _skeleton.get_bone_parent(neck)
+		var parent_basis := _skeleton.get_bone_global_pose(parent).basis if parent >= 0 else Basis.IDENTITY
+		_skeleton.set_bone_pose_rotation(neck, (parent_basis.inverse() * turned).get_rotation_quaternion())
+	# The head's own bobble: how far its spring has swung it off where it'd be.
+	var head_pose := _skeleton.get_bone_global_pose(head)
+	var head_offset := head_pose.basis.y.normalized() * neck_offset.length() * 0.8
+	var head_joint := to_world * head_pose.origin
+	var head_want := to_world * (head_pose.origin + head_offset)
+	if not _head_point.is_finite():
+		_head_point = head_want
+	var head_spring := _spring(head_joint, head_want, _head_point, _head_velocity, delta)
+	_head_point = head_spring[0]
+	_head_velocity = head_spring[1]
+	var rest_dir := (head_want - head_joint).normalized()
+	var now_dir := (_head_point - head_joint).normalized()
+	_head_wobble = Quaternion(to_skeleton.basis * rest_dir, to_skeleton.basis * now_dir) if rest_dir.dot(now_dir) < 0.9999 else Quaternion.IDENTITY
+
+
+## One jiggle step (JiggleLimb's): `point` pulled toward `want`, gravity,
+## damping, kept its length from `joint`. [point, velocity].
+static func _spring(joint: Vector3, want: Vector3, point: Vector3, velocity: Vector3, delta: float) -> Array:
+	var length := joint.distance_to(want)
+	velocity += (JIGGLE_STIFFNESS * (want - point) - JIGGLE_DAMPING * velocity + Vector3.DOWN * JIGGLE_GRAVITY) * delta
+	var moved := point + velocity * delta
+	var reach := moved - joint
+	moved = joint + (reach.normalized() if reach.length_squared() > 0.000001 else (want - joint).normalized()) * length
+	return [moved, (moved - point) / delta]
+
+
 ## The head locked on the nearest player (yours, on your screen), tilted
 ## wrong, now and then snapping to a new tilt (The Grudge).
 func _aim_head(delta: float, camera: Camera3D) -> void:
@@ -1556,7 +1628,7 @@ func _aim_head(delta: float, camera: Camera3D) -> void:
 	if angle > 0.001:
 		var axis := face.cross(wants).normalized()
 		var turn := Basis(axis, minf(angle, deg_to_rad(80.0)))
-		var turned := Basis(wants, _tilt) * turn * pose.basis
+		var turned := Basis(_head_wobble) * Basis(wants, _tilt) * turn * pose.basis
 		var parent := _skeleton.get_bone_parent(head)
 		var parent_basis := _skeleton.get_bone_global_pose(parent).basis if parent >= 0 else Basis.IDENTITY
 		_skeleton.set_bone_pose_rotation(head, (parent_basis.inverse() * turned).get_rotation_quaternion())
