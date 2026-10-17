@@ -20,8 +20,13 @@ const SHAKE := 2.0
 ## Dust bursts on the floor and crumbling spots on the walls, each kick.
 const FLOOR_DUST := 6
 const WALL_CRUMBLES := 8
-## Chunks break off the walls this high (over the floor), near players.
-const CHUNK_HEIGHT := Vector2(25.0, 90.0)
+## Chunks fall from this high over the floor (out of the dark overhead, the
+## user's: in the arena, not off at the walls): half scattered round the
+## players (within NEAR_PLAYER), half anywhere in the arena round the heart
+## (its open middle, ARENA across).
+const CHUNK_HEIGHT := Vector2(40.0, 70.0)
+const NEAR_PLAYER := 12.0
+const ARENA := StackBuilder.CATHEDRAL_CLEAR
 const CHUNK_SIZE := Vector2(1.2, 2.6)
 
 const DUST_COLOR := Color(0.42, 0.38, 0.33, 0.55)
@@ -31,27 +36,27 @@ static var _dust_mesh: QuadMesh
 static var _rubble_mesh: BoxMesh
 
 
-## The host: where this kick's chunks break off -- on the wall nearest a
-## player inside (one picked each), above them, just off it.
-static func pick_chunks(room: AABB, players: Array[Node3D]) -> PackedVector3Array:
+## The host: where this kick's chunks fall from -- every other one over a
+## player inside (scattered round them), the rest anywhere in the arena
+## round the heart (`centre`); high over the floor either way.
+static func pick_chunks(room: AABB, players: Array[Node3D], centre: Vector3) -> PackedVector3Array:
 	var spots := PackedVector3Array()
 	for i in CHUNKS:
-		var near := players[randi() % players.size()].global_position if not players.is_empty() else room.get_center()
-		var x := clampf(near.x + randf_range(-15.0, 15.0), room.position.x + 2.0, room.end.x - 2.0)
-		var z := clampf(near.z + randf_range(-15.0, 15.0), room.position.z + 2.0, room.end.z - 2.0)
-		# Onto whichever wall is closest there.
-		var to_walls := [x - room.position.x, room.end.x - x, z - room.position.z, room.end.z - z]
-		var wall := 0
-		for k in 4:
-			if to_walls[k] < to_walls[wall]:
-				wall = k
-		match wall:
-			0: x = room.position.x + 2.0
-			1: x = room.end.x - 2.0
-			2: z = room.position.z + 2.0
-			3: z = room.end.z - 2.0
-		spots.append(Vector3(x, room.position.y + randf_range(CHUNK_HEIGHT.x, CHUNK_HEIGHT.y), z))
+		var over: Vector3
+		if i % 2 == 0 and not players.is_empty():
+			over = players[randi() % players.size()].global_position + _scatter(NEAR_PLAYER)
+		else:
+			over = centre + _scatter(ARENA * 0.5)
+		over.x = clampf(over.x, room.position.x + 3.0, room.end.x - 3.0)
+		over.z = clampf(over.z, room.position.z + 3.0, room.end.z - 3.0)
+		spots.append(Vector3(over.x, room.position.y + randf_range(CHUNK_HEIGHT.x, CHUNK_HEIGHT.y), over.z))
 	return spots
+
+
+## Somewhere within `radius` across the floor (evenly over the disc).
+static func _scatter(radius: float) -> Vector3:
+	var flat := Vector2.from_angle(randf() * TAU) * radius * sqrt(randf())
+	return Vector3(flat.x, 0.0, flat.y)
 
 
 ## Every game: the shake, the dust, the crumbling and the chunks; the host's
@@ -84,8 +89,8 @@ static func hit(heart: Node3D, room: AABB, spots: PackedVector3Array, decides: b
 		dust(world, at, randf_range(2.0, 4.0))
 		rubble(world, at, 0.6)
 	for spot in spots:
-		var inward := (Vector3(room.get_center().x, spot.y, room.get_center().z) - spot).normalized()
-		FallingChunk.drop(world, spot, inward * randf_range(2.0, 6.0), randf_range(CHUNK_SIZE.x, CHUNK_SIZE.y), decides)
+		var drift := Vector3(randf_range(-1.5, 1.5), -randf_range(4.0, 8.0), randf_range(-1.5, 1.5))
+		FallingChunk.drop(world, spot, drift, randf_range(CHUNK_SIZE.x, CHUNK_SIZE.y), decides)
 	if not decides:
 		return
 	# Caught standing, against a wall or perched: thrown up, hurt.

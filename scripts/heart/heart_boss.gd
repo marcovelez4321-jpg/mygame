@@ -167,7 +167,7 @@ func _kick() -> void:
 	for node in get_tree().get_nodes_in_group("player"):
 		if _room_world().has_point((node as Node3D).global_position + Vector3.UP):
 			inside.append(node as Node3D)
-	Network.send_heart_kick(HeartQuake.pick_chunks(_room_world(), inside))
+	Network.send_heart_kick(HeartQuake.pick_chunks(_room_world(), inside, global_position))
 
 
 ## Network.send_heart_kick, on every game.

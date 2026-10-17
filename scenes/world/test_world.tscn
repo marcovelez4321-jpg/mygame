@@ -14,6 +14,7 @@
 [ext_resource type="Script" uid="uid://cku7pyx3p03gi" path="res://scripts/world/cloud_deck.gd" id="13_c2v4b"]
 [ext_resource type="Script" uid="uid://8l5laalbjcbl" path="res://scripts/world/skyline_layer.gd" id="14_oysqe"]
 [ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="15_25kst"]
+[ext_resource type="Resource" path="res://audio/music/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).beats.tres" id="21_lludv"]
 [ext_resource type="PackedScene" uid="uid://dwh531b4rtkwn" path="res://scenes/enemy/spider_pack.tscn" id="22_3nfe5"]
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="23_k6tl3"]
 [ext_resource type="Resource" uid="uid://4o8gxqlvnutb" path="res://weapons/starter_gun.tres" id="24_5vhu7"]
@@ -318,6 +319,7 @@ directional_shadow_max_distance = 90.0
 [node name="Player" parent="." unique_id=1710340998 instance=ExtResource("29_fyxt2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
 spawn_in_cathedral = true
+heart_song = ExtResource("21_lludv")
 
 [node name="HUD" parent="." unique_id=1218208162 instance=ExtResource("30_0goju")]
 
