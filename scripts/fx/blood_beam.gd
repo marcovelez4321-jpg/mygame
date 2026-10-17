@@ -12,6 +12,8 @@ extends Node3D
 ##   - its red light flooding the room; a splash and blood where it hits.
 ## It stops at whatever it hits (walls, mezzanines, pillars: you can hide).
 ## Caught in it: DAMAGE, and blasted backwards at PUSH m/s, once a blast.
+## It ricochets RICOCHETS times (the user's): off what it hits at the mirror
+## angle, a beam on from there for the same blast (no hole: it's a bounce).
 ## Rule 1 (co-op): the host fires it (Network.send_blood_beam): every game
 ## draws the same beam from (from, direction, warn); only the host's deals hits.
 
@@ -21,6 +23,7 @@ const DAMAGE := 35.0
 const PUSH := 15.0
 ## How far it can reach with nothing in the way (m).
 const MAX_REACH := 600.0
+const RICOCHETS := 1
 ## Its far end this many times wider than at the hole.
 const SPREAD := 1.3
 ## The white-hot core's share of its thickness.
@@ -54,6 +57,9 @@ var _exclude: Array[RID] = []
 var _hit_players := {}
 var _fired := false
 var _impact_left := 0.0
+var _bounces := 0
+## A ricochet off a wall: no hole glowing where it starts.
+var _ricochet := false
 
 var _pivot: Node3D
 var _layers: Array[ShaderMaterial] = []
@@ -71,13 +77,16 @@ static var _hole_texture: GradientTexture2D
 ## A beam from the heart's surface at `from`, blasting out along `direction`
 ## after `warn` seconds of its hole glowing. `decides`: this game deals its
 ## hits (the host's, or offline). `exclude`: what it passes through (the heart).
-static func fire(world: Node, from: Vector3, direction: Vector3, warn: float, decides: bool, exclude: Array[RID] = []) -> BloodBeam:
+static func fire(world: Node, from: Vector3, direction: Vector3, warn: float, decides: bool, exclude: Array[RID] = [],
+		bounces: int = RICOCHETS, ricochet: bool = false) -> BloodBeam:
 	var beam := BloodBeam.new()
 	beam._from = from
 	beam._direction = direction.normalized()
 	beam._warn = maxf(warn, 0.0)
 	beam._decides = decides
 	beam._exclude = exclude
+	beam._bounces = bounces
+	beam._ricochet = ricochet
 	world.add_child(beam)
 	beam.global_position = from
 	return beam
@@ -90,6 +99,9 @@ func _ready() -> void:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	_length = _from.distance_to(hit.position) if not hit.is_empty() else MAX_REACH
 	_hit_normal = hit.normal if not hit.is_empty() else -_direction
+	if not hit.is_empty() and _bounces > 0:
+		# On off what it hits, at the mirror angle, blasting with it.
+		_bounce.call_deferred(hit.position as Vector3, _direction.bounce(_hit_normal))
 	_build_hole()
 	_build_beam()
 	_light = OmniLight3D.new()
@@ -105,6 +117,8 @@ func _process(delta: float) -> void:
 	_age += delta
 	var blast := _age - _warn
 	if blast < 0.0:
+		if _ricochet:
+			return # (a bounce shows nothing till it blasts)
 		# The warning: the hole tearing open, glowing hotter and hotter.
 		var opening := clampf(_age / maxf(_warn, 0.01), 0.0, 1.0)
 		_hole.emission_energy = lerpf(0.5, 6.0, opening * opening)
@@ -125,8 +139,9 @@ func _process(delta: float) -> void:
 	_pivot.basis = Basis(Quaternion(Vector3.UP, _direction)) * Basis.from_scale(Vector3(maxf(thick, 0.05), 1.0, maxf(thick, 0.05)))
 	for layer in _layers:
 		layer.set_shader_parameter("fade", fade)
-	_hole.emission_energy = 8.0 * fade
-	_set_flare(THICKNESS * lerpf(2.4, 1.6, clampf(blast / BLAST_TIME, 0.0, 1.0)), fade)
+	if not _ricochet:
+		_hole.emission_energy = 8.0 * fade
+		_set_flare(THICKNESS * lerpf(2.4, 1.6, clampf(blast / BLAST_TIME, 0.0, 1.0)), fade)
 	_light.light_energy = BLAST_LIGHT * fade
 	_impact_light.light_energy = BLAST_LIGHT * 0.6 * fade
 	# Splashing where it hits all the while it blasts.
@@ -164,6 +179,11 @@ func _physics_process(_delta: float) -> void:
 		push.y = maxf(push.y, PUSH * 0.2)
 		player.shove(push)
 		BloodFX.spawn_impact(get_tree().current_scene, body, -_direction, BloodFX.BLOOD_COLOR, 2.0)
+
+
+func _bounce(at: Vector3, way: Vector3) -> void:
+	if is_inside_tree():
+		BloodBeam.fire(get_parent(), at + _hit_normal * 0.1, way, _warn - _age, _decides, [], _bounces - 1, true)
 
 
 ## The blast: in at full thickness, the spray and mist on, a splash and

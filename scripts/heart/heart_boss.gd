@@ -19,8 +19,10 @@ const CHAIN_MODEL := "res://art/heart_boss/chain/chain.FBX"
 ## Its map: when its drums land. None: test_bpm, a beam every beat.
 @export var beat_map: BeatMap
 @export var test_bpm: float = 80.0
-## Beams at the players inside (else anywhere off its surface).
+## Each snare's volley: one beam mainly at a player inside (the user's), and
+## this many more off random spots on it, every way.
 @export var aim_at_players: bool = true
+@export var random_beams: int = 4
 ## Chains: this many to the walls round it, this many up to the ceiling.
 @export var wall_chains: int = 4
 @export var ceiling_chains: int = 4
@@ -157,6 +159,10 @@ func _fire(warn: float) -> void:
 	var from := global_position + way * _radii * 0.85
 	var aim := (target - from).normalized() if target.is_finite() else way
 	Network.send_blood_beam(from, aim, maxf(warn, 0.05))
+	# The rest: out of random spots on it, straight out from them, any way.
+	for i in random_beams:
+		var out := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized()
+		Network.send_blood_beam(global_position + out * _radii * 0.85, out, maxf(warn, 0.05))
 
 
 # ---- Who's here -----------------------------------------------------------------
