@@ -226,22 +226,19 @@ var _body_roll := 0.0
 ## real one): a capsule per part, moved onto its bones every physics tick.
 ## [shape, from bone, to bone (-1: a ball at `from`), radius].
 var _hitboxes: Array = []
-## Its eyes (the user's): blue, glaring, unmissable -- through the fog and
+## Its eyes (the user's): blue, piercing, unmissable -- through the fog and
 ## the dark (no fog on them): two hot points that stay a few pixels big
-## however far off it is, a soft round glow round them, and a faint blue
-## light on whatever's in front of its face. Walls still hide them.
+## however far off it is. No glow round them. Walls still hide them.
 const EYE_COLOR := Color(0.3, 0.62, 1.0)
 const EYE_CORE := 0.2 # m (the eye itself, up close)
 const EYE_GLARE := 0.045 # screen-steady size (fixed_size: as if this big at 1 m)
-const EYE_HALO := 0.16
-const EYE_LIGHT := 1.6
+
 ## Where the eyes sit on the head bone (a person's, scaled to its size).
 const EYE_FORWARD := 0.09
 const EYE_UP := 0.08
 const EYE_APART := 0.034
 var _eyes: Array[Node3D] = []
-var _eye_halo: MeshInstance3D
-var _eye_light: OmniLight3D
+
 ## The neck and head bobble as it goes (the user's: the Harvestmen's jiggle
 ## limbs, JiggleLimb -- Half-Life 2's $jigglebone): each a point on a spring
 ## pulling back to its own shape, gravity dragging, damped; the body's moves
@@ -1507,8 +1504,7 @@ func _update_eyes() -> void:
 	var middle := pose.origin + (up * EYE_UP + face * EYE_FORWARD) * k
 	_eyes[0].global_position = middle + side * EYE_APART * k
 	_eyes[1].global_position = middle - side * EYE_APART * k
-	_eye_halo.global_position = middle + face * 0.05 * k
-	_eye_light.global_position = middle + face * 0.4 * k
+
 
 
 func _build_eyes() -> void:
@@ -1531,20 +1527,8 @@ func _build_eyes() -> void:
 		flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		eye.add_child(flare)
 		_eyes.append(eye)
-	_eye_halo = MeshInstance3D.new()
-	var halo_quad := QuadMesh.new()
-	halo_quad.size = Vector2.ONE * EYE_HALO
-	_eye_halo.mesh = halo_quad
-	var halo := _glow_material(Color(EYE_COLOR, 0.45), true)
-	_eye_halo.material_override = halo
-	_eye_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_visual.add_child(_eye_halo)
-	_eye_light = OmniLight3D.new()
-	_eye_light.light_color = EYE_COLOR
-	_eye_light.light_energy = EYE_LIGHT
-	_eye_light.omni_range = 2.5 * SIZE
-	_eye_light.shadow_enabled = false
-	_visual.add_child(_eye_light)
+	# (No soft glow round them and no light off them: the user's -- just the
+	# piercing eyes.)
 
 
 ## A soft round glow (white-hot middle fading out), lit by nothing, no fog on

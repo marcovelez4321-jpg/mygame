@@ -1766,3 +1766,4 @@ them:
 - **Half the cosmetic debris (2026-10-17).** The user's: each burst of harmless rubble (wall crumbles, dust curtains' grit, a chunk bursting) throws 7 bits (was 14). The chunks that hurt are unchanged.
 - **Stalker head bobble halved (2026-10-17).** The user's: it shook too wildly. The neck and head show half their springs' swing (`Stalker.JIGGLE_AMOUNT` 0.5), with the same rhythm. The user's stiffness of 13 is kept.
 - **Death ragdoll falls heavier (2026-10-17).** The user's: it floated. Its bones fall at 2x the world's gravity (`PlayerDeath.BODY_GRAVITY`), matching the player's own 20 m/s². This includes a drag ragdoll that becomes the body.
+- **Stalker eyes: just the piercing points (2026-10-17).** The user's: the soft round glow and the blue light off its face are gone. The two blue eye points and their screen-steady glare stay, still unmissable through fog and dark.
