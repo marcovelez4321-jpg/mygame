@@ -38,6 +38,19 @@ extends Node3D
 @export var opening_reach: float = 18.0
 @export var wind_volume_db: float = -12.0
 @export var drone_volume_db: float = 2.0
+## INSIDE (the user's, 2026-10-17): in any part of it, the hollow loop
+## (audio/sfx/map/hallowloop.wav) takes over from the approach's wind and
+## drone, crossfading over inside_fade seconds both ways.
+@export var hollow_stream: AudioStream = preload("res://audio/sfx/map/hallowloop.wav")
+@export var hollow_volume_db: float = -6.0
+@export var inside_fade: float = 2.5
+## And now and then, while you're inside, one of the ambience one-shots
+## (the user's files: audio/sfx/ambience/oneshot_anylevel_*) goes off far
+## away -- above you or off in the distance, something going on in the
+## megastructure -- heard through the radio's echo (HallEcho).
+@export var distant_sounds: SoundEvent = preload("res://audio/events/ambience/ambience_oneshot.tres")
+@export var distant_every := Vector2(20.0, 45.0)
+@export var distant_range := Vector2(60.0, 200.0)
 
 const SILENT := -60.0
 
@@ -45,11 +58,20 @@ var _high_wind: AudioStreamPlayer
 var _drone: AudioStreamPlayer
 var _voices: Array[AudioStreamPlayer3D] = []
 var _check_left := 0.0
+var _hollow: AudioStreamPlayer
+var _inside_blend := 0.0
+var _distant_left := 15.0
 
 
 func _ready() -> void:
 	_high_wind = _loop(AudioStreamPlayer.new(), wind_stream) as AudioStreamPlayer
 	_drone = _loop(AudioStreamPlayer.new(), drone_stream) as AudioStreamPlayer
+	if hollow_stream is AudioStreamWAV:
+		var wav := hollow_stream as AudioStreamWAV
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_end = int(wav.get_length() * wav.mix_rate)
+	_hollow = _loop(AudioStreamPlayer.new(), hollow_stream) as AudioStreamPlayer
+	_hollow.bus = &"Ambience" if AudioServer.get_bus_index(&"Ambience") != -1 else &"Master"
 	for i in opening_voices:
 		var voice := _loop(AudioStreamPlayer3D.new(), wind_stream) as AudioStreamPlayer3D
 		voice.unit_size = 2.5
@@ -78,15 +100,23 @@ func _process(delta: float) -> void:
 		return
 	var at := to_local(camera.global_position)
 	var is_inside := inside.has_point(at)
+	# In any part of it: the hollow loop takes over, smoothly both ways.
+	var within := is_inside or _in_a_room(at)
+	_inside_blend = move_toward(_inside_blend, 1.0 if within else 0.0, delta / maxf(inside_fade, 0.01))
+	var outside_share := 1.0 - _inside_blend
+	_fade(_hollow, hollow_volume_db, _inside_blend, delta)
+	if _inside_blend > 0.5:
+		_distant_noise(camera.global_position, delta)
 	# The open-sky wind: outside, up by the clouds -- none in a room or hall.
 	var sky := smoothstep(cloud_height - sky_wind_below, cloud_height + sky_wind_above, camera.global_position.y)
 	if _in_a_room(at):
 		sky = 0.0
-	_fade(_high_wind, wind_volume_db, sky, delta)
+	_fade(_high_wind, wind_volume_db, sky * outside_share, delta)
 	# The drone: full inside, rising as you near the base.
 	var flat := Vector2(at.x - base_centre.x, at.z - base_centre.z).length()
 	var near := smoothstep(drone_reach, drone_reach * 0.3, flat) * smoothstep(drone_height, drone_height * 0.5, at.y - base_centre.y)
-	_fade(_drone, drone_volume_db, 1.0 if is_inside else near, delta)
+	# (Approaching only: inside, the hollow loop's in its place.)
+	_fade(_drone, drone_volume_db, near * outside_share, delta)
 	# The openings' voices onto the nearest few openings (a few times a second).
 	_check_left -= delta
 	if _check_left > 0.0:
@@ -99,6 +129,19 @@ func _process(delta: float) -> void:
 			_voices[i].volume_db = wind_volume_db + 2.0
 		else:
 			_voices[i].volume_db = SILENT
+
+
+## Now and then a far-off noise somewhere in it: above you or off in the
+## distance, through the radio's echo.
+func _distant_noise(from: Vector3, delta: float) -> void:
+	_distant_left -= delta
+	if _distant_left > 0.0 or distant_sounds == null:
+		return
+	_distant_left = randf_range(distant_every.x, distant_every.y)
+	var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	way.y = randf_range(0.1, 1.2) # (level with you, up to steeply overhead)
+	HallEcho.play(distant_sounds.pick_clip(), from + way.normalized() * randf_range(distant_range.x, distant_range.y),
+			get_tree().current_scene, distant_sounds.roll_pitch_scale())
 
 
 ## In one of its rooms or halls (or, with none given, its inside box).

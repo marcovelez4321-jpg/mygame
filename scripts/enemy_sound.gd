@@ -76,6 +76,9 @@ func _on_attack_started() -> void:
 
 func _on_shot_fired(_end_point: Vector3) -> void:
 	SoundPlayer.play_3d(shot_sound, _enemy.global_position, _enemy.get_tree().current_scene)
+	# Inside the Stack: it echoes on through the halls (HallEcho).
+	if shot_sound and Megastructure.contains(_enemy.global_position):
+		HallEcho.tail(shot_sound.pick_clip(), _enemy.global_position, _enemy.get_tree().current_scene, shot_sound.roll_pitch_scale())
 
 
 func _start_idle_loop() -> void:

@@ -142,6 +142,10 @@ func _lamp_in(hall: AABB) -> void:
 	light.distance_fade_length = LAMP_FADE * 0.3
 	light.position = bulb
 	add_child(light)
+	# Its hum, by the bulb (the user's).
+	var hum := LampHum.new()
+	hum.position = bulb
+	add_child(hum)
 
 
 ## Where a ray from `from` toward `to` first meets the Stack (local), or INF.

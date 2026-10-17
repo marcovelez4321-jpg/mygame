@@ -280,7 +280,7 @@ webs = Array[Dictionary]([{
 
 [node name="CloudDeck" type="MeshInstance3D" parent="." unique_id=433324838]
 script = ExtResource("13_c2v4b")
-height = 900.0
+height = 650.0
 
 [node name="SkylineLayer" type="Node3D" parent="." unique_id=2100368034]
 script = ExtResource("14_oysqe")

@@ -1654,3 +1654,10 @@ them:
   - **Fix:** a roaming band's patrol anchor was in the Stack's local space, not the world's.
   - Not run (the user's testing).
 - **Camp fire: no more flame pictures (2026-10-17).** The user's: the crossed fire images were still there. In the forest props the part named "Fire" IS the crossed flame cards (a 1 m cube of pictures, hung off the "Bonfire"), and the logs are "Bonfire". The camp now uses "Bonfire" and leaves out any mesh named Fire or Flame (`Camp._is_card`); the old flat-card guess is gone (it also took the pot's food).
+- **The Stack's sound inside (2026-10-17).** The user's, with their files.
+  - **Hollow loop:** inside any part of it (its inside box, a hall, the base, a window room), `audio/sfx/map/hallowloop.wav` loops on the Ambience bus. It crossfades with the approach's drone and open-sky wind over 2.5 s both ways (`MegastructureSound`). Outside, the drone only plays as you approach.
+  - **Distant noises:** while you're inside, every 20-45 s one of the ambience one-shots (`oneshot_anylevel_*`) goes off 60-200 m away, above you or off in the distance, through the radio's echo (`HallEcho.play`: the same three voices, buses and mix as a radio).
+  - **Lamp hum:** the halls' lamp posts hum (`lighthum.wav`), heard within 16 m, playing only while you're that near (`LampHum`).
+  - **Gunshot echo:** fired inside the Stack, every gunshot, yours and the gunners', also rolls on through the halls on the radio's echo bus with its long reverb (`HallEcho.tail`, `Megastructure.contains`).
+  - The door's radio-style sound now goes through `HallEcho` too.
+  - Not run (the user's testing).
