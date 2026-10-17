@@ -31,6 +31,16 @@ The order from "The new direction" below, with where each step stands now:
 9. **The 1v1v1v1 race to the top:** not yet (PvP rules, the lobby, what's
    shared: to choose when it's built).
 
+### Planned: the Stalker (the user's, 2026-10-17; behaviour to be discussed)
+One of a kind, like Resident Evil's Nemesis: a human gone wrong that crawls on all fours (the PSX pack's `Character_Monster_03`: a standard Mixamo skeleton). It's synced to every player (the host runs it), follows your trail (corpses, camps, flares, gunshots), and stalks and scares more than it fights.
+- **The fear meter:** it stages stunts in front of you, like Alien: Isolation's menace gauge. Each player's fear meter fills by how they react, and once it's full it strikes, only when you're truly caught off guard.
+- **The body:** IK-driven, the spider's way: two-bone IK on each arm and leg, sticking to floors, walls and ceilings, its spine bending between hands and feet, its head locked on you.
+- **Animation references:**
+  - The Grudge: broken-joint jerks, the headfirst stair crawl, the throat rattle, a still tilted head with sudden snaps, the face hidden, slow then a sudden lunge, limbs overreaching.
+  - The Exorcist: the belly-up spider-walk.
+  - Mama and REC: freeze, then dart.
+  - The Ring: grasping fingers, the wrong head tilt.
+- **Build order:** the crawler and its IK, then the trail, then the stunts and the fear meter.
 ### Next: the Stack's secrets (the user's, 2026-10-17)
 Secret doors in the Stack, opened by buttons or keys found in it, leading to
 secret rooms and entrances. Keys are universal: any key opens any key door,
