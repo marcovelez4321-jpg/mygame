@@ -501,6 +501,9 @@ func _ready() -> void:
 	weapons.hit_confirmed.connect(_on_hit_confirmed)
 	if spawn_in_cathedral and is_multiplayer_authority():
 		_to_cathedral.call_deferred()
+	if PlayerDeath.wake_after_reload and is_multiplayer_authority():
+		PlayerDeath.wake_after_reload = false
+		_wake_on_load.call_deferred()
 
 
 ## Testing (spawn_in_cathedral): straight to the Stack's CathedralSpawn marker,
@@ -608,9 +611,13 @@ func is_dead() -> bool:
 ## where you fell, your gear left behind in a backpack (DeathPack); with none,
 ## offline restarts the level as ever.
 func _on_died(_attacker_id: int, _is_critical: bool) -> void:
+	# The fall (PlayerDeath, the user's): your body goes limp carrying on the
+	# way you were going; your view pulls back as it fades to black.
+	var momentum := velocity
 	_is_dead = true
 	velocity = Vector3.ZERO
 	grapple.release()
+	PlayerDeath.begin(self, momentum)
 	if Network.is_online() and not multiplayer.is_server():
 		return
 	_wake_camp = Camp.nearest(get_tree(), global_position)
@@ -618,10 +625,10 @@ func _on_died(_attacker_id: int, _is_critical: bool) -> void:
 	if _wakes_at_camp:
 		DeathPack.drop(self)
 	if not Network.is_online():
-		get_tree().create_timer(respawn_delay).timeout.connect(_wake_at_camp if _wakes_at_camp else _restart_level)
+		get_tree().create_timer(maxf(respawn_delay, PlayerDeath.FADE + PlayerDeath.HOLD)).timeout.connect(_wake_at_camp if _wakes_at_camp else _restart_level)
 	else:
 		# Co-op: the level goes on for everyone else; the host brings you back.
-		get_tree().create_timer(respawn_delay).timeout.connect(_respawn_everywhere)
+		get_tree().create_timer(maxf(respawn_delay, PlayerDeath.FADE + PlayerDeath.HOLD)).timeout.connect(_respawn_everywhere)
 
 
 ## The camp you'll wake at (the host's), and whether you died with one.
@@ -676,10 +683,19 @@ func respawn(at: Vector3) -> void:
 	_net_predicted.clear()
 	_net_snaps.clear()
 	respawned.emit()
+	PlayerDeath.wake(self)
 
 
 func _restart_level() -> void:
+	PlayerDeath.wake_after_reload = true # (wake up in the new one)
 	get_tree().reload_current_scene()
+
+
+## The level's restarted after you died: you wake up in it.
+func _wake_on_load() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	PlayerDeath.wake(self)
 
 
 ## The ONLY function allowed to touch Input/keyboard/mouse state. Everything

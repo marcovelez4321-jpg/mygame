@@ -408,7 +408,7 @@ func _on_player_damaged(_amount: float, _attacker_id: int) -> void:
 
 
 func _on_player_died(_attacker_id: int, _is_critical: bool) -> void:
-	death_label.visible = true
+	pass # (no words: the fall and the fade say it -- PlayerDeath, the user's)
 
 
 ## "Picked up X" / "+N Shells" message: pops in oversized and snaps down to
