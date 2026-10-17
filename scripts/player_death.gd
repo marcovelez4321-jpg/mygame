@@ -21,6 +21,9 @@ const WAKE := 1.0
 ## The black lifting as you wake.
 const UNFADE := 0.8
 const RAGDOLL_LAYER := 1 << 3
+## The body falls this many times the world's gravity (the user's: it floated --
+## the player falls at 20 m/s², the physics world's 9.8).
+const BODY_GRAVITY := 2.0
 const OVERLAY_LAYER := 90
 
 ## Set as the level restarts after a death: wake up in the new one.
@@ -81,6 +84,8 @@ func _ready() -> void:
 		# limp where it lies, and the view pulls back from where it was.
 		_drag = drag
 		_hips = _drag.die()
+		for bone in _drag.find_children("*", "PhysicalBone3D", true, false):
+			(bone as PhysicalBone3D).gravity_scale = BODY_GRAVITY
 		if _model:
 			_model.free()
 			_model = null
@@ -141,6 +146,7 @@ func _ragdoll() -> void:
 	simulator.physical_bones_start_simulation()
 	for bone in _bones:
 		bone.can_sleep = false
+		bone.gravity_scale = BODY_GRAVITY
 		bone.linear_velocity = momentum
 		if String(bone.bone_name) in ["Chest", "UpperChest", "Head", "Neck", "Spine"]:
 			bone.apply_central_impulse(-_back * 1.5 * bone.mass)

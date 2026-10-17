@@ -1765,3 +1765,4 @@ them:
 - **Hurting chunks twice as big (2026-10-17).** The user's: the falling chunks that can hurt are 2.4-5.2 m (were 1.2-2.6), so they stand out from the harmless rubble. Their hit size grows with them. The bits they burst into stay rubble-sized.
 - **Half the cosmetic debris (2026-10-17).** The user's: each burst of harmless rubble (wall crumbles, dust curtains' grit, a chunk bursting) throws 7 bits (was 14). The chunks that hurt are unchanged.
 - **Stalker head bobble halved (2026-10-17).** The user's: it shook too wildly. The neck and head show half their springs' swing (`Stalker.JIGGLE_AMOUNT` 0.5), with the same rhythm. The user's stiffness of 13 is kept.
+- **Death ragdoll falls heavier (2026-10-17).** The user's: it floated. Its bones fall at 2x the world's gravity (`PlayerDeath.BODY_GRAVITY`), matching the player's own 20 m/s². This includes a drag ragdoll that becomes the body.
