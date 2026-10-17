@@ -119,11 +119,12 @@ const STANDING_HEIGHT := 1.9 * SIZE
 const STUNT_EVERY := Vector2(30.0, 60.0)
 const REACT_WINDOW := 3.0
 ## (Doubled, the user's: 15/10/10/5/50 % before.)
-const FEAR_SEEN := 0.30
-const FEAR_FIRE := 0.20
-const FEAR_FLEE := 0.20
-const FEAR_SPIN := 0.10
-const FEAR_HELP := 1.0
+## (Halved, the user's 2026-10-17: it filled too fast -- was 0.30, 0.20, 0.20, 0.10, 1.0.)
+const FEAR_SEEN := 0.15
+const FEAR_FIRE := 0.10
+const FEAR_FLEE := 0.10
+const FEAR_SPIN := 0.05
+const FEAR_HELP := 0.5
 const FEAR_DRAIN_TIME := 300.0
 ## Full, it stays full this long (seconds) if it hasn't had you -- then the
 ## slow drain again (the user's).
@@ -225,6 +226,22 @@ var _body_roll := 0.0
 ## real one): a capsule per part, moved onto its bones every physics tick.
 ## [shape, from bone, to bone (-1: a ball at `from`), radius].
 var _hitboxes: Array = []
+## Its eyes (the user's): blue, glaring, unmissable -- through the fog and
+## the dark (no fog on them): two hot points that stay a few pixels big
+## however far off it is, a soft round glow round them, and a faint blue
+## light on whatever's in front of its face. Walls still hide them.
+const EYE_COLOR := Color(0.3, 0.62, 1.0)
+const EYE_CORE := 0.2 # m (the eye itself, up close)
+const EYE_GLARE := 0.045 # screen-steady size (fixed_size: as if this big at 1 m)
+const EYE_HALO := 0.16
+const EYE_LIGHT := 1.6
+## Where the eyes sit on the head bone (a person's, scaled to its size).
+const EYE_FORWARD := 0.09
+const EYE_UP := 0.08
+const EYE_APART := 0.034
+var _eyes: Array[Node3D] = []
+var _eye_halo: MeshInstance3D
+var _eye_light: OmniLight3D
 ## The neck and head bobble as it goes (the user's: the Harvestmen's jiggle
 ## limbs, JiggleLimb -- Half-Life 2's $jigglebone): each a point on a spring
 ## pulling back to its own shape, gravity dragging, damped; the body's moves
@@ -1414,6 +1431,7 @@ func _build_body() -> void:
 		_limbs.append({upper = upper, lower = lower, end = end, group = spec[3], arm = arm, out = out, home = home,
 				planted = _visual.global_transform * home, foot = _visual.global_transform * home,
 				stepping = false, t = 0.0, from = Vector3.ZERO, to = Vector3.ZERO})
+	_build_eyes()
 
 
 func _find_bone(key: String) -> int:
@@ -1462,6 +1480,7 @@ func _process(delta: float) -> void:
 	var camera := get_viewport().get_camera_3d()
 	_update_skitter(camera)
 	if camera and camera.global_position.distance_to(global_position) > 90.0:
+		_update_eyes() # (seen from any way off)
 		return # too far to make out its limbs
 	_update_limbs(delta)
 	_update_spine(delta)
@@ -1470,6 +1489,86 @@ func _process(delta: float) -> void:
 		_two_bone(limb)
 	_jiggle_neck(delta)
 	_aim_head(delta, camera)
+	_update_eyes()
+
+
+## The eyes onto its head as it's posed now.
+func _update_eyes() -> void:
+	var head: int = _bones.get("Head", -1)
+	if head < 0 or _eyes.is_empty():
+		return
+	var pose := _skeleton.global_transform * _skeleton.get_bone_global_pose(head)
+	var up := pose.basis.y.normalized()
+	var face := pose.basis.z.normalized()
+	var side := up.cross(face).normalized()
+	var k := STANDING_HEIGHT / 1.8
+	var middle := pose.origin + (up * EYE_UP + face * EYE_FORWARD) * k
+	_eyes[0].global_position = middle + side * EYE_APART * k
+	_eyes[1].global_position = middle - side * EYE_APART * k
+	_eye_halo.global_position = middle + face * 0.05 * k
+	_eye_light.global_position = middle + face * 0.4 * k
+
+
+func _build_eyes() -> void:
+	var core := _glow_material(Color(0.9, 0.97, 1.0), false)
+	var glare := _glow_material(EYE_COLOR, true)
+	for i in 2:
+		var eye := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2.ONE * EYE_CORE * SIZE
+		eye.mesh = quad
+		eye.material_override = core
+		eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_visual.add_child(eye)
+		# The glare: a few pixels however far off.
+		var flare := MeshInstance3D.new()
+		var flare_quad := QuadMesh.new()
+		flare_quad.size = Vector2.ONE * EYE_GLARE
+		flare.mesh = flare_quad
+		flare.material_override = glare
+		flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		eye.add_child(flare)
+		_eyes.append(eye)
+	_eye_halo = MeshInstance3D.new()
+	var halo_quad := QuadMesh.new()
+	halo_quad.size = Vector2.ONE * EYE_HALO
+	_eye_halo.mesh = halo_quad
+	var halo := _glow_material(Color(EYE_COLOR, 0.45), true)
+	_eye_halo.material_override = halo
+	_eye_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_visual.add_child(_eye_halo)
+	_eye_light = OmniLight3D.new()
+	_eye_light.light_color = EYE_COLOR
+	_eye_light.light_energy = EYE_LIGHT
+	_eye_light.omni_range = 2.5 * SIZE
+	_eye_light.shadow_enabled = false
+	_visual.add_child(_eye_light)
+
+
+## A soft round glow (white-hot middle fading out), lit by nothing, no fog on
+## it, added over what's behind; `steady`: the same size on screen at any range.
+static func _glow_material(color: Color, steady: bool) -> StandardMaterial3D:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	gradient.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.7), Color(1, 1, 1, 0)])
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(1.0, 0.5)
+	texture.width = 32
+	texture.height = 32
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.albedo_texture = texture
+	material.albedo_color = color
+	material.disable_fog = true
+	material.fixed_size = steady
+	material.render_priority = 10
+	return material
 
 
 ## Its hands and feet on the floor as it goes: the spiders' skitter, slower
