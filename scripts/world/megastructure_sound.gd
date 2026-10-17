@@ -42,7 +42,8 @@ extends Node3D
 ## (audio/sfx/map/hallowloop.wav) takes over from the approach's wind and
 ## drone, crossfading over inside_fade seconds both ways.
 @export var hollow_stream: AudioStream = preload("res://audio/sfx/map/hallowloop.wav")
-@export var hollow_volume_db: float = -6.0
+## (Halved, the user's 2026-10-17: -6 dB is half as loud as -6 was.)
+@export var hollow_volume_db: float = -12.0
 @export var inside_fade: float = 2.5
 ## And now and then, while you're inside, one of the ambience one-shots
 ## (the user's files: audio/sfx/ambience/oneshot_anylevel_*) goes off far

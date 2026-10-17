@@ -49,6 +49,7 @@ static func run(tree: SceneTree) -> void:
 	var buttons := builder.secrets.filter(func(s: Dictionary) -> bool: return s.has("button")).size()
 	print("secrets: ", builder.secret_report, ", ", builder.secrets.size(), " doors (", buttons, " with buttons), ", builder.key_spots.size(), " key spots, ", builder.climber_spots.size(), " climber spots")
 	print("hive: ", builder.hive_holes.size(), " holes; panic stairs: ", builder.panic_report)
+	print("cathedral: ", builder.cathedral_report)
 	print("cobwebs: ", builder.web_quads.size(), " (", builder.web_quads.filter(func(w: Dictionary) -> bool: return w.indoors).size(), " inside)")
 	print("map: ", MAP, " (error ", builder.write_map(ProjectSettings.globalize_path(MAP), names), ")")
 	var settings := (load("res://addons/func_godot/func_godot_default_map_settings.tres") as Resource).duplicate()

@@ -52,8 +52,20 @@ extends Node
 ## The ground (a Terrain3D node). Empty = found in the scene.
 @export var terrain: Node3D
 
+## Recast keeps a tile's height in 13 bits of cells (8,191 x 0.25 m: 2,047 m);
+## anything above that was silently left out -- the Stack's halls past
+## ~1,750 m had no navmesh. A taller tile's baked in slices SLICE tall
+## (overlapping SLICE_OVERLAP, so a floor on a seam is in one whole), each its
+## own file (tile_x_z.res, then tile_x_z_s1.res...) and region; regions'
+## edge connections join them where a ramp crosses a seam.
+const SLICE := 1900.0
+const SLICE_OVERLAP := 6.0
+const MAX_SLICES := 6
+
 var _template: NavigationMesh
-## Baked tiles: Vector2i -> NavigationRegion3D once loaded, or the path
+## Slice files known not to be there (not asked about again).
+var _missing := {}
+## Baked tiles: Vector3i (tile x, tile z, slice) -> NavigationRegion3D once loaded, or the path
 ## while it's loading in the background.
 var _tiles := {}
 var _use_tiles := false
@@ -98,24 +110,38 @@ func bake_tiles(area: Rect2, terrain_node: Node3D, static_root: Node, height_ran
 	# to be read on this thread); the bakes then run on every CPU core at
 	# once, and the finished tiles are saved compressed.
 	var jobs: Array = []
+	var bottom := height_range.x - 5.0
+	var top := height_range.y + 5.0
+	var slices := mini(maxi(1, ceili((top - bottom) / SLICE)), MAX_SLICES)
 	for tz in range(first.y, last.y + 1):
 		for tx in range(first.x, last.x + 1):
-			var low := Vector3(tx * tile_size, height_range.x - 5.0, tz * tile_size)
-			var box := AABB(low, Vector3(tile_size, height_range.y - height_range.x + 10.0, tile_size))
-			var mesh: NavigationMesh = template.duplicate()
-			# Baked over the tile plus its border, then the border's trimmed
-			# off (border_size), so the edges land on the tile's bounds (to
-			# within a cell -- the region's edge connections bridge that).
-			mesh.filter_baking_aabb = box.grow(border)
-			var source: NavigationMeshSourceGeometryData3D = statics.duplicate()
-			var faces: PackedVector3Array = terrain_node.call("generate_nav_mesh_source_geometry", box.grow(border), false)
-			source.add_faces(faces, Transform3D.IDENTITY)
-			if source.has_data():
-				jobs.append([Vector2i(tx, tz), mesh, source])
+			for slice in slices:
+				var y0 := maxf(bottom + slice * SLICE - SLICE_OVERLAP, bottom)
+				var y1 := minf(bottom + (slice + 1) * SLICE + SLICE_OVERLAP, top) if slice < slices - 1 else top
+				var box := AABB(Vector3(tx * tile_size, y0, tz * tile_size), Vector3(tile_size, y1 - y0, tile_size))
+				var mesh: NavigationMesh = template.duplicate()
+				# Baked over the tile plus its border, then the border's trimmed
+				# off (border_size), so the edges land on the tile's bounds (to
+				# within a cell -- the region's edge connections bridge that).
+				var bake_box := box.grow(border)
+				bake_box.position.y = box.position.y
+				bake_box.size.y = box.size.y
+				mesh.filter_baking_aabb = bake_box
+				var source: NavigationMeshSourceGeometryData3D = statics.duplicate()
+				var faces: PackedVector3Array = terrain_node.call("generate_nav_mesh_source_geometry", box.grow(border), false)
+				source.add_faces(faces, Transform3D.IDENTITY)
+				if source.has_data():
+					jobs.append([Vector3i(tx, tz, slice), mesh, source])
+			# Slices from an earlier, taller bake that this one doesn't make.
+			for slice in range(slices, MAX_SLICES):
+				var stale := ProjectSettings.globalize_path(_tile_path(Vector2i(tx, tz), slice))
+				if FileAccess.file_exists(stale):
+					DirAccess.remove_absolute(stale)
 	var group := WorkerThreadPool.add_group_task(_bake_job.bind(jobs), jobs.size(), -1, true, "Bake navmesh tiles")
 	WorkerThreadPool.wait_for_group_task_completion(group)
 	for job in jobs:
-		ResourceSaver.save(job[1], _tile_path(job[0]), ResourceSaver.FLAG_COMPRESS)
+		var key: Vector3i = job[0]
+		ResourceSaver.save(job[1], _tile_path(Vector2i(key.x, key.y), key.z), ResourceSaver.FLAG_COMPRESS)
 	return jobs.size()
 
 
@@ -126,7 +152,9 @@ func _bake_job(index: int, jobs: Array) -> void:
 	NavigationServer3D.bake_from_source_geometry_data(job[1], job[2])
 
 
-func _tile_path(tile: Vector2i) -> String:
+func _tile_path(tile: Vector2i, slice: int = 0) -> String:
+	if slice > 0:
+		return tiles_dir.path_join("tile_%d_%d_s%d.res" % [tile.x, tile.y, slice])
 	return tiles_dir.path_join("tile_%d_%d.res" % [tile.x, tile.y])
 
 
@@ -168,33 +196,42 @@ func _stream_tiles() -> void:
 			for dx in range(-load_radius, load_radius + 1):
 				wanted[centre + Vector2i(dx, dz)] = true
 	# Start loading what's wanted (in the background); finish what's loaded.
-	for tile in wanted:
-		if not _tiles.has(tile):
-			var path := _tile_path(tile)
-			if ResourceLoader.exists(path):
-				ResourceLoader.load_threaded_request(path, "NavigationMesh")
-				_tiles[tile] = path
-		elif _tiles[tile] is String:
-			var path: String = _tiles[tile]
-			if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_LOADED:
-				var region := NavigationRegion3D.new()
-				# Joins this tile to its neighbours across the one-cell seam the
-				# bake leaves (worked out once as the tile loads, not per frame).
-				region.use_edge_connections = true
-				region.navigation_mesh = ResourceLoader.load_threaded_get(path) as NavigationMesh
-				add_child(region)
-				_tiles[tile] = region
+	# Every slice of a tile (most have only the one).
+	for tile: Vector2i in wanted:
+		for slice in MAX_SLICES:
+			var key := Vector3i(tile.x, tile.y, slice)
+			if not _tiles.has(key):
+				if _missing.has(key):
+					continue
+				var path := _tile_path(tile, slice)
+				if ResourceLoader.exists(path):
+					ResourceLoader.load_threaded_request(path, "NavigationMesh")
+					_tiles[key] = path
+				else:
+					_missing[key] = true
+			elif _tiles[key] is String:
+				var path: String = _tiles[key]
+				if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_LOADED:
+					var region := NavigationRegion3D.new()
+					# Joins this tile to its neighbours across the one-cell seam the
+					# bake leaves (worked out once as the tile loads, not per frame),
+					# and to its other slices where a ramp crosses between them.
+					region.use_edge_connections = true
+					region.navigation_mesh = ResourceLoader.load_threaded_get(path) as NavigationMesh
+					add_child(region)
+					_tiles[key] = region
 	# Unload tiles no player's near any more (one ring of slack, so walking
 	# back and forth over a tile edge doesn't load/unload it every time).
-	for tile in _tiles.keys():
+	for key: Vector3i in _tiles.keys():
+		var tile := Vector2i(key.x, key.y)
 		if wanted.has(tile) or _near_any(tile, wanted):
 			continue
-		var held: Variant = _tiles[tile]
+		var held: Variant = _tiles[key]
 		if held is NavigationRegion3D:
 			(held as Node).queue_free()
-			_tiles.erase(tile)
+			_tiles.erase(key)
 		elif ResourceLoader.load_threaded_get_status(held) != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-			_tiles.erase(tile)
+			_tiles.erase(key)
 
 
 func _near_any(tile: Vector2i, wanted: Dictionary) -> bool:

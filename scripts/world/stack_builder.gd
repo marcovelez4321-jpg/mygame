@@ -265,8 +265,11 @@ func _init(build: bool = true) -> void:
 	_shaft_platforms()
 	_cobwebs()
 	_secrets()
+	# The heart's cathedral on the hive (its own dice: nothing above moves).
+	_cathedral()
 	# Last, round everything else: the skybridges.
 	_place_sky_bridges()
+	blocks.append_array(cathedral_blocks)
 
 
 # ---- Boxes and carving --------------------------------------------------------
@@ -645,6 +648,7 @@ func _place_sky_bridges() -> void:
 		keep_clear.append(landing.grow(BRIDGE_MARGIN))
 	for grown in secret_blocks:
 		keep_clear.append(grown.grow(BRIDGE_MARGIN + 8.0)) # (and the air round them: a balcony, a way in)
+	keep_clear.append_array(bridge_avoid)
 	for bridge in sky_bridges:
 		var placed := false
 		for k in 61:
@@ -1121,6 +1125,13 @@ func _hall_features(hall: Dictionary) -> void:
 	var tall := box.size.y
 	var main: bool = hall.tower == 0
 	var shaft := Rect2(-UPPER_SHAFT * 0.5 - 6.0, -UPPER_SHAFT * 0.5 - 6.0, UPPER_SHAFT + 12.0, UPPER_SHAFT + 12.0)
+	# A hall with its middle kept open (the heart's cathedral): `open`, the
+	# radius of the circle round the middle nothing free-standing goes in --
+	# and the mezzanines' ramps kept out of it too. `growth`: its floor's
+	# growth that many times thicker. (Neither: every other hall, as ever.)
+	var open: float = hall.get("open", 0.0)
+	var middle := Vector2(box.get_center().x, box.get_center().z)
+	var growth: float = hall.get("growth", 1.0)
 	# Mezzanines, against a wall each, and switchback ramps up to them.
 	var levels: Array = [0.4, 0.7] if tall < 250.0 else [0.25, 0.5, 0.75]
 	for level: float in levels:
@@ -1132,6 +1143,13 @@ func _hall_features(hall: Dictionary) -> void:
 		var along_len := box.size.x if side < 2 else box.size.z
 		var across_len := box.size.z if side < 2 else box.size.x
 		var depth := across_len * 0.25
+		if open > 0.0:
+			# Shallow enough that its ramps' lanes (in from its front edge) stay
+			# out of the open middle.
+			var lanes := mini(ceili(tall * level / maxf((along_len - 24.0) * tan(deg_to_rad(RAMP_SLOPE)), 1.0)), 8)
+			depth = minf(depth, across_len * 0.5 - open - 10.0 * lanes)
+			if depth < 6.0:
+				continue
 		var span := along_len * 0.8
 		var deck_y := floor_y + tall * level
 		var wall_mid := box.get_center() + out * (across_len * 0.5 - depth * 0.5)
@@ -1146,12 +1164,16 @@ func _hall_features(hall: Dictionary) -> void:
 				y = deck_y, zone = group, kinds = HALL_GROWTH, density = 0.8, shaft = 0.0})
 		_switchback(box, out, cross, across_len * 0.5 - depth, along_len - 24.0, floor_y, deck_y, group)
 		decks.append({hall = hall, side = side, y = deck_y, span = span})
-	growth_floors.append({rect = Rect2(box.position.x + 4.0, box.position.z + 4.0, box.size.x - 8.0, box.size.z - 8.0), y = floor_y,
-			zone = group, kinds = HALL_GROWTH, density = 1.2, shaft = (UPPER_SHAFT * 0.5 + 6.0) if main else 0.0})
+	var hall_floor := {rect = Rect2(box.position.x + 4.0, box.position.z + 4.0, box.size.x - 8.0, box.size.z - 8.0), y = floor_y,
+			zone = group, kinds = HALL_GROWTH, density = 1.2 * growth, shaft = (UPPER_SHAFT * 0.5 + 6.0) if main else 0.0}
+	if open > 0.0:
+		hall_floor["open"] = open
+		hall_floor["open_at"] = middle
+	growth_floors.append(hall_floor)
 	# Now and then a barnacle nest's spot on the hall floor (more the higher up).
 	for n in _nests_at(0.6, floor_y):
 		var spot := Vector3(random.randf_range(box.position.x + 12.0, box.end.x - 12.0), floor_y, random.randf_range(box.position.z + 12.0, box.end.z - 12.0))
-		if not (main and shaft.has_point(Vector2(spot.x, spot.z))):
+		if not (main and shaft.has_point(Vector2(spot.x, spot.z))) and not (open > 0.0 and Vector2(spot.x, spot.z).distance_to(middle) < open):
 			nest_spots.append(spot)
 	# A gang camped on the floor of about one hall in three (the user's: the
 	# main tower only, for now).
@@ -1167,14 +1189,28 @@ func _hall_features(hall: Dictionary) -> void:
 		var at := Vector3(random.randf_range(box.position.x + 8.0, box.end.x - 8.0), 0.0, random.randf_range(box.position.z + 8.0, box.end.z - 8.0))
 		if main and shaft.has_point(Vector2(at.x, at.z)):
 			continue
+		if open > 0.0:
+			for attempt in 20:
+				if Vector2(at.x, at.z).distance_to(middle) > open + 6.0:
+					break
+				at = Vector3(random.randf_range(box.position.x + 8.0, box.end.x - 8.0), 0.0, random.randf_range(box.position.z + 8.0, box.end.z - 8.0))
+			if Vector2(at.x, at.z).distance_to(middle) <= open + 6.0:
+				continue
 		var lean := Basis.from_euler(Vector3(random.randf_range(-0.12, 0.12), random.randf() * 0.5, random.randf_range(-0.12, 0.12)))
 		var thick := random.randf_range(5.0, 9.0)
 		_add(Vector3(at.x, floor_y + tall * 0.5, at.z), Vector3(thick, tall + 2.0, thick), &"interior", group, &"plain", lean)
 		nest_objects.append(AABB(Vector3(at.x - thick * 0.5, floor_y, at.z - thick * 0.5), Vector3(thick, minf(tall, 60.0), thick)))
 	# A stepped pyramid hanging upside down from the ceiling.
 	var hang := Vector3(random.randf_range(box.position.x + 20.0, box.end.x - 20.0), box.end.y, random.randf_range(box.position.z + 20.0, box.end.z - 20.0))
-	if not (main and shaft.has_point(Vector2(hang.x, hang.z))):
-		var width := minf(box.size.x, box.size.z) * 0.35
+	var width := minf(box.size.x, box.size.z) * 0.35
+	var hang_here := not (main and shaft.has_point(Vector2(hang.x, hang.z)))
+	if open > 0.0:
+		for attempt in 30:
+			if Vector2(hang.x, hang.z).distance_to(middle) > open + width * 0.5:
+				break
+			hang = Vector3(random.randf_range(box.position.x + 20.0, box.end.x - 20.0), box.end.y, random.randf_range(box.position.z + 20.0, box.end.z - 20.0))
+		hang_here = Vector2(hang.x, hang.z).distance_to(middle) > open + width * 0.5
+	if hang_here:
 		for k in 4:
 			var step := width * (1.0 - k * 0.22)
 			_add(hang + Vector3.DOWN * (6.0 * k + 3.0), Vector3(step, 6.0, step), &"interior", group, &"plain")
@@ -1187,7 +1223,14 @@ func _hall_features(hall: Dictionary) -> void:
 	_add(lean_at, Vector3(30.0, tall * 0.6, 3.0) if lean_side < 2 else Vector3(3.0, tall * 0.6, 30.0), &"interior", group, &"plain", lean_basis)
 	# Stairs that stop in mid-air.
 	var stair_at := Vector3(random.randf_range(box.position.x + 15.0, box.end.x - 15.0), floor_y, random.randf_range(box.position.z + 15.0, box.end.z - 15.0))
-	if not (main and shaft.has_point(Vector2(stair_at.x, stair_at.z))):
+	var stairs_here := not (main and shaft.has_point(Vector2(stair_at.x, stair_at.z)))
+	if open > 0.0:
+		for attempt in 30:
+			if Vector2(stair_at.x, stair_at.z).distance_to(middle) > open + 30.0:
+				break
+			stair_at = Vector3(random.randf_range(box.position.x + 15.0, box.end.x - 15.0), floor_y, random.randf_range(box.position.z + 15.0, box.end.z - 15.0))
+		stairs_here = Vector2(stair_at.x, stair_at.z).distance_to(middle) > open + 30.0
+	if stairs_here:
 		var stair_turn := Basis(Vector3.UP, random.randf() * TAU)
 		for k in 7:
 			var step_at := stair_at + stair_turn * Vector3(0.0, 1.0 + k * 2.0, k * 4.0)
@@ -1404,6 +1447,7 @@ func _panic_stairs(hall: Dictionary) -> void:
 			if l.links < 2:
 				dead_ends += 1
 	panic_report.append({hall = group, landings = alive, flights = flights.size(), dead_ends = dead_ends})
+	panic_tangles[group] = {landings = landings, flights = flights, lo = lo, hi = hi, floor_y = floor_y}
 	# Built: flat landings at any turn, ramps (RAMP_SLOPE at most), growth on them all.
 	for l in landings:
 		if l.floor or not l.alive:
@@ -1680,6 +1724,301 @@ func _anything_at(area: AABB) -> bool:
 		if AABB((b.c as Vector3) - extent, extent * 2.0).intersects(area):
 			return true
 	return false
+
+# ---- The heart's cathedral (the user's, 2026-10-17) -----------------------------------
+
+## The heart boss's room, on top of the hive: one huge hall the way the
+## procedural Stacks made theirs (this builder's own hall, run in a box
+## 1/CATHEDRAL_SCALE its size and everything scaled back up) -- 500 m tall,
+## 300 m across (280 inside the walls), its middle CATHEDRAL_CLEAR across left
+## open for the heart and the fight (mezzanines, their ramps, the leaning
+## slab round the walls; no columns, mid-air stairs or hanging pyramid in it).
+## The Stack's concrete, the hive's growth creeping in round its floor's edges.
+## Right over the hive's top hall: the panic stairs there carry on up through
+## a hole in its floor. From outside, a torn-open gap CATHEDRAL_GAP across,
+## CATHEDRAL_GAP_UP up one wall (the side the dice pick); two slit windows on
+## opposite walls. The hive steps out to it in CATHEDRAL_TIERS tiers from
+## CATHEDRAL_TIERS_FROM up, its holes, windows and secrets kept open through
+## them. Its own dice (like the secrets'), so nothing else in the Stack moves.
+const CATHEDRAL_TALL := 500.0
+const CATHEDRAL_WIDTH := 300.0
+const CATHEDRAL_ROOF := 20.0
+const CATHEDRAL_CLEAR := 160.0
+const CATHEDRAL_SCALE := 1.5
+const CATHEDRAL_TIERS := 4
+const CATHEDRAL_TIERS_FROM := 3500.0
+const CATHEDRAL_GAP := 30.0
+const CATHEDRAL_GAP_UP := 165.0
+const CATHEDRAL_SLIT := Vector2(3.0, 60.0) # wide, tall
+const CATHEDRAL_SLIT_UP := 10.0
+## The room (floor to ceiling, local), once built; empty before.
+var cathedral := AABB()
+var cathedral_random := RandomNumberGenerator.new()
+var cathedral_report := {}
+## What the skybridges keep clear of: the cathedral and the tiers under it.
+var bridge_avoid: Array[AABB] = []
+## Each hive hall's tangle (_panic_stairs): {landings, flights, lo, hi, floor_y}.
+var panic_tangles := {}
+## The cathedral's block and its tiers, as tower blocks (for the growth up
+## their outsides) -- added to `blocks` once nothing else reads them.
+var cathedral_blocks: Array[Dictionary] = []
+
+
+func _cathedral() -> void:
+	cathedral_random.seed = SEED + 999
+	var centre := Vector2(TOWERS[HIVE][0], TOWERS[HIVE][1])
+	var middle := Vector3(centre.x, 0.0, centre.y)
+	var top_hall: Dictionary = {}
+	for hall in halls:
+		if hall.tower == HIVE and (top_hall.is_empty() or (hall.box as AABB).end.y > (top_hall.box as AABB).end.y):
+			top_hall = hall
+	if top_hall.is_empty():
+		return
+	var base_y: float = (top_hall.box as AABB).end.y
+	var floor_y := base_y + SLAB
+	var half := CATHEDRAL_WIDTH * 0.5
+	var hive_blocks: Array[AABB] = []
+	for b in blocks:
+		if b.tower == HIVE:
+			hive_blocks.append(AABB((b.c as Vector3) - (b.s as Vector3) * 0.5, b.s))
+	# The hive's old top, over its top hall, makes way for the cathedral's block.
+	_carve(AABB(Vector3(centre.x - half - 10.0, base_y, centre.y - half - 10.0),
+			Vector3(CATHEDRAL_WIDTH + 20.0, float(TOWERS[HIVE][3]) - base_y + 10.0, CATHEDRAL_WIDTH + 20.0)))
+	var block := AABB(Vector3(centre.x - half, base_y, centre.y - half), Vector3(CATHEDRAL_WIDTH, SLAB + CATHEDRAL_TALL + CATHEDRAL_ROOF, CATHEDRAL_WIDTH))
+	_add(block.get_center(), block.size, &"shell", "Tower_%d" % HIVE, &"concrete", Basis.IDENTITY, true, HIVE)
+	cathedral_blocks.append(boxes[boxes.size() - 1].duplicate())
+	var room := AABB(Vector3(centre.x - half + HALL_WALL, floor_y, centre.y - half + HALL_WALL),
+			Vector3(CATHEDRAL_WIDTH - HALL_WALL * 2.0, CATHEDRAL_TALL, CATHEDRAL_WIDTH - HALL_WALL * 2.0))
+	_carve(room)
+	cathedral = room
+	bridge_avoid.append(block.grow(BRIDGE_MARGIN))
+	var walled: Array[AABB] = [block]
+	# The tiers: the hive stepping out to it, each wider than the last; every
+	# tier the hive's blocks taken out (no faces doubled up on its walls), and
+	# slots cut through them wherever something opens out of the hive.
+	var cutters: Array[AABB] = hive_blocks.duplicate()
+	for hole in hive_holes:
+		var at: Vector3 = hole.at
+		var out: Vector3 = hole.normal
+		var size: Vector2 = hole.size
+		if at.y > CATHEDRAL_TIERS_FROM - size.y and at.y < base_y + size.y:
+			cutters.append(_span(at - out * 2.0, at + out * (half + 20.0), Vector3(out.z, 0.0, out.x).abs(), size.x, at.y - size.y * 0.5, size.y))
+	for window in window_rooms:
+		var at: Vector3 = window.at
+		var out: Vector3 = window.normal
+		var size: Vector2 = window.size
+		if Vector2(at.x, at.z).distance_to(centre) < half and at.y > CATHEDRAL_TIERS_FROM - size.y and at.y < base_y + size.y:
+			cutters.append(_span(at - out, at + out * (half + 20.0), Vector3(out.z, 0.0, out.x).abs(), size.x + 4.0, at.y - size.y * 0.5 - 2.0, size.y + 4.0))
+	for grown in secret_blocks:
+		var d := Vector2(grown.get_center().x - centre.x, grown.get_center().z - centre.y)
+		if d.length() > half + 30.0 or grown.end.y < CATHEDRAL_TIERS_FROM or grown.position.y > base_y:
+			continue
+		var slot := grown.grow(4.0)
+		if absf(d.x) > absf(d.y):
+			slot = slot.merge(AABB(Vector3(centre.x + signf(d.x) * (half + 20.0), slot.position.y, slot.position.z), Vector3(0.1, slot.size.y, slot.size.z)))
+		else:
+			slot = slot.merge(AABB(Vector3(slot.position.x, slot.position.y, centre.y + signf(d.y) * (half + 20.0)), Vector3(slot.size.x, slot.size.y, 0.1)))
+		cutters.append(slot)
+	var widest := 0.0
+	for box in hive_blocks:
+		if box.end.y > CATHEDRAL_TIERS_FROM and box.position.y < base_y:
+			widest = maxf(widest, 2.0 * maxf(maxf(box.end.x - centre.x, centre.x - box.position.x), maxf(box.end.z - centre.y, centre.y - box.position.z)))
+	var tier_tall := (base_y - CATHEDRAL_TIERS_FROM) / CATHEDRAL_TIERS
+	var tier_pieces := 0
+	for k in CATHEDRAL_TIERS:
+		var width := lerpf(widest, CATHEDRAL_WIDTH, float(k + 1) / CATHEDRAL_TIERS)
+		var tier := AABB(Vector3(centre.x - width * 0.5, CATHEDRAL_TIERS_FROM + tier_tall * k, centre.y - width * 0.5), Vector3(width, tier_tall, width))
+		var pieces: Array[AABB] = [tier]
+		for cutter in cutters:
+			var next: Array[AABB] = []
+			for piece in pieces:
+				if not piece.intersects(cutter):
+					next.append(piece)
+					continue
+				for bit in _subtract(piece, cutter):
+					if minf(bit.size.x, minf(bit.size.y, bit.size.z)) > 0.05:
+						next.append(bit)
+			pieces = next
+		for piece in pieces:
+			_add(piece.get_center(), piece.size, &"shell", "Tower_%d" % HIVE, &"stained", Basis.IDENTITY, true, HIVE)
+		tier_pieces += pieces.size()
+		cathedral_blocks.append({c = tier.get_center(), s = tier.size, tower = HIVE, mat = &"stained"})
+		bridge_avoid.append(tier.grow(BRIDGE_MARGIN))
+		walled.append(tier)
+	# Cobwebs left outside on ledges the tiers and the cathedral now fill.
+	web_quads.assign(web_quads.filter(func(w: Dictionary) -> bool: return w.indoors or not _within((w.xform as Transform3D).origin, walled)))
+	web_nests.assign(web_nests.filter(func(w: Dictionary) -> bool: return w.indoors or not _within(w.at, walled)))
+	# The hall itself: the procedural Stacks' way, its middle left open.
+	var small := AABB(room.position / CATHEDRAL_SCALE, room.size / CATHEDRAL_SCALE)
+	var inside := StackBuilder.new(false)
+	inside.random.seed = SEED + 998
+	inside._hall_features({tower = -1, box = small, name = "Cathedral", open = CATHEDRAL_CLEAR * 0.5 / CATHEDRAL_SCALE, growth = HIVE_GROWTH})
+	var scale := CATHEDRAL_SCALE
+	for b in inside.boxes:
+		boxes.append({c = (b.c as Vector3) * scale, s = (b.s as Vector3) * scale, b = b.b, part = b.part, solid = false,
+				tower = -1, group = "Cathedral", mat = b.mat})
+	for f in inside.growth_floors:
+		var g: Dictionary = f.duplicate()
+		var rect: Rect2 = f.rect
+		g.rect = Rect2(rect.position * scale, rect.size * scale)
+		g.y = float(f.y) * scale
+		g.zone = "Cathedral"
+		if f.has("open_at"):
+			g["open"] = float(f["open"]) * scale
+			g["open_at"] = (f["open_at"] as Vector2) * scale
+		growth_floors.append(g)
+	for spot in inside.nest_spots:
+		nest_spots.append(spot * scale)
+	for o in inside.nest_objects:
+		nest_objects.append(AABB(o.position * scale, o.size * scale))
+	for lamp: Array in inside.lamps:
+		lamps.append([(lamp[0] as Vector3) * scale, lamp[1], lamp[2], float(lamp[3]) * scale])
+	# Two slit windows, on opposite walls (which pair: the dice), centred.
+	var sides: Array = [0, 1] if cathedral_random.randi() % 2 == 0 else [2, 3]
+	for side: int in sides:
+		var out := _outward(side)
+		var cross := Vector3(out.z, 0.0, out.x).abs()
+		_carve(_span(middle + out * (half - HALL_WALL - 1.0), middle + out * (half + 3.0), cross, CATHEDRAL_SLIT.x, floor_y + CATHEDRAL_SLIT_UP, CATHEDRAL_SLIT.y))
+		openings.append(middle + out * half + Vector3.UP * (floor_y + CATHEDRAL_SLIT_UP + CATHEDRAL_SLIT.y * 0.5))
+	# The torn-open gap: a third of the way up one wall, ragged round its rim.
+	var gap_side := cathedral_random.randi() % 4
+	var gap_out := _outward(gap_side)
+	var gap_cross := Vector3(gap_out.z, 0.0, gap_out.x).abs()
+	var reach := half - HALL_WALL - CATHEDRAL_GAP
+	var gap_mid := middle + gap_cross * cathedral_random.randf_range(-reach, reach)
+	var gap := _span(gap_mid + gap_out * (half - HALL_WALL - 1.0), gap_mid + gap_out * (half + 3.0), gap_cross, CATHEDRAL_GAP, floor_y + CATHEDRAL_GAP_UP, CATHEDRAL_GAP)
+	_carve(gap)
+	for k in 3:
+		var size := gap.size * Vector3(cathedral_random.randf_range(0.35, 0.6), cathedral_random.randf_range(0.35, 0.6), cathedral_random.randf_range(0.35, 0.6))
+		var at := gap.position + gap.size * Vector3(cathedral_random.randf(), cathedral_random.randf(), cathedral_random.randf())
+		_carve(AABB(at - size * 0.5, size))
+	var mouth := gap_mid + gap_out * half + Vector3.UP * (floor_y + CATHEDRAL_GAP_UP + CATHEDRAL_GAP * 0.5)
+	openings.append(mouth)
+	hive_holes.append({at = mouth, normal = gap_out, size = Vector2(CATHEDRAL_GAP, CATHEDRAL_GAP)})
+	growth_floors.append({rect = Rect2(gap.position.x, gap.position.z, gap.size.x, gap.size.z), y = gap.position.y, zone = "Cathedral",
+			kinds = HALL_GROWTH, density = 2.0 * HIVE_GROWTH, shaft = 0.0})
+	# Up from the hive's top hall: its panic stairs carry on, through the floor.
+	var stairs := _panic_up(panic_tangles.get(top_hall.name, {}), top_hall.name, base_y, floor_y, room)
+	halls.append({tower = HIVE, box = room, name = "Cathedral"})
+	cathedral_report = {floor = floor_y, roof = block.end.y, room = room.size, tiers = CATHEDRAL_TIERS, tier_pieces = tier_pieces,
+			hive_width = snappedf(widest, 0.1), gap_side = gap_side, slit_sides = sides, stairs = stairs}
+
+
+## The hive's top hall's tangle (_panic_stairs) grown on up, from its highest
+## landings, to just under the ceiling, then one last flight up through a
+## hole in the cathedral's floor onto it. What happened, for the report.
+func _panic_up(tangle: Dictionary, group: String, ceiling: float, floor_y: float, room: AABB) -> String:
+	if tangle.is_empty():
+		return "no tangle"
+	var landings: Array[Dictionary] = tangle.landings
+	var flights: Array[Dictionary] = tangle.flights
+	var lo: Vector2 = tangle.lo
+	var hi: Vector2 = tangle.hi
+	var hall_floor: float = tangle.floor_y
+	var first_landing := landings.size()
+	var first_flight := flights.size()
+	var target := ceiling - 16.0
+	var highest := -1
+	for _try in 4000:
+		var order: Array[int] = []
+		for i in landings.size():
+			if landings[i].alive and not landings[i].floor:
+				order.append(i)
+		if order.is_empty():
+			break
+		order.sort_custom(func(a: int, b: int) -> bool: return (landings[a].c as Vector3).y > (landings[b].c as Vector3).y)
+		highest = order[0]
+		if (landings[highest].c as Vector3).y >= target:
+			break
+		var parent: int = order[cathedral_random.randi() % mini(4, order.size())]
+		var dir := Vector2.from_angle(cathedral_random.randf() * TAU)
+		var dir3 := Vector3(dir.x, 0.0, dir.y)
+		var slope := deg_to_rad(cathedral_random.randf_range(16.0, RAMP_SLOPE))
+		var length := cathedral_random.randf_range(14.0, 34.0)
+		var start: Vector3 = (landings[parent].c as Vector3) + dir3 * float(landings[parent].r)
+		var finish := start + dir3 * length * cos(slope) + Vector3.UP * length * sin(slope)
+		var r := cathedral_random.randf_range(5.0, 8.0)
+		var c := finish + dir3 * r
+		if not _landing_fits(c, r, lo, hi, hall_floor, ceiling - 10.0, landings, flights):
+			continue
+		if not _flight_clear(start, finish, landings, flights, parent, -1):
+			continue
+		landings.append({c = c, r = r, links = 1, floor = false, alive = true})
+		landings[parent].links += 1
+		flights.append({a = start, b = finish, from = parent, to = landings.size() - 1})
+	if highest < 0:
+		return "no landings"
+	# The last flight, straight along one of the walls' ways (so its hole is a
+	# clean slot), from one of the top landings up onto the cathedral floor --
+	# out past the top hall's walls if it must, through a channel cut in
+	# their top.
+	var tops: Array[int] = []
+	for i in landings.size():
+		if landings[i].alive and not landings[i].floor and (landings[i].c as Vector3).y >= target - 20.0:
+			tops.append(i)
+	tops.sort_custom(func(a: int, b: int) -> bool: return (landings[a].c as Vector3).y > (landings[b].c as Vector3).y)
+	var top: Dictionary = landings[highest]
+	var placed := false
+	# Clear of everything if it can be; then just clear of the landings (it
+	# may brush a flight below); then anyhow -- there's always a way up.
+	for strict in [2, 1, 0]:
+		if placed:
+			break
+		for i in tops:
+			var from: Dictionary = landings[i]
+			var rise := floor_y - (from.c as Vector3).y
+			var run := rise / tan(deg_to_rad(RAMP_SLOPE))
+			var turn := cathedral_random.randi() % 4
+			for k in 4:
+				var out := _outward((k + turn) % 4)
+				var start: Vector3 = (from.c as Vector3) + out * float(from.r)
+				var finish := start + out * run + Vector3.UP * rise
+				if not Rect2(room.position.x, room.position.z, room.size.x, room.size.z).grow(-10.0).has_point(Vector2(finish.x, finish.z)):
+					continue
+				if strict == 2 and not _flight_clear(start, finish, landings, flights, i, -1):
+					continue
+				if strict == 1 and not _flight_clear(start, finish, landings, [], i, -1):
+					continue
+				flights.append({a = start, b = finish, from = i, to = -1})
+				landings[i].links += 1
+				var bottom := minf(start.y - 3.0, ceiling - 1.0)
+				_carve(_span(start, finish - out * 0.5, Vector3(out.z, 0.0, out.x).abs(), PANIC_WIDTH + 4.0, bottom, floor_y + 1.0 - bottom))
+				top = from
+				placed = true
+				break
+			if placed:
+				break
+	# Built like the rest of the tangle.
+	for i in range(first_landing, landings.size()):
+		var l: Dictionary = landings[i]
+		var c: Vector3 = l.c
+		var r: float = l.r
+		_add(c + Vector3.DOWN, Vector3(r * 2.0, 2.0, r * 2.0), &"interior", group, &"plain", Basis(Vector3.UP, cathedral_random.randf() * TAU))
+		growth_floors.append({rect = Rect2(c.x - r * 0.7, c.z - r * 0.7, r * 1.4, r * 1.4), y = c.y, zone = group,
+				kinds = HALL_GROWTH, density = 0.8 * HIVE_GROWTH, shaft = 0.0})
+	for i in range(first_flight, flights.size()):
+		var a: Vector3 = flights[i].a
+		var b: Vector3 = flights[i].b
+		var basis := Basis.looking_at((b - a).normalized(), Vector3.UP)
+		_add((a + b) * 0.5 + basis.y * -1.0, Vector3(PANIC_WIDTH, 2.0, a.distance_to(b) + 1.5), &"interior", group, &"plain", basis)
+	var reached := "%d flights up to %.0f m" % [flights.size() - first_flight, (top.c as Vector3).y]
+	return reached + (", through the floor" if placed else ", NO way through the floor (grapple)")
+
+
+## Whether `point` is inside any of `spaces` (a little grown).
+static func _within(point: Vector3, spaces: Array[AABB]) -> bool:
+	for space in spaces:
+		if space.grow(2.0).has_point(point):
+			return true
+	return false
+
+
+## A tower's top (the hive's: its cathedral's roof, once built).
+func _top(t: int) -> float:
+	if t == HIVE and cathedral.size != Vector3.ZERO:
+		return cathedral.end.y + CATHEDRAL_ROOF
+	return TOWERS[t][3]
+
 
 # ---- Secrets (the user's, 2026-10-17) ----------------------------------------------------
 
@@ -2143,8 +2482,8 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	root.barnacle_nests = OUTSIDE_NESTS
 	root.nest_top_density = NEST_TOP_DENSITY
 	var columns := PackedVector3Array()
-	for tower: Array in TOWERS:
-		columns.append(Vector3(tower[0], tower[3], tower[1]))
+	for t in TOWERS.size():
+		columns.append(Vector3(TOWERS[t][0], _top(t), TOWERS[t][1]))
 	root.nest_columns = columns
 	root.webs = web_nests
 	root.secret_rooms = secret_rooms
@@ -2213,7 +2552,7 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	sound.name = "Sound"
 	sound.wind_stream = wind
 	sound.drone_stream = drone
-	sound.drone_volume_db = -8.0 # subtle: felt more than heard (the user's)
+	sound.drone_volume_db = -14.0 # subtle: felt more than heard (the user's); halved 2026-10-17 (was -8)
 	sound.openings = openings
 	sound.inside = root.inside
 	# The wind's inside: every hall, the base, and every window room.
@@ -2788,6 +3127,8 @@ func _indoor_growth(root: Node, parent: Node) -> void:
 				var shaft: float = f.shaft
 				if shaft > 0.0 and absf(at.x) < shaft and absf(at.y) < shaft:
 					continue
+				if f.has("open_at") and at.distance_to(f["open_at"]) < float(f["open"]):
+					continue # (a hall's middle kept open: the cathedral's)
 				var point := Vector3(at.x, y + 0.6, at.y)
 				var inside := false
 				for blocker in blockers:
@@ -2866,7 +3207,7 @@ func _swarms(root: Node, parent: Node) -> void:
 	GrowthMeshes._blob(speck, Vector3.ZERO, 3.5, Color(0.05, 0.04, 0.03), 0.0, 0.0, Vector3(1.6, 0.5, 1.0), false)
 	var mesh := speck.commit()
 	for t in TOWERS.size():
-		var top: float = TOWERS[t][3]
+		var top := _top(t)
 		var multimesh := MultiMesh.new()
 		multimesh.transform_format = MultiMesh.TRANSFORM_3D
 		multimesh.use_custom_data = true
