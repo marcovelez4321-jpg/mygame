@@ -203,7 +203,7 @@ var secret_blocks: Array[AABB] = []
 var secret_rooms: Array[AABB] = []
 var key_spots := PackedVector3Array()
 var climber_spots := PackedVector3Array()
-var secret_report := {loot = 0, shortcut = 0, entrance = 0, tries = 0}
+var secret_report := {loot = 0, shortcut = 0, entrance = 0, tries = 0, no_deck = 0, bottom = 0, top = 0, fits = 0}
 ## What barnacles grow on inside (Megastructure.inner_nest_*): pillars, stair
 ## steps and ramps in the halls, and the shortcut shafts' insides.
 var nest_objects: Array[AABB] = []
@@ -1705,32 +1705,46 @@ const BUTTON_REACH := 40.0
 const BUTTON_HEIGHT := 1.3
 const HALL_KEY_SPOTS := 60
 const CLIMBER_SPOTS := 16
+## Scattered (the user's): dealt out to the towers in turn, and never within
+## SECRET_SPACING of another secret.
+const SECRET_SPACING := 150.0
+var secret_points := PackedVector3Array()
 
 var secret_random := RandomNumberGenerator.new()
 
 
 func _secrets() -> void:
 	secret_random.seed = SEED + 777
+	# The pickiest first: shortcuts need a hall floor under a mezzanine, and
+	# loot rooms can go up on the mezzanines too.
 	var kinds: Array[String] = []
-	for i in SECRET_LOOT:
-		kinds.append("loot")
 	for i in SECRET_SHORTCUTS:
 		kinds.append("shortcut")
 	for i in SECRET_ENTRANCES:
 		kinds.append("entrance")
+	for i in SECRET_LOOT:
+		kinds.append("loot")
 	var locks: Array[int] = []
 	for i in kinds.size():
 		locks.append(SecretDoor.Lock.KEY if i < SECRET_KEY_DOORS else SecretDoor.Lock.BUTTON)
-	_secret_shuffle(kinds)
 	_secret_shuffle(locks)
 	var usable_halls: Array[Dictionary] = []
+	var by_tower := {}
 	for hall in halls:
 		if hall.tower != STUMP:
 			usable_halls.append(hall)
+			if not by_tower.has(hall.tower):
+				by_tower[hall.tower] = []
+			(by_tower[hall.tower] as Array).append(hall)
+	var towers: Array = by_tower.keys()
+	towers.sort()
 	for i in kinds.size():
-		for attempt in 1500:
+		var own: Array = by_tower[towers[i % towers.size()]]
+		for attempt in 3000:
 			secret_report.tries += 1
-			var hall: Dictionary = usable_halls[secret_random.randi() % usable_halls.size()]
+			# Its tower's turn first; anywhere, if its tower has no room left.
+			var pool: Array = own if attempt < 600 else usable_halls
+			var hall: Dictionary = pool[secret_random.randi() % pool.size()]
 			var done := false
 			match kinds[i]:
 				"loot":
@@ -1741,6 +1755,7 @@ func _secrets() -> void:
 					done = _secret_shaft(hall, locks[i])
 			if done:
 				secret_report[kinds[i]] += 1
+				secret_points.append((secrets[secrets.size() - 1].hinge as Transform3D).origin)
 				break
 	_key_and_climber_spots()
 
@@ -1757,7 +1772,7 @@ func _secret_shuffle(list: Array) -> void:
 ## meets the hall (edge), the tower's face there, the passage's box -- or {}
 ## if there's no clean way (too thin, something in front of it, something
 ## already carved there).
-func _secret_way(hall: Dictionary, side: int, along: float, y: float, check_front: bool = true) -> Dictionary:
+func _secret_way(hall: Dictionary, side: int, along: float, y: float, check_front: bool = true, spaced: bool = true) -> Dictionary:
 	var t: int = hall.tower
 	var box: AABB = hall.box
 	if _fused(t, side, y):
@@ -1770,6 +1785,10 @@ func _secret_way(hall: Dictionary, side: int, along: float, y: float, check_fron
 		return {}
 	var centre := Vector3(box.get_center().x, y, box.get_center().z) + cross * along
 	var edge := centre + out * hall_reach
+	if spaced:
+		for other in secret_points:
+			if other.distance_to(edge) < SECRET_SPACING:
+				return {}
 	var face := _face(t, y + DOOR.y, side)
 	if face - hall_reach < 4.0:
 		return {}
@@ -1865,7 +1884,20 @@ func _secret_room(hall: Dictionary, lock: int, entrance: bool) -> bool:
 	var hall_wide := (box.size.z if side >= 2 else box.size.x) * 0.5
 	var along := secret_random.randf_range(-hall_wide + 10.0, hall_wide - 10.0)
 	var y := box.position.y
-	var way := _secret_way(hall, side, along, y, not entrance)
+	var check_front := not entrance
+	# Half the time up on one of the hall's mezzanines instead, through the
+	# wall it's against (spreads them up the halls, not just their floors).
+	var own: Array[Dictionary] = []
+	for d in decks:
+		if d.hall == hall:
+			own.append(d)
+	if not own.is_empty() and secret_random.randf() < 0.5:
+		var deck: Dictionary = own[secret_random.randi() % own.size()]
+		side = deck.side
+		along = secret_random.randf_range(-(deck.span as float) * 0.4, (deck.span as float) * 0.4)
+		y = deck.y
+		check_front = false # (the deck's in front of it)
+	var way := _secret_way(hall, side, along, y, check_front)
 	if way.is_empty():
 		return false
 	var block := _grown_box(way, y, SECRET_ROOM)
@@ -1920,6 +1952,7 @@ func _secret_shaft(hall: Dictionary, lock: int) -> bool:
 		if d.hall == hall:
 			own.append(d)
 	if own.is_empty():
+		secret_report.no_deck += 1
 		return false
 	var deck: Dictionary = own[secret_random.randi() % own.size()]
 	var side: int = deck.side
@@ -1928,8 +1961,10 @@ func _secret_shaft(hall: Dictionary, lock: int) -> bool:
 	var y := box.position.y
 	var top_y: float = deck.y
 	var bottom := _secret_way(hall, side, along, y)
-	var top := _secret_way(hall, side, along, top_y, false)
+	var top := _secret_way(hall, side, along, top_y, false, false)
 	if bottom.is_empty() or top.is_empty():
+		secret_report.bottom += 1 if bottom.is_empty() else 0
+		secret_report.top += 1 if top.is_empty() else 0
 		return false
 	var inner := Vector3(SHAFT_INNER, top_y - y + DOOR.y + 4.0, SHAFT_INNER)
 	var face := minf(bottom.face, top.face)
@@ -1937,6 +1972,7 @@ func _secret_shaft(hall: Dictionary, lock: int) -> bool:
 	var block := _grown_box(bottom, y, inner)
 	var face_point: Vector3 = bottom.centre + (bottom.out as Vector3) * face
 	if not _grown_fits(block, bottom.out, face_point):
+		secret_report.fits += 1
 		return false
 	var wall_mat := _mat_at((bottom.edge as Vector3) + (bottom.out as Vector3) * 0.5 + Vector3.UP)
 	_grown_add(block, bottom.tower)

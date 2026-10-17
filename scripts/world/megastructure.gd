@@ -589,6 +589,9 @@ func fill_band(group: RoamingGroup, kind: String, body: bool = false) -> void:
 			var pack := SPIDER_PACK.instantiate() as SpiderPack
 			pack.start_count = randi_range(12, 20)
 			pack.spider_scale = infest_magnify
+			# The towers' roaming spiders see you from twice as far (the user's).
+			pack.notice_range *= 2.0
+			pack.lose_range *= 2.0
 			_member(group, pack, 0)
 		_:
 			var nest := RAT_NEST.instantiate() as RatNest

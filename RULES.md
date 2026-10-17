@@ -1638,3 +1638,9 @@ them:
   - Bigger spiders sound lower. Heard within 45 m, on the Enemies bus.
 - **Roach sounds heard from 25% less far (2026-10-17).** The user's: every roach SoundEvent's `unit_size` is x0.75 (the buzz 12 -> 9); the spiders' use the same 9.
 - Not compiled or run in game (the user's testing). The editor scan showed no script errors.
+- **Secrets scattered (2026-10-17).** The user's: no two secrets within 150 m (`StackBuilder.SECRET_SPACING`), and dealt out to the towers in turn (each tries its own tower first, then anywhere). Loot rooms and entrances can also open off a hall's mezzanine, through the wall it's against, not only the hall floor. Shortcuts are placed first (the pickiest). That spacing fits 4 shortcuts, not 10, which the user OK'd: 24 doors (14 loot, 4 shortcuts, 6 entrances), 13 with buttons. Re-baked.
+- **Secret doors echo like the radio (2026-10-17).** The user's: a door's opening sounds (door_move, door_stop) play exactly the way a radio is heard (`SecretDoor.echo()`, Radio's three voices, buses and mix): clear up close, tinny further off, and far away a muffled echo through the halls whose long reverb fades slowly. (Being the radio's buses, it rides the Music slider.)
+- **The towers' roaming spiders see you from twice as far (2026-10-17).** The user's: the halls' roaming spider swarms and the climbing hordes have double `notice_range` and `lose_range`.
+- **Shoot one, the horde comes (2026-10-17).** The user's: a spider hurt by a player sends its whole pack after that player, however far off, and it won't give up for 20 s (`SpiderPack.alert`, `ALERT_TIME`); after that it's the usual lose range.
+- **Spider leaps 25% further (2026-10-17).** The user's: spider.tscn `leap_range_max` 10 -> 12.5, `wall_leap_range` 10 -> 12.5 (the least stays 4).
+- Not compiled or run in game (the user's testing).

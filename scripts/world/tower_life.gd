@@ -139,6 +139,8 @@ func _horde_on_wall(box: AABB, shaft: bool) -> Variant:
 		pack.free_when_empty = true
 		# Onward and upward, a short hop at a time.
 		pack.climb = true
+		pack.notice_range *= 2.0 # (the towers' spiders: twice as far, the user's)
+		pack.lose_range *= 2.0
 		pack.roam_interval = 3.0
 		pack.roam_radius = 10.0
 		# Its up out of the wall (set before it's added: it takes its surface

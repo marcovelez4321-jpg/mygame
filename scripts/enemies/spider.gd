@@ -616,9 +616,12 @@ func _sees(target: Node3D) -> bool:
 
 # ---- Dying ------------------------------------------------------------------
 
-func _on_damaged(_amount: float, _attacker_id: int) -> void:
+func _on_damaged(_amount: float, attacker_id: int) -> void:
 	if _state != State.DEAD:
 		HitFlash.flash(_visual)
+	# Shot by a player: the whole horde comes for them (the user's).
+	if pack and attacker_id != Health.NO_ATTACKER and (not Network.is_online() or multiplayer.is_server()):
+		pack.alert(attacker_id)
 
 
 ## Decided next physics tick, once we know if a blast did it (Explosion

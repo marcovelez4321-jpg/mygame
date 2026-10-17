@@ -330,6 +330,23 @@ func _nearest_player(point: Vector3) -> float:
 	return nearest
 
 
+## Shot at (the user's): one of them hurt by a player sends the whole horde
+## after that player, however far off, and it doesn't give up for ALERT_TIME
+## (then it's the usual: lost past lose_range).
+const ALERT_TIME := 20.0
+var _alert_until := 0
+
+
+func alert(peer_id: int) -> void:
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as Node3D
+		if player.get_multiplayer_authority() == peer_id and Factions.is_alive_target(player):
+			target = player
+			order = Order.HUNT
+			_alert_until = Time.get_ticks_msec() + int(ALERT_TIME * 1000.0)
+			return
+
+
 ## A pack slot laid flat on a surface facing `up`.
 static func _flat_spot(slot: Vector2, up: Vector3) -> Vector3:
 	var side := up.cross(Vector3.FORWARD if absf(up.z) < 0.9 else Vector3.RIGHT).normalized()
@@ -344,7 +361,8 @@ func _look_out(delta: float) -> void:
 	if _lookout > 0.0:
 		return
 	_lookout = 0.5
-	if target and (not Factions.is_alive_target(target) or _nearest_spider_distance(target.global_position) > lose_range):
+	if target and (not Factions.is_alive_target(target) \
+			or (_nearest_spider_distance(target.global_position) > lose_range and Time.get_ticks_msec() > _alert_until)):
 		target = null
 		home = pack_center()
 	# Players come first: one any spider can see within notice_range takes

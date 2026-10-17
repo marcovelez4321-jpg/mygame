@@ -171,6 +171,8 @@ biomes = ExtResource("5_u65ls")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 250, 31.5, -1450)
 interior_distance = 450.0
 nest_height = 5000.0
+inner_nest_objects = Array[AABB]([])
+inner_nest_shafts = Array[AABB]([])
 webs = Array[Dictionary]([{
 &"at": Vector3(104.48445, 1010.25, -253.94556),
 &"indoors": true,
