@@ -41,6 +41,13 @@ signal respawned
 ## A bhop (jumping the tick you land): no ground friction that tick, and
 ## this much faster (0.1 = +10%).
 @export var bhop_gain: float = 0.1
+## Hills (the user's, Source's ramp rules): moving up faster than skim_speed
+## you don't count as landed -- you skim up and over a slope instead of
+## re-jumping on it every few frames (Source's NON_JUMP_VELOCITY, ~2.7 m/s).
+## Landing on a downhill, the fall turns into forward speed along it
+## (Source's ClipVelocity), times slope_landing_boost, up to speed_cap.
+@export var skim_speed: float = 2.7
+@export var slope_landing_boost: float = 1.1
 ## A wall jump: your speed kept (at least wall_jump_min_speed), sent where
 ## you look (bent off the wall if you look into it), and this much faster.
 @export var wall_jump_gain: float = 0.15
@@ -785,10 +792,10 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	if grapple.tick(input.grapple and not input.bag_open, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority(), input.wishdir):
 		fresh_jump = false
 
-	var was_airborne := not is_on_floor()
+	var was_airborne := not _on_ground()
 
 	# Being pulled counts as airborne: no ground friction slowing the pull.
-	if is_on_floor() and not grapple.is_pulling():
+	if _on_ground() and not grapple.is_pulling():
 		_wall_jumped_since_reset = false # touching ground resets the wall-jump limiter
 		_wall_seen_left = 0.0
 		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
@@ -852,6 +859,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	# whatever's left after the collision itself slowed it down.
 	var pre_slide_speed := velocity.length()
 	var pre_slide_fall := -velocity.y
+	var pre_slide_velocity := velocity
 
 	move_and_slide()
 	# Whether we came into this tick's move in the air: the tick after a landing
@@ -864,6 +872,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_check_enemy_stomp(pre_slide_speed)
 		if is_on_floor():
 			_take_fall_damage(pre_slide_fall)
+			_land_on_slope(pre_slide_velocity)
 
 	_finish_tick(input, delta)
 
@@ -1238,6 +1247,32 @@ func _look_for_wall(delta: float) -> void:
 
 
 ## Speed gained (a bhop): this share more, horizontally, up to speed_cap.
+## On the ground for moving and jumping: touching the floor and not moving up
+## off it faster than skim_speed (skimming up a hill is still flying).
+func _on_ground() -> bool:
+	return is_on_floor() and velocity.y <= skim_speed
+
+
+## Just landed: on a downhill, the speed that went into the slope comes out
+## along it (times slope_landing_boost), never past speed_cap -- the hills'
+## boost. Uphill or flat: as ever.
+func _land_on_slope(came_in: Vector3) -> void:
+	var normal := get_floor_normal()
+	if normal.y > 0.995:
+		return
+	var along := came_in.slide(normal)
+	var flat_in := Vector2(came_in.x, came_in.z)
+	var flat_along := Vector2(along.x, along.z)
+	var gained := flat_along.length() - flat_in.length()
+	if gained <= 0.01 or flat_along.length() < 0.1:
+		return
+	var speed := flat_in.length() + gained * slope_landing_boost
+	speed = minf(speed, maxf(flat_in.length(), speed_cap))
+	var way := flat_along.normalized()
+	velocity.x = way.x * speed
+	velocity.z = way.y * speed
+
+
 func _gain_speed(share: float) -> void:
 	var flat := Vector2(velocity.x, velocity.z)
 	var speed := flat.length()

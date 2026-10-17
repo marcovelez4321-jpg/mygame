@@ -67,7 +67,17 @@ func _physics_process(_delta: float) -> void:
 	_last_position = _player.global_position
 
 
+## Jumps closer together than this play one sound (the user's: bhopping up a
+## hill spammed it).
+const JUMP_SOUND_GAP_MSEC := 600
+var _jump_sound_msec := -100000
+
+
 func _on_jumped() -> void:
+	var now := Time.get_ticks_msec()
+	if now - _jump_sound_msec < JUMP_SOUND_GAP_MSEC:
+		return
+	_jump_sound_msec = now
 	SoundPlayer.play_for_owner(jump_sound, _player)
 
 
