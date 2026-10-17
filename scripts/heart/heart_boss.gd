@@ -72,7 +72,10 @@ const ROOM_MESHES := ["Cathedral_plain", "Tower_5_concrete"]
 const SHIFT_EVERY := 10
 const LURCHES := 5
 const LURCH_TIME := 0.25
-const SHIFT_RANGE := 25.0
+## (The user's: 50 m -- 25 wasn't dramatic enough; and each move at least
+## SHIFT_LEAST of it, so every shift's a clear rearrangement.)
+const SHIFT_RANGE := 50.0
+const SHIFT_LEAST := 0.5
 const ARENA := 80.0
 ## Kept this far clear of the heart (its bounds swollen by a full thump), the
 ## user's: never clipping into it -- where it'd end up, and the way there.
@@ -236,7 +239,7 @@ func _pick_shift() -> PackedVector3Array:
 		var now := _pieces[i].global_position if is_instance_valid(_pieces[i]) else home
 		var chosen := now # (none clear: it stays)
 		for attempt in 12:
-			var flat := Vector2.from_angle(randf() * TAU) * SHIFT_RANGE * sqrt(randf())
+			var flat := Vector2.from_angle(randf() * TAU) * SHIFT_RANGE * sqrt(randf_range(SHIFT_LEAST * SHIFT_LEAST, 1.0))
 			var to := home + Vector3(flat.x, 0.0, flat.y)
 			to.x = clampf(to.x, room.position.x + 8.0, room.end.x - 8.0)
 			to.z = clampf(to.z, room.position.z + 8.0, room.end.z - 8.0)
