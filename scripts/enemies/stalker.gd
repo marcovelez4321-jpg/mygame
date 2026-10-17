@@ -32,10 +32,10 @@ const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Chara
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
 ## at (slow enough to watch it skitter out of view), sprinting (driven off).
 ## Spotted, it first freezes SPOTTED_FREEZE s, staring, then scrambles.
-const CRAWL := 9.0
-const SCRAMBLE := 13.0
-const SPRINT := 18.0
-const SPOTTED_FREEZE := 0.8
+const CRAWL := 13.0
+const SCRAMBLE := 17.0
+const SPRINT := 22.0
+const SPOTTED_FREEZE := 1.0
 const ACCELERATION := 30.0
 const STALK_DISTANCE := 30.0
 ## Looked at within this cone (degrees off where a player looks) with a clear
@@ -75,6 +75,18 @@ const PERCH_HEIGHT := Vector2(2.0, 6.0)
 const PERCH_EVERY := 3.0
 const PERCH_REACH := 15.0
 var _perch := Vector3.INF
+## Getting away (the user's): it first runs straight off from the players
+## for RUN_OFF_TIME, then picks cover further from them than it is. Stuck
+## (not moving UNSTICK_MOVE in UNSTICK_EVERY while it means to) on a wall or
+## a ceiling, it lets go and drops to the floor, and picks cover on the
+## floor; stuck on the floor, other cover.
+const RUN_OFF_TIME := 1.5
+const UNSTICK_EVERY := 1.5
+const UNSTICK_MOVE := 0.6
+var _run_off_left := 0.0
+var _check_pos := Vector3.ZERO
+var _check_left := UNSTICK_EVERY
+var _floor_only := false
 var _perch_left := 0.0
 const WALL_DOT := 0.7
 ## Twice a person (the user's): everything about its body scales with this.
@@ -280,6 +292,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		_crawl(delta)
 	_face()
+	_unstick(delta)
 
 
 func _think(delta: float) -> void:
@@ -299,9 +312,7 @@ func _think(delta: float) -> void:
 		var to_me := global_position - near.global_position
 		var closing := Vector3(near.velocity.x, 0.0, near.velocity.z).dot(_flat(to_me))
 		if to_me.length() < RUSHED_RANGE and closing > RUSHED_SPEED:
-			_hide_to = _hiding_spot()
-			_hide_fast = true
-			state = State.HIDE
+			_start_hide(true)
 	# Seen? Hide (a stunt plays out first).
 	_look_check -= delta
 	if _look_check <= 0.0:
@@ -352,10 +363,15 @@ func _think(delta: float) -> void:
 			_desired = Vector3.ZERO
 			_velocity = Vector3.ZERO
 			if _state_left <= 0.0:
-				_hide_to = _hiding_spot()
-				_hide_fast = false
-				state = State.HIDE
+				_start_hide(false)
 		State.HIDE:
+			# Off away from them first, then to cover further off.
+			if _run_off_left > 0.0:
+				_run_off_left -= delta
+				_desired = _away_from_players() * (SPRINT if _hide_fast else SCRAMBLE)
+				if _run_off_left <= 0.0:
+					_hide_to = _hiding_spot()
+				return
 			if not _hide_to.is_finite() or global_position.distance_to(_hide_to) < 1.5:
 				_hide_fast = false
 				state = State.WAIT
@@ -491,9 +507,7 @@ func _let_go(dragged: bool) -> void:
 	fear = 0.0
 	if dragged or state == State.DRAG:
 		_cooldown_left = randf_range(COOLDOWN.x, COOLDOWN.y)
-	_hide_to = _hiding_spot()
-	_hide_fast = true
-	state = State.HIDE
+	_start_hide(true)
 
 # ---- Stage 2: the fear meter ----------------------------------------------------------
 
@@ -612,6 +626,37 @@ func _visible_from_any(points: Array[Vector3]) -> bool:
 	return false
 
 
+## Into hiding: straight off away from the players first (`fast`: flat out).
+func _start_hide(fast: bool) -> void:
+	_hide_fast = fast
+	_hide_to = Vector3.INF
+	_run_off_left = RUN_OFF_TIME
+	state = State.HIDE
+
+
+## Not getting anywhere while it means to: clinging to a wall or ceiling, it
+## lets go and drops (and hides on the floor after); on the floor, it picks
+## other cover.
+func _unstick(delta: float) -> void:
+	_check_left -= delta
+	if _check_left > 0.0:
+		return
+	_check_left = UNSTICK_EVERY
+	var moved := global_position.distance_to(_check_pos)
+	_check_pos = global_position
+	if _desired.length() < 1.0 or state == State.FALL or _airborne or state == State.DRAG:
+		return
+	if moved >= UNSTICK_MOVE:
+		return
+	if _normal.y < WALL_DOT:
+		# Off the wall (or ceiling): a push out from it, and down.
+		_velocity = _normal * 3.0 + Vector3.DOWN
+		_airborne = true
+		_floor_only = true
+	elif state == State.HIDE and _run_off_left <= 0.0:
+		_hide_to = _hiding_spot()
+
+
 ## A spot up a wall (PERCH_HEIGHT) within PERCH_REACH of `spot`, or indoors
 ## half the time on the ceiling over it; `spot` itself if there's neither.
 func _perch_near(spot: Vector3) -> Vector3:
@@ -642,8 +687,20 @@ func _hiding_spot() -> Vector3:
 	var best_score := INF
 	var space := get_world_3d().direct_space_state
 	var players := get_tree().get_nodes_in_group("player")
-	# Up a wall or onto a ceiling round it, like a spider -- out of reach.
-	for i in 16:
+	# Further from them than it is now (the user's: it gets away first).
+	var nearest_now := INF
+	for node in players:
+		nearest_now = minf(nearest_now, (node as Node3D).global_position.distance_to(global_position))
+	var further := func(at: Vector3) -> bool:
+		for node in players:
+			if (node as Node3D).global_position.distance_to(at) < nearest_now + 5.0:
+				return false
+		return true
+	# Up a wall or onto a ceiling round it, like a spider -- out of reach
+	# (not straight after dropping off one that held it up).
+	var walls := not _floor_only
+	_floor_only = false
+	for i in (16 if walls else 0):
 		var way := Vector3(randf_range(-1.0, 1.0), randf_range(0.2, 1.0), randf_range(-1.0, 1.0)).normalized()
 		var hit := _ray(global_position + _normal * 0.5, global_position + way * 25.0)
 		if hit.is_empty():
@@ -653,7 +710,7 @@ func _hiding_spot() -> Vector3:
 		if normal.y > WALL_DOT:
 			continue # (floors: the rings below)
 		var forward := _flat_perpendicular(normal, at - global_position)
-		if _visible_from_any(_body_points(at, Basis(forward.cross(normal), normal, -forward))):
+		if not further.call(at) or _visible_from_any(_body_points(at, Basis(forward.cross(normal), normal, -forward))):
 			continue
 		var score := global_position.distance_to(at) - (at.y - global_position.y) * 0.5 # higher is better
 		for node in players:
@@ -672,7 +729,7 @@ func _hiding_spot() -> Vector3:
 				continue
 			spot = stick.position
 			var frame := Basis(way.cross(_normal), _normal, -way)
-			if _visible_from_any(_body_points(spot, frame)):
+			if not further.call(spot) or _visible_from_any(_body_points(spot, frame)):
 				continue
 			var score := ring
 			for node in players:
@@ -716,8 +773,7 @@ func _on_damaged(amount: float, attacker: int) -> void:
 		_airborne = false
 		Network.send_stalker_sound(StalkerSound.Kind.SHRIEK, global_position + Vector3.UP * BODY_HEIGHT)
 	elif state == State.STALK or state == State.WAIT:
-		_hide_to = _hiding_spot()
-		state = State.HIDE
+		_start_hide(false)
 
 
 ## Gone for a while (driven off): out of the world entirely.
@@ -988,8 +1044,7 @@ func _end_stunt() -> void:
 	if _stunt == Stunt.LEAP:
 		_turn_up() # (far off on another tower: just gone)
 		return
-	_hide_to = _hiding_spot()
-	state = State.HIDE
+	_start_hide(false)
 
 
 ## The body dragged along behind it by a foot (the roaches' hold).
@@ -1084,7 +1139,9 @@ func _fall(delta: float) -> void:
 		_set_surface(hit.normal, _velocity)
 		global_position = (hit.position as Vector3) + _normal * RIDE
 		if _airborne:
-			_airborne = false # (a stunt's leap: the stunt goes on)
+			_airborne = false # (a stunt's leap, a drop off a wall: it goes on)
+			if _floor_only and state == State.HIDE:
+				_hide_to = _hiding_spot()
 		else:
 			state = State.STALK
 		return
