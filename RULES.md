@@ -1713,3 +1713,9 @@ them:
 - **The Stalker is never culled (2026-10-17).** The user's: past the fog it carries on, kept for every player however far (`net_always` in NetEntities).
 - Not run (the user's testing).
 - **The drag, smooth both ways (2026-10-17).** The user's: never immersion-breaking. Taken: the ragdoll starts in the very pose and place the body was in, and the yank on the foot topples it backward. Your view eases from where you were looking into the ragdoll's head over 0.35 s, then follows it a touch smoothed. A jolt (shake, FOV kick) as it hits, and the gun drops out of view a beat later. Let go (`StalkerDrag.release`): you're back on your feet where you lay, facing the way you lay, the view easing up to your eyes over 0.5 s, then your gun comes back up with its draw. Checked (the user OK'd): an editor scan (no script errors) and 70 s of the test world headless with the Stalker spawning (no errors).
+- **The Stalker: twice a person, hittable, grabs when you come close (2026-10-17).** The user's.
+  - **Size:** it was tiny. Its size was measured without its model's import scale, so it came out far smaller than meant, and its person-size hitbox sat above the little body, which is why shots seemed to do nothing. Now it's measured as the meshes really sit, and everything scales with `Stalker.SIZE` 2: 3.8 m standing, about 3.2 m long on all fours, its back ~1.2 m up, its hitbox (radius 0.7 m) matching.
+  - **Rushed at:** a player within 20 m coming at it faster than 2 m/s sends it flat out (18 m/s) to cover.
+  - **Too close:** one that still gets within 5 m is grabbed and dragged off, always (not mid-stunt, not during its cooldown).
+  - **After any drag** (broken free, freed by a teammate, or run its course): it runs flat out to cover, then waits 2-3 min before staging or striking again, stalking meanwhile. It no longer vanishes after a full drag.
+  - Not run (the user's testing).

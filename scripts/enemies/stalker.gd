@@ -54,17 +54,19 @@ const RELOCATE_FAR := 280.0
 const RELOCATE_AFTER := 5.0
 const RELOCATE_TO := Vector2(55.0, 85.0)
 const WALL_DOT := 0.7
-const RIDE := 0.25
-const SPAN := 1.6
+## Twice a person (the user's): everything about its body scales with this.
+const SIZE := 2.0
+const RIDE := 0.25 * SIZE
+const SPAN := 1.6 * SIZE
 const GRAVITY := 22.0
 const AWAY_DEPTH := -5000.0
 ## The body (looks): how high the spine rides, the hands' and feet's spots
 ## round it, how far one strays before it steps, how high and how fast.
-const BODY_HEIGHT := 0.6
-const STRIDE := 0.5
-const STEP_HEIGHT := 0.28
-const STEP_TIME := 0.32
-const STANDING_HEIGHT := 1.9
+const BODY_HEIGHT := 0.6 * SIZE
+const STRIDE := 0.5 * SIZE
+const STEP_HEIGHT := 0.28 * SIZE
+const STEP_TIME := 0.32 * sqrt(SIZE)
+const STANDING_HEIGHT := 1.9 * SIZE
 
 ## STAGE 2 (the user's): stunts every STUNT_EVERY, and the shared FEAR
 ## meter (hidden). A reaction within REACT_WINDOW of a stunt fills it (each
@@ -96,7 +98,8 @@ const CORPSE := preload("res://scenes/enemy/enemy.tscn")
 ## (LUNGE), and on reaching them drags them off by a foot (StalkerDrag) at
 ## DRAG_PULL for DRAG_TIME. Loose (spam clicks, or TEAMMATE_FREES damage from
 ## someone else): it scrambles off, the fear spent. Not loose in time:
-## DRAG_DAMAGE, dropped there in the dark, and it's gone for GONE_AFTER.
+## DRAG_DAMAGE, dropped there in the dark. Either way it runs flat out to cover,
+## then waits out its COOLDOWN before staging or striking again.
 const LUNGE := 25.0
 const LUNGE_FROM := 12.0
 const LUNGE_TIME := 2.5
@@ -106,7 +109,17 @@ const DRAG_PULL := 8.0
 const DRAG_TIME := 15.0
 const DRAG_DAMAGE := 70.0
 const TEAMMATE_FREES := 30.0
-const GONE_AFTER := Vector2(120.0, 180.0)
+## After a drag (the user's): off to cover, then COOLDOWN before it stages
+## or strikes again -- it keeps stalking meanwhile.
+const COOLDOWN := Vector2(120.0, 180.0)
+## Rushed at (the user's): a player within RUSHED_RANGE coming at it faster
+## than RUSHED_SPEED and it flees flat out (SPRINT) to cover; one that still
+## gets within GRAB_RANGE is grabbed and dragged off (cooldown aside).
+const RUSHED_RANGE := 20.0
+const RUSHED_SPEED := 2.0
+const GRAB_RANGE := 5.0
+var _cooldown_left := 0.0
+var _hide_fast := false
 var _victim: PlayerMovement
 var _drag_way := Vector3.FORWARD
 var _freed_by_others := 0.0
@@ -184,7 +197,7 @@ func _ready() -> void:
 	collision_mask = 0
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.35
+	capsule.radius = 0.35 * SIZE
 	capsule.height = SPAN
 	shape.shape = capsule
 	shape.rotation.x = PI * 0.5 # lying along its length
@@ -238,9 +251,24 @@ func _physics_process(delta: float) -> void:
 
 func _think(delta: float) -> void:
 	_fear_tick(delta)
+	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	if state == State.APPROACH or state == State.LUNGE or state == State.DRAG:
 		_strike_tick(delta)
 		return
+	# Too close: grabbed (not while it's cooling down after a drag).
+	var near := _nearest_player()
+	if near and _cooldown_left <= 0.0 and state != State.STUNT and near.drag == null and near.global_position.distance_to(global_position) < GRAB_RANGE:
+		_victim = near
+		_grab(near)
+		return
+	# Rushed at: off flat out to cover.
+	if near and state != State.HIDE and state != State.STUNT:
+		var to_me := global_position - near.global_position
+		var closing := Vector3(near.velocity.x, 0.0, near.velocity.z).dot(_flat(to_me))
+		if to_me.length() < RUSHED_RANGE and closing > RUSHED_SPEED:
+			_hide_to = _hiding_spot()
+			_hide_fast = true
+			state = State.HIDE
 	# Seen? Hide (a stunt plays out first).
 	_look_check -= delta
 	if _look_check <= 0.0:
@@ -274,28 +302,30 @@ func _think(delta: float) -> void:
 			_velocity = Vector3.ZERO
 			if _state_left <= 0.0:
 				_hide_to = _hiding_spot()
+				_hide_fast = false
 				state = State.HIDE
 		State.HIDE:
 			if not _hide_to.is_finite() or global_position.distance_to(_hide_to) < 1.5:
+				_hide_fast = false
 				state = State.WAIT
 				_state_left = WAIT_TIME
 				_desired = Vector3.ZERO
 			else:
-				_desired = (_hide_to - global_position).normalized() * SCRAMBLE
+				_desired = (_hide_to - global_position).normalized() * (SPRINT if _hide_fast else SCRAMBLE)
 		State.WAIT:
 			_desired = Vector3.ZERO
 			if _state_left <= 0.0:
 				state = State.STALK
 		State.STALK:
 			# The fear's full: someone caught off guard is taken.
-			if fear >= 1.0:
+			if fear >= 1.0 and _cooldown_left <= 0.0:
 				var exposed := _exposed_player()
 				if exposed:
 					_victim = exposed
 					state = State.APPROACH
 					return
 			_stunt_left_every -= delta
-			if _stunt_left_every <= 0.0:
+			if _stunt_left_every <= 0.0 and _cooldown_left <= 0.0:
 				_stunt_left_every = randf_range(STUNT_EVERY.x, STUNT_EVERY.y)
 				if _start_stunt():
 					return
@@ -366,7 +396,7 @@ func _strike_tick(delta: float) -> void:
 		State.DRAG:
 			_desired = _drag_way * DRAG_PULL
 			if _state_left <= 0.0:
-				# Not loose in time: badly hurt, left there in the dark; it's gone.
+				# Not loose in time: badly hurt, left there in the dark; it runs off.
 				p.health.hurt_unscaled(DRAG_DAMAGE)
 				_let_go(true)
 
@@ -395,18 +425,18 @@ func drag_broken() -> void:
 		_let_go(false)
 
 
-## Lets go of whoever it has: `gone` -- the drag ran its course: it vanishes;
-## else it scrambles off into hiding. The fear's spent either way.
-func _let_go(gone: bool) -> void:
+## Lets go of whoever it has (`dragged`: it had them) and runs flat out to
+## cover; after a drag, a COOLDOWN before it stages or strikes again (it
+## keeps stalking). The fear's spent.
+func _let_go(dragged: bool) -> void:
 	if is_instance_valid(_victim):
 		Network.send_stalker_drag(_victim.get_multiplayer_authority(), false)
 	_victim = null
 	fear = 0.0
-	if gone:
-		_go_away()
-		_state_left = randf_range(GONE_AFTER.x, GONE_AFTER.y)
-		return
+	if dragged or state == State.DRAG:
+		_cooldown_left = randf_range(COOLDOWN.x, COOLDOWN.y)
 	_hide_to = _hiding_spot()
+	_hide_fast = true
 	state = State.HIDE
 
 # ---- Stage 2: the fear meter ----------------------------------------------------------
@@ -495,7 +525,7 @@ func _nearest_player() -> PlayerMovement:
 func _body_points(at: Vector3, basis: Basis) -> Array[Vector3]:
 	var up := basis.y * BODY_HEIGHT
 	var forward := -basis.z * SPAN * 0.5
-	var side := basis.x * 0.5
+	var side := basis.x * 0.5 * SIZE
 	return [at + up + forward, at + up - forward, at + up * 0.3 + forward + side, at + up * 0.3 + forward - side,
 			at + up * 0.3 - forward + side, at + up * 0.3 - forward - side]
 
@@ -1027,12 +1057,16 @@ func _build_body() -> void:
 			"LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm", "RightHand",
 			"LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot"]:
 		_bones[key] = _find_bone(key)
-	# Standing height to a person's, then laid down chest-first.
+	# Standing height to STANDING_HEIGHT, then laid down chest-first. Measured
+	# as the meshes really sit in the model -- every node above them, its
+	# import scale too (the first version measured without it: tiny).
+	_model.transform = Transform3D.IDENTITY
+	var to_model := _model.global_transform.affine_inverse()
 	var bounds := AABB()
 	var first := true
 	for node in _model.find_children("*", "MeshInstance3D", true, false):
 		var mesh := node as MeshInstance3D
-		var box := mesh.transform * mesh.get_aabb()
+		var box := (to_model * mesh.global_transform) * mesh.get_aabb()
 		bounds = box if first else bounds.merge(box)
 		first = false
 	var fit := STANDING_HEIGHT / maxf(bounds.size.y, 0.01)
@@ -1055,7 +1089,7 @@ func _build_body() -> void:
 		var root := _bone_in_visual(upper)
 		var arm: bool = spec[4]
 		var out := signf(root.x) if absf(root.x) > 0.01 else (-1.0 if (spec[0] as String).begins_with("Left") else 1.0)
-		var home := Vector3(root.x + out * (0.35 if arm else 0.25), 0.0, root.z + (-0.3 if arm else 0.25))
+		var home := Vector3(root.x + out * (0.35 if arm else 0.25) * SIZE, 0.0, root.z + (-0.3 if arm else 0.25) * SIZE)
 		_limbs.append({upper = upper, lower = lower, end = end, group = spec[3], arm = arm, out = out, home = home,
 				planted = _visual.global_transform * home, foot = _visual.global_transform * home,
 				stepping = false, t = 0.0, from = Vector3.ZERO, to = Vector3.ZERO})
