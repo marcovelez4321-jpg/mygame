@@ -309,6 +309,12 @@ func _find_room() -> void:
 						extent = part if first else extent.merge(part)
 						first = false
 				_piece_extent.append(extent)
+				# Its look judders with the kick too (its mesh only: the body, and
+				# whoever's standing on it, stays steady).
+				var mesh := node.get_node_or_null(^"Mesh") as Node3D
+				if mesh:
+					_room_meshes.append(mesh)
+					_room_rests.append(mesh.position)
 	var box := _room_world()
 	for light in stack.find_children("*", "Light3D", true, false):
 		if not is_ancestor_of(light) and box.has_point((light as Node3D).global_position):
