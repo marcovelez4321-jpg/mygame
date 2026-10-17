@@ -31,16 +31,39 @@ The order from "The new direction" below, with where each step stands now:
 9. **The 1v1v1v1 race to the top:** not yet (PvP rules, the lobby, what's
    shared: to choose when it's built).
 
-### Planned: the Stalker (the user's, 2026-10-17; behaviour to be discussed)
-One of a kind, like Resident Evil's Nemesis: a human gone wrong that crawls on all fours (the PSX pack's `Character_Monster_03`: a standard Mixamo skeleton). It's synced to every player (the host runs it), follows your trail (corpses, camps, flares, gunshots), and stalks and scares more than it fights.
-- **The fear meter:** it stages stunts in front of you, like Alien: Isolation's menace gauge. Each player's fear meter fills by how they react, and once it's full it strikes, only when you're truly caught off guard.
-- **The body:** IK-driven, the spider's way: two-bone IK on each arm and leg, sticking to floors, walls and ceilings, its spine bending between hands and feet, its head locked on you.
+### The Stalker (the user's, 2026-10-17: every detail below)
+One of a kind, like Resident Evil's Nemesis, everywhere (the land and the Stack), hunting from the first minute. It's a human gone wrong (`Character_Monster_03`, its own face; Mixamo skeleton) crawling on all fours: IK-driven like the spider, on floors, walls and ceilings. The host runs it and every player sees the same one.
+
+- **Looked at, it hides.** The moment a player looks at it, it runs until not one limb can be seen. A stunt plays out first (a beat, frozen, staring), then it bolts.
+- **Always knows roughly where you are** (Alien: Isolation): it drifts after the players, keeping out of sight.
+- **Stunts:**
+  - leaping building to building in the distance, a silhouette, while you climb the Stack's outside;
+  - a ceiling crawl at the edge of your view;
+  - it's right behind you when you turn;
+  - skittering past a doorway;
+  - watching from the dark;
+  - its rattle close by, nothing there;
+  - dragging a corpse across your path;
+  - screaming for help in a human voice (the user's audio) somewhere off in the distance, then following you, unseen.
+- **Fear: one shared meter, hidden.**
+  - What fills it: seeing it +15%, panic firing +10%, running or backing off after a stunt +10%, spinning round +5%. Investigating where it screamed for help: +50%.
+  - It drains slowly (empty in ~5 min).
+  - It can only attack once the meter is full, and then only when a player is caught off guard: looking away from it, reloading or hands busy, alone (no teammate within ~25 m), or mid-climb or grappling. Any one of these will do.
+- **Speed:** crawls at 6 m/s, sprints at 18 m/s, lunges at 25 m/s.
+- **The strike: grab and drag.** The player goes limp (a ragdoll) on their back and it drags them by one foot at 8 m/s for 15 s. Their camera rides their ragdoll's head, deliberately placed, out of their control.
+  - **Getting loose:** spam click (20 clicks, slipping back 0.15/s), or a teammate shoots it off.
+  - **Not loose in time:** 70 damage, dropped somewhere in the dark, and it vanishes.
+- **Driven off, never killed:** 200 damage and it shrieks and flees, back in 5-8 min.
+- **Sounds:** placeholders made in code (rattle, shriek, skitter, drag) until the user's files; the help screams are the user's.
 - **Animation references:**
-  - The Grudge: broken-joint jerks, the headfirst stair crawl, the throat rattle, a still tilted head with sudden snaps, the face hidden, slow then a sudden lunge, limbs overreaching.
+  - The Grudge: broken-joint jerks, the headfirst stair crawl, the throat rattle, a still tilted head with sudden snaps, slow then a sudden lunge, limbs overreaching.
   - The Exorcist: the belly-up spider-walk.
   - Mama and REC: freeze, then dart.
   - The Ring: grasping fingers, the wrong head tilt.
-- **Build order:** the crawler and its IK, then the trail, then the stunts and the fear meter.
+- **Build order:**
+  1. The crawler: body, IK, surfaces, the hide-when-seen rule, following, co-op sync.
+  2. The stunts and the fear meter.
+  3. The strike, the drag, getting loose, being driven off.
 ### Next: the Stack's secrets (the user's, 2026-10-17)
 Secret doors in the Stack, opened by buttons or keys found in it, leading to
 secret rooms and entrances. Keys are universal: any key opens any key door,
