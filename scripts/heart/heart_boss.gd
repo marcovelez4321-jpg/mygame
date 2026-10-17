@@ -57,6 +57,8 @@ var _active := false
 var _player: AudioStreamPlayer
 ## The map it's playing (yours if you've picked one: PlayerMovement.heart_song).
 var _map: BeatMap
+## The song's snares up to here have had their holes opened.
+var _snares_to := -1.0
 
 
 func _ready() -> void:
@@ -111,6 +113,7 @@ func _start() -> void:
 	_next_beat = 0.0
 	_next_beam = 0
 	_map = _chosen_map()
+	_snares_to = -1.0
 	_player.stream = _map.song if _map else null
 	if _player.stream:
 		_player.play()
@@ -133,13 +136,15 @@ func _chosen_map() -> BeatMap:
 func _tick(delta: float) -> void:
 	_time = _song_time() if _player.playing else _time + delta
 	if _map:
-		# Its map: every kick, the quake; every snare, the holes glow open
-		# (on the beat) and blast a beat later.
+		# Its map: every kick, the quake; every snare, the volley blasts ON it
+		# (the user's) -- its holes glowing open the beat before.
 		var beat := _map.beat()
 		if not _map.between(BeatMap.Drum.KICK, _time - delta, _time).is_empty():
 			_kick()
-		if not _map.between(BeatMap.Drum.SNARE, _time - delta, _time).is_empty():
-			_fire(beat)
+		var ahead := _time + beat
+		for at in _map.between(BeatMap.Drum.SNARE, _snares_to, ahead):
+			_fire(at - _time)
+		_snares_to = maxf(_snares_to, ahead)
 		if not _player.playing:
 			_start() # the song's over: round again
 		return
@@ -149,8 +154,7 @@ func _tick(delta: float) -> void:
 		_next_beat += beat
 		if _next_beam % 2 == 0:
 			_kick()
-		else:
-			_fire(beat)
+			_fire(beat) # (the snare's volley: glowing now, blasting on the next beat)
 		_next_beam += 1
 
 
