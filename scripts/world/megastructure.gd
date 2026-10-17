@@ -553,7 +553,7 @@ func band_group(at: Vector3, radius: float, drift: float, name_: String) -> Roam
 	var group := RoamingGroup.new()
 	group.name = name_
 	group.use_navmesh = false
-	group.anchor = to_local(at)
+	group.anchor = at # (global, as a RoamingGroup's home is)
 	group.anchor_radius = radius
 	group.drift_speed = drift
 	add_child(group)
@@ -567,6 +567,7 @@ func band_group(at: Vector3, radius: float, drift: float, name_: String) -> Roam
 func fill_band(group: RoamingGroup, kind: String, body: bool = false) -> void:
 	match kind:
 		"roaches":
+			var roaches: Array[FlyingRoach] = []
 			for r in randi_range(6, 12):
 				while FrameBudget.over():
 					await get_tree().process_frame
@@ -574,9 +575,13 @@ func fill_band(group: RoamingGroup, kind: String, body: bool = false) -> void:
 					return
 				var roach := ROACH.instantiate() as FlyingRoach
 				roach.size = infest_magnify
+				# The towers' roaming roaches pick fights from twice as far (the user's).
+				roach.threat_range *= 2.0
 				_member(group, roach, r, 1.5 * infest_magnify)
+				roaches.append(roach)
 			if body and is_instance_valid(group):
-				# A dead person (or a climber who didn't make it) for them to lift.
+				# A dead person (or a climber who didn't make it), up in the air
+				# with them: they take hold of it at once and fly it about.
 				var dead := (load("res://scenes/enemy/enemy.tscn") as PackedScene).instantiate() as Enemy
 				dead.can_mutate = false
 				dead.corpse_time = 1.0e9
@@ -585,6 +590,11 @@ func fill_band(group: RoamingGroup, kind: String, body: bool = false) -> void:
 				_member(group, dead, 3)
 				var health := dead.get_node(^"Health") as Health
 				health.take_damage(health.current_health + 1.0)
+				for frame in 3:
+					await get_tree().physics_frame
+				for roach in roaches:
+					if is_instance_valid(roach):
+						RoachCarry.recruit(roach)
 		"spiders":
 			var pack := SPIDER_PACK.instantiate() as SpiderPack
 			pack.start_count = randi_range(12, 20)
