@@ -35,7 +35,9 @@ const CHUNK_HEIGHT := Vector2(100.0, 150.0)
 const MAX_CHUNKS := 5
 const NEAR_PLAYER := 12.0
 const ARENA := StackBuilder.CATHEDRAL_CLEAR
-const CHUNK_SIZE := Vector2(1.2, 2.6)
+## The chunks that hurt: twice the size they were (the user's), so they stand
+## out from the harmless rubble.
+const CHUNK_SIZE := Vector2(2.4, 5.2)
 
 const DUST_COLOR := Color(0.42, 0.38, 0.33, 0.55)
 const RUBBLE_COLOR := Color(0.5, 0.48, 0.45)

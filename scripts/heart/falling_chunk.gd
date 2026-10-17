@@ -91,5 +91,5 @@ func _physics_process(delta: float) -> void:
 func _shatter(at: Vector3, normal: Vector3) -> void:
 	_done = true
 	HeartQuake.dust(get_tree().current_scene, at + normal * 0.5, _size * 1.5)
-	HeartQuake.rubble(get_tree().current_scene, at + normal * 0.5, _size)
+	HeartQuake.rubble(get_tree().current_scene, at + normal * 0.5, _size * 0.5) # (its bits: rubble-sized)
 	queue_free()
