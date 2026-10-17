@@ -215,6 +215,20 @@ func send_stalker_sound(kind: int, at: Vector3) -> void:
 		_stalker_sound.rpc(kind, at)
 
 
+## Host: words on one player's screen (the bottom-middle message), wherever
+## they are.
+func send_message(peer_id: int, text: String) -> void:
+	if not is_online() or peer_id == multiplayer.get_unique_id():
+		MapIO.show_message(get_tree(), text)
+	elif is_online():
+		_net_message.rpc_id(peer_id, text)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_message(text: String) -> void:
+	MapIO.show_message(get_tree(), text)
+
+
 ## Host: a player taken by the Stalker (or let go), here and everywhere.
 func send_stalker_drag(peer_id: int, on: bool) -> void:
 	_stalker_drag(peer_id, on)

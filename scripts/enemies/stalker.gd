@@ -125,6 +125,8 @@ const INVESTIGATE_TIME := 10.0
 ## Looked straight at (degrees off centre): a watching one's cue to go.
 const STARED_AT := 12.0
 const SPIN_RATE := 4.7 # rad/s: whipping round
+## Each stunt (the user's): these words on its player's screen.
+const TINGLE := "A tingle goes down your spine."
 const FLEE_SPEED := 7.0
 const DRAG_SPEED := 5.0
 const CORPSE := preload("res://scenes/enemy/enemy.tscn")
@@ -154,7 +156,7 @@ const COOLDOWN := Vector2(120.0, 180.0)
 ## gets within GRAB_RANGE is grabbed and dragged off (cooldown aside).
 const RUSHED_RANGE := 20.0
 const RUSHED_SPEED := 2.0
-const GRAB_RANGE := 5.0
+const GRAB_RANGE := 10.0 # (doubled, the user's: was 5)
 var _cooldown_left := 0.0
 var _hide_fast := false
 var _victim: PlayerMovement
@@ -663,9 +665,13 @@ func _body_points(at: Vector3, basis: Basis) -> Array[Vector3]:
 			at + up * 0.3 - forward + side, at + up * 0.3 - forward - side]
 
 
-## Whether any player could see any part of it right now.
+## Whether any player could see any part of it right now: its real body --
+## each hitbox on its bones -- as well as the points round where it stands.
 func _seen() -> bool:
-	return _visible_from_any(_body_points(global_position, global_basis))
+	var points := _body_points(global_position, global_basis)
+	for box: Array in _hitboxes:
+		points.append((box[0] as CollisionShape3D).global_position)
+	return _visible_from_any(points)
 
 
 func _visible_from_any(points: Array[Vector3]) -> bool:
@@ -684,7 +690,8 @@ func _visible_from_any(points: Array[Vector3]) -> bool:
 				continue
 			var query := PhysicsRayQueryParameters3D.create(eye, point, 1, [player.get_rid(), get_rid()])
 			var hit := space.intersect_ray(query)
-			if hit.is_empty() or (hit.position as Vector3).distance_to(point) < 0.3:
+			# (A point just inside the ground or a wall still counts as seen.)
+			if hit.is_empty() or (hit.position as Vector3).distance_to(point) < 0.5 * SIZE:
 				return true
 	return false
 
@@ -896,6 +903,7 @@ func _start_stunt() -> bool:
 		kinds.push_front(Stunt.LEAP)
 	for kind: int in kinds:
 		if _stage(kind):
+			Network.send_message(_stunt_target.get_multiplayer_authority(), TINGLE)
 			return true
 	return false
 
