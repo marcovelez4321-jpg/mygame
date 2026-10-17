@@ -58,11 +58,12 @@ const RELOCATE_TO := Vector2(55.0, 85.0)
 ## everyone for LEASH_TIME, or not gaining STUCK_GAIN on them in STUCK_TIME
 ## (hung up on a wall, a ceiling, the land), it turns up again out of sight
 ## BACKSTAGE_TO from one of them.
-const LEASH := 90.0
-const LEASH_TIME := 6.0
-const STUCK_TIME := 6.0
+## (25% less clingy, the user's: was 90 m, 6 s, 6 s, 35-55 m.)
+const LEASH := 112.5
+const LEASH_TIME := 7.5
+const STUCK_TIME := 7.5
 const STUCK_GAIN := 2.0
-const BACKSTAGE_TO := Vector2(35.0, 55.0)
+const BACKSTAGE_TO := Vector2(44.0, 69.0)
 var _leash_for := 0.0
 var _stuck_for := 0.0
 var _stuck_best := INF
