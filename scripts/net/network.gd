@@ -45,6 +45,13 @@ const LAN_FORGET_MSEC := 4000
 
 var status := "Offline"
 var entities: NetEntities
+## Steam co-op (invites; on when GodotSteam's installed and Steam's running).
+var steam: SteamCoop
+## Round trips (ms) to each peer, measured here by ping (Steam's peer has no
+## ENet statistics): peer id -> msec. Net.half_ping / round_trip_msec use it.
+var round_trips := {}
+var _ping_left := 0.0
+const PING_EVERY := 1.0
 ## Host: peer id -> the character it picked (its body's look on every machine).
 var _characters := {}
 ## LAN: the host's announcer, the listener, and what it's heard
@@ -53,6 +60,14 @@ var _announcer: PacketPeerUDP
 var _announce_left := 0.0
 var _listener: PacketPeerUDP
 var _lan_games := {}
+
+
+func _init() -> void:
+	# Made here, not in _ready: the pause menu (an earlier autoload) builds its
+	# Co-op panel before this is ready, and asks after it.
+	steam = SteamCoop.new()
+	steam.name = "SteamCoop"
+	add_child(steam)
 
 
 func _ready() -> void:
@@ -128,6 +143,12 @@ func _start_announcing() -> void:
 
 
 func _process(delta: float) -> void:
+	# Ping everyone now and then (the round trips, for any kind of peer).
+	if is_online() and not (multiplayer.multiplayer_peer is ENetMultiplayerPeer):
+		_ping_left -= delta
+		if _ping_left <= 0.0:
+			_ping_left = PING_EVERY
+			_net_ping.rpc(Time.get_ticks_msec())
 	if _announcer and multiplayer.is_server():
 		_announce_left -= delta
 		if _announce_left <= 0.0:
@@ -172,11 +193,23 @@ func join(address: String, port: int = PORT) -> void:
 	_set_status("Joining %s..." % address)
 
 
+## Steam's connection is up (SteamCoop): hosting, or joining a lobby's owner.
+## From here it's the same as hosting / joining by address.
+func use_steam_peer(peer: MultiplayerPeer, hosting: bool) -> void:
+	multiplayer.multiplayer_peer = peer
+	if hosting:
+		_characters = {1: GameSettings.player_character}
+		_set_status("Hosting on Steam -- press Invite friends")
+	else:
+		_set_status("Joining through Steam...")
+
+
 ## Back to playing alone. A host keeps its world (minus the others' bodies);
 ## a client's world was the host's, so it starts its scene fresh.
 func leave() -> void:
 	var was_client := is_online() and not multiplayer.is_server()
 	_close()
+	steam.leave_lobby()
 	_set_status("Offline")
 	if was_client:
 		get_tree().reload_current_scene()
@@ -322,6 +355,16 @@ func half_ping() -> float:
 	return Net.half_ping(self)
 
 
+@rpc("any_peer", "call_remote", "unreliable")
+func _net_ping(sent: int) -> void:
+	_net_pong.rpc_id(multiplayer.get_remote_sender_id(), sent)
+
+
+@rpc("any_peer", "call_remote", "unreliable")
+func _net_pong(sent: int) -> void:
+	round_trips[multiplayer.get_remote_sender_id()] = Time.get_ticks_msec() - sent
+
+
 func _close() -> void:
 	if _announcer:
 		_announcer.close()
@@ -330,6 +373,7 @@ func _close() -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	_characters.clear()
+	round_trips.clear()
 	entities.reset()
 
 
@@ -368,7 +412,7 @@ func _on_peer_disconnected(id: int) -> void:
 	_remove_body(id)
 	_remove_body.rpc(id)
 	if multiplayer.get_peers().is_empty():
-		_set_status("Hosting on port %d -- waiting for someone to join" % PORT)
+		_set_status("Hosting on Steam -- press Invite friends" if steam.hosting else "Hosting on port %d -- waiting for someone to join" % PORT)
 	else:
 		_set_status("Player %d left" % id)
 
@@ -403,11 +447,13 @@ func _on_connected() -> void:
 
 func _on_connection_failed() -> void:
 	_close()
+	steam.leave_lobby()
 	_set_status("Couldn't reach the host (wrong address, or nobody hosting?)")
 
 
 func _on_server_gone() -> void:
 	_close()
+	steam.leave_lobby()
 	_set_status("The host left")
 	get_tree().reload_current_scene()
 

@@ -483,6 +483,36 @@ func _build_coop_panel() -> void:
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(status)
 	Network.status_changed.connect(func(text: String) -> void: status.text = text)
+	# Steam (SteamCoop, the user's): host with a friends-only lobby and invite
+	# friends -- no ports, no addresses. Off (and says why) without GodotSteam
+	# or Steam running.
+	var steam_row := HBoxContainer.new()
+	var steam_host := Button.new()
+	steam_host.text = "Host on Steam"
+	steam_host.custom_minimum_size = Vector2(0, 36)
+	steam_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	steam_host.pressed.connect(func() -> void: Network.steam.host())
+	var steam_invite := Button.new()
+	steam_invite.text = "Invite friends"
+	steam_invite.custom_minimum_size = Vector2(0, 36)
+	steam_invite.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	steam_invite.pressed.connect(func() -> void: Network.steam.invite())
+	steam_row.add_child(steam_host)
+	steam_row.add_child(steam_invite)
+	vbox.add_child(steam_row)
+	var steam_note := Label.new()
+	steam_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	steam_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	steam_note.add_theme_font_size_override("font_size", 13)
+	vbox.add_child(steam_note)
+	var show_steam := func() -> void:
+		var ready: bool = Network.steam.available
+		steam_host.disabled = not ready
+		steam_invite.disabled = not (ready and Network.steam.lobby_id != 0)
+		steam_note.text = "Steam: accept a friend's invite to join them." if ready else "Steam invites are off: %s" % Network.steam.why_not
+	show_steam.call()
+	Network.steam.state_changed.connect(func() -> void: show_steam.call())
+	Network.status_changed.connect(func(_text: String) -> void: show_steam.call())
 	var host := Button.new()
 	host.text = "Host (port %d)" % Network.PORT
 	host.custom_minimum_size = Vector2(0, 36)
