@@ -125,6 +125,9 @@ const RAMP_SLOPE := 28.0 # degrees: every ramp you walk up
 ## high hall, 60% of the way up the main tower (the user's call). The crown
 ## is beyond it: on foot and by grapple.
 const LIFT_STOPS := [40.0, 900.0, 3000.0]
+## The express lift (the user's, 2026-10-17: out for now -- it ran through
+## some skybridges). Its docks stay; the car, its call buttons and cable go.
+const LIFT_ENABLED := false
 ## Each hall's window rooms: two, and a third this often (2.6 a hall on
 ## average: 30% more than two, the user's). The hive keeps its own two.
 const WINDOW_THIRD_CHANCE := 0.6
@@ -2417,19 +2420,20 @@ func _swarms(root: Node, parent: Node) -> void:
 ## The express lift up the main tower's -Z side (and its cable), and the
 ## cable car between the high halls (and its cable).
 func _rides(root: Node, parent: Node) -> void:
-	var lift := StackLift.new()
-	lift.name = "Lift"
-	lift.stops = lift_stops
-	lift.on_call = true
-	_own(root, lift, parent)
-	for i in lift_buttons.size():
-		var button := LiftButton.new()
-		button.name = "LiftCall_%d" % i
-		button.lift_path = NodePath("../Lift")
-		button.stop = i
-		button.position = lift_buttons[i]
-		_own(root, button, parent)
-	_cable(root, parent, "LiftCable", Vector3(0.0, 0.0, lift_face), Vector3(0.0, LIFT_STOPS[LIFT_STOPS.size() - 1] + 80.0, lift_face))
+	if LIFT_ENABLED:
+		var lift := StackLift.new()
+		lift.name = "Lift"
+		lift.stops = lift_stops
+		lift.on_call = true
+		_own(root, lift, parent)
+		for i in lift_buttons.size():
+			var button := LiftButton.new()
+			button.name = "LiftCall_%d" % i
+			button.lift_path = NodePath("../Lift")
+			button.stop = i
+			button.position = lift_buttons[i]
+			_own(root, button, parent)
+		_cable(root, parent, "LiftCable", Vector3(0.0, 0.0, lift_face), Vector3(0.0, LIFT_STOPS[LIFT_STOPS.size() - 1] + 80.0, lift_face))
 	if cable_stops.size() == 2:
 		var car := StackLift.new()
 		car.name = "CableCar"

@@ -5,6 +5,41 @@ This wins over everything below. The procedural Stacks wait until the main
 co-op mode is finished; work happens in the open world
 (`scenes/world/test_world.tscn`).
 
+### The roadmap before this one (2026-10-14), carried over (2026-10-17)
+The order from "The new direction" below, with where each step stands now:
+1. **Movement (Vholume-style):** done (bhops, wall jumps, 28 m/s cap; hills
+   skim and boost, 2026-10-17).
+2. **The grapple reworked:** done (charge-and-launch, the three Tendrils and
+   their M2 markers, half a bar a throw, the wall kick). Since: the Tentacle
+   Whip (now slung like a real whip) and Seeded Growth mutations.
+3. **The greybox procedural-Stack prototype:** started (`ProceduralStacks`),
+   parked while the open world comes first. The hand-made Stack
+   (StackBuilder) is where the secrets go now.
+4. **The performance pass:** done (measured, 2026-10-16), then the long-fight
+   fixes (2026-10-17): spawn budget, fog-based spawning, caps on corpses and
+   decals, leaks closed.
+5. **Drops and money:** partly. Done: meat (big ones), scrap (people), silk
+   (spiders), player kills only, untaken drops vanish. Not yet: **money**, and
+   **roaches dropping wings**; scrap and silk lying about the world.
+6. **Hunger, food, the vending machine:** partly. Done: the hunger meter
+   (meat, cooked meat, glued meat). Not yet: **food and water items**, the
+   **vending machine** and its **drinks** (what they do: to choose).
+7. **Camps as checkpoints:** done (craft a kit, ghost placement, tent +
+   bedroll + fire; wake at the nearest camp, gear left in a backpack).
+8. **Throwable flares:** not yet (thrown like grenades, with light; the
+   zippo stays as an item).
+9. **The 1v1v1v1 race to the top:** not yet (PvP rules, the lobby, what's
+   shared: to choose when it's built).
+
+### Next: the Stack's secrets (the user's, 2026-10-17)
+Secret doors in the Stack, opened by buttons or keys found in it, leading to
+secret rooms and entrances. Keys are universal: any key opens any key door,
+but never a button door (those need their own button), and a button is
+never far from its door. Secret rooms can be new rooms grown onto the
+towers: square blocks merging out of a building, slightly extended as if
+growing off it, in the same building concrete or plain concrete. The Stack's
+express lift is out for now (it ran through some skybridges). Details asked
+before it's built.
 ### Feeding off the virus
 Everything in this world, the character included, carries an eldritch virus;
 that's why the world went wrong (maybe the character's own ritual, just
