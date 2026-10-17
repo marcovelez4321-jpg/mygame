@@ -434,10 +434,11 @@ func _think(delta: float) -> void:
 			if _state_left <= 0.0:
 				_start_hide(false)
 		State.HIDE:
-			# Off away from them first, then to cover further off.
+			# Off away from them first -- a bolt, flat out, after its stare (the
+			# user's) -- then to cover further off.
 			if _run_off_left > 0.0:
 				_run_off_left -= delta
-				_desired = _away_from_players() * (SPRINT if _hide_fast else SCRAMBLE)
+				_desired = _away_from_players() * SPRINT
 				if _run_off_left <= 0.0:
 					_hide_to = _hiding_spot()
 				return
