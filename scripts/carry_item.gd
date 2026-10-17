@@ -7,7 +7,8 @@ extends RigidBody3D
 ## it flies into your hand (the user's, 2026-10-15). Outlined like any pickup.
 ##   MEAT rots once it's ROT_TIME old, wherever it is (the backpack and your
 ##   hand too): green-grey, with flies. Fresh meat on, over or within
-##   COOK_REACH of a fire (FireSource) cooks in COOK_TIME; stepping away
+##   COOK_REACH of a fire (FireSource) -- from the chunk's edge, not its middle,
+##   so a big one lying beside it counts -- cooks in COOK_TIME; stepping away
 ##   keeps what it's cooked so far. Rot can't be cooked.
 ## Rule 1 (co-op): only the host's runs (ages, cooks) -- the clients see a
 ## puppet (NetEntities: net_spawn_args()/net_restore(), net_state()/
@@ -19,7 +20,7 @@ extends RigidBody3D
 ## from materials shared by every chunk.
 
 const ROT_TIME := 600.0
-const COOK_TIME := 25.0
+const COOK_TIME := 5.0
 const COOK_REACH := 1.0
 ## Seconds between looking for a fire, and between aging steps.
 const COOK_EVERY := 1.0
@@ -198,7 +199,7 @@ func _physics_process(delta: float) -> void:
 	var changed := false
 	if _cook_left <= 0.0:
 		_cook_left += COOK_EVERY
-		changed = cook(self, COOK_EVERY, global_position)
+		changed = cook(self, COOK_EVERY, global_position, COOK_REACH + size_of(to_data()) * 0.5)
 	if _age_left <= 0.0:
 		_age_left += AGE_EVERY
 		changed = grow_old(self, AGE_EVERY) or changed
@@ -221,10 +222,11 @@ static func grow_old(target: Variant, step: float) -> bool:
 
 ## Fresh meat cooked `step` seconds more if a fire's within reach of `at`.
 ## True if that finished it.
-static func cook(target: Variant, step: float, at: Vector3) -> bool:
+## `reach`: from `at` (a chunk lying about reaches from its edge).
+static func cook(target: Variant, step: float, at: Vector3, reach: float = COOK_REACH) -> bool:
 	if int(target["kind"]) != Backpack.Kind.MEAT or float(target["age"]) >= ROT_TIME:
 		return false
-	if not FireSource.near_point(at, COOK_REACH):
+	if not FireSource.near_point(at, reach):
 		return false
 	target["cooked_for"] = float(target["cooked_for"]) + step
 	if float(target["cooked_for"]) >= COOK_TIME:

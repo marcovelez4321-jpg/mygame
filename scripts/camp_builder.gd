@@ -134,9 +134,9 @@ static func _ghost_material(valid: bool) -> StandardMaterial3D:
 		_green = StandardMaterial3D.new()
 		_green.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_green.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_green.albedo_color = Color(0.3, 1.0, 0.4, 0.35)
+		_green.albedo_color = Color(0.3, 1.0, 0.4, 0.5)
 		_red = _green.duplicate() as StandardMaterial3D
-		_red.albedo_color = Color(1.0, 0.25, 0.2, 0.35)
+		_red.albedo_color = Color(1.0, 0.25, 0.2, 0.5)
 	return _green if valid else _red
 
 

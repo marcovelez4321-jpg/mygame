@@ -144,7 +144,7 @@ static func _part(root: Node3D, pack: PackedScene, name: String, at: Vector3, si
 	meshes.push_front(part)
 	for node in meshes:
 		var mesh := node as MeshInstance3D
-		if mesh == null or mesh.mesh == null:
+		if mesh == null or mesh.mesh == null or _is_card(mesh):
 			continue
 		var copy := MeshInstance3D.new()
 		copy.mesh = mesh.mesh
@@ -169,6 +169,15 @@ static func _part(root: Node3D, pack: PackedScene, name: String, at: Vector3, si
 	holder.scale = Vector3.ONE * fit
 	holder.position = at - Vector3(box.get_center().x, box.position.y, box.get_center().z) * fit
 	root.add_child(holder)
+
+
+## A flat picture card (the Fire's crossed flame planes -- they showed as
+## pictures in a plus over it): left out, the camp's own flames burn there.
+static func _is_card(mesh: MeshInstance3D) -> bool:
+	if String(mesh.name).to_lower().contains("flame"):
+		return true
+	var size := mesh.get_aabb().size
+	return minf(size.x, minf(size.y, size.z)) < maxf(size.x, maxf(size.y, size.z)) * 0.02
 
 
 static var _bed_look: StandardMaterial3D

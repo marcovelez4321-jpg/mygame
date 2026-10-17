@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Animation" path="res://art/animations/LowerPistol.res" id="1_850nn"]
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="2_xfop6"]
+[ext_resource type="Resource" path="res://audio/events/weapons/grenade_switch.tres" id="3_4uorn"]
+
+[resource]
+script = ExtResource("2_xfop6")
+weapon_name = "Hand: shells"
+magazine_size = 1
+right_finger_curl = PackedFloat32Array(0, 0, 0, 0, 0)
+draw_time = 0.3
+one_handed = true
+arms_fitted = true
+right_arm_offset = Vector3(-0.019886365, 0.04513617, -0.042825967)
+right_arm_rotation_degrees = Vector3(-31.605898, 0, 0)
+viewmodel_position = Vector3(0.13769792, -0.16845517, -0.3918221)
+viewmodel_rotation_degrees = Vector3(-0.45638406, -2.3669384, 39.528988)
+viewmodel_scale = 0.712301769798815
+placeholder_color = Color(0.9, 0.9, 0.9, 1)
+hold_animation = ExtResource("1_850nn")
+arms_position = Vector3(0.005253993, -0.008067982, -0.06120392)
+switch_sound = ExtResource("3_4uorn")
