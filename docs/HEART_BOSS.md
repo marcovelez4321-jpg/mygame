@@ -37,6 +37,12 @@ The look comes from the Avatar State's glowing eyes and mouth (Aang).
 - **A hit:** **35** damage, and you're blasted backwards at **15 m/s**.
 - **Co-op:** `Network.send_blood_beam` (the host deals the hits).
 
+### The beat mapper (`scenes/tools/beat_mapper.tscn`, `BeatMap`)
+
+Run the scene with F6 and load a song. Press Space to play, then tap 1 for kick, 2 for snare and 3 for hi-hat. Taps can snap to a BPM grid (1/16 notes) once you've set the BPM and where the first beat lands. The song's waveform runs under the lanes.
+
+It saves a `BeatMap` (`.tres`, next to the song by default) holding the song, its BPM and first beat, and the times of every hit. The heart will read this file.
+
 ## Still to decide or build
 
 - The song: one the user has rights to, ideally with its drum stems or MIDI. Then the beat map.
