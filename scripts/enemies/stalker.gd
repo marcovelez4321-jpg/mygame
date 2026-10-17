@@ -230,8 +230,10 @@ var _hitboxes: Array = []
 ## the dark (no fog on them): two hot points that stay a few pixels big
 ## however far off it is. No glow round them. Walls still hide them.
 const EYE_COLOR := Color(0.3, 0.62, 1.0)
-const EYE_CORE := 0.2 # m (the eye itself, up close)
-const EYE_GLARE := 0.045 # screen-steady size (fixed_size: as if this big at 1 m)
+const EYE_CORE := 0.12 # m (the eye itself, up close)
+## The glare: screen-steady (fixed_size: as if this big at 1 m) -- a pinpoint,
+## ~6 px (the user's: at 0.045 it was ~20 px an eye, over its whole body far off).
+const EYE_GLARE := 0.012
 
 ## Where the eyes sit on the head bone (a person's, scaled to its size).
 const EYE_FORWARD := 0.09
