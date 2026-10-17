@@ -48,6 +48,13 @@ extends Node3D
 ## Spots on its floors (local space) where a nest grows while a player's near.
 @export var floor_nests := PackedVector3Array()
 @export var floor_nest_reach: float = 90.0
+## Inside (the user's, 2026-10-17): barnacles on what stands in its halls --
+## pillars, stairs, ramps (inner_nest_objects) -- and especially up its
+## secret shortcut shafts (inner_nest_shafts): SHAFT_NESTS and OBJECT_NESTS.
+@export var inner_nest_objects: Array[AABB] = []
+@export var inner_nest_shafts: Array[AABB] = []
+const SHAFT_NESTS := 6
+const OBJECT_NESTS := 4
 @export_group("Infestation")
 ## While a player's within infest_range of it, its insides are infested:
 ## roach swarms, spider hordes and big rat hordes, each wandering its own
@@ -162,6 +169,13 @@ func _ready() -> void:
 		var dressing := StackDressing.new()
 		dressing.name = "Dressing"
 		add_child(dressing)
+	# Swarms moving through its halls and hordes climbing its walls (TowerLife).
+	if not inside_zones.is_empty():
+		var life := TowerLife.new()
+		life.name = "TowerLife"
+		add_child(life)
+	if multiplayer.is_server() and (not inner_nest_shafts.is_empty() or not inner_nest_objects.is_empty()):
+		_grow_inner_nests.call_deferred()
 	if not secret_rooms.is_empty() or not secret_keys.is_empty():
 		var secrets := StackSecrets.new()
 		secrets.name = "Secrets"
@@ -170,6 +184,52 @@ func _ready() -> void:
 		_roll_rooms(randi() % 1000000 + 1)
 	else:
 		_net_ask_rooms.rpc_id(1)
+
+
+## The inside barnacles: SHAFT_NESTS up different shortcut shafts (a ray
+## from the shaft's middle out to its wall), OBJECT_NESTS on pillars and
+## stairs (a ray in at one from beside it).
+func _grow_inner_nests() -> void:
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var space := get_world_3d().direct_space_state
+	var shafts := inner_nest_shafts.duplicate()
+	shafts.shuffle()
+	var placed := 0
+	for shaft: AABB in shafts:
+		if placed >= SHAFT_NESTS:
+			break
+		var at := Vector3(shaft.get_center().x, randf_range(shaft.position.y + 8.0, shaft.end.y - 6.0), shaft.get_center().z)
+		var way := Vector3.FORWARD.rotated(Vector3.UP, (randi() % 4) * PI * 0.5)
+		if _nest_by_ray(space, at, at + way * 12.0):
+			placed += 1
+	placed = 0
+	for attempt in OBJECT_NESTS * 8:
+		if placed >= OBJECT_NESTS or inner_nest_objects.is_empty():
+			break
+		var thing: AABB = inner_nest_objects[randi() % inner_nest_objects.size()]
+		var middle := thing.get_center()
+		middle.y = randf_range(thing.position.y + 1.0, thing.end.y - 0.5)
+		var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+		var from := middle + way * (maxf(thing.size.x, thing.size.z) * 0.5 + 4.0)
+		if _nest_by_ray(space, from, middle):
+			placed += 1
+
+
+## A nest where a ray (local) first meets something solid; false if none.
+func _nest_by_ray(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(to_global(from), to_global(to))
+	query.collision_mask = 1
+	var hit := space.intersect_ray(query)
+	if hit.is_empty() or not LevelGeometry.is_static(hit.collider):
+		return false
+	var cluster := cluster_scene.instantiate() as Node3D
+	add_child(cluster)
+	var normal := hit.normal as Vector3
+	var reference := Vector3.FORWARD if absf(normal.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT
+	var side := normal.cross(reference).normalized()
+	cluster.global_transform = Transform3D(Basis(side, normal, side.cross(normal)), hit.position)
+	return true
 
 
 ## Barnacle nests on it: rays from outside in at the walls (half), and from
@@ -479,6 +539,60 @@ func _infest() -> void:
 		if group:
 			var nest := RAT_NEST.instantiate() as RatNest
 			nest.rat_count = randi_range(15, 22) # x2 (leaderless): 30-44
+			nest.bodyguard_count = randi_range(2, 3)
+			var swarm := nest.get_node(^"RatSwarm") as RatSwarm
+			swarm.rat_scale = infest_magnify
+			swarm.rat_damage_multiplier = infest_magnify
+			swarm.separation_distance *= infest_magnify
+			_member(group, nest, 0)
+
+
+## A band wandering round `at` (global) within `radius` (TowerLife's roaming
+## swarms), added and counted as part of its infestation.
+func band_group(at: Vector3, radius: float, drift: float, name_: String) -> RoamingGroup:
+	var group := RoamingGroup.new()
+	group.name = name_
+	group.use_navmesh = false
+	group.anchor = to_local(at)
+	group.anchor_radius = radius
+	group.drift_speed = drift
+	add_child(group)
+	group.global_position = at
+	return group
+
+
+## Fills a band with its kind, within the frame budget: "rats", "roaches"
+## (`body`: with a dead person among them for the roaches to carry off) or
+## "spiders" -- the infestation's own sizes.
+func fill_band(group: RoamingGroup, kind: String, body: bool = false) -> void:
+	match kind:
+		"roaches":
+			for r in randi_range(6, 12):
+				while FrameBudget.over():
+					await get_tree().process_frame
+				if not is_instance_valid(group):
+					return
+				var roach := ROACH.instantiate() as FlyingRoach
+				roach.size = infest_magnify
+				_member(group, roach, r, 1.5 * infest_magnify)
+			if body and is_instance_valid(group):
+				# A dead person (or a climber who didn't make it) for them to lift.
+				var dead := (load("res://scenes/enemy/enemy.tscn") as PackedScene).instantiate() as Enemy
+				dead.can_mutate = false
+				dead.corpse_time = 1.0e9
+				dead.set_meta(&"climber", true) # (stays while its band does)
+				dead.set_meta(&"culled", true) # nothing to drop
+				_member(group, dead, 3)
+				var health := dead.get_node(^"Health") as Health
+				health.take_damage(health.current_health + 1.0)
+		"spiders":
+			var pack := SPIDER_PACK.instantiate() as SpiderPack
+			pack.start_count = randi_range(12, 20)
+			pack.spider_scale = infest_magnify
+			_member(group, pack, 0)
+		_:
+			var nest := RAT_NEST.instantiate() as RatNest
+			nest.rat_count = randi_range(15, 22)
 			nest.bodyguard_count = randi_range(2, 3)
 			var swarm := nest.get_node(^"RatSwarm") as RatSwarm
 			swarm.rat_scale = infest_magnify

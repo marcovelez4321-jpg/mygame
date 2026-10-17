@@ -1625,3 +1625,16 @@ them:
   - Not compiled or run in game (the user's testing). The bake's editor scan showed no script errors.
 - **Speed effects from 32 to 40 m/s (2026-10-17).** The user's: the camera's speed juice (FOV widening, strafe/turn roll lean, sway, the rattle) starts lightly at 32 m/s and is full at 40 (`CameraJuice.speed_floor`/`speed_top`; was 7 to 28). That's past the 28 m/s bhop cap, so it comes from grapple kicks, launches and downhill boosts.
 - **Mouse look freezing at random (2026-10-17).** The user's bug (their friend had it too): the crosshair stopped moving. Look was read in `_unhandled_input`, so any UI rect under the hidden, captured cursor ate the motion; the stamina and hunger pips (code-made ColorRects, which take the mouse by default) sit 14 px under the crosshair and change size. Now: look is read in `PlayerMovement._input` (before the UI), the pips ignore the mouse, the camp ghost's clicks are read in `_input` too, and coming back into the window (an overlay, a notification, alt-tab) re-grabs the mouse capture. Not compiled or run (the user's testing).
+- **Life in the Stack's towers (2026-10-17).** The user's: every detail below. The parked infestation stays.
+  - **Roaming swarms (`TowerLife`):** as you come within 40 m of a hall, it has a 50% chance of a swarm moving through it (rats, roaches or spiders, wandering the whole hall). A roach swarm carries a body a third of the time: a dead person or climber the roaches lift and fly off to eat.
+  - **Climbing hordes:** a third of halls, and of the main shaft's 150 m stretches, have a spider horde of 15-30 crawling up a wall as you go up past it (`SpiderPack.climb`). They turn on you if you get close.
+  - **Rolls:** each is rolled as you come near, cleared once everyone's 200 m off, and rolled again next time. The host does it all.
+  - **Inside barnacles:** 10 more, 6 up different secret shortcut shafts and 4 on the halls' pillars, stair steps and ramps (`Megastructure.inner_nest_*`, from the builder; re-baked, same layout).
+- **Spiders roam simply (2026-10-17).** The user's bug: packs walked in circles together forever, because idle spots slowly turned round the pack's middle. Now an idle pack heads for a random spot on the walls round it: off the floor to a wall it can see, then on along the wall in any direction, round its edges and out of an opening up the building's outside if it goes that way. It heads back if it's 3x its roam radius from home. Spots no longer spin.
+- **Spiders no longer stuck in barnacles (2026-10-17).** Spiders spat out of a spider barnacle landed back on its body and clung to it. A barnacle is no longer a surface to a spider, and they come out clear of its body.
+- **Spider sounds (2026-10-17).** The user's: like the roaches' buzz, each one its own (`SpiderSound`, made in code).
+  - **Crawling:** a skitter loop of leg clicks, one of 6, each spider with its own pitch and start point, louder the faster it crawls, paused when still.
+  - **Leaping:** a chittering rasp, one of 6.
+  - Bigger spiders sound lower. Heard within 45 m, on the Enemies bus.
+- **Roach sounds heard from 25% less far (2026-10-17).** The user's: every roach SoundEvent's `unit_size` is x0.75 (the buzz 12 -> 9); the spiders' use the same 9.
+- Not compiled or run in game (the user's testing). The editor scan showed no script errors.

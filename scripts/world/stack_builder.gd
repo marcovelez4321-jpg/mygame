@@ -204,6 +204,10 @@ var secret_rooms: Array[AABB] = []
 var key_spots := PackedVector3Array()
 var climber_spots := PackedVector3Array()
 var secret_report := {loot = 0, shortcut = 0, entrance = 0, tries = 0}
+## What barnacles grow on inside (Megastructure.inner_nest_*): pillars, stair
+## steps and ramps in the halls, and the shortcut shafts' insides.
+var nest_objects: Array[AABB] = []
+var secret_shafts: Array[AABB] = []
 ## What grows indoors: the sewer kinds that would, by where they are.
 const HALL_GROWTH := {
 	GrowthMeshes.Kind.HAIR_MOLD: 3.0, GrowthMeshes.Kind.EGG_SACS: 2.0, GrowthMeshes.Kind.FUNGUS_SHELF: 2.0,
@@ -1166,6 +1170,7 @@ func _hall_features(hall: Dictionary) -> void:
 		var lean := Basis.from_euler(Vector3(random.randf_range(-0.12, 0.12), random.randf() * 0.5, random.randf_range(-0.12, 0.12)))
 		var thick := random.randf_range(5.0, 9.0)
 		_add(Vector3(at.x, floor_y + tall * 0.5, at.z), Vector3(thick, tall + 2.0, thick), &"interior", group, &"plain", lean)
+		nest_objects.append(AABB(Vector3(at.x - thick * 0.5, floor_y, at.z - thick * 0.5), Vector3(thick, minf(tall, 60.0), thick)))
 	# A stepped pyramid hanging upside down from the ceiling.
 	var hang := Vector3(random.randf_range(box.position.x + 20.0, box.end.x - 20.0), box.end.y, random.randf_range(box.position.z + 20.0, box.end.z - 20.0))
 	if not (main and shaft.has_point(Vector2(hang.x, hang.z))):
@@ -1187,6 +1192,8 @@ func _hall_features(hall: Dictionary) -> void:
 		for k in 7:
 			var step_at := stair_at + stair_turn * Vector3(0.0, 1.0 + k * 2.0, k * 4.0)
 			_add(step_at, Vector3(10.0, 2.0 + k * 4.0, 4.0) if k == 0 else Vector3(10.0, 2.0, 4.0), &"interior", group, &"plain", stair_turn)
+			if k % 3 == 0:
+				nest_objects.append(AABB(step_at - Vector3(2.0, 1.0, 2.0), Vector3(4.0, 2.0, 4.0)))
 	# Its lamps: cold up high, warm low.
 	lamps.append([box.get_center() + Vector3.UP * tall * 0.35, Color(0.75, 0.85, 1.0), 4.0, maxf(box.size.x, box.size.z) * 0.8])
 	lamps.append([Vector3(box.get_center().x, floor_y + 8.0, box.get_center().z) + Vector3(box.size.x * 0.3, 0.0, 0.0), Color(1.0, 0.6, 0.3), 3.0, 50.0])
@@ -1215,6 +1222,8 @@ func _switchback(box: AABB, out: Vector3, cross: Vector3, edge: float, room: flo
 		bottom.y = bottom_y
 		var basis := Basis.looking_at((top - bottom).normalized(), Vector3.UP)
 		_add((top + bottom) * 0.5 + basis.y * -1.0, Vector3(width, 2.0, top.distance_to(bottom) + 1.0), &"interior", group, &"plain", basis)
+		var ramp_mid := (top + bottom) * 0.5
+		nest_objects.append(AABB(ramp_mid - Vector3(3.0, 2.0, 3.0), Vector3(6.0, 2.0, 6.0)))
 		if bottom_y - floor_y > 0.5:
 			# A landing across this lane and the next, where the ramp turns.
 			var landing := centre + out * (lane_at - width * 0.5) + cross * bottom_along
@@ -1932,6 +1941,7 @@ func _secret_shaft(hall: Dictionary, lock: int) -> bool:
 	var wall_mat := _mat_at((bottom.edge as Vector3) + (bottom.out as Vector3) * 0.5 + Vector3.UP)
 	_grown_add(block, bottom.tower)
 	_carve(_grown_inside(bottom, y, inner))
+	secret_shafts.append(_grown_inside(bottom, y, inner))
 	_carve(bottom.passage)
 	_carve(_span((top.edge as Vector3) - (top.out as Vector3) * 0.1, face_point + (bottom.out as Vector3) * 0.6 + Vector3.UP * (top_y - y),
 			top.cross, DOOR.x, top_y, DOOR.y))
@@ -2104,6 +2114,8 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	root.secret_rooms = secret_rooms
 	root.secret_keys = key_spots
 	root.secret_climbers = climber_spots
+	root.inner_nest_objects = nest_objects
+	root.inner_nest_shafts = secret_shafts
 	var shell := Node3D.new()
 	shell.name = "Shell"
 	_own(root, shell, root)

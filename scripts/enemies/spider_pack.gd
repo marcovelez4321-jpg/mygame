@@ -330,6 +330,13 @@ func _nearest_player(point: Vector3) -> float:
 	return nearest
 
 
+## A pack slot laid flat on a surface facing `up`.
+static func _flat_spot(slot: Vector2, up: Vector3) -> Vector3:
+	var side := up.cross(Vector3.FORWARD if absf(up.z) < 0.9 else Vector3.RIGHT).normalized()
+	var other := up.cross(side).normalized()
+	return side * slot.x + other * slot.y
+
+
 ## Every half second: keep after the target unless it's dead or every spider
 ## has lost it; with none, see if any spider notices something.
 func _look_out(delta: float) -> void:
@@ -412,17 +419,59 @@ func _nearest_spider_distance(point: Vector3) -> float:
 	return nearest
 
 
-## On to a new spot around home now and then (or once the pack gets there).
+## Roaming, kept simple (the user's, 2026-10-17): the pack makes for a
+## random spot on the walls round it -- off the floor to the nearest wall it
+## finds, then on along that wall in any direction (round its edges, out of
+## an opening and up the building's outside, if that's where it goes). Far
+## from home (LEASH x roam_radius) it heads back that way. `climb`: always
+## onward and upward (TowerLife's climbing hordes).
+const LEASH := 3.0
+var climb := false
+
+
 func _roam(delta: float, center: Vector3) -> void:
 	_roam_left -= delta
-	var arrived := center.distance_to(_wander_to) < 2.0
+	var arrived := center.distance_to(_wander_to) < 3.0
 	if _roam_left > 0.0 and not arrived:
 		return
 	_roam_left = randf_range(roam_interval * 0.5, roam_interval * 1.5)
-	var offset := Vector2.from_angle(randf() * TAU) * randf_range(roam_radius * 0.3, roam_radius)
-	var step := _home_basis * Vector3(offset.x, 0.0, offset.y)
-	step.y = clampf(step.y, -roam_height, roam_height) # a wall pack: along the wall
-	_wander_to = home + step
+	_wander_to = _wall_spot_near(center)
+
+
+## A random spot on a surface near `center`: along the wall the pack's on,
+## or (on the floor) on a wall it can see; the floor itself if there's none.
+func _wall_spot_near(center: Vector3) -> Vector3:
+	var lead := spiders[0] if not spiders.is_empty() else null
+	var normal := lead.surface_normal() if lead else Vector3.UP
+	var homeward := home - center
+	var leashed := not climb and homeward.length() > roam_radius * LEASH
+	for attempt in 6:
+		var way: Vector3
+		if absf(normal.y) < Spider.WALL_DOT:
+			# On a wall: anywhere along it (mostly up, climbing).
+			var along := Vector3.UP if not climb else Vector3.UP * 2.0
+			way = (along * randf_range(-1.0, 1.0) + normal.cross(Vector3.UP).normalized() * randf_range(-1.0, 1.0))
+			if climb:
+				way.y = absf(way.y) + 0.6
+			if leashed:
+				way = homeward
+			way = (way - normal * way.dot(normal)).normalized()
+			var spot := center + way * randf_range(roam_radius * 0.3, roam_radius)
+			var hit := lead._surface_ray(spot + normal * 2.0, spot - normal * 3.0) if lead else {}
+			if not hit.is_empty():
+				return (hit.position as Vector3) + (hit.normal as Vector3) * 0.3
+			continue
+		# On the floor: off to a wall it can see.
+		way = homeward.normalized() if leashed else Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+		way.y = 0.0
+		way = way.normalized()
+		var from := center + Vector3.UP * 0.5
+		var wall := lead._surface_ray(from, from + way * roam_radius * 1.5) if lead else {}
+		if not wall.is_empty() and absf((wall.normal as Vector3).y) < 0.3:
+			return (wall.position as Vector3) + (wall.normal as Vector3) * 0.3 + Vector3.UP * randf_range(1.0, roam_height * 3.0)
+		if attempt == 5:
+			return center + way * randf_range(roam_radius * 0.3, roam_radius)
+	return center
 
 
 ## One spider's velocity (world space -- it keeps the part along its surface).
@@ -458,9 +507,12 @@ func _spot_for(spider: Spider) -> Vector3:
 	if order != Order.HUNT or target == null:
 		var ebb := 0.5 + 0.5 * sin(_time * ebb_speed * TAU + spider.rhythm_seed * 0.7)
 		var radius := spider.slot_radius * lerpf(1.0 - ebb_amount, 1.0 + ebb_amount, ebb)
-		var drift := drift_speed if int(spider.rhythm_seed) % 2 == 0 else -drift_speed
-		var slot := spider.slot.rotated(_time * drift)
-		return _wander_to + _home_basis * Vector3(slot.x, 0.0, slot.y) * radius
+		# Its own spot round where the pack's going, on the surface it's on --
+		# held still (it used to turn slowly round, so a pack that had got
+		# there walked in circles together forever: the user's bug).
+		var up := spider.surface_normal()
+		var across := _flat_spot(spider.slot, up)
+		return _wander_to + across * radius
 	var prey := target.global_position
 	if spider.wants_wall():
 		var perch_slot := spider.slot * perch_spread

@@ -155,6 +155,12 @@ var slot_radius := 1.0
 ## the surface it's on).
 var desired_velocity := Vector3.ZERO
 var size := 1.0
+## Its own sounds (SpiderSound): which skitter and leap, and how it's heard.
+var _skitter: AudioStreamPlayer3D
+var _voice := 0
+var _camera_distance := INF
+var _sound_position := Vector3.ZERO
+var _sound_speed := 0.0
 var speed_scale := 1.0
 var rhythm_seed := 0.0
 ## Goes for walls and ceilings first (rolled from wall_preference).
@@ -270,6 +276,8 @@ func _ready() -> void:
 		add_collision_exception_with(player as PhysicsBody3D)
 	_build_model()
 	_last_position = global_position
+	_sound_position = global_position
+	_voice = randi()
 	_heading = _flat_perpendicular(_normal, -global_basis.z)
 	global_basis = Basis.IDENTITY # the body never turns; Visual does
 
@@ -501,6 +509,53 @@ func leap(target: Node3D) -> void:
 	_leap_bit = false
 	_leap_cooldown = leap_cooldown
 	_fang_open = 1.0
+	_play_leap()
+
+
+## Your own ears only (cosmetic, every peer): its skitter while it crawls --
+## louder the faster it goes, paused when it stops -- made once you're within
+## SpiderSound.HEAR_DISTANCE and let go past it.
+func _update_skitter(delta: float) -> void:
+	if delta > 0.0:
+		var moved := global_position.distance_to(_sound_position) / delta
+		_sound_position = global_position
+		_sound_speed = lerpf(_sound_speed, minf(moved, 30.0), 1.0 - exp(-8.0 * delta))
+	if _camera_distance > SpiderSound.HEAR_DISTANCE or _state == State.DEAD:
+		if _skitter:
+			_skitter.queue_free()
+			_skitter = null
+		return
+	var level := clampf(_sound_speed / (3.0 * size), 0.0, 1.0) if _state == State.CRAWL else 0.0
+	if _skitter == null:
+		if level < 0.1:
+			return
+		_skitter = AudioStreamPlayer3D.new()
+		_skitter.stream = SpiderSound.skitter(_voice)
+		_skitter.unit_size = SpiderSound.UNIT_SIZE * sqrt(size)
+		_skitter.max_distance = SpiderSound.HEAR_DISTANCE
+		_skitter.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+		_skitter.pitch_scale = randf_range(0.85, 1.2) / pow(size, 0.35) # bigger: lower
+		add_child(_skitter)
+		_skitter.play(randf() * 0.9) # from its own place in the loop
+	_skitter.volume_db = SpiderSound.SKITTER_DB + linear_to_db(maxf(level, 0.0005))
+	_skitter.stream_paused = level < 0.05
+
+
+## A leap's chittering rasp, its own of the few (SpiderSound), where it leaps.
+func _play_leap() -> void:
+	if _camera_distance > SpiderSound.HEAR_DISTANCE:
+		return
+	var player := AudioStreamPlayer3D.new()
+	player.stream = SpiderSound.leap(randi())
+	player.unit_size = SpiderSound.UNIT_SIZE * sqrt(size)
+	player.max_distance = SpiderSound.HEAR_DISTANCE
+	player.volume_db = SpiderSound.LEAP_DB
+	player.pitch_scale = randf_range(0.9, 1.15) / pow(size, 0.35)
+	player.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+	get_tree().current_scene.add_child(player)
+	player.global_position = global_position
+	player.finished.connect(player.queue_free)
+	player.play()
 
 
 ## Up a wall but not getting any closer, and too far to leap: drop off and go
@@ -661,8 +716,9 @@ func _surface_ray(from: Vector3, to: Vector3) -> Dictionary:
 		if hit.is_empty():
 			return hit
 		var collider = hit.collider
+		# (Nor a barnacle: spiders spat out of one clung to it and got stuck.)
 		if collider is RigidBody3D or collider is CharacterBody3D or collider is AnimatableBody3D \
-				or collider is PhysicalBone3D:
+				or collider is PhysicalBone3D or collider is Barnacle:
 			exclude.append(hit.rid)
 			continue
 		return hit
@@ -841,6 +897,8 @@ func _process(delta: float) -> void:
 		var camera := get_viewport().get_camera_3d()
 		var distance := camera.global_position.distance_to(global_position) if camera else 0.0
 		_lod = 0 if distance < ik_full_distance else (1 if distance < ik_far_distance else 2)
+		_camera_distance = distance
+	_update_skitter(delta)
 	_turn_visual(delta)
 	if _lod == 2:
 		return

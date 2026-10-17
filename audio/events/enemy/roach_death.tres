@@ -8,4 +8,5 @@ clip_folder = "res://audio/sfx/enemy/roach"
 clip_prefix = "death"
 volume_db = -5.0
 pitch_variance = 0.1
+unit_size = 7.5
 bus = "Enemies"

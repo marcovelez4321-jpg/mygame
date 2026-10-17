@@ -7,5 +7,5 @@ script = ExtResource("1")
 clip_folder = "res://audio/sfx/enemy/roach"
 clip_prefix = "dive"
 pitch_variance = 0.08
-unit_size = 10.0
+unit_size = 7.5
 bus = "Enemies"

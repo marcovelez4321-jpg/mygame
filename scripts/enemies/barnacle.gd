@@ -215,7 +215,8 @@ func _release(count: int) -> void:
 			spider_pack.start_count = 0
 			spider_pack.position = global_position # the level's root sits at the origin
 			world.add_child(spider_pack)
-		for spider in spider_pack.spawn_spiders(count, _mouth.global_position + up * 0.2, up * spider_launch_speed):
+		# Clear of its own body (they used to land back on it and stick).
+		for spider in spider_pack.spawn_spiders(count, _mouth.global_position + up * (0.4 + 0.5 * size), up * spider_launch_speed):
 			_brood.append(weakref(spider))
 		return
 	for i in count:
