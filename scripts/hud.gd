@@ -61,6 +61,9 @@ var _pickup_tween: Tween
 var _message_tween: Tween
 ## Built in code (_make_center_label) rather than in hud.tscn: just two
 ## plain centred labels.
+## Every message and pickup line pops up here, the bottom middle of the screen
+## (the user's: all in one spot -- the backpack's own text aside).
+const MESSAGE_HEIGHT := 0.84
 var _message_label: Label
 var _use_prompt_label: Label
 
@@ -73,7 +76,7 @@ var _leech_label: Label
 
 func _ready() -> void:
 	add_to_group("hud")
-	_message_label = _make_center_label(0.62, 26)
+	_message_label = _make_center_label(MESSAGE_HEIGHT, 26)
 	_message_label.modulate.a = 0.0
 	_use_prompt_label = _make_center_label(0.56, 20)
 	_use_prompt_label.visible = false
@@ -404,15 +407,6 @@ func _on_picked_up(weapon: WeaponData, ammo_type: WeaponData.AmmoType, ammo_amou
 ## The pickup notice, for anything added to your inventory (weapons and ammo
 ## here; pills, bandages and keys through MapIO.show_pickup()).
 func show_pickup(text: String) -> void:
-	pickup_label.text = text
-
-	if _pickup_tween:
-		_pickup_tween.kill()
-	pickup_label.pivot_offset = pickup_label.size * 0.5
-	pickup_label.scale = Vector2(1.3, 1.3)
-	pickup_label.modulate.a = 1.0
-	_pickup_tween = create_tween()
-	_pickup_tween.tween_property(pickup_label, "scale", Vector2.ONE, 0.12) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_pickup_tween.tween_interval(PICKUP_HOLD_TIME)
-	_pickup_tween.tween_property(pickup_label, "modulate:a", 0.0, PICKUP_FADE_TIME)
+	# The same spot as every other message, the bottom middle (the user's).
+	pickup_label.visible = false
+	show_message(text)

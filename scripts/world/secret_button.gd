@@ -19,6 +19,13 @@ const MODELS := [
 	["res://New assets/PSX_Traps/Assets/Lever.fbx", 0.6],
 ]
 
+## What pressing it sounds like (the user's to set: the SoundEvent files, or
+## files named button_press_01.. / lever_pull_01.. in audio/sfx/map).
+const PRESS_SOUND := preload("res://audio/events/map/button_press.tres")
+const PULL_SOUND := preload("res://audio/events/map/lever_pull.tres")
+## The words at the bottom of your screen when it opens its door (the user's).
+const OPENED_TEXT := "Something opened."
+
 @export var door_path: NodePath
 @export var model_index := 0
 
@@ -57,11 +64,14 @@ func can_use() -> bool:
 	return not _pressed
 
 
-func use_by(_player: Node) -> void:
+func use_by(player: Node) -> void:
 	if _pressed:
 		return
 	_pressed = true
 	remove_from_group(PlayerMovement.USABLE_GROUP)
+	SoundPlayer.play_3d(PULL_SOUND if use_prompt == "Pull" else PRESS_SOUND, global_position, get_tree().current_scene)
+	if player is Node and player.is_multiplayer_authority():
+		MapIO.show_message(get_tree(), OPENED_TEXT)
 	if _model:
 		var tween := create_tween()
 		if use_prompt == "Pull":
