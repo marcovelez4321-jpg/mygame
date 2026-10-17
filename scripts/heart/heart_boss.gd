@@ -62,6 +62,17 @@ const JUDDER_TIME := 0.45
 const JUDDER_RATE := 38.0
 const FLICKER_TIME := 0.35
 const ROOM_MESHES := ["Cathedral_plain", "Tower_5_concrete"]
+## Its structures shift about (the user's), so there's no hiding behind the
+## same wall: every SHIFT_EVERY kicks each one (a mezzanine with its ramps, a
+## column, the pyramid, the slab, the stairs) heads for a new spot within
+## SHIFT_RANGE m of where it was built, at 1 m a beat; never into the open
+## middle (ARENA) or out of the room. The host picks; everyone moves them.
+const SHIFT_EVERY := 10
+const SHIFT_RANGE := 25.0
+const ARENA := 80.0
+## Kept this far clear of the heart (its bounds swollen by a full thump), the
+## user's: never clipping into it -- where it'd end up, and the way there.
+const HEART_CLEARANCE := 6.0
 ## Its looks only run with someone this close (m).
 const NEAR := 700.0
 
@@ -80,6 +91,11 @@ var _room_rests: Array[Vector3] = []
 var _lamps: Array[Light3D] = []
 var _lamp_energy: Array[float] = []
 var _quake_age := 10.0
+var _pieces: Array[AnimatableBody3D] = []
+var _piece_home: Array[Vector3] = []
+var _piece_to: Array[Vector3] = []
+var _piece_extent: Array[AABB] = [] # each piece's own shape, round its origin
+var _kicks := 0
 var _active := false
 var _player: AudioStreamPlayer
 ## The map it's playing (yours if you've picked one: PlayerMovement.heart_song).
@@ -196,6 +212,68 @@ func _kick() -> void:
 		if _room_world().has_point((node as Node3D).global_position + Vector3.UP):
 			inside.append(node as Node3D)
 	Network.send_heart_kick(HeartQuake.pick_chunks(_room_world(), inside, global_position))
+	_kicks += 1
+	if _kicks % SHIFT_EVERY == 0 and not _pieces.is_empty():
+		Network.send_heart_shift(_pick_shift())
+
+
+## New spots for its structures: each within SHIFT_RANGE of where it was
+## built (level: heights stay), in the room, out of the open middle.
+func _pick_shift() -> PackedVector3Array:
+	var room := _room_world()
+	var heart := AABB(global_position - _radii * (1.0 + THUMP), _radii * 2.0 * (1.0 + THUMP)).grow(HEART_CLEARANCE)
+	var spots := PackedVector3Array()
+	for i in _pieces.size():
+		var home := _piece_home[i]
+		var now := _pieces[i].global_position if is_instance_valid(_pieces[i]) else home
+		var chosen := now # (none clear: it stays)
+		for attempt in 12:
+			var flat := Vector2.from_angle(randf() * TAU) * SHIFT_RANGE * sqrt(randf())
+			var to := home + Vector3(flat.x, 0.0, flat.y)
+			to.x = clampf(to.x, room.position.x + 8.0, room.end.x - 8.0)
+			to.z = clampf(to.z, room.position.z + 8.0, room.end.z - 8.0)
+			var from_middle := Vector2(to.x - global_position.x, to.z - global_position.z)
+			var home_middle := Vector2(home.x - global_position.x, home.z - global_position.z)
+			# (Not into the arena -- unless it was built nearer than that.)
+			var least := minf(ARENA, home_middle.length())
+			if from_middle.length() < least:
+				from_middle = from_middle.normalized() * least if from_middle.length_squared() > 0.01 else home_middle
+				to = Vector3(global_position.x + from_middle.x, to.y, global_position.z + from_middle.y)
+			if _clear_of(heart, i, now, to):
+				chosen = to
+				break
+		spots.append(chosen)
+	return spots
+
+
+## Whether piece i, sliding from `from` to `to`, stays out of `heart` the
+## whole way (checked every couple of metres along it).
+func _clear_of(heart: AABB, i: int, from: Vector3, to: Vector3) -> bool:
+	var extent := _piece_extent[i]
+	var steps := maxi(1, ceili(from.distance_to(to) / 2.0))
+	for k in steps + 1:
+		var at := from.lerp(to, float(k) / steps)
+		if AABB(at + extent.position, extent.size).intersects(heart):
+			return false
+	return true
+
+
+## Network.send_heart_shift, on every game: where they head now.
+func shift(spots: PackedVector3Array) -> void:
+	for i in mini(spots.size(), _piece_to.size()):
+		_piece_to[i] = spots[i]
+
+
+## Sliding them on toward their spots, 1 m a beat.
+func _physics_process(delta: float) -> void:
+	if _pieces.is_empty():
+		return
+	var beat := _map.beat() if _map else 60.0 / maxf(test_bpm, 1.0)
+	var step := delta / maxf(beat, 0.05)
+	for i in _pieces.size():
+		var piece := _pieces[i]
+		if is_instance_valid(piece) and not piece.global_position.is_equal_approx(_piece_to[i]):
+			piece.global_position = piece.global_position.move_toward(_piece_to[i], step)
 
 
 ## Network.send_heart_kick, on every game.
@@ -214,6 +292,23 @@ func _find_room() -> void:
 		if mesh:
 			_room_meshes.append(mesh)
 			_room_rests.append(mesh.position)
+	var pieces := stack.find_child("CathedralPieces", true, false)
+	if pieces:
+		for node in pieces.get_children():
+			if node is AnimatableBody3D:
+				_pieces.append(node)
+				_piece_home.append((node as Node3D).global_position)
+				_piece_to.append((node as Node3D).global_position)
+				var extent := AABB()
+				var first := true
+				for shape_node in node.get_children():
+					var shape := shape_node as CollisionShape3D
+					if shape and shape.shape is BoxShape3D:
+						var size := (shape.shape as BoxShape3D).size
+						var part := shape.transform * AABB(-size * 0.5, size)
+						extent = part if first else extent.merge(part)
+						first = false
+				_piece_extent.append(extent)
 	var box := _room_world()
 	for light in stack.find_children("*", "Light3D", true, false):
 		if not is_ancestor_of(light) and box.has_point((light as Node3D).global_position):

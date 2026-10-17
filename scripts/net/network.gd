@@ -248,6 +248,25 @@ func _heart_kick(spots: PackedVector3Array, decides: bool) -> void:
 		heart.call(&"quake", spots, decides)
 
 
+## Host: the heart's cathedral rearranging (HeartBoss.shift): where each of
+## its structures heads now, on every machine.
+func send_heart_shift(spots: PackedVector3Array) -> void:
+	_heart_shift(spots)
+	if is_online():
+		_net_heart_shift.rpc(spots)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_heart_shift(spots: PackedVector3Array) -> void:
+	_heart_shift(spots)
+
+
+func _heart_shift(spots: PackedVector3Array) -> void:
+	var heart := get_tree().get_first_node_in_group(&"heart_boss") as Node3D
+	if heart:
+		heart.call(&"shift", spots)
+
+
 ## Host: words on one player's screen (the bottom-middle message), wherever
 ## they are.
 func send_message(peer_id: int, text: String) -> void:

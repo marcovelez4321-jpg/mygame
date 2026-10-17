@@ -227,6 +227,10 @@ const ROOM_GROWTH := {
 }
 
 var random := RandomNumberGenerator.new()
+## Which structure a box is part of (_hall_features: a mezzanine with its
+## ramps, a column, the pyramid, the slab, the stairs) -- the cathedral's
+## move as wholes (HeartBoss).
+var _unit := -1
 
 
 ## `build` false: an empty builder (no Stack built) -- for borrowing its hall
@@ -280,7 +284,7 @@ func _add(c: Vector3, s: Vector3, part: StringName, group: String, mat: StringNa
 		# Standing on the ground: sunk 3 m into it, so no gap shows on a slope.
 		s.y += 3.0
 		c.y -= 1.5
-	boxes.append({c = c, s = s, b = basis, part = part, solid = solid, tower = tower, group = group, mat = mat})
+	boxes.append({c = c, s = s, b = basis, part = part, solid = solid, tower = tower, group = group, mat = mat, unit = _unit})
 
 
 ## Cuts `space` out of every tower block it touches (each block becomes the
@@ -1152,6 +1156,7 @@ func _hall_features(hall: Dictionary) -> void:
 				continue
 		var span := along_len * 0.8
 		var deck_y := floor_y + tall * level
+		_unit += 1 # (the deck and its ramps)
 		var wall_mid := box.get_center() + out * (across_len * 0.5 - depth * 0.5)
 		_add(Vector3(wall_mid.x, deck_y - 2.0, wall_mid.z), cross * span + Vector3.UP * 4.0 + out.abs() * depth, &"interior", group)
 		for n in _nests_at(0.45, deck_y):
@@ -1198,6 +1203,7 @@ func _hall_features(hall: Dictionary) -> void:
 				continue
 		var lean := Basis.from_euler(Vector3(random.randf_range(-0.12, 0.12), random.randf() * 0.5, random.randf_range(-0.12, 0.12)))
 		var thick := random.randf_range(5.0, 9.0)
+		_unit += 1
 		_add(Vector3(at.x, floor_y + tall * 0.5, at.z), Vector3(thick, tall + 2.0, thick), &"interior", group, &"plain", lean)
 		nest_objects.append(AABB(Vector3(at.x - thick * 0.5, floor_y, at.z - thick * 0.5), Vector3(thick, minf(tall, 60.0), thick)))
 	# A stepped pyramid hanging upside down from the ceiling.
@@ -1211,6 +1217,7 @@ func _hall_features(hall: Dictionary) -> void:
 			hang = Vector3(random.randf_range(box.position.x + 20.0, box.end.x - 20.0), box.end.y, random.randf_range(box.position.z + 20.0, box.end.z - 20.0))
 		hang_here = Vector2(hang.x, hang.z).distance_to(middle) > open + width * 0.5
 	if hang_here:
+		_unit += 1
 		for k in 4:
 			var step := width * (1.0 - k * 0.22)
 			_add(hang + Vector3.DOWN * (6.0 * k + 3.0), Vector3(step, 6.0, step), &"interior", group, &"plain")
@@ -1220,6 +1227,7 @@ func _hall_features(hall: Dictionary) -> void:
 	var lean_at := box.get_center() + lean_out * ((box.size.x if lean_side >= 2 else box.size.z) * 0.5 - 10.0)
 	lean_at.y = floor_y + tall * 0.3
 	var lean_basis := Basis(Vector3(lean_out.z, 0.0, lean_out.x).abs().normalized(), 0.35 * (1.0 if lean_side % 2 == 0 else -1.0))
+	_unit += 1
 	_add(lean_at, Vector3(30.0, tall * 0.6, 3.0) if lean_side < 2 else Vector3(3.0, tall * 0.6, 30.0), &"interior", group, &"plain", lean_basis)
 	# Stairs that stop in mid-air.
 	var stair_at := Vector3(random.randf_range(box.position.x + 15.0, box.end.x - 15.0), floor_y, random.randf_range(box.position.z + 15.0, box.end.z - 15.0))
@@ -1231,6 +1239,7 @@ func _hall_features(hall: Dictionary) -> void:
 			stair_at = Vector3(random.randf_range(box.position.x + 15.0, box.end.x - 15.0), floor_y, random.randf_range(box.position.z + 15.0, box.end.z - 15.0))
 		stairs_here = Vector2(stair_at.x, stair_at.z).distance_to(middle) > open + 30.0
 	if stairs_here:
+		_unit += 1
 		var stair_turn := Basis(Vector3.UP, random.randf() * TAU)
 		for k in 7:
 			var step_at := stair_at + stair_turn * Vector3(0.0, 1.0 + k * 2.0, k * 4.0)
@@ -1864,10 +1873,14 @@ func _cathedral() -> void:
 	inside.random.seed = SEED + 998
 	inside._hall_features({tower = -1, box = small, name = "Cathedral", open = CATHEDRAL_CLEAR * 0.5 / CATHEDRAL_SCALE, growth = HIVE_GROWTH})
 	var scale := CATHEDRAL_SCALE
+	# They shift about (HeartBoss, the user's): each structure its own moving
+	# piece -- and so nothing's left growing on them, or nesting, where they were.
 	for b in inside.boxes:
 		boxes.append({c = (b.c as Vector3) * scale, s = (b.s as Vector3) * scale, b = b.b, part = b.part, solid = false,
-				tower = -1, group = "Cathedral", mat = b.mat})
+				tower = -1, group = "Cathedral", mat = b.mat, unit = b.unit, moving = true})
 	for f in inside.growth_floors:
+		if not f.has("open_at"):
+			continue # (a deck's: it moves)
 		var g: Dictionary = f.duplicate()
 		var rect: Rect2 = f.rect
 		g.rect = Rect2(rect.position * scale, rect.size * scale)
@@ -1878,9 +1891,8 @@ func _cathedral() -> void:
 			g["open_at"] = (f["open_at"] as Vector2) * scale
 		growth_floors.append(g)
 	for spot in inside.nest_spots:
-		nest_spots.append(spot * scale)
-	for o in inside.nest_objects:
-		nest_objects.append(AABB(o.position * scale, o.size * scale))
+		if spot.y * scale < floor_y + 1.0:
+			nest_spots.append(spot * scale) # (the floor's only: the decks move)
 	for lamp: Array in inside.lamps:
 		lamps.append([(lamp[0] as Vector3) * scale, lamp[1], lamp[2], float(lamp[3]) * scale])
 	# Two slit windows, on opposite walls (which pair: the dice), centred.
@@ -2524,6 +2536,8 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	# Meshes: one per part, group and material.
 	var groups := {}
 	for b in boxes:
+		if b.get("moving", false):
+			continue # (its own piece: _moving_pieces)
 		var key := "%s|%s|%s" % [b.part, b.group, b.mat]
 		if not groups.has(key):
 			groups[key] = []
@@ -2535,6 +2549,7 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 		_mesh_node(root, parent, "%s_%s" % [bits[1], bits[2]], groups[key], material, bits[0] == "shell")
 	_collision(root, shell, "ShellBody", &"shell")
 	_collision(root, interior, "InteriorBody", &"interior")
+	_moving_pieces(root, interior, materials)
 	_occluders(root, shell)
 	_water(root, interior)
 	_lamps(root, interior)
@@ -2733,7 +2748,7 @@ func _collision(root: Node, parent: Node, name: String, part: StringName) -> voi
 	body.name = name
 	_own(root, body, parent)
 	for b in boxes:
-		if b.part != part or b.mat == &"sludge":
+		if b.part != part or b.mat == &"sludge" or b.get("moving", false):
 			continue
 		var shape := CollisionShape3D.new()
 		var box := BoxShape3D.new()
@@ -2741,6 +2756,46 @@ func _collision(root: Node, parent: Node, name: String, part: StringName) -> voi
 		shape.shape = box
 		shape.transform = Transform3D(b.b, b.c)
 		_own(root, shape, body)
+
+
+## The cathedral's structures that shift about (HeartBoss, the user's): each
+## (a mezzanine with its ramps, a column, the pyramid, the slab, the stairs)
+## its own AnimatableBody3D under CathedralPieces -- its boxes' mesh and
+## collision -- placed at its middle.
+func _moving_pieces(root: Node, parent: Node, materials: Dictionary) -> void:
+	var units := {}
+	for b in boxes:
+		if b.get("moving", false):
+			if not units.has(b.unit):
+				units[b.unit] = []
+			(units[b.unit] as Array).append(b)
+	if units.is_empty():
+		return
+	var holder := Node3D.new()
+	holder.name = "CathedralPieces"
+	_own(root, holder, parent)
+	for key: int in units:
+		var list: Array = units[key]
+		var centre := Vector3.ZERO
+		for b: Dictionary in list:
+			centre += b.c as Vector3
+		centre /= list.size()
+		var body := AnimatableBody3D.new()
+		body.name = "Piece_%d" % key
+		body.position = centre
+		_own(root, body, holder)
+		var local: Array = []
+		for b: Dictionary in list:
+			var copy: Dictionary = b.duplicate()
+			copy.c = (b.c as Vector3) - centre
+			local.append(copy)
+			var shape := CollisionShape3D.new()
+			var box := BoxShape3D.new()
+			box.size = b.s
+			shape.shape = box
+			shape.transform = Transform3D(b.b, copy.c)
+			_own(root, shape, body)
+		_mesh_node(root, body, "Mesh", local, materials[StringName((list[0] as Dictionary).mat)], true)
 
 
 ## The big solid pieces of the towers block the view: what's behind them
