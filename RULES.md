@@ -1764,3 +1764,4 @@ them:
 - **Stalker fear gains halved (2026-10-17).** The user's: it filled too fast. Seen 0.15, panic fire 0.10, running off 0.10, whipping round 0.05, investigating the scream 0.5 (were 0.30, 0.20, 0.20, 0.10, 1.0).
 - **Hurting chunks twice as big (2026-10-17).** The user's: the falling chunks that can hurt are 2.4-5.2 m (were 1.2-2.6), so they stand out from the harmless rubble. Their hit size grows with them. The bits they burst into stay rubble-sized.
 - **Half the cosmetic debris (2026-10-17).** The user's: each burst of harmless rubble (wall crumbles, dust curtains' grit, a chunk bursting) throws 7 bits (was 14). The chunks that hurt are unchanged.
+- **Stalker head bobble halved (2026-10-17).** The user's: it shook too wildly. The neck and head show half their springs' swing (`Stalker.JIGGLE_AMOUNT` 0.5), with the same rhythm. The user's stiffness of 13 is kept.

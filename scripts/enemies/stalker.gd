@@ -251,6 +251,8 @@ const JIGGLE_STIFFNESS := 13.0
 const JIGGLE_DAMPING := 2.4
 const JIGGLE_GRAVITY := 6.0
 const STEP_KICK := 1.2
+## How much of the springs' swing shows (the user's: half -- it shook too wildly).
+const JIGGLE_AMOUNT := 0.5
 var _neck_point := Vector3.INF
 var _neck_velocity := Vector3.ZERO
 var _head_point := Vector3.INF
@@ -1741,7 +1743,7 @@ func _jiggle_neck(delta: float) -> void:
 	var was := neck_pose.basis * neck_offset
 	var wants := to_skeleton * _neck_point - neck_pose.origin
 	if was.length_squared() > 0.0000001 and wants.length_squared() > 0.0000001:
-		var turned := Basis(Quaternion(was.normalized(), wants.normalized())) * neck_pose.basis
+		var turned := Basis(Quaternion.IDENTITY.slerp(Quaternion(was.normalized(), wants.normalized()), JIGGLE_AMOUNT)) * neck_pose.basis
 		var parent := _skeleton.get_bone_parent(neck)
 		var parent_basis := _skeleton.get_bone_global_pose(parent).basis if parent >= 0 else Basis.IDENTITY
 		_skeleton.set_bone_pose_rotation(neck, (parent_basis.inverse() * turned).get_rotation_quaternion())
@@ -1757,7 +1759,7 @@ func _jiggle_neck(delta: float) -> void:
 	_head_velocity = head_spring[1]
 	var rest_dir := (head_want - head_joint).normalized()
 	var now_dir := (_head_point - head_joint).normalized()
-	_head_wobble = Quaternion(to_skeleton.basis * rest_dir, to_skeleton.basis * now_dir) if rest_dir.dot(now_dir) < 0.9999 else Quaternion.IDENTITY
+	_head_wobble = Quaternion.IDENTITY.slerp(Quaternion(to_skeleton.basis * rest_dir, to_skeleton.basis * now_dir), JIGGLE_AMOUNT) if rest_dir.dot(now_dir) < 0.9999 else Quaternion.IDENTITY
 
 
 ## One jiggle step (JiggleLimb's): `point` pulled toward `want`, gravity,
