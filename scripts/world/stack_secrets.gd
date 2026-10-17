@@ -14,7 +14,7 @@ extends Node
 ## Rule 1 (co-op): the host's; what it makes are normal items (CarryItem,
 ## seen through NetEntities).
 
-const HALL_KEYS := 14
+const HALL_KEYS := 28 # the user's: doubled (was 14)
 const CLIMBER_KEYS := 4
 const WINDOW_ROOM_KEY := 0.08
 const CLIMBER_CAMP := 0.3

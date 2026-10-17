@@ -1679,3 +1679,25 @@ them:
   - Stunts, the fear meter and the strike are stages 2-3.
   - Not compiled or run (the user's testing).
 - **The high wind, everywhere (2026-10-17).** The user's: the procedural Stacks' wind now blows in every world (`WorldWind`): in the open air from 4 km up, building to 4 m/s by 12 km, gusting to 7, a prevailing wind wandering slowly round. None indoors (a megastructure's halls and rooms). `PlayerMovement._blow` pulls you along it while you're in the air, using a world's own wind if it has one (the procedural Stacks' still), else this. In the open world that's the top kilometre of the Stack. Not run (the user's testing).
+- **The Stalker, stage 2: the stunts and the fear meter (2026-10-17).** The user's: every detail below.
+  - **When:** every 30-60 s, while it stalks unseen, it stages a stunt for one of the players.
+  - **The stunts:**
+    - **Behind you:** right behind you, still and staring, with a rattle after 3 s. Turn and see it: it holds 0.8 s, then bolts.
+    - **Ceiling at the edge of view:** across the ceiling indoors (a wall or the ground outside), 55-65 degrees off where you look, scuttling on out of view at 13 m/s.
+    - **Doorway pass:** across your way 16-26 m ahead, cover to cover.
+    - **Drags a corpse past:** the same crossing at 5 m/s, a dead person pulled along by the foot (the roaches' carry hold).
+    - **Watching from the dark:** off to the side 20-35 m, still and rattling. Look away a second and it's gone; stare straight at it (12 degrees) and it holds 0.8 s, then goes.
+    - **The rattle close by:** its croak behind and above you, with nothing there.
+    - **The help scream:** the user's scream from 70-140 m off, through the halls' echo; then it follows, unseen.
+    - **The leap:** when you're climbing a megastructure's outside above 150 m, by preference: a silhouette leaping 30-150 m between two tower faces 120-400 m off, then gone.
+    - Each stunt ends with it hiding again.
+  - **Fear:** one shared meter, hidden (printed in debug runs). Each counts once a stunt, within 3 s of its moment:
+    - seeing it +15% (each glimpse outside a stunt too);
+    - panic firing +10%;
+    - running off at 7 m/s+ away from it +10%;
+    - whipping round (270 degrees/s) +5%;
+    - staying within 20 m of where it screamed for help for 10 s +50%.
+    - It drains over 5 min and stays full once full (the strike comes in stage 3).
+  - **Sounds** (`StalkerSound`, made in code until the user's files): a dry throat rattle (4 of them), a shriek when it's driven off (with the halls' echo), and a heavier, slower skitter while it crawls. The help scream is the user's mp3. The host's are relayed to every machine (`Network.send_stalker_sound`).
+  - Not run (the user's testing).
+- **Twice the keys lying about in the Stack (2026-10-17).** The user's: `StackSecrets.HALL_KEYS` 14 -> 28 (from the same 60 spots).

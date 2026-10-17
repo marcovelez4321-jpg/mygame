@@ -24,7 +24,9 @@ extends AnimatableBody3D
 ## (NetEntities: its transform carries the surface it's on), and works the
 ## body out from that.
 
-enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY }
+enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT }
+## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
+enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP }
 
 const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Character_Monster_03.fbx")
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
@@ -63,6 +65,51 @@ const STRIDE := 0.5
 const STEP_HEIGHT := 0.28
 const STEP_TIME := 0.32
 const STANDING_HEIGHT := 1.9
+
+## STAGE 2 (the user's): stunts every STUNT_EVERY, and the shared FEAR
+## meter (hidden). A reaction within REACT_WINDOW of a stunt fills it (each
+## once a stunt): seeing it, panic firing, running off, whipping round;
+## investigating where it screamed for help (staying within
+## INVESTIGATE_RADIUS for INVESTIGATE_TIME) fills half. Each glimpse of it
+## outside a stunt counts as seeing it too. It drains over FEAR_DRAIN_TIME,
+## and once it's full it stays full: the strike (stage 3) can come.
+const STUNT_EVERY := Vector2(30.0, 60.0)
+const REACT_WINDOW := 3.0
+const FEAR_SEEN := 0.15
+const FEAR_FIRE := 0.10
+const FEAR_FLEE := 0.10
+const FEAR_SPIN := 0.05
+const FEAR_HELP := 0.5
+const FEAR_DRAIN_TIME := 300.0
+const INVESTIGATE_RADIUS := 20.0
+const INVESTIGATE_TIME := 10.0
+## Looked straight at (degrees off centre): a watching one's cue to go.
+const STARED_AT := 12.0
+const SPIN_RATE := 4.7 # rad/s: whipping round
+const FLEE_SPEED := 7.0
+const DRAG_SPEED := 5.0
+const CORPSE := preload("res://scenes/enemy/enemy.tscn")
+
+## The shared fear meter, 0..1 (the host's).
+var fear := 0.0
+var _stunt := Stunt.RATTLE
+var _stunt_phase := 0
+var _stunt_target: PlayerMovement
+var _stunt_to := Vector3.ZERO
+var _stunt_seen := false
+var _stunt_away_for := 0.0
+var _stunt_rattle_left := 0.0
+var _stunt_left_every := 40.0
+var _corpse: Enemy
+var _moment_msec := -100000
+var _reacted := {}
+var _yaws := {}
+var _help_spot := Vector3.INF
+var _help_time := 0.0
+var _fire_hooked := {}
+var _hook_left := 0.0
+var _skitter: AudioStreamPlayer3D
+var _airborne := false
 
 var state := State.STALK
 var _normal := Vector3.UP
@@ -159,7 +206,7 @@ func _physics_process(delta: float) -> void:
 				return
 		_:
 			_think(delta)
-	if state == State.FALL:
+	if state == State.FALL or _airborne:
 		_fall(delta)
 	else:
 		_crawl(delta)
@@ -167,13 +214,22 @@ func _physics_process(delta: float) -> void:
 
 
 func _think(delta: float) -> void:
-	# Seen? Hide, at once (a stunt aside, later).
+	_fear_tick(delta)
+	# Seen? Hide (a stunt plays out first).
 	_look_check -= delta
 	if _look_check <= 0.0:
 		_look_check = 0.1
-		if _seen() and state != State.HIDE and state != State.SPOTTED:
+		var seen := _seen()
+		if state == State.STUNT:
+			_stunt_look(seen)
+		elif seen and state != State.HIDE and state != State.SPOTTED:
 			state = State.SPOTTED
 			_state_left = SPOTTED_FREEZE
+			_moment()
+			_add_fear(FEAR_SEEN, "glimpsed")
+	if state == State.STUNT:
+		_stunt_tick(delta)
+		return
 	var nearest := _nearest_player()
 	if nearest == null:
 		_desired = Vector3.ZERO
@@ -205,6 +261,11 @@ func _think(delta: float) -> void:
 			if _state_left <= 0.0:
 				state = State.STALK
 		State.STALK:
+			_stunt_left_every -= delta
+			if _stunt_left_every <= 0.0:
+				_stunt_left_every = randf_range(STUNT_EVERY.x, STUNT_EVERY.y)
+				if _start_stunt():
+					return
 			# Round to a spot STALK_DISTANCE from them, on the side it's on.
 			var away := global_position - nearest.global_position
 			away.y = 0.0
@@ -212,6 +273,74 @@ func _think(delta: float) -> void:
 			var spot := nearest.global_position + away * STALK_DISTANCE
 			var to := spot - global_position
 			_desired = to.normalized() * CRAWL * clampf(to.length() / 4.0, 0.0, 1.0) if to.length() > 2.0 else Vector3.ZERO
+
+
+# ---- Stage 2: the fear meter ----------------------------------------------------------
+
+func _add_fear(amount: float, why: String) -> void:
+	if fear >= 1.0:
+		return
+	fear = minf(fear + amount, 1.0)
+	if OS.is_debug_build():
+		print("Stalker fear %3.0f%%  (+%2.0f%% %s)" % [fear * 100.0, amount * 100.0, why])
+
+
+## A stunt's moment: reactions in the next REACT_WINDOW count (each once).
+func _moment() -> void:
+	_moment_msec = Time.get_ticks_msec()
+	_reacted.clear()
+
+
+func _reacting(kind: String) -> bool:
+	if Time.get_ticks_msec() - _moment_msec > int(REACT_WINDOW * 1000.0) or _reacted.has(kind):
+		return false
+	_reacted[kind] = true
+	return true
+
+
+## Every tick: the meter drains; players whipping round or running off after
+## a stunt fill it; a help scream's spot, investigated, fills half.
+func _fear_tick(delta: float) -> void:
+	if fear < 1.0:
+		fear = maxf(fear - delta / FEAR_DRAIN_TIME, 0.0)
+	_hook_left -= delta
+	if _hook_left <= 0.0:
+		_hook_left = 2.0
+		for node in get_tree().get_nodes_in_group("player"):
+			var player := node as PlayerMovement
+			if player and not _fire_hooked.has(player):
+				_fire_hooked[player] = true
+				player.weapons.shot_fired.connect(_on_player_fired)
+	var in_window := Time.get_ticks_msec() - _moment_msec <= int(REACT_WINDOW * 1000.0)
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player == null:
+			continue
+		var yaw := player.rotation.y
+		var turned := absf(angle_difference(float(_yaws.get(player, yaw)), yaw)) / maxf(delta, 0.001)
+		_yaws[player] = yaw
+		if not in_window:
+			continue
+		if turned > SPIN_RATE and _reacting("spin"):
+			_add_fear(FEAR_SPIN, "whipped round")
+		var flat := Vector3(player.velocity.x, 0.0, player.velocity.z)
+		var away := player.global_position - global_position
+		away.y = 0.0
+		if flat.length() > FLEE_SPEED and flat.normalized().dot(away.normalized()) > 0.5 and _reacting("flee"):
+			_add_fear(FEAR_FLEE, "ran off")
+	if _help_spot.is_finite():
+		for node in get_tree().get_nodes_in_group("player"):
+			if (node as Node3D).global_position.distance_to(_help_spot) < INVESTIGATE_RADIUS:
+				_help_time += delta
+				break
+		if _help_time >= INVESTIGATE_TIME:
+			_help_spot = Vector3.INF
+			_add_fear(FEAR_HELP, "went to see who screamed")
+
+
+func _on_player_fired() -> void:
+	if _reacting("fire"):
+		_add_fear(FEAR_FIRE, "panic fired")
 
 
 func _nearest_player() -> PlayerMovement:
@@ -311,6 +440,8 @@ func _on_damaged(amount: float, _attacker: int) -> void:
 	if _hurt >= DRIVE_OFF:
 		state = State.FLEE
 		_state_left = FLEE_TIME
+		_airborne = false
+		Network.send_stalker_sound(StalkerSound.Kind.SHRIEK, global_position + Vector3.UP * BODY_HEIGHT)
 	elif state == State.STALK or state == State.WAIT:
 		_hide_to = _hiding_spot()
 		state = State.HIDE
@@ -353,6 +484,291 @@ func _turn_up() -> void:
 	_state_left = 2.0 # nowhere hidden yet: try again shortly
 
 
+# ---- Stage 2: the stunts ---------------------------------------------------------------
+
+## A stunt for one of the players (one that fits where they are; the leap
+## across the towers by preference when they're climbing a megastructure's
+## outside). False if none could be staged this time.
+func _start_stunt() -> bool:
+	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool: return n is PlayerMovement and not (n as PlayerMovement).is_dead())
+	if players.is_empty():
+		return false
+	_stunt_target = players[randi() % players.size()] as PlayerMovement
+	var kinds: Array = [Stunt.BEHIND, Stunt.CEILING, Stunt.DOORWAY, Stunt.WATCH, Stunt.RATTLE, Stunt.DRAG, Stunt.HELP]
+	kinds.shuffle()
+	if _climbing_outside(_stunt_target) and randf() < 0.5:
+		kinds.push_front(Stunt.LEAP)
+	for kind: int in kinds:
+		if _stage(kind):
+			return true
+	return false
+
+
+## On a megastructure's outside, high up: where the leap's seen from.
+func _climbing_outside(player: PlayerMovement) -> bool:
+	if HallEcho.inside(player.global_position) or player.global_position.y < 150.0:
+		return false
+	for place in HallEcho.places:
+		if is_instance_valid(place) and Vector2(place.global_position.x - player.global_position.x, place.global_position.z - player.global_position.z).length() < 700.0:
+			return true
+	return false
+
+
+func _stage(kind: int) -> bool:
+	var p := _stunt_target
+	var eye := p.head.global_position
+	var look := _flat(-p.head.global_basis.z)
+	var side := look.cross(Vector3.UP).normalized()
+	_stunt = kind
+	_stunt_phase = 0
+	_stunt_seen = false
+	_stunt_away_for = 0.0
+	match kind:
+		Stunt.RATTLE:
+			# Its croak right behind and above you; nothing there.
+			Network.send_stalker_sound(StalkerSound.Kind.RATTLE, p.global_position - look * 3.0 + Vector3.UP * 1.6)
+			_moment()
+			return true
+		Stunt.HELP:
+			# A human voice screaming for help, far off; then it follows, unseen.
+			for attempt in 8:
+				var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+				var hit := _ground_at(p.global_position + way * randf_range(70.0, 140.0))
+				if hit.is_empty():
+					continue
+				_help_spot = hit.position
+				_help_time = 0.0
+				Network.send_stalker_sound(StalkerSound.Kind.HELP, _help_spot + Vector3.UP * 1.5)
+				_moment()
+				return true
+			return false
+		Stunt.BEHIND:
+			# Right behind you, still, staring -- there when you turn round.
+			var hit := _ground_at(p.global_position - look * 3.5)
+			if hit.is_empty() or not _place(hit.position, hit.normal, (p.global_position - (hit.position as Vector3)), true):
+				return false
+			_stunt_left_set(8.0)
+			_stunt_rattle_left = 3.0
+			return true
+		Stunt.CEILING:
+			# Across the ceiling (outdoors: a wall or the ground) at the edge
+			# of your view, scuttling on out of it.
+			var turn := randf_range(0.95, 1.13) * (1.0 if randf() < 0.5 else -1.0)
+			var dir := look.rotated(Vector3.UP, turn)
+			var start := eye + dir * randf_range(12.0, 20.0)
+			var hit := {}
+			if HallEcho.inside(p.global_position):
+				hit = _ray(start, start + Vector3.UP * 40.0)
+				if not hit.is_empty() and (hit.normal as Vector3).y > -0.7:
+					hit = {}
+			if hit.is_empty():
+				hit = _ground_at(start)
+			if hit.is_empty() or not _place(hit.position, hit.normal, dir, false):
+				return false
+			_stunt_to = dir.rotated(Vector3.UP, signf(turn) * 0.8)
+			_stunt_left_set(2.4)
+			_moment()
+			return true
+		Stunt.DOORWAY, Stunt.DRAG:
+			# Across your way ahead, from cover to cover (a doorway, a gap):
+			# skittering past -- or dragging a body after it.
+			var middle := _ground_at(eye + look * randf_range(16.0, 26.0))
+			if middle.is_empty():
+				return false
+			var from := _cover_beside(middle.position, -side, p)
+			var to := _cover_beside(middle.position, side, p)
+			if not from.is_finite() or not to.is_finite():
+				return false
+			if not _place(from, Vector3.UP, to - from, true):
+				return false
+			_stunt_to = to
+			_stunt_left_set(9.0)
+			if kind == Stunt.DRAG:
+				_corpse = CORPSE.instantiate() as Enemy
+				_corpse.can_mutate = false
+				_corpse.set_meta(&"culled", true) # nothing to drop
+				get_tree().current_scene.add_child(_corpse)
+				_corpse.global_position = from + (from - to).normalized() * 1.4 + Vector3.UP * 0.3
+				var health := _corpse.get_node(^"Health") as Health
+				health.take_damage(health.current_health + 1.0)
+			return true
+		Stunt.WATCH:
+			# Off to the side in the dark, dead still, head tilted, rattling --
+			# gone the moment you look away, or stare straight at it.
+			var dir := look.rotated(Vector3.UP, randf_range(0.45, 0.7) * (1.0 if randf() < 0.5 else -1.0))
+			var hit := _ground_at(eye + dir * randf_range(20.0, 35.0))
+			if hit.is_empty() or not _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), false):
+				return false
+			_stunt_left_set(15.0)
+			_stunt_rattle_left = 1.0
+			return true
+		Stunt.LEAP:
+			# Across the gap between two towers far off, a silhouette.
+			for attempt in 10:
+				var a_dir := (look.rotated(Vector3.UP, randf_range(-0.5, 0.5)) + Vector3.UP * randf_range(-0.1, 0.15)).normalized()
+				var a := _ray(eye, eye + a_dir * 400.0)
+				if a.is_empty() or eye.distance_to(a.position) < 120.0 or absf((a.normal as Vector3).y) > 0.4:
+					continue
+				var b_dir := a_dir.rotated(Vector3.UP, randf_range(0.15, 0.3) * (1.0 if randf() < 0.5 else -1.0))
+				var b := _ray(eye, eye + b_dir * 400.0)
+				if b.is_empty() or absf((b.normal as Vector3).y) > 0.4:
+					continue
+				var gap := (a.position as Vector3).distance_to(b.position)
+				if gap < 30.0 or gap > 150.0:
+					continue
+				global_position = (a.position as Vector3) + (a.normal as Vector3) * RIDE
+				_normal = a.normal
+				var flight := clampf(gap / 25.0, 1.2, 3.0)
+				_velocity = ((b.position as Vector3) - (a.position as Vector3)) / flight + Vector3.UP * 0.5 * GRAVITY * flight
+				_heading = _velocity.normalized()
+				_airborne = true
+				state = State.STUNT
+				_stunt_left_set(flight + 2.0)
+				_moment()
+				return true
+			return false
+	return false
+
+
+func _stunt_left_set(seconds: float) -> void:
+	state = State.STUNT
+	_state_left = seconds
+
+
+## Each tick of the stunt under way.
+func _stunt_tick(delta: float) -> void:
+	_desired = Vector3.ZERO
+	var p := _stunt_target
+	if not is_instance_valid(p):
+		_end_stunt()
+		return
+	match _stunt:
+		Stunt.BEHIND:
+			_velocity = Vector3.ZERO
+			_heading = _flat(p.global_position - global_position)
+			_stunt_rattle_left -= delta
+			if _stunt_rattle_left <= 0.0 and _stunt_phase == 0:
+				_stunt_rattle_left = 999.0
+				Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * 0.8)
+				_moment()
+			if _stunt_phase == 1 and _state_left <= 0.0:
+				_end_stunt()
+		Stunt.CEILING:
+			_desired = _flat_perpendicular(_normal, _stunt_to) * SCRAMBLE
+		Stunt.DOORWAY, Stunt.DRAG:
+			if _stunt_phase == 0 and _stunt == Stunt.DRAG and _state_left > 8.6:
+				return # (the body falls limp first)
+			var to := _stunt_to - global_position
+			if to.length() < 1.5:
+				_end_stunt()
+				return
+			_desired = to.normalized() * (DRAG_SPEED if _stunt == Stunt.DRAG else SCRAMBLE)
+			if _stunt == Stunt.DRAG:
+				_drag_corpse(delta)
+		Stunt.WATCH:
+			_velocity = Vector3.ZERO
+			_heading = _flat(p.global_position - global_position)
+			_stunt_rattle_left -= delta
+			if _stunt_rattle_left <= 0.0:
+				_stunt_rattle_left = randf_range(3.0, 5.0)
+				Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * 0.8)
+			# Looked away for a second: it moves on.
+			var look := -p.head.global_basis.z
+			var to := (global_position - p.head.global_position).normalized()
+			_stunt_away_for = _stunt_away_for + delta if look.dot(to) < cos(deg_to_rad(70.0)) else 0.0
+			if _stunt_away_for > 1.0:
+				_end_stunt()
+			if _stunt_phase == 1 and _state_left <= 0.0:
+				_end_stunt()
+	if _state_left <= 0.0 and _stunt_phase == 0:
+		_end_stunt()
+
+
+## Seen mid-stunt: it counts once (fear), and for the ones that wait to be
+## seen -- behind you, watching -- a beat, frozen, staring, then it goes.
+func _stunt_look(seen: bool) -> void:
+	var p := _stunt_target
+	if not is_instance_valid(p):
+		return
+	var stared := false
+	if _stunt == Stunt.WATCH:
+		var to := (global_position + Vector3.UP * BODY_HEIGHT - p.head.global_position).normalized()
+		stared = (-p.head.global_basis.z).dot(to) > cos(deg_to_rad(STARED_AT))
+	var noticed := stared if _stunt == Stunt.WATCH else seen
+	if noticed and not _stunt_seen:
+		_stunt_seen = true
+		_moment()
+		_add_fear(FEAR_SEEN, "saw it (%s)" % Stunt.keys()[_stunt].to_lower())
+		if _stunt == Stunt.BEHIND or _stunt == Stunt.WATCH:
+			_stunt_phase = 1
+			_state_left = SPOTTED_FREEZE
+
+
+## The stunt's over: out of sight again, and back to stalking.
+func _end_stunt() -> void:
+	_airborne = false
+	if is_instance_valid(_corpse):
+		var ragdoll := _corpse.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+		if ragdoll:
+			ragdoll.carry({})
+	_corpse = null
+	if _stunt == Stunt.LEAP:
+		_turn_up() # (far off on another tower: just gone)
+		return
+	_hide_to = _hiding_spot()
+	state = State.HIDE
+
+
+## The body dragged along behind it by a foot (the roaches' hold).
+func _drag_corpse(delta: float) -> void:
+	if not is_instance_valid(_corpse):
+		return
+	var ragdoll := _corpse.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+	if ragdoll == null:
+		return
+	var foot := ragdoll.bone_named("LeftFoot")
+	if foot == null:
+		return
+	var hold := global_position + global_basis.z * 0.9 + Vector3.UP * 0.35
+	var pull := ((hold - foot.global_position) * 10.0 - foot.linear_velocity) * ragdoll.total_mass() * delta * 0.6
+	ragdoll.carry({foot: pull}, 0.7)
+
+
+## Somewhere beside `point` (along `way`, 4-10 m out) none of the players
+## can see: cover to come out of, or go into.
+func _cover_beside(point: Vector3, way: Vector3, _player: PlayerMovement) -> Vector3:
+	for k: float in [4.0, 6.0, 8.0, 10.0]:
+		var hit := _ground_at(point + way * k)
+		if hit.is_empty():
+			continue
+		if not _visible_from_any(_body_points(hit.position, Basis.IDENTITY)):
+			return hit.position
+	return Vector3.INF
+
+
+## Put down at `at` on a surface facing `normal`, facing `toward`. `hidden`:
+## only if none of the players can see it there (false: not placed).
+func _place(at: Vector3, normal: Vector3, toward: Vector3, hidden: bool) -> bool:
+	var up := normal.normalized()
+	var forward := _flat_perpendicular(up, toward)
+	if hidden and _visible_from_any(_body_points(at, Basis(forward.cross(up), up, -forward))):
+		return false
+	_normal = up
+	_heading = forward
+	_velocity = Vector3.ZERO
+	global_position = at + up * RIDE
+	global_basis = Basis(forward.cross(up), up, -forward).orthonormalized()
+	return true
+
+
+func _ground_at(point: Vector3) -> Dictionary:
+	return _ray(point + Vector3.UP * 6.0, point + Vector3.DOWN * 40.0)
+
+
+static func _flat(v: Vector3) -> Vector3:
+	var flat := Vector3(v.x, 0.0, v.z)
+	return flat.normalized() if flat.length_squared() > 0.0001 else Vector3.FORWARD
+
 # ---- Host: crawling (the spider's way) -----------------------------------------------
 
 func _crawl(delta: float) -> void:
@@ -394,7 +810,10 @@ func _fall(delta: float) -> void:
 	if not hit.is_empty():
 		_set_surface(hit.normal, _velocity)
 		global_position = (hit.position as Vector3) + _normal * RIDE
-		state = State.STALK
+		if _airborne:
+			_airborne = false # (a stunt's leap: the stunt goes on)
+		else:
+			state = State.STALK
 		return
 	global_position += step
 	if global_position.y < -400.0:
@@ -520,17 +939,29 @@ func _process(delta: float) -> void:
 	if _skeleton == null:
 		return
 	_time += delta
-	# The look follows the body (smoothly: a puppet's moves in steps).
-	_visual.global_transform = _visual.global_transform.interpolate_with(global_transform, 1.0 - exp(-14.0 * delta))
+	# The look follows the body (smoothly: a puppet's moves in steps) -- or,
+	# after a jump across the map (it turned up, a stunt), snaps there.
+	if _visual.global_position.distance_to(global_position) > 4.0:
+		_visual.global_transform = global_transform
+		for limb in _limbs:
+			limb.stepping = false
+			limb.planted = _visual.global_transform * (limb.home as Vector3)
+			limb.foot = limb.planted
+	else:
+		_visual.global_transform = _visual.global_transform.interpolate_with(global_transform, 1.0 - exp(-14.0 * delta))
 	var hidden := global_position.y < AWAY_DEPTH * 0.5
 	_visual.visible = not hidden
 	if hidden:
+		if _skitter:
+			_skitter.queue_free()
+			_skitter = null
 		return
 	var moved := (global_position - _last_position) / maxf(delta, 0.0001)
 	_last_position = global_position
 	if moved.length() < 60.0:
 		_smooth_velocity = _smooth_velocity.lerp(moved, 1.0 - exp(-15.0 * delta))
 	var camera := get_viewport().get_camera_3d()
+	_update_skitter(camera)
 	if camera and camera.global_position.distance_to(global_position) > 90.0:
 		return # too far to make out its limbs
 	_update_limbs(delta)
@@ -539,6 +970,29 @@ func _process(delta: float) -> void:
 	for limb in _limbs:
 		_two_bone(limb)
 	_aim_head(delta, camera)
+
+
+## Its hands and feet on the floor as it goes: the spiders' skitter, slower
+## and heavier (StalkerSound placeholders), louder the faster it moves.
+func _update_skitter(camera: Camera3D) -> void:
+	var near := camera != null and camera.global_position.distance_to(global_position) < SpiderSound.HEAR_DISTANCE
+	if not near:
+		if _skitter:
+			_skitter.queue_free()
+			_skitter = null
+		return
+	if _skitter == null:
+		_skitter = AudioStreamPlayer3D.new()
+		_skitter.stream = SpiderSound.skitter(7)
+		_skitter.unit_size = SpiderSound.UNIT_SIZE * 1.4
+		_skitter.max_distance = SpiderSound.HEAR_DISTANCE
+		_skitter.pitch_scale = 0.55
+		_skitter.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+		_visual.add_child(_skitter)
+		_skitter.play(randf())
+	var level := clampf(_smooth_velocity.length() / CRAWL, 0.0, 1.0)
+	_skitter.volume_db = SpiderSound.SKITTER_DB + 2.0 + linear_to_db(maxf(level, 0.0005))
+	_skitter.stream_paused = level < 0.05
 
 
 ## Hands and feet: planted till the body's carried them too far, then a step

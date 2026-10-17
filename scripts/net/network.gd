@@ -208,6 +208,18 @@ func send_explosion(center: Vector3, radius: float, knockback: float, attacker_i
 			_explosion.rpc_id(peer, center, radius, knockback)
 
 
+## Host: one of the Stalker's sounds (StalkerSound), here and on every machine.
+func send_stalker_sound(kind: int, at: Vector3) -> void:
+	StalkerSound.play(kind, at, get_tree().current_scene)
+	if is_online():
+		_stalker_sound.rpc(kind, at)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _stalker_sound(kind: int, at: Vector3) -> void:
+	StalkerSound.play(kind, at, get_tree().current_scene)
+
+
 @rpc("authority", "call_remote", "unreliable")
 func _explosion(center: Vector3, radius: float, knockback: float) -> void:
 	var scene := get_tree().current_scene as Node3D
