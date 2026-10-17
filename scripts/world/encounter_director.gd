@@ -6,8 +6,8 @@ extends Node
 ## spawners, it keeps a few bands of enemies on the move round each player,
 ## just out of sight, so meeting them feels like crossing paths:
 ##   Every few seconds it counts the bands (RoamingGroup) near each player.
-##   Short of groups_per_player, it starts one spawn_min..spawn_max metres
-##   off -- behind or beside them, never where they're looking, on walkable
+##   Short of groups_per_player, it starts one out in the fog (band_fog_min..max)
+##   -- behind or beside them, never where they're looking, on walkable
 ##   ground, away from the yard and other bands -- heading somewhere.
 ##   What comes depends on the biome there (sewer: more rats and roaches;
 ##   reef: more spiders and Harvestmen): a rat swarm, a roach swarm, a
@@ -17,15 +17,26 @@ extends Node
 ##   within camp_range of one, a big gang (camp_min..camp_max) is there --
 ##   set up on its far side from you -- patrolling round it, not wandering
 ##   off. Wipe a camp out and that structure stays empty for camp_rest.
-##   A band more than despawn_distance from every player is quietly removed
+##   A band despawn_past_fog beyond the fog end from every player is quietly removed
 ##   (far out in the fog). Bands far off sleep (RoamingGroup).
 ## The creature caps (Population) still hold on top of all this.
 ## Rule 1 (co-op): the host decides; everything it makes is a normal spawn.
 
 @export var groups_per_player: int = 7
-@export var spawn_min: float = 70.0
-@export var spawn_max: float = 120.0
-@export var despawn_distance: float = 240.0
+## Distances go by the fog (the user's, 2026-10-17): read live from the
+## world's environment -- its fog_depth_end, where the fog's solid, which
+## changes with the biome and the view distance setting. Bands start
+## band_fog_min..band_fog_max of the way out to it (mid fog), Harvestmen
+## harvestman_fog_min..max (the edge of what you can see, just before the
+## fog takes everything), and every band is removed despawn_past_fog metres
+## past it (hidden by then). A megastructure's camp forms once it's inside
+## the fog end. FOG_FALLBACK if there's no fog.
+@export var band_fog_min: float = 0.6
+@export var band_fog_max: float = 0.9
+@export var harvestman_fog_min: float = 0.8
+@export var harvestman_fog_max: float = 0.95
+@export var despawn_past_fog: float = 10.0
+const FOG_FALLBACK := 192.5
 ## Bands keep at least this far apart when they start.
 @export var group_spacing: float = 60.0
 ## Seconds between checks, and before the first band (the land's quiet at first).
@@ -57,10 +68,7 @@ extends Node
 ## and the next ones wait for it.
 @export var band_budget_max: int = 3
 @export var band_refill_time: float = 30.0
-## Harvestmen start this many times as far off (the user's: twice), and are
-## only removed past harvestman_despawn_distance.
-@export var harvestman_spawn_scale: float = 2.0
-@export var harvestman_despawn_distance: float = 360.0
+
 
 enum Band { TWEAKERS, RATS, ROACHES, SPIDERS, HARVESTMEN }
 
@@ -99,8 +107,7 @@ var _group_spacing_sq: float = 0.0
 func _ready() -> void:
 	_check_left = first_delay
 	_budget = float(band_budget_max)
-	_despawn_sq = despawn_distance * despawn_distance
-	_camp_range_sq = camp_range * camp_range
+	_update_ranges()
 	_clear_radius_sq = clear_radius * clear_radius
 	_group_spacing_sq = group_spacing * group_spacing
 
@@ -130,6 +137,7 @@ func _process(delta: float) -> void:
 	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		return
+	_update_ranges()
 
 	# Fast cleanup of distant groups using squared distance
 	var kept: Array[RoamingGroup] = []
@@ -164,9 +172,29 @@ func _process(delta: float) -> void:
 			return
 
 
-## How far off a band is removed (Harvestmen further).
-func _despawn_sq_of(group: RoamingGroup) -> float:
-	return float(group.get_meta(&"despawn_sq", _despawn_sq))
+## How far off a band is removed.
+func _despawn_sq_of(_group: RoamingGroup) -> float:
+	return _despawn_sq
+
+
+## Where the fog's solid now (m).
+var _fog_end := FOG_FALLBACK
+
+
+## The ranges from the fog, as it is now.
+func _update_ranges() -> void:
+	var environment: Environment = null
+	var world := get_viewport().find_world_3d() if is_inside_tree() else null
+	if world:
+		environment = world.environment
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if environment == null and camera:
+		environment = camera.environment
+	_fog_end = environment.fog_depth_end if environment and environment.fog_enabled and environment.fog_depth_end > 1.0 else FOG_FALLBACK
+	var despawn := _fog_end + despawn_past_fog
+	_despawn_sq = despawn * despawn
+	var camp := minf(camp_range, _fog_end)
+	_camp_range_sq = camp * camp
 
 
 ## Optimized camp lifecycle processing
@@ -253,19 +281,17 @@ func _nearest_player_cached(from: Vector3, players: Array[Node]) -> Node3D:
 
 
 func _start_band(player: Node3D) -> void:
-	var spot := _hidden_spot(player)
+	var spot := _hidden_spot(player, band_fog_min, band_fog_max)
 	if not spot.is_finite():
 		return
 	var reef := biomes.reef(spot.x, spot.z) if biomes else 0.0
 	var band := _roll_band(reef)
 	if band == Band.HARVESTMEN:
-		spot = _hidden_spot(player, harvestman_spawn_scale)
+		spot = _hidden_spot(player, harvestman_fog_min, harvestman_fog_max)
 		if not spot.is_finite():
 			return
 	_budget -= 1.0
 	var group := RoamingGroup.new()
-	if band == Band.HARVESTMEN:
-		group.set_meta(&"despawn_sq", harvestman_despawn_distance * harvestman_despawn_distance)
 	group.name = "Band_%s" % Band.keys()[band]
 	group.position = spot
 	get_tree().current_scene.add_child(group)
@@ -321,7 +347,9 @@ func _roll_band(reef: float) -> Band:
 	return Band.ROACHES
 
 
-func _hidden_spot(player: Node3D, scale: float = 1.0) -> Vector3:
+## Somewhere min_share..max_share of the way out to the fog end, behind or
+## beside player, on walkable ground, clear of the yard and other bands.
+func _hidden_spot(player: Node3D, min_share: float, max_share: float) -> Vector3:
 	var camera := player.get_viewport().get_camera_3d()
 	var looking := -camera.global_basis.z if camera else Vector3.FORWARD
 	looking.y = 0.0
@@ -336,7 +364,7 @@ func _hidden_spot(player: Node3D, scale: float = 1.0) -> Vector3:
 		var out := Vector3(cos(angle), 0.0, sin(angle))
 		if out.dot(looking) > 0.2:
 			continue
-		var want := player_pos + out * randf_range(spawn_min, spawn_max) * scale
+		var want := player_pos + out * randf_range(min_share, max_share) * _fog_end
 		var on := NavigationServer3D.map_get_closest_point(map, want)
 		if on == Vector3.ZERO or Vector2(on.x - want.x, on.z - want.z).length_squared() > 144.0:
 			continue
