@@ -792,10 +792,10 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	if grapple.tick(input.grapple and not input.bag_open, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority(), input.wishdir):
 		fresh_jump = false
 
-	var was_airborne := not _on_ground()
+	var was_airborne := not on_ground()
 
 	# Being pulled counts as airborne: no ground friction slowing the pull.
-	if _on_ground() and not grapple.is_pulling():
+	if on_ground() and not grapple.is_pulling():
 		_wall_jumped_since_reset = false # touching ground resets the wall-jump limiter
 		_wall_seen_left = 0.0
 		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
@@ -1249,7 +1249,7 @@ func _look_for_wall(delta: float) -> void:
 ## Speed gained (a bhop): this share more, horizontally, up to speed_cap.
 ## On the ground for moving and jumping: touching the floor and not moving up
 ## off it faster than skim_speed (skimming up a hill is still flying).
-func _on_ground() -> bool:
+func on_ground() -> bool:
 	return is_on_floor() and velocity.y <= skim_speed
 
 

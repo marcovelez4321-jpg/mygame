@@ -54,8 +54,11 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	var on_floor := _player.is_on_floor()
-	if on_floor and not _was_on_floor:
+	# Skimming up a hill isn't landing (PlayerMovement.on_ground()), and
+	# landings closer together than the jump gap play once.
+	var on_floor := _player.on_ground()
+	if on_floor and not _was_on_floor and Time.get_ticks_msec() - _land_sound_msec >= JUMP_SOUND_GAP_MSEC:
+		_land_sound_msec = Time.get_ticks_msec()
 		SoundPlayer.play_for_owner(land_sound, _player)
 	_was_on_floor = on_floor
 
@@ -71,6 +74,7 @@ func _physics_process(_delta: float) -> void:
 ## hill spammed it).
 const JUMP_SOUND_GAP_MSEC := 600
 var _jump_sound_msec := -100000
+var _land_sound_msec := -100000
 
 
 func _on_jumped() -> void:
