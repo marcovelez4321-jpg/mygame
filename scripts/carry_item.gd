@@ -21,7 +21,7 @@ extends RigidBody3D
 
 const ROT_TIME := 600.0
 const COOK_TIME := 5.0
-const COOK_REACH := 1.0
+const COOK_REACH := 2.0 # the user's (was 1)
 ## Seconds between looking for a fire, and between aging steps.
 const COOK_EVERY := 1.0
 const AGE_EVERY := 120.0
