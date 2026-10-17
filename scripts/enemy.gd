@@ -1034,7 +1034,8 @@ static var _corpses: Array[Enemy] = []
 
 
 func _count_corpse() -> void:
-	_corpses.assign(_corpses.filter(func(body: Enemy) -> bool: return is_instance_valid(body) and not body.is_queued_for_deletion()))
+	# (Untyped: a freed body can't be passed as an Enemy.)
+	_corpses.assign(_corpses.filter(func(body: Variant) -> bool: return is_instance_valid(body) and not (body as Node).is_queued_for_deletion()))
 	_corpses.append(self)
 	while _corpses.size() > MAX_CORPSES:
 		_corpses.pop_front()._fade_away()

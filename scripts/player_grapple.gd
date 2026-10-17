@@ -138,7 +138,7 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 ## stronger still, with the chime. No press: a weak bounce, bounce_keep of it.
 @export var wall_reach: float = 1.2
 @export var kick_window: float = 0.4
-@export var kick_perfect_window: float = 0.2
+@export var kick_perfect_window: float = 0.1
 @export var kick_grace: float = 0.1
 @export var kick_keep: float = 1.2
 @export var kick_perfect_bonus: float = 1.3

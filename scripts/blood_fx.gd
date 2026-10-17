@@ -443,7 +443,8 @@ static func _place_decal(world: Node, texture: Texture2D, position: Vector3, nor
 	decal.rotate_object_local(Vector3.UP, randf() * TAU)
 
 	world.add_child(decal)
-	_decals.assign(_decals.filter(func(other: Decal) -> bool: return is_instance_valid(other) and not other.is_queued_for_deletion()))
+	# (Untyped: a freed decal can't be passed as a Decal.)
+	_decals.assign(_decals.filter(func(other: Variant) -> bool: return is_instance_valid(other) and not (other as Node).is_queued_for_deletion()))
 	_decals.append(decal)
 	while _decals.size() > MAX_DECALS:
 		_decals.pop_front().queue_free()
