@@ -1662,3 +1662,19 @@ them:
   - The door's radio-style sound now goes through `HallEcho` too.
   - Not run (the user's testing).
 - **Crash fix: empty roach scene (2026-10-17).** The user's crash: `Megastructure._infest` got a null roach (its preloaded roach scene came out empty: 'node count is 0'). The gunshot echo made the weapon and enemy sound scripts load Megastructure, which preloads the creature scenes, so a load cycle ran through roach.tscn. Now `HallEcho` (which loads nothing) keeps the list of places sound echoes in (each Megastructure adds itself), and the sound scripts ask `HallEcho.inside()`. Nothing in the player's or enemies' scripts names Megastructure.
+- **The Stalker, stage 1: the crawler (2026-10-17).** The user's (design in docs/CLIMB_VISION.md). `Stalker`: `Character_Monster_03` laid chest-down on all fours, sized to a 1.9 m person.
+  - **Movement:** it crawls on floors, walls and ceilings the spider's way, and falls off edges.
+  - **Body (every screen):**
+    - two-bone IK on each arm and leg, elbows and knees bent up and out;
+    - hands and feet planted, stepping in diagonal pairs in three jerky snatches each (The Grudge's broken joints);
+    - the spine settling to their height and tilt on a spring;
+    - the head locked on your camera, tilted wrong, snapping to a new tilt every 2-5 s.
+  - **Brain (host):**
+    - It always knows roughly where you are and stalks 30 m off at 9 m/s.
+    - Seen by any player (within 55 degrees of where they look, a clear line to any of six points over its body), it freezes 0.8 s staring, then scrambles away at 13 m/s (slow enough to watch it skitter off) to the nearest spot none of them can see, and waits there 1.5 s.
+    - 200 damage drives it off: it flees at 18 m/s for 4 s, then it's gone for 5-8 min. It's never killed.
+    - Everyone 280 m+ off for 5 s: it turns up again unseen, 55-85 m behind one of you.
+  - **Spawn:** made once by the EncounterDirector after its first delay (the host's).
+  - **Co-op:** a NetEntities puppet whose transform carries the surface it's on.
+  - Stunts, the fear meter and the strike are stages 2-3.
+  - Not compiled or run (the user's testing).
