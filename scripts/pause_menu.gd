@@ -289,7 +289,33 @@ func _build_audio_panel() -> void:
 		vbox.add_child(row)
 		_audio_rows[bus] = [slider, value_label]
 		slider.value_changed.connect(_on_audio_slider_changed.bind(bus))
+	_add_skim_sound_row(vbox)
 	_finish_sub_panel(vbox)
+
+
+## "Skim Sound" (GameSettings.skim_sound): what skimming up a hill sounds
+## like. One without its file yet shows greyed out.
+func _add_skim_sound_row(vbox: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = "Skim Sound"
+	label.custom_minimum_size = Vector2(170, 0)
+	var option := OptionButton.new()
+	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Same order as GameSettings.SkimSound.
+	var names := ["Wet glide", "Chitin skate", "Wing flutter"]
+	for i in names.size():
+		var has_file := ResourceLoader.exists(PlayerSound.SKIM_FILES[i])
+		option.add_item(names[i] if has_file else names[i] + " (no sound yet)")
+		option.set_item_disabled(i, not has_file)
+	option.select(GameSettings.skim_sound)
+	option.item_selected.connect(func(index: int) -> void:
+		GameSettings.skim_sound = index as GameSettings.SkimSound
+		GameSettings.save_settings()
+	)
+	row.add_child(label)
+	row.add_child(option)
+	vbox.add_child(row)
 
 
 ## Everything about how the game looks, in one place: the display settings
