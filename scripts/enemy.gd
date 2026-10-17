@@ -146,7 +146,7 @@ signal shot_fired(end_point: Vector3)
 @export var creature_pain_cooldown: float = 1.5
 ## Seconds the body stays after death before it fades away (the user's:
 ## 120 s -- long enough for the hordes to drag, haul and eat it).
-@export var corpse_time: float = 120.0
+@export var corpse_time: float = 60.0 # the user's: a minute (was 2)
 ## How long it takes to fade out at the end (the user's: not gone in a blink).
 @export var corpse_fade_time: float = 2.5
 
@@ -1023,6 +1023,21 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 	# (see spawn_mutant() below), whenever that ends up being.
 	if not will_mutate:
 		get_tree().create_timer(corpse_time).timeout.connect(_fade_away)
+		_count_corpse()
+
+
+## At most MAX_CORPSES bodies lie about at once (the user's: ragdolls are the
+## costly part of a long fight); past that the oldest fades out early, the
+## way Source caps its ragdolls.
+const MAX_CORPSES := 20
+static var _corpses: Array[Enemy] = []
+
+
+func _count_corpse() -> void:
+	_corpses.assign(_corpses.filter(func(body: Enemy) -> bool: return is_instance_valid(body) and not body.is_queued_for_deletion()))
+	_corpses.append(self)
+	while _corpses.size() > MAX_CORPSES:
+		_corpses.pop_front()._fade_away()
 
 
 ## A shot landing on this corpse while it's mutating (weapon_controller.gd's
@@ -1038,11 +1053,15 @@ func damage_mutation(amount: float) -> bool:
 	will_mutate = false
 	mutation_stopped.emit()
 	get_tree().create_timer(corpse_time).timeout.connect(_fade_away)
+	_count_corpse()
 	return true
 
 
 ## The body's time is up: it fades out over corpse_fade_time, then it's gone.
 func _fade_away() -> void:
+	if has_meta(&"fading"):
+		return
+	set_meta(&"fading", true)
 	var fade := create_tween().set_parallel(true)
 	for node in find_children("*", "GeometryInstance3D", true, false):
 		var shape := node as GeometryInstance3D
@@ -1074,7 +1093,10 @@ func spawn_mutant(at_position: Vector3) -> void:
 	var mutant_model := mutant.get_node_or_null("Model") as EnemyModel
 	if model and mutant_model:
 		mutant_model.model_seed = model.model_seed
-	get_tree().current_scene.add_child(mutant)
+	# Into its band (RoamingGroup), not the open world: a mutant left out
+	# there was never despawned or counted, and piled up over a long fight.
+	var band := get_parent() if get_parent() is RoamingGroup else get_tree().current_scene
+	band.add_child(mutant)
 	mutant.global_position = at_position
 	mutant.global_rotation.y = global_rotation.y
 	mutant.start_spawning()

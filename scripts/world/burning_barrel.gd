@@ -69,6 +69,7 @@ func net_restore(data: Dictionary) -> void:
 
 func _ready() -> void:
 	_build_barrel()
+	_settle.call_deferred()
 	var fire := FireSource.new()
 	fire.radius = RADIUS
 	fire.height = HEIGHT + FLAME_HEIGHT
@@ -89,6 +90,35 @@ func _ready() -> void:
 	_light.position = Vector3.UP * (HEIGHT + 0.8)
 	add_child(_light)
 	_check_left = randf() * 0.5
+
+
+## Stood on whatever's under it (the user's: a gang's barrel floated where
+## the navmesh sat above the ground), tilted to match it (at most
+## MAX_TILT). The ground may not be loaded yet (a chunk streaming in): tried
+## again a few times.
+const MAX_TILT := 20.0
+var _settle_tries := 10
+
+
+func _settle() -> void:
+	if not is_inside_tree():
+		return
+	var from := global_position + Vector3.UP * 2.0
+	var query := PhysicsRayQueryParameters3D.create(from, global_position + Vector3.DOWN * 8.0, 1)
+	query.exclude = [get_rid()] if self is CollisionObject3D else []
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		_settle_tries -= 1
+		if _settle_tries > 0:
+			get_tree().create_timer(0.5).timeout.connect(_settle)
+		return
+	var up: Vector3 = hit.normal
+	if up.angle_to(Vector3.UP) > deg_to_rad(MAX_TILT):
+		up = Vector3.UP.slerp(up, deg_to_rad(MAX_TILT) / up.angle_to(Vector3.UP))
+	var forward := global_basis.z.slide(up).normalized()
+	if forward.length_squared() < 0.01:
+		forward = up.cross(Vector3.RIGHT).normalized()
+	global_transform = Transform3D(Basis(up.cross(forward), up, forward).orthonormalized(), hit.position)
 
 
 ## The light's flicker -- only while a camera's near enough to see it.

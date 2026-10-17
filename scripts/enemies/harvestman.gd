@@ -1546,9 +1546,11 @@ func _brood_step(delta: float) -> void:
 		BloodFX.spawn_artery_spurt(wound, 2.0)
 		get_tree().create_timer(5.0).timeout.connect(wound.queue_free)
 		var roach_scene := load(ROACH_SCENE) as PackedScene
+		# Into its band (RoamingGroup), so the brood sleeps and despawns with it.
+		var brood_home: Node = get_parent() if get_parent() is RoamingGroup else world
 		for i in brood_count:
 			var roach := roach_scene.instantiate() as Node3D
-			world.add_child(roach)
+			brood_home.add_child(roach)
 			var out := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / maxf(brood_count, 1) + randf_range(-0.4, 0.4))
 			roach.global_position = bottom + out * 0.6
 			if roach is RigidBody3D:

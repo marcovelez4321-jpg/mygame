@@ -50,6 +50,17 @@ extends Node
 @export var camp_rest: float = 600.0
 ## The chunk streamer (empty = the WorldChunks next to this node).
 @export var chunks: WorldChunks
+@export_group("Pacing")
+## The spawn budget (the user's, instead of a flat cooldown, as Left 4 Dead
+## and Days Gone pace theirs): each new band costs a point; points refill one
+## every band_refill_time seconds, up to band_budget_max. Wipe bands out fast
+## and the next ones wait for it.
+@export var band_budget_max: int = 3
+@export var band_refill_time: float = 30.0
+## Harvestmen start this many times as far off (the user's: twice), and are
+## only removed past harvestman_despawn_distance.
+@export var harvestman_spawn_scale: float = 2.0
+@export var harvestman_despawn_distance: float = 360.0
 
 enum Band { TWEAKERS, RATS, ROACHES, SPIDERS, HARVESTMEN }
 
@@ -73,6 +84,7 @@ const ROACH := preload("res://scenes/enemy/roach.tscn")
 const SPIDER_PACK := preload("res://scenes/enemy/spider_pack.tscn")
 
 var _check_left := 0.0
+var _budget := 0.0
 var _groups: Array[RoamingGroup] = []
 var _structures := {}
 var _resting := {}
@@ -86,6 +98,7 @@ var _group_spacing_sq: float = 0.0
 
 func _ready() -> void:
 	_check_left = first_delay
+	_budget = float(band_budget_max)
 	_despawn_sq = despawn_distance * despawn_distance
 	_camp_range_sq = camp_range * camp_range
 	_clear_radius_sq = clear_radius * clear_radius
@@ -108,6 +121,7 @@ func _on_chunk_loaded(_chunk: Vector2i, root: Node3D) -> void:
 func _process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
+	_budget = minf(_budget + delta / band_refill_time, float(band_budget_max))
 	_check_left -= delta
 	if _check_left > 0.0:
 		return
@@ -124,8 +138,9 @@ func _process(delta: float) -> void:
 			continue
 		var disband := true
 		var group_pos := group.home
+		var reach_sq := _despawn_sq_of(group)
 		for player_node in players:
-			if (player_node as Node3D).global_position.distance_squared_to(group_pos) <= _despawn_sq:
+			if (player_node as Node3D).global_position.distance_squared_to(group_pos) <= reach_sq:
 				disband = false
 				break
 		if disband:
@@ -142,11 +157,16 @@ func _process(delta: float) -> void:
 		var player_pos := player.global_position
 		var near := 0
 		for group in _groups:
-			if group.home.distance_squared_to(player_pos) < _despawn_sq:
+			if group.home.distance_squared_to(player_pos) < _despawn_sq_of(group):
 				near += 1
-		if near < groups_per_player:
+		if near < groups_per_player and _budget >= 1.0:
 			_start_band(player)
 			return
+
+
+## How far off a band is removed (Harvestmen further).
+func _despawn_sq_of(group: RoamingGroup) -> float:
+	return float(group.get_meta(&"despawn_sq", _despawn_sq))
 
 
 ## Optimized camp lifecycle processing
@@ -238,7 +258,14 @@ func _start_band(player: Node3D) -> void:
 		return
 	var reef := biomes.reef(spot.x, spot.z) if biomes else 0.0
 	var band := _roll_band(reef)
+	if band == Band.HARVESTMEN:
+		spot = _hidden_spot(player, harvestman_spawn_scale)
+		if not spot.is_finite():
+			return
+	_budget -= 1.0
 	var group := RoamingGroup.new()
+	if band == Band.HARVESTMEN:
+		group.set_meta(&"despawn_sq", harvestman_despawn_distance * harvestman_despawn_distance)
 	group.name = "Band_%s" % Band.keys()[band]
 	group.position = spot
 	get_tree().current_scene.add_child(group)
@@ -294,7 +321,7 @@ func _roll_band(reef: float) -> Band:
 	return Band.ROACHES
 
 
-func _hidden_spot(player: Node3D) -> Vector3:
+func _hidden_spot(player: Node3D, scale: float = 1.0) -> Vector3:
 	var camera := player.get_viewport().get_camera_3d()
 	var looking := -camera.global_basis.z if camera else Vector3.FORWARD
 	looking.y = 0.0
@@ -309,7 +336,7 @@ func _hidden_spot(player: Node3D) -> Vector3:
 		var out := Vector3(cos(angle), 0.0, sin(angle))
 		if out.dot(looking) > 0.2:
 			continue
-		var want := player_pos + out * randf_range(spawn_min, spawn_max)
+		var want := player_pos + out * randf_range(spawn_min, spawn_max) * scale
 		var on := NavigationServer3D.map_get_closest_point(map, want)
 		if on == Vector3.ZERO or Vector2(on.x - want.x, on.z - want.z).length_squared() > 144.0:
 			continue

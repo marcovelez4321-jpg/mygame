@@ -917,7 +917,8 @@ func _eat_prey(delta: float) -> void:
 	_prey.call("consumed")
 	_prey = null
 	BloodFX.spawn_impact(world, at, Vector3.UP, RoachCarry.BLOOD, 1.5)
-	RoachCarry.hatch(world, at + Vector3.UP * 0.2)
+	# Into its own band, like a carried body's newborns (RoachCarry.bitten()).
+	RoachCarry.hatch(get_parent() if get_parent() is RoamingGroup else world, at + Vector3.UP * 0.2)
 
 
 ## A rat killed it and wants it in its jaws. True if it can be taken: dead,

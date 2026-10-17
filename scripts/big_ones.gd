@@ -157,12 +157,14 @@ static func drops_meat(body: Node, weight: float, boss: bool, burst: bool = fals
 		var health := body.get_node_or_null(^"Health") as Health
 		if health == null:
 			return
-		health.died.connect(func(_attacker: int, _critical: bool) -> void:
+		health.died.connect(func(attacker: int, _critical: bool) -> void:
 			var culled := body.has_meta(&"culled")
 			if burst and not culled:
 				_burst(body)
 			if culled or NetEntities.is_puppet(body) or (Network.is_online() and not body.multiplayer.is_server()):
 				return # the host's chunk is the one (it reaches clients as a puppet)
+			if attacker == Health.NO_ATTACKER:
+				return # only a player's kill drops meat (the user's)
 			var at := (body as Node3D).global_position + Vector3.UP * (1.2 if burst else 0.5)
 			if boss and health.last_hit_position != Vector3.ZERO:
 				at = health.last_hit_position + Vector3.UP * 0.5
@@ -189,6 +191,7 @@ static func _spawn_chunk(world: Node, at: Vector3, weight: float, boss: bool, th
 	if world == null:
 		return
 	var chunk := CarryItem.spawn_meat(world, at, weight, boss)
+	chunk.expire_unclaimed()
 	if thrown:
 		var out := Vector2.from_angle(randf() * TAU) * randf_range(2.0, 4.0)
 		chunk.linear_velocity = Vector3(out.x, randf_range(5.0, 7.0), out.y)

@@ -65,6 +65,8 @@ var cooked_for := 0.0
 var glued := false
 ## A pod: its mutation (Virus).
 var mutation: StringName
+## Seconds left before it's gone untaken (an enemy's drop), -1: it stays.
+var _expire_left := -1.0
 
 var _model: Node3D
 var _shape: CollisionShape3D
@@ -237,6 +239,35 @@ static func cook(target: Variant, step: float, at: Vector3, reach: float = COOK_
 		target["kind"] = Backpack.Kind.COOKED_MEAT
 		return true
 	return false
+
+
+## Dropped by an enemy (the user's): gone after DROP_LIFETIME unless taken,
+## or sooner once every player is DROP_RANGE off. The host's (checked once a
+## second); what a player drops (G) or a tree grows stays.
+const DROP_LIFETIME := 25.0
+const DROP_RANGE := 60.0
+
+
+func expire_unclaimed() -> void:
+	_expire_left = DROP_LIFETIME
+	var timer := Timer.new()
+	timer.wait_time = 1.0
+	timer.autostart = true
+	add_child(timer)
+	timer.timeout.connect(_tick_expiry)
+
+
+func _tick_expiry() -> void:
+	if has_meta(&"fetched"):
+		return # on its way to a hand
+	_expire_left -= 1.0
+	var near := false
+	for node in get_tree().get_nodes_in_group("player"):
+		if (node as Node3D).global_position.distance_squared_to(global_position) < DROP_RANGE * DROP_RANGE:
+			near = true
+			break
+	if _expire_left <= 0.0 or not near:
+		queue_free()
 
 
 ## Walking into it puts it in your backpack (the host's; pods are grapple

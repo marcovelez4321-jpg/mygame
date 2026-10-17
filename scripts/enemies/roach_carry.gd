@@ -361,11 +361,18 @@ func bitten() -> void:
 	var at := ragdoll.body_position()
 	var world := get_tree().current_scene
 	BloodFX.spawn_impact(world, at, Vector3.UP, BLOOD, 2.5)
+	# Newborns join the carriers' band (RoamingGroup): left in the open world
+	# they never slept or despawned and went on breeding (the user's catch).
+	var band: Node = world
+	for roach in roaches:
+		if is_instance_valid(roach) and roach.get_parent() is RoamingGroup:
+			band = roach.get_parent()
+			break
 	var turn := randf() * TAU
 	for i in ROACHES_PER_BREED:
 		# Spread around the body, so they don't start inside each other.
 		var side := Vector3.RIGHT.rotated(Vector3.UP, turn + TAU * i / ROACHES_PER_BREED) * 0.25
-		hatch(world, at + Vector3.UP * 0.3 + side)
+		hatch(band, at + Vector3.UP * 0.3 + side)
 		BloodFX.spawn_impact(world, at + Vector3.UP * 0.2, (Vector3.UP + Vector3(randf() - 0.5, 0.0, randf() - 0.5)).normalized(), BLOOD, 1.5)
 
 

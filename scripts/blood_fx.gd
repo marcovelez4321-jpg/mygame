@@ -18,6 +18,10 @@ extends RefCounted
 const DECAL_LIFETIME := 25.0
 const DECAL_LIFETIME_VARIANCE := 5.0
 const DECAL_FADE_OUT_TIME := 2.0
+## At most this many blood splats and bullet holes at once (the user's);
+## past it the oldest goes, as Source's decal pool does.
+const MAX_DECALS := 100
+static var _decals: Array[Decal] = []
 const BLOOD_COLOR := Color(0.35, 0.02, 0.02)
 ## The spurt's physics, shared by the visible GPU droplets AND the invisible
 ## traced droplets that decide where blood lands -- one source of truth, so
@@ -439,6 +443,10 @@ static func _place_decal(world: Node, texture: Texture2D, position: Vector3, nor
 	decal.rotate_object_local(Vector3.UP, randf() * TAU)
 
 	world.add_child(decal)
+	_decals.assign(_decals.filter(func(other: Decal) -> bool: return is_instance_valid(other) and not other.is_queued_for_deletion()))
+	_decals.append(decal)
+	while _decals.size() > MAX_DECALS:
+		_decals.pop_front().queue_free()
 	var tween := decal.create_tween()
 	tween.tween_property(decal, "modulate:a", 1.0, fade_time)
 	var stay := DECAL_LIFETIME + randf_range(-DECAL_LIFETIME_VARIANCE, DECAL_LIFETIME_VARIANCE)
