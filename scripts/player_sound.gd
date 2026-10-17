@@ -74,10 +74,10 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	# Skimming up a hill isn't landing (PlayerMovement.on_ground()), and
-	# landings closer together than the jump gap play once.
+	# landings closer together than LAND_SOUND_GAP_MSEC play once.
 	_update_skim(_delta)
 	var on_floor := _player.on_ground()
-	if on_floor and not _was_on_floor and Time.get_ticks_msec() - _land_sound_msec >= JUMP_SOUND_GAP_MSEC:
+	if on_floor and not _was_on_floor and Time.get_ticks_msec() - _land_sound_msec >= LAND_SOUND_GAP_MSEC:
 		_land_sound_msec = Time.get_ticks_msec()
 		SoundPlayer.play_for_owner(land_sound, _player)
 	_was_on_floor = on_floor
@@ -143,7 +143,9 @@ func _skim_ready() -> bool:
 
 ## Jumps closer together than this play one sound (the user's: bhopping up a
 ## hill spammed it).
-const JUMP_SOUND_GAP_MSEC := 600
+const JUMP_SOUND_GAP_MSEC := 400 # the user's (was 600)
+## Landings closer together than this play one sound.
+const LAND_SOUND_GAP_MSEC := 600
 var _jump_sound_msec := -100000
 var _land_sound_msec := -100000
 
