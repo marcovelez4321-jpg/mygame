@@ -66,6 +66,15 @@ const BACKSTAGE_TO := Vector2(35.0, 55.0)
 var _leash_for := 0.0
 var _stuck_for := 0.0
 var _stuck_best := INF
+## Up the walls, like a spider (the user's): it stalks from a PERCH -- a
+## spot PERCH_HEIGHT up a wall near where it means to be, or indoors (half
+## the time) on the ceiling -- picked again every PERCH_EVERY; and it hides
+## up walls and on ceilings as readily as round a corner (higher is better).
+const PERCH_HEIGHT := Vector2(2.0, 6.0)
+const PERCH_EVERY := 3.0
+const PERCH_REACH := 15.0
+var _perch := Vector3.INF
+var _perch_left := 0.0
 const WALL_DOT := 0.7
 ## Twice a person (the user's): everything about its body scales with this.
 const SIZE := 2.0
@@ -375,7 +384,12 @@ func _think(delta: float) -> void:
 			away.y = 0.0
 			away = away.normalized() if away.length_squared() > 0.01 else Vector3.BACK
 			var spot := nearest.global_position + away * STALK_DISTANCE
-			var to := spot - global_position
+			# Up a wall or on a ceiling near there, rather than on the ground.
+			_perch_left -= delta
+			if _perch_left <= 0.0 or not _perch.is_finite() or _perch.distance_to(spot) > PERCH_REACH * 2.0:
+				_perch_left = PERCH_EVERY
+				_perch = _perch_near(spot)
+			var to := _perch - global_position
 			_desired = to.normalized() * CRAWL * clampf(to.length() / 4.0, 0.0, 1.0) if to.length() > 2.0 else Vector3.ZERO
 
 
@@ -597,6 +611,28 @@ func _visible_from_any(points: Array[Vector3]) -> bool:
 	return false
 
 
+## A spot up a wall (PERCH_HEIGHT) within PERCH_REACH of `spot`, or indoors
+## half the time on the ceiling over it; `spot` itself if there's neither.
+func _perch_near(spot: Vector3) -> Vector3:
+	if HallEcho.inside(spot) and randf() < 0.5:
+		var ceiling := _ray(spot + Vector3.UP * 1.5, spot + Vector3.UP * 35.0)
+		if not ceiling.is_empty() and (ceiling.normal as Vector3).y < -0.7:
+			return ceiling.position
+	var turn := randf() * TAU
+	for i in 8:
+		var way := Vector3.FORWARD.rotated(Vector3.UP, turn + TAU * i / 8.0)
+		var from := spot + Vector3.UP * 1.5
+		var wall := _ray(from, from + way * PERCH_REACH)
+		if wall.is_empty() or absf((wall.normal as Vector3).y) > 0.3:
+			continue
+		var normal := wall.normal as Vector3
+		var up_it := (wall.position as Vector3) + Vector3.UP * randf_range(PERCH_HEIGHT.x, PERCH_HEIGHT.y)
+		var on := _ray(up_it + normal * 1.5, up_it - normal * 2.0)
+		if not on.is_empty():
+			return on.position
+	return spot
+
+
 ## Somewhere near none of them can see (any of it): round it on its surface,
 ## the nearest such spot that isn't toward them; straight away from them if
 ## there's none.
@@ -605,6 +641,27 @@ func _hiding_spot() -> Vector3:
 	var best_score := INF
 	var space := get_world_3d().direct_space_state
 	var players := get_tree().get_nodes_in_group("player")
+	# Up a wall or onto a ceiling round it, like a spider -- out of reach.
+	for i in 16:
+		var way := Vector3(randf_range(-1.0, 1.0), randf_range(0.2, 1.0), randf_range(-1.0, 1.0)).normalized()
+		var hit := _ray(global_position + _normal * 0.5, global_position + way * 25.0)
+		if hit.is_empty():
+			continue
+		var at := hit.position as Vector3
+		var normal := hit.normal as Vector3
+		if normal.y > WALL_DOT:
+			continue # (floors: the rings below)
+		var forward := _flat_perpendicular(normal, at - global_position)
+		if _visible_from_any(_body_points(at, Basis(forward.cross(normal), normal, -forward))):
+			continue
+		var score := global_position.distance_to(at) - (at.y - global_position.y) * 0.5 # higher is better
+		for node in players:
+			var player := node as Node3D
+			if player.global_position.distance_to(at) < player.global_position.distance_to(global_position):
+				score += 15.0
+		if score < best_score:
+			best_score = score
+			best = at
 	for ring: float in [6.0, 12.0, 20.0, 30.0]:
 		for i in 12:
 			var way := _flat_perpendicular(_normal, Vector3.FORWARD.rotated(_normal, TAU * i / 12.0 + randf() * 0.4))
@@ -624,8 +681,10 @@ func _hiding_spot() -> Vector3:
 			if score < best_score:
 				best_score = score
 				best = spot
-		if best.is_finite():
+		if best.is_finite() and best_score < ring + 20.0:
 			return best
+	if best.is_finite():
+		return best
 	return global_position + _away_from_players() * 25.0
 
 
