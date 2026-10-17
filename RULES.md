@@ -1606,3 +1606,20 @@ them:
 - Not compiled or run (the user's testing).
 - **Taking a mutation heals and feeds you (2026-10-17).** The user's: eating a pod heals to full health and fills hunger (`Virus.take_mutation`; the host's, sent with the usual virus sync). Not compiled or run (the user's testing).
 - **The Stack's express lift is out for now (2026-10-17).** The user's: it ran through some skybridges. `StackBuilder.LIFT_ENABLED` false: no car, call buttons or cable (its docks stay; the cable car between the high halls stays). The Stack was re-baked (`tools/make_the_stack.gd`): scene and map rewritten. docs/CLIMB_VISION.md now carries the earlier (2026-10-14) roadmap with each step's status, and the next step: the Stack's secrets.
+- **The Stack's secrets (2026-10-17).** The user's: every detail below.
+  - **The doors:** 30 person-size (2 x 3 m) secret doors: 14 to loot rooms, 10 to shortcuts, 6 secret entrances. 15 open with a key, 15 with a button.
+    - Key doors are visible locked doors (one of the Mega Pack's loose doors, at random). F with a key in the bag: the key's used up and it swings in. Without one it rattles locked ("Locked. It needs a key."). Any key opens any key door, never a button door.
+    - Button doors look like the wall they're in: a panel of the wall's own concrete on the same texture grid, with nothing to use. Their button is within 40 m (8 m at the least), at hand height on a hall wall. It's a random small button, call button, button panel, light switch, valve or lever (`SecretButton`). F presses or pulls it and the door swings in.
+    - Sounds are the existing door_locked / door_move / door_stop.
+  - **The rooms:** new blocks grown onto the towers' outsides, merging out of the wall (sunk 4 m into it), half windowed building concrete and half plain. All are clear of windows, ways in, the lift's landings, crossings, bridges and each other; skybridges keep 12 m clear of them.
+    - **Loot room:** 12 x 12 x 8 m with a dim warm lamp, its door in a hall's wall at the floor.
+    - **Shortcut:** a door in a hall's wall under one of its mezzanines, and behind it a 5 m shaft grown up the outside to a way back in onto the deck. Grapple up it.
+    - **Entrance:** a grown room whose door is on its outside, with a balcony to grapple onto, its passage to the hall open. An entrance's button sits on the room's outside wall beside it.
+  - **Per play (`StackSecrets`, the host's; made only once a player first comes within 150 m):**
+    - Each loot room has 1-2 boxes of ammo (30 bullets or 8 shells), pills half the time, 1-3 scrap, 0-2 silk, a gun 15% of the time and a key 3%.
+    - 14 keys lie on hall floors (from 60 spots).
+    - 4 dead climbers (from 16 spots), each a person who fell as a ragdoll and settled, with a key on them. 30% have an abandoned camp beside them: cold fire, a bedroll you can still sleep in, not a camp you wake at.
+    - Every window room has an 8% chance of a key.
+  - **Keys:** a backpack item (`Backpack.Kind.KEY`, `key_mp_1`). Walk into one or grapple it. They drop with the rest of your gear when you die at a camp.
+  - **How it's built:** `StackBuilder._secrets()`, with its own dice so nothing else in the Stack moved. Re-baked: 30 doors, 15 with buttons.
+  - Not compiled or run in game (the user's testing). The bake's editor scan showed no script errors.

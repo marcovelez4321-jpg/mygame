@@ -192,6 +192,18 @@ var web_quads: Array[Dictionary] = []
 var web_nests: Array[Dictionary] = []
 ## Each hive hall's tangle: {hall, landings, flights, dead_ends} (none, ever).
 var panic_report: Array[Dictionary] = []
+## Every mezzanine deck: {hall, side (its wall), y, span (along the wall)}.
+var decks: Array[Dictionary] = []
+## The secrets (_secrets()): each door {kind, lock, hinge: Transform3D,
+## panel (a box like the wall, for a button door), mat, model, button:
+## Transform3D (a button door's), button_model}; the grown-on blocks, the
+## loot rooms, where keys may lie and where a dead climber may be.
+var secrets: Array[Dictionary] = []
+var secret_blocks: Array[AABB] = []
+var secret_rooms: Array[AABB] = []
+var key_spots := PackedVector3Array()
+var climber_spots := PackedVector3Array()
+var secret_report := {loot = 0, shortcut = 0, entrance = 0, tries = 0}
 ## What grows indoors: the sewer kinds that would, by where they are.
 const HALL_GROWTH := {
 	GrowthMeshes.Kind.HAIR_MOLD: 3.0, GrowthMeshes.Kind.EGG_SACS: 2.0, GrowthMeshes.Kind.FUNGUS_SHELF: 2.0,
@@ -248,6 +260,7 @@ func _init(build: bool = true) -> void:
 		_hall_features(hall)
 	_shaft_platforms()
 	_cobwebs()
+	_secrets()
 	# Last, round everything else: the skybridges.
 	_place_sky_bridges()
 
@@ -626,6 +639,8 @@ func _place_sky_bridges() -> void:
 		keep_clear.append(crossing_clear)
 	for landing in lift_landings:
 		keep_clear.append(landing.grow(BRIDGE_MARGIN))
+	for grown in secret_blocks:
+		keep_clear.append(grown.grow(BRIDGE_MARGIN + 8.0)) # (and the air round them: a balcony, a way in)
 	for bridge in sky_bridges:
 		var placed := false
 		for k in 61:
@@ -1126,6 +1141,7 @@ func _hall_features(hall: Dictionary) -> void:
 		growth_floors.append({rect = Rect2(wall_mid.x - deck_size.x * 0.5, wall_mid.z - deck_size.z * 0.5, deck_size.x, deck_size.z),
 				y = deck_y, zone = group, kinds = HALL_GROWTH, density = 0.8, shaft = 0.0})
 		_switchback(box, out, cross, across_len * 0.5 - depth, along_len - 24.0, floor_y, deck_y, group)
+		decks.append({hall = hall, side = side, y = deck_y, span = span})
 	growth_floors.append({rect = Rect2(box.position.x + 4.0, box.position.z + 4.0, box.size.x - 8.0, box.size.z - 8.0), y = floor_y,
 			zone = group, kinds = HALL_GROWTH, density = 1.2, shaft = (UPPER_SHAFT * 0.5 + 6.0) if main else 0.0})
 	# Now and then a barnacle nest's spot on the hall floor (more the higher up).
@@ -1656,6 +1672,411 @@ func _anything_at(area: AABB) -> bool:
 			return true
 	return false
 
+# ---- Secrets (the user's, 2026-10-17) ----------------------------------------------------
+
+## Thirty secret doors: SECRET_LOOT to loot rooms, SECRET_SHORTCUTS to hidden
+## shafts up to a hall's mezzanine (grapple up them), SECRET_ENTRANCES into
+## the towers from outside. Half open with a key (any key: universal, used
+## up), half with a button within BUTTON_REACH of the door. The rooms and
+## shafts are new blocks grown onto the towers' outsides -- merging out of a
+## wall (sunk GROWN_SINK into it), the building's windowed concrete or plain,
+## half and half -- every one clear of windows, ways in, bridges and each
+## other. Doors are person-size (DOOR). Its own dice, so nothing else in the
+## Stack moves.
+const SECRET_LOOT := 14
+const SECRET_SHORTCUTS := 10
+const SECRET_ENTRANCES := 6
+const SECRET_KEY_DOORS := 15
+const DOOR := Vector2(2.0, 3.0)
+const SECRET_ROOM := Vector3(12.0, 8.0, 12.0) # across, tall, out
+const SHAFT_INNER := 5.0
+const GROWN_WALL := 2.0
+const GROWN_SINK := 4.0
+const BUTTON_REACH := 40.0
+const BUTTON_HEIGHT := 1.3
+const HALL_KEY_SPOTS := 60
+const CLIMBER_SPOTS := 16
+
+var secret_random := RandomNumberGenerator.new()
+
+
+func _secrets() -> void:
+	secret_random.seed = SEED + 777
+	var kinds: Array[String] = []
+	for i in SECRET_LOOT:
+		kinds.append("loot")
+	for i in SECRET_SHORTCUTS:
+		kinds.append("shortcut")
+	for i in SECRET_ENTRANCES:
+		kinds.append("entrance")
+	var locks: Array[int] = []
+	for i in kinds.size():
+		locks.append(SecretDoor.Lock.KEY if i < SECRET_KEY_DOORS else SecretDoor.Lock.BUTTON)
+	_secret_shuffle(kinds)
+	_secret_shuffle(locks)
+	var usable_halls: Array[Dictionary] = []
+	for hall in halls:
+		if hall.tower != STUMP:
+			usable_halls.append(hall)
+	for i in kinds.size():
+		for attempt in 1500:
+			secret_report.tries += 1
+			var hall: Dictionary = usable_halls[secret_random.randi() % usable_halls.size()]
+			var done := false
+			match kinds[i]:
+				"loot":
+					done = _secret_room(hall, locks[i], false)
+				"entrance":
+					done = _secret_room(hall, locks[i], true)
+				"shortcut":
+					done = _secret_shaft(hall, locks[i])
+			if done:
+				secret_report[kinds[i]] += 1
+				break
+	_key_and_climber_spots()
+
+
+func _secret_shuffle(list: Array) -> void:
+	for i in range(list.size() - 1, 0, -1):
+		var j := secret_random.randi_range(0, i)
+		var keep: Variant = list[i]
+		list[i] = list[j]
+		list[j] = keep
+
+
+## A way through a hall's wall on `side` at floor y, `along` it: where it
+## meets the hall (edge), the tower's face there, the passage's box -- or {}
+## if there's no clean way (too thin, something in front of it, something
+## already carved there).
+func _secret_way(hall: Dictionary, side: int, along: float, y: float, check_front: bool = true) -> Dictionary:
+	var t: int = hall.tower
+	var box: AABB = hall.box
+	if _fused(t, side, y):
+		return {}
+	var out := _outward(side)
+	var cross := Vector3(out.z, 0.0, out.x).abs()
+	var hall_reach := (box.size.x if side >= 2 else box.size.z) * 0.5
+	var hall_wide := (box.size.z if side >= 2 else box.size.x) * 0.5
+	if absf(along) > hall_wide - 8.0:
+		return {}
+	var centre := Vector3(box.get_center().x, y, box.get_center().z) + cross * along
+	var edge := centre + out * hall_reach
+	var face := _face(t, y + DOOR.y, side)
+	if face - hall_reach < 4.0:
+		return {}
+	var passage := _span(edge - out * 0.1, centre + out * (face + 0.6), cross, DOOR.x, y, DOOR.y)
+	for space in carved:
+		if space != box and space.intersects(passage.grow(1.0)):
+			return {}
+	if check_front and _anything_at(_span(edge - out * 6.0, edge - out * 0.2, cross, DOOR.x + 2.0, y + 0.3, DOOR.y)):
+		return {}
+	return {edge = edge, out = out, cross = cross, face = face, passage = passage, centre = centre, tower = t}
+
+
+## A grown block outside a tower's face: whether `block` (all of it past the
+## face) is open air -- no other box, window, way in, landing, crossing or
+## grown block in it.
+func _grown_fits(block: AABB, out: Vector3, face_point: Vector3) -> bool:
+	var outside := block
+	# Only the part past the face (the sunk part's in the wall).
+	var lo := block.position
+	var hi := block.end
+	for k in 3:
+		if absf(out[k]) > 0.5:
+			if out[k] > 0.0:
+				lo[k] = maxf(lo[k], face_point[k] + 0.3)
+			else:
+				hi[k] = minf(hi[k], face_point[k] - 0.3)
+	outside = AABB(lo, hi - lo)
+	if outside.size.x <= 0.0 or outside.size.y <= 0.0 or outside.size.z <= 0.0:
+		return false
+	if block.position.y < 30.0:
+		return false # (clear of the ground and the base's ways in)
+	var wide := outside.grow(6.0)
+	for b in boxes:
+		var basis: Basis = b.b
+		var half: Vector3 = (b.s as Vector3) * 0.5
+		var extent := Vector3(
+				absf(basis.x.x) * half.x + absf(basis.y.x) * half.y + absf(basis.z.x) * half.z,
+				absf(basis.x.y) * half.x + absf(basis.y.y) * half.y + absf(basis.z.y) * half.z,
+				absf(basis.x.z) * half.x + absf(basis.y.z) * half.y + absf(basis.z.z) * half.z)
+		if AABB((b.c as Vector3) - extent, extent * 2.0).intersects(outside):
+			return false
+	for w in window_rooms:
+		if wide.has_point(w.at):
+			return false
+	for opening in openings:
+		if wide.has_point(opening):
+			return false
+	for space in carved:
+		if space.intersects(outside):
+			return false
+	for grown in secret_blocks:
+		if grown.grow(10.0).intersects(block):
+			return false
+	for landing in lift_landings:
+		if landing.intersects(wide):
+			return false
+	if crossing_clear.size != Vector3.ZERO and crossing_clear.intersects(wide):
+		return false
+	return true
+
+
+## A grown block's box: `inner` (across, tall, out) of room past the face,
+## its walls round it, sunk into the tower.
+func _grown_box(way: Dictionary, y: float, inner: Vector3) -> AABB:
+	var out: Vector3 = way.out
+	var cross: Vector3 = way.cross
+	var face_point: Vector3 = way.centre + out * (way.face as float)
+	var near := face_point - out * GROWN_SINK
+	var far := face_point + out * (inner.z + GROWN_WALL)
+	return _span(near, far, cross, inner.x + GROWN_WALL * 2.0, y - GROWN_WALL - 2.0, inner.y + GROWN_WALL * 2.0 + 2.0)
+
+
+func _grown_inside(way: Dictionary, y: float, inner: Vector3) -> AABB:
+	var out: Vector3 = way.out
+	var face_point: Vector3 = way.centre + out * (way.face as float)
+	return _span(face_point - out * 0.2, face_point + out * inner.z, way.cross, inner.x, y, inner.y)
+
+
+func _grown_add(block: AABB, t: int) -> StringName:
+	var mat: StringName = &"concrete" if secret_random.randf() < 0.5 else &"plain"
+	_add(block.get_center(), block.size, &"shell", "Secrets", mat, Basis.IDENTITY, true, t)
+	secret_blocks.append(block)
+	return mat
+
+
+## A loot room (or, `entrance`, a way in from outside): a grown room on the
+## hall's tower at its floor, a passage through the wall to it. A loot
+## room's door is in the hall's wall; an entrance's is on the room's outside
+## (a balcony in front of it to grapple onto), its passage to the hall open.
+func _secret_room(hall: Dictionary, lock: int, entrance: bool) -> bool:
+	var box: AABB = hall.box
+	var side := secret_random.randi() % 4
+	var hall_wide := (box.size.z if side >= 2 else box.size.x) * 0.5
+	var along := secret_random.randf_range(-hall_wide + 10.0, hall_wide - 10.0)
+	var y := box.position.y
+	var way := _secret_way(hall, side, along, y, not entrance)
+	if way.is_empty():
+		return false
+	var block := _grown_box(way, y, SECRET_ROOM)
+	var face_point: Vector3 = way.centre + (way.out as Vector3) * (way.face as float)
+	if not _grown_fits(block, way.out, face_point):
+		return false
+	var room := _grown_inside(way, y, SECRET_ROOM)
+	var door := {}
+	if entrance:
+		# The door on the room's outside, a balcony in front of it.
+		var out: Vector3 = way.out
+		var outer: Vector3 = face_point + out * (SECRET_ROOM.z + GROWN_WALL)
+		var balcony := _span(outer, outer + out * 5.0, way.cross, 12.0, y - 1.0, 1.0)
+		for b in boxes:
+			if AABB((b.c as Vector3) - (b.s as Vector3) * 0.5, b.s).intersects(balcony.grow(1.0)):
+				return false
+		var mat := _grown_add(block, way.tower)
+		_carve(room)
+		_carve(way.passage)
+		_carve(_span(outer - out * (GROWN_WALL + 0.6), outer + out * 0.6, way.cross, DOOR.x, y, DOOR.y))
+		_add(balcony.get_center(), balcony.size, &"shell", "Secrets", &"plain")
+		door = _secret_door(outer, -out, way.cross, y, lock, mat, "entrance")
+		if lock == SecretDoor.Lock.BUTTON:
+			var side_way := 1.0 if secret_random.randf() < 0.5 else -1.0
+			var at: Vector3 = outer + (way.cross as Vector3) * side_way * secret_random.randf_range(3.5, 5.5) + Vector3.UP * (y + BUTTON_HEIGHT - outer.y)
+			door.button = _facing(out, at)
+		openings.append(outer + Vector3.UP * (y + DOOR.y * 0.5 - outer.y))
+	else:
+		var wall_mat := _mat_at((way.edge as Vector3) + (way.out as Vector3) * 0.5 + Vector3.UP)
+		_grown_add(block, way.tower)
+		_carve(room)
+		_carve(way.passage)
+		door = _secret_door(way.edge, way.out, way.cross, y, lock, wall_mat, "loot")
+		if lock == SecretDoor.Lock.BUTTON:
+			var button := _hall_button(hall, way.edge, y)
+			if button != Transform3D():
+				door.button = button
+		secret_rooms.append(room)
+	lamps.append([room.get_center() + Vector3.UP * 2.0, Color(1.0, 0.7, 0.4), 2.0, 14.0])
+	if lock == SecretDoor.Lock.BUTTON and not door.has("button"):
+		door.lock = SecretDoor.Lock.KEY # (no wall for its button: a key door, then)
+	secrets.append(door)
+	return true
+
+
+## A shortcut: a hidden door in a hall's wall under one of its mezzanines,
+## and behind it a narrow shaft grown up the tower's outside, to a way back
+## in at the deck -- grapple up it.
+func _secret_shaft(hall: Dictionary, lock: int) -> bool:
+	var own: Array[Dictionary] = []
+	for d in decks:
+		if d.hall == hall:
+			own.append(d)
+	if own.is_empty():
+		return false
+	var deck: Dictionary = own[secret_random.randi() % own.size()]
+	var side: int = deck.side
+	var along := secret_random.randf_range(-(deck.span as float) * 0.4, (deck.span as float) * 0.4)
+	var box: AABB = hall.box
+	var y := box.position.y
+	var top_y: float = deck.y
+	var bottom := _secret_way(hall, side, along, y)
+	var top := _secret_way(hall, side, along, top_y, false)
+	if bottom.is_empty() or top.is_empty():
+		return false
+	var inner := Vector3(SHAFT_INNER, top_y - y + DOOR.y + 4.0, SHAFT_INNER)
+	var face := minf(bottom.face, top.face)
+	bottom.face = face
+	var block := _grown_box(bottom, y, inner)
+	var face_point: Vector3 = bottom.centre + (bottom.out as Vector3) * face
+	if not _grown_fits(block, bottom.out, face_point):
+		return false
+	var wall_mat := _mat_at((bottom.edge as Vector3) + (bottom.out as Vector3) * 0.5 + Vector3.UP)
+	_grown_add(block, bottom.tower)
+	_carve(_grown_inside(bottom, y, inner))
+	_carve(bottom.passage)
+	_carve(_span((top.edge as Vector3) - (top.out as Vector3) * 0.1, face_point + (bottom.out as Vector3) * 0.6 + Vector3.UP * (top_y - y),
+			top.cross, DOOR.x, top_y, DOOR.y))
+	var door := _secret_door(bottom.edge, bottom.out, bottom.cross, y, lock, wall_mat, "shortcut")
+	if lock == SecretDoor.Lock.BUTTON:
+		var button := _hall_button(hall, bottom.edge, y)
+		if button == Transform3D():
+			door.lock = SecretDoor.Lock.KEY
+		else:
+			door.button = button
+	secrets.append(door)
+	return true
+
+
+## A door in the plane through `at`, the side you stand on toward `toward`:
+## its hinge (this frame: +X across the doorway, +Z toward you), and for a
+## button door the panel that looks like the wall it's in (`mat`).
+func _secret_door(at: Vector3, into: Vector3, cross: Vector3, y: float, lock: int, mat: StringName, kind: String) -> Dictionary:
+	var toward := -into # the side you open it from
+	var across := cross
+	if across.cross(Vector3.UP).dot(toward) < 0.0:
+		across = -across
+	var z := across.cross(Vector3.UP).normalized()
+	var hinge := Transform3D(Basis(across, Vector3.UP, z), Vector3(at.x, y, at.z) - across * DOOR.x * 0.5)
+	var panel_centre := Vector3(at.x, y + DOOR.y * 0.5, at.z) - z * 0.25
+	var panel := {c = panel_centre, s = across.abs() * DOOR.x + Vector3.UP * DOOR.y + z.abs() * 0.5, b = Basis.IDENTITY}
+	return {kind = kind, lock = lock, hinge = hinge, panel = panel, mat = mat, model = secret_random.randi() % 64,
+			button_model = secret_random.randi() % 64}
+
+
+## A button set into a hall's wall within BUTTON_REACH of `door` (but not
+## right by it), at hand height, on solid wall with nothing in front of it.
+## Transform3D() if none fits.
+func _hall_button(hall: Dictionary, door: Vector3, y: float) -> Transform3D:
+	var box: AABB = hall.box
+	for attempt in 150:
+		var side := secret_random.randi() % 4
+		var out := _outward(side)
+		var cross := Vector3(out.z, 0.0, out.x).abs()
+		var hall_reach := (box.size.x if side >= 2 else box.size.z) * 0.5
+		var hall_wide := (box.size.z if side >= 2 else box.size.x) * 0.5
+		var along := secret_random.randf_range(-hall_wide + 3.0, hall_wide - 3.0)
+		var at := Vector3(box.get_center().x, y + BUTTON_HEIGHT, box.get_center().z) + cross * along + out * hall_reach
+		var distance := Vector2(at.x - door.x, at.z - door.z).length()
+		if distance < 8.0 or distance > BUTTON_REACH:
+			continue
+		if not _solid_at(at + out * 0.5):
+			continue
+		var front := AABB(at - out * 1.0 - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
+		if _anything_at(front):
+			continue
+		var clear := true
+		for space in carved:
+			if space != box and space.has_point(at - out * 0.3):
+				clear = false
+				break
+		if clear:
+			return _facing(-out, at)
+	return Transform3D()
+
+
+## A frame at `at` whose +Z points `normal` (out of the wall it's on).
+static func _facing(normal: Vector3, at: Vector3) -> Transform3D:
+	var z := normal.normalized()
+	var x := Vector3.UP.cross(z).normalized()
+	return Transform3D(Basis(x, Vector3.UP, z), at)
+
+
+## The material of the solid block at `point` (what a wall there is made of).
+func _mat_at(point: Vector3) -> StringName:
+	for b in boxes:
+		if b.solid and AABB((b.c as Vector3) - (b.s as Vector3) * 0.5, b.s).has_point(point):
+			return b.mat
+	return &"concrete"
+
+
+## Whether `point` is inside a solid tower block.
+func _solid_at(point: Vector3) -> bool:
+	for b in boxes:
+		if b.solid and AABB((b.c as Vector3) - (b.s as Vector3) * 0.5, b.s).has_point(point):
+			return true
+	return false
+
+
+## Where keys may lie (hall floors, decks) and dead climbers may be (hall
+## floors): clear of everything standing there, out of the main shaft.
+func _key_and_climber_spots() -> void:
+	var shaft := Rect2(-UPPER_SHAFT * 0.5 - 6.0, -UPPER_SHAFT * 0.5 - 6.0, UPPER_SHAFT + 12.0, UPPER_SHAFT + 12.0)
+	var floors: Array[Dictionary] = []
+	for hall in halls:
+		floors.append({box = hall.box, y = (hall.box as AABB).position.y, main = hall.tower == 0})
+	var tries := 0
+	while (key_spots.size() < HALL_KEY_SPOTS or climber_spots.size() < CLIMBER_SPOTS) and tries < 4000:
+		tries += 1
+		var f: Dictionary = floors[secret_random.randi() % floors.size()]
+		var box: AABB = f.box
+		var spot := Vector3(secret_random.randf_range(box.position.x + 10.0, box.end.x - 10.0), f.y,
+				secret_random.randf_range(box.position.z + 10.0, box.end.z - 10.0))
+		if f.main and shaft.has_point(Vector2(spot.x, spot.z)):
+			continue
+		if _anything_at(AABB(spot + Vector3(-1.5, 0.3, -1.5), Vector3(3.0, 2.0, 3.0))):
+			continue
+		if climber_spots.size() < CLIMBER_SPOTS and secret_random.randf() < 0.25:
+			if not _anything_at(AABB(spot + Vector3(-7.0, 0.3, -7.0), Vector3(14.0, 3.0, 14.0))):
+				climber_spots.append(spot) # (room for the camp beside them)
+				continue
+		if key_spots.size() < HALL_KEY_SPOTS:
+			key_spots.append(spot)
+
+
+## The doors and buttons, in the scene (Interior > Secrets).
+func _secret_nodes(root: Node, parent: Node, materials: Dictionary) -> void:
+	var holder := Node3D.new()
+	holder.name = "Secrets"
+	_own(root, holder, parent)
+	for i in secrets.size():
+		var s: Dictionary = secrets[i]
+		var door := SecretDoor.new()
+		door.name = "Door_%d" % i
+		door.lock = s.lock
+		door.size = DOOR
+		door.model_index = s.model
+		door.transform = s.hinge
+		_own(root, door, holder)
+		if s.lock == SecretDoor.Lock.BUTTON:
+			# Looks like the wall: the wall's own concrete, laid on the same grid.
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			_box_faces(st, s.panel)
+			st.generate_normals()
+			var material: Material = materials[&"shell"] if s.mat == &"concrete" else materials.get(s.mat, materials[&"plain"])
+			st.set_material(material)
+			var panel := MeshInstance3D.new()
+			panel.name = "Panel"
+			panel.mesh = st.commit()
+			panel.transform = (s.hinge as Transform3D).affine_inverse()
+			_own(root, panel, door)
+			if s.has("button"):
+				var button := SecretButton.new()
+				button.name = "Button_%d" % i
+				button.model_index = s.button_model
+				button.transform = s.button
+				button.door_path = NodePath("../Door_%d" % i)
+				_own(root, button, holder)
+
 # ---- The scene ------------------------------------------------------------------------
 
 ## The whole Stack as a Megastructure scene (not yet saved).
@@ -1680,6 +2101,9 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 		columns.append(Vector3(tower[0], tower[3], tower[1]))
 	root.nest_columns = columns
 	root.webs = web_nests
+	root.secret_rooms = secret_rooms
+	root.secret_keys = key_spots
+	root.secret_climbers = climber_spots
 	var shell := Node3D.new()
 	shell.name = "Shell"
 	_own(root, shell, root)
@@ -1714,6 +2138,7 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 	_indoor_growth(root, decor)
 	_cobweb_nodes(root, decor)
 	_radios(root, interior)
+	_secret_nodes(root, interior, materials)
 	_swarms(root, decor)
 	var worm := CoilingWorm.new()
 	worm.name = "CoilingWorm"

@@ -26,15 +26,18 @@ const WAKE_AT := Vector3(-1.2, 1.0, 2.6)
 const GROUP := "camps"
 
 var tent := 0
+## A dead climber's (StackSecrets): its fire cold, and no camp to wake at.
+var abandoned := false
 
 static var _forest_scene: PackedScene
 static var _survival_scene: PackedScene
 
 
 ## A camp at `place` (the host's).
-static func build(world: Node, place: Transform3D, tent_variant: int) -> Camp:
+static func build(world: Node, place: Transform3D, tent_variant: int, cold: bool = false) -> Camp:
 	var camp := Camp.new()
 	camp.tent = tent_variant
+	camp.abandoned = cold
 	world.add_child(camp)
 	camp.global_transform = place
 	return camp
@@ -59,15 +62,17 @@ func wake_point() -> Vector3:
 
 
 func net_spawn_args() -> Dictionary:
-	return {tent = tent}
+	return {tent = tent, abandoned = abandoned}
 
 
 func net_restore(data: Dictionary) -> void:
 	tent = data.get("tent", 0)
+	abandoned = data.get("abandoned", false)
 
 
 func _ready() -> void:
-	add_to_group(GROUP)
+	if not abandoned:
+		add_to_group(GROUP)
 	add_to_group(NetEntities.GROUP)
 	add_child(make_look(tent))
 	# Something solid round the tent.
@@ -79,6 +84,11 @@ func _ready() -> void:
 	shape.position = Vector3(0.0, 0.9, 0.0)
 	body.add_child(shape)
 	add_child(body)
+	if abandoned:
+		var bedroll := Bedroll.new()
+		bedroll.position = BED_AT
+		add_child(bedroll)
+		return # long gone cold
 	# The fire: cooks (FireSource), burns (the barrels' flames), glows.
 	var fire := FireSource.new()
 	fire.radius = 0.5

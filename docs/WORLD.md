@@ -177,3 +177,4 @@ It also has:
   - wind at the openings (three voices that follow you to the nearest windows);
   - a drone inside and near the base.
 - **Made by:** `tools/make_the_stack.gd` (StackBuilder), into `scenes/megastructures/the_stack.scn` and `maps/megastructures/the_stack.map` (586 brushes in Shell and Interior layers, to edit in TrenchBroom from now on).
+- **Secrets (2026-10-17):** 30 person-size secret doors (14 to loot rooms, 10 to shortcuts, 6 secret entrances), half opened by a universal key and half by a hidden button within 40 m. The rooms and shafts are new blocks grown onto the towers' outsides. Keys lie in halls, on dead climbers and in window rooms, rolled each play. See RULES.md and `StackBuilder._secrets()`.

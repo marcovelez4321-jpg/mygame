@@ -46,6 +46,8 @@ static func run(tree: SceneTree) -> void:
 			&"rubble": "Megastructure/stack_plain", &"clay": "Megastructure/stack_plain",
 			&"metal": "Megastructure/stack_plain", &"sludge": "Megastructure/stack_plain"}
 	print("skybridges: ", builder.bridge_report)
+	var buttons := builder.secrets.filter(func(s: Dictionary) -> bool: return s.has("button")).size()
+	print("secrets: ", builder.secret_report, ", ", builder.secrets.size(), " doors (", buttons, " with buttons), ", builder.key_spots.size(), " key spots, ", builder.climber_spots.size(), " climber spots")
 	print("hive: ", builder.hive_holes.size(), " holes; panic stairs: ", builder.panic_report)
 	print("cobwebs: ", builder.web_quads.size(), " (", builder.web_quads.filter(func(w: Dictionary) -> bool: return w.indoors).size(), " inside)")
 	print("map: ", MAP, " (error ", builder.write_map(ProjectSettings.globalize_path(MAP), names), ")")

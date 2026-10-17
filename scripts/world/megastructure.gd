@@ -92,6 +92,13 @@ extends Node3D
 @export var gang_wake: float = 70.0
 @export var gang_min: int = 6
 @export var gang_max: int = 12
+@export_group("Secrets")
+## The Stack's secrets (StackBuilder; StackSecrets fills them each play):
+## the loot rooms behind its secret doors, the hall-floor spots a key may
+## lie on, and where a dead climber may be (all local).
+@export var secret_rooms: Array[AABB] = []
+@export var secret_keys := PackedVector3Array()
+@export var secret_climbers := PackedVector3Array()
 @export_group("Webs")
 ## Cobwebs with a spider horde each (the builder's: {at: the floor by the
 ## web, local; size: the web's width, m; indoors; radius: how far its
@@ -155,6 +162,10 @@ func _ready() -> void:
 		var dressing := StackDressing.new()
 		dressing.name = "Dressing"
 		add_child(dressing)
+	if not secret_rooms.is_empty() or not secret_keys.is_empty():
+		var secrets := StackSecrets.new()
+		secrets.name = "Secrets"
+		add_child(secrets)
 	if not Network.is_online() or multiplayer.is_server():
 		_roll_rooms(randi() % 1000000 + 1)
 	else:

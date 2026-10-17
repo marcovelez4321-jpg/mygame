@@ -23,7 +23,7 @@ signal changed
 
 ## What a stack is.
 enum Kind { NONE = -1, GUN, BULLETS, SHELLS, ROCKETS, GRENADES, PILLS, BANDAGE, SCRAP, SILK, CAMP_KIT,
-		MEAT, ROTTEN_MEAT, COOKED_MEAT, GLUED_MEAT, GLUED_COOKED }
+		MEAT, ROTTEN_MEAT, COOKED_MEAT, GLUED_MEAT, GLUED_COOKED, KEY }
 
 const MAX_STACKS := 12
 ## Camp kits: only one on you at a time (the user's).
@@ -31,7 +31,7 @@ const MAX_CAMP_KITS := 1
 ## Weight (kg) of one of each kind; a gun weighs its own (WeaponData.carry_weight).
 const WEIGHTS := {
 	Kind.BULLETS: 0.012, Kind.SHELLS: 0.04, Kind.ROCKETS: 2.0, Kind.GRENADES: 0.4,
-	Kind.PILLS: 0.05, Kind.BANDAGE: 0.08, Kind.SCRAP: 0.6, Kind.SILK: 0.15, Kind.CAMP_KIT: 3.0,
+	Kind.PILLS: 0.05, Kind.BANDAGE: 0.08, Kind.SCRAP: 0.6, Kind.SILK: 0.15, Kind.CAMP_KIT: 3.0, Kind.KEY: 0.02,
 }
 
 ## Up to free_weight (kg) the pack costs nothing ("overweight" past it: the
@@ -55,6 +55,8 @@ const WEIGHTS := {
 var scrap := 0
 var silk := 0
 var camp_kits := 0
+## Keys for the Stack's key doors (SecretDoor): any key, any key door; used up.
+var keys := 0
 ## Meat chunks (CarryItem.to_data(): their weight, boss or not, when they
 ## rot, cooked or not). They go on rotting in here (the user's).
 var meat: Array[Dictionary] = []
@@ -128,7 +130,7 @@ func stacks() -> Array[Dictionary]:
 	if grenades > 0:
 		found.append({kind = Kind.GRENADES, count = grenades, weapon = null})
 	for pair: Array in [[Kind.PILLS, weapons.pills], [Kind.BANDAGE, weapons.bandages], [Kind.SCRAP, scrap],
-			[Kind.SILK, silk], [Kind.CAMP_KIT, camp_kits]]:
+			[Kind.SILK, silk], [Kind.CAMP_KIT, camp_kits], [Kind.KEY, keys]]:
 		if pair[1] > 0:
 			found.append({kind = pair[0], count = pair[1], weapon = null})
 	var meats := {}
@@ -259,6 +261,8 @@ func add(kind: Kind, amount: int) -> int:
 		Kind.CAMP_KIT:
 			amount = mini(amount, MAX_CAMP_KITS - camp_kits)
 			camp_kits += amount
+		Kind.KEY:
+			keys += amount
 		_:
 			return 0
 	changed.emit()
@@ -289,10 +293,12 @@ func take_all() -> Dictionary:
 	gear.scrap = scrap
 	gear.silk = silk
 	gear.camp_kits = camp_kits
+	gear.keys = keys
 	gear.meat = meat.duplicate(true)
 	scrap = 0
 	silk = 0
 	camp_kits = 0
+	keys = 0
 	meat.clear()
 	placing_camp = false
 	changed.emit()
@@ -306,6 +312,7 @@ func give_all(gear: Dictionary) -> void:
 	scrap += int(gear.get("scrap", 0))
 	silk += int(gear.get("silk", 0))
 	camp_kits = mini(camp_kits + int(gear.get("camp_kits", 0)), MAX_CAMP_KITS)
+	keys += int(gear.get("keys", 0))
 	for chunk: Dictionary in gear.get("meat", []):
 		meat.append(chunk)
 	changed.emit()
@@ -342,10 +349,19 @@ func take(kind: Kind, amount: int) -> bool:
 			if camp_kits < amount:
 				return false
 			camp_kits -= amount
+		Kind.KEY:
+			if keys < amount:
+				return false
+			keys -= amount
 		_:
 			return false
 	changed.emit()
 	return true
+
+
+## A key door opened (SecretDoor): one key used up.
+func use_key() -> bool:
+	return take(Kind.KEY, 1)
 
 
 ## How heavy the pack is, in kg.
