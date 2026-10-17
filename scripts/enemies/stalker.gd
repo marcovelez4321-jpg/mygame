@@ -156,26 +156,21 @@ const DRAG_PULL := 8.0
 const DRAG_TIME := 15.0
 const DRAG_DAMAGE := 70.0
 const TEAMMATE_FREES := 30.0
-## Broke out of its grip yourself (the user's): flung off in a random way at
-## THROW_SPEED (a little up), THROW_DAMAGE.
-const THROW_SPEED := 25.0
-const THROW_DAMAGE := 15.0
-## After a drag (the user's): off to cover, then COOLDOWN before it stages
-## or strikes again -- it keeps stalking meanwhile.
+
+const THROW_SPEED := 30.0
+const THROW_DAMAGE := 50.0
+
 const COOLDOWN := Vector2(120.0, 180.0)
-## Rushed at (the user's): a player within RUSHED_RANGE coming at it faster
-## than RUSHED_SPEED and it flees flat out (SPRINT) to cover; one that still
-## gets within GRAB_RANGE is grabbed and dragged off (cooldown aside).
+
 const RUSHED_RANGE := 20.0
-const RUSHED_SPEED := 2.0
-const GRAB_RANGE := 10.0 # (doubled, the user's: was 5)
+const RUSHED_SPEED := 1.25
+const GRAB_RANGE := 10.0 
 var _cooldown_left := 0.0
 var _hide_fast := false
 var _victim: PlayerMovement
 var _drag_way := Vector3.FORWARD
 var _freed_by_others := 0.0
 
-## The shared fear meter, 0..1 (the host's).
 var fear := 0.0
 var _full_for := 0.0
 var _stunt := Stunt.RATTLE
@@ -235,7 +230,7 @@ var _hitboxes: Array = []
 ## pulling back to its own shape, gravity dragging, damped; the body's moves
 ## swing them and every hand or foot planting gives the head a little kick.
 ## The head still locks on you, the bobble laid over it.
-const JIGGLE_STIFFNESS := 9.0
+const JIGGLE_STIFFNESS := 13.0
 const JIGGLE_DAMPING := 2.4
 const JIGGLE_GRAVITY := 6.0
 const STEP_KICK := 1.2

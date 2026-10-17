@@ -72,6 +72,11 @@ signal respawned
 ## stairs with each step at or below this height.
 @export var step_height: float = 0.5
 
+@export_group("Testing")
+## Start (and restart) in the heart's cathedral, where the hive's stairs come
+## up through its floor -- no climbing every time (the user's). Off to play.
+@export var spawn_in_cathedral: bool = false
+
 @export_group("Death")
 ## Seconds between dying and the level restarting.
 @export var respawn_delay: float = 2.0
@@ -491,6 +496,22 @@ func _ready() -> void:
 	# without touching the actual aim/shot math at all.
 	weapons.shot_fired.connect(_on_shot_fired)
 	weapons.hit_confirmed.connect(_on_hit_confirmed)
+	if spawn_in_cathedral and is_multiplayer_authority():
+		_to_cathedral.call_deferred()
+
+
+## Testing (spawn_in_cathedral): straight to the Stack's CathedralSpawn marker,
+## once the level's all in, facing into the cathedral.
+func _to_cathedral() -> void:
+	await get_tree().process_frame
+	var spot := get_tree().get_first_node_in_group(&"cathedral_spawn") as Node3D
+	if spot == null:
+		push_warning("spawn_in_cathedral: no CathedralSpawn in this level (re-bake the Stack)")
+		return
+	global_position = spot.global_position + Vector3.UP * 0.2
+	velocity = Vector3.ZERO
+	rotation.y = spot.global_rotation.y
+	spawn_position = global_position
 
 
 ## A backpack item clicked (BackpackView): used in the next simulation tick.

@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dn0egeu10fhn0"
+path="res://.godot/imported/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).mp3-b8c3310b651b9b689be8c36fb69c1db9.mp3str"
+
+[deps]
+
+source_file="res://audio/music/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).mp3"
+dest_files=["res://.godot/imported/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).mp3-b8c3310b651b9b689be8c36fb69c1db9.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

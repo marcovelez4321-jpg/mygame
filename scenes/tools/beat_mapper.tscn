@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://blkcb34plowx0"]
 
-[ext_resource type="Script" path="res://scripts/tools/beat_mapper.gd" id="1"]
+[ext_resource type="Script" uid="uid://bngpknimy8r6h" path="res://scripts/tools/beat_mapper.gd" id="1"]
 
-[node name="BeatMapper" type="Control"]
+[node name="BeatMapper" type="Control" unique_id=490494836]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

@@ -1751,8 +1751,15 @@ const CATHEDRAL_GAP := 30.0
 const CATHEDRAL_GAP_UP := 165.0
 const CATHEDRAL_SLIT := Vector2(3.0, 60.0) # wide, tall
 const CATHEDRAL_SLIT_UP := 10.0
+## How high the heart hangs over the cathedral floor (m).
+const HEART_HANG := 100.0
+## Its song's beat map (the beat mapper's), if it's there.
+const HEART_MAP := "res://audio/music/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).beats.tres"
 ## The room (floor to ceiling, local), once built; empty before.
 var cathedral := AABB()
+## Where the stairs come up onto its floor, facing in (local): a marker in
+## the scene (CathedralSpawn) the player can start at while testing.
+var cathedral_entry := Transform3D()
 var cathedral_random := RandomNumberGenerator.new()
 var cathedral_report := {}
 ## What the skybridges keep clear of: the cathedral and the tiers under it.
@@ -1900,6 +1907,9 @@ func _cathedral() -> void:
 	# Up from the hive's top hall: its panic stairs carry on, through the floor.
 	var stairs := _panic_up(panic_tangles.get(top_hall.name, {}), top_hall.name, base_y, floor_y, room)
 	halls.append({tower = HIVE, box = room, name = "Cathedral"})
+	if cathedral_entry.origin == Vector3.ZERO:
+		# (No way up through the floor: by the -Z wall, facing in.)
+		cathedral_entry = Transform3D(Basis.looking_at(Vector3.BACK, Vector3.UP), Vector3(middle.x, floor_y, room.position.z + 12.0))
 	cathedral_report = {floor = floor_y, roof = block.end.y, room = room.size, tiers = CATHEDRAL_TIERS, tier_pieces = tier_pieces,
 			hive_width = snappedf(widest, 0.1), gap_side = gap_side, slit_sides = sides, stairs = stairs}
 
@@ -1983,6 +1993,7 @@ func _panic_up(tangle: Dictionary, group: String, ceiling: float, floor_y: float
 				landings[i].links += 1
 				var bottom := minf(start.y - 3.0, ceiling - 1.0)
 				_carve(_span(start, finish - out * 0.5, Vector3(out.z, 0.0, out.x).abs(), PANIC_WIDTH + 4.0, bottom, floor_y + 1.0 - bottom))
+				cathedral_entry = Transform3D(Basis.looking_at(out, Vector3.UP), finish + out * 3.0)
 				top = from
 				placed = true
 				break
@@ -2561,6 +2572,21 @@ func build_scene(textures: Dictionary, wind: AudioStream, drone: AudioStream) ->
 		rooms.append(w.room)
 	sound.inside_zones = rooms
 	_own(root, sound, decor)
+	if cathedral.size != Vector3.ZERO:
+		var entry := Marker3D.new()
+		entry.name = "CathedralSpawn"
+		entry.transform = cathedral_entry
+		entry.add_to_group(&"cathedral_spawn", true)
+		_own(root, entry, root)
+		# The heart (HeartBoss), hanging HEART_HANG over the middle of its floor.
+		var heart := Node3D.new()
+		heart.name = "Heart"
+		heart.set_script(load("res://scripts/heart/heart_boss.gd"))
+		heart.position = Vector3(cathedral.get_center().x, cathedral.position.y + HEART_HANG, cathedral.get_center().z)
+		heart.set("room", cathedral)
+		if ResourceLoader.exists(HEART_MAP):
+			heart.set("beat_map", load(HEART_MAP))
+		_own(root, heart, root)
 	var lair := CollisionShape3D.new()
 	lair.name = "Lair"
 	var lair_box := BoxShape3D.new()
