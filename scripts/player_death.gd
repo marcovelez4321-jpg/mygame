@@ -37,6 +37,8 @@ var _from_view := Transform3D.IDENTITY
 var _back := Vector3.BACK
 var _time := 0.0
 var _black: ColorRect
+## Died while the Stalker had you: its ragdoll is the body (freed on waking).
+var _drag: StalkerDrag
 
 
 ## Dead: the ragdoll here, and (your own body) the pull-back and fade.
@@ -73,6 +75,15 @@ func _ready() -> void:
 	var flat := Vector3(momentum.x, 0.0, momentum.z)
 	var facing := -player.global_basis.z
 	_back = -(flat.normalized() if flat.length() > 1.0 else Vector3(facing.x, 0.0, facing.z).normalized())
+	var drag: Variant = player.get_meta(&"stalker_drag", null)
+	if drag is StalkerDrag and is_instance_valid(drag):
+		# Died in the Stalker's grip: no second body -- the dragged one goes
+		# limp where it lies, and the view pulls back from where it was.
+		_drag = drag
+		_hips = _drag.die()
+		if _model:
+			_model.free()
+			_model = null
 	if _model:
 		add_child(_model)
 		for node in _model.find_children("*", "AnimationPlayer", true, false):
@@ -83,7 +94,7 @@ func _ready() -> void:
 	var viewmodel := player.get_node_or_null(^"Head/Camera3D/Viewmodel") as Node3D
 	if viewmodel:
 		viewmodel.visible = false
-	_saved_head = player.head.transform
+	_saved_head = _drag.saved_head() if _drag else player.head.transform
 	_from_view = player.head.global_transform
 	if player.is_multiplayer_authority():
 		var layer := CanvasLayer.new()
@@ -160,6 +171,8 @@ func _exit_tree() -> void:
 		return
 	if player.get_meta(&"player_death", null) == self:
 		player.remove_meta(&"player_death")
+	if is_instance_valid(_drag):
+		_drag.queue_free()
 	if _body_model:
 		_body_model.visible = true
 	var viewmodel := player.get_node_or_null(^"Head/Camera3D/Viewmodel") as Node3D

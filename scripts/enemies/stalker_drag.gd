@@ -48,6 +48,8 @@ var _time := 0.0
 var _releasing := false
 var _release_time := 0.0
 var _release_from := Transform3D.IDENTITY
+## Died while taken (PlayerDeath took over): its ragdoll is the body now.
+var _dead := false
 
 
 ## Starts it for `player` (here), dragged by `stalker`.
@@ -159,7 +161,7 @@ func _ready() -> void:
 ## `throw` (the user's: broke out of its grip): flung that way at once,
 ## yours to control again straight away (the view still eases up).
 func release(throw: Vector3 = Vector3.ZERO) -> void:
-	if _releasing:
+	if _releasing or _dead:
 		return
 	_releasing = true
 	_release_time = 0.0
@@ -176,6 +178,20 @@ func release(throw: Vector3 = Vector3.ZERO) -> void:
 		player.collision_layer = _saved_layers.x
 		player.collision_mask = _saved_layers.y
 		player.shove(throw)
+
+
+## Died while taken (PlayerDeath): the ragdoll stays as the body, no more
+## pulling or riding its head -- the view and the end are PlayerDeath's (it
+## frees this when you wake). The ragdoll's hips: PlayerDeath's to look at.
+func die() -> PhysicalBone3D:
+	_dead = true
+	player.weapons.unlatch_leech(self)
+	return _hips
+
+
+## The head as it sat before the grab (PlayerDeath's: your eyes on waking).
+func saved_head() -> Transform3D:
+	return _saved_head
 
 
 static func _flat(v: Vector3) -> Vector3:
@@ -206,7 +222,7 @@ func _exit_tree() -> void:
 
 func _physics_process(delta: float) -> void:
 	escape = maxf(escape - ESCAPE_SLIP * delta, 0.0)
-	if _releasing or not is_instance_valid(stalker) or _foot == null:
+	if _releasing or _dead or not is_instance_valid(stalker) or _foot == null:
 		return
 	# Hauled by the foot toward its hold: just behind it, low.
 	var hold := stalker.global_position + stalker.global_basis.z * 0.8 + stalker.global_basis.y * 0.35
@@ -220,6 +236,8 @@ func _physics_process(delta: float) -> void:
 ## the face looks -- yours only, and out of your hands.
 func _process(delta: float) -> void:
 	_time += delta
+	if _dead:
+		return
 	if _releasing:
 		_release_time += delta
 		if player.is_multiplayer_authority():
