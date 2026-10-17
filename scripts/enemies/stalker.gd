@@ -53,6 +53,19 @@ const FLEE_TIME := 4.0
 const RELOCATE_FAR := 280.0
 const RELOCATE_AFTER := 5.0
 const RELOCATE_TO := Vector2(55.0, 85.0)
+## Never far behind (the user's: it lost you too easily -- Alien: Isolation's
+## "backstage"): unseen, it doesn't crawl all the way. More than LEASH from
+## everyone for LEASH_TIME, or not gaining STUCK_GAIN on them in STUCK_TIME
+## (hung up on a wall, a ceiling, the land), it turns up again out of sight
+## BACKSTAGE_TO from one of them.
+const LEASH := 90.0
+const LEASH_TIME := 6.0
+const STUCK_TIME := 6.0
+const STUCK_GAIN := 2.0
+const BACKSTAGE_TO := Vector2(35.0, 55.0)
+var _leash_for := 0.0
+var _stuck_for := 0.0
+var _stuck_best := INF
 const WALL_DOT := 0.7
 ## Twice a person (the user's): everything about its body scales with this.
 const SIZE := 2.0
@@ -305,6 +318,24 @@ func _think(delta: float) -> void:
 		_far_for = 0.0
 		_turn_up()
 		return
+	# Backstage: too far behind, or hung up and not closing in -- and nobody
+	# watching -- it slips round and turns up closer.
+	if state == State.STALK:
+		_leash_for = _leash_for + delta if distance > LEASH else 0.0
+		if distance < _stuck_best - STUCK_GAIN:
+			_stuck_best = distance
+			_stuck_for = 0.0
+		elif distance > STALK_DISTANCE + 8.0:
+			_stuck_for += delta
+		else:
+			_stuck_best = distance
+			_stuck_for = 0.0
+		if (_leash_for > LEASH_TIME or _stuck_for > STUCK_TIME) and not _seen():
+			_leash_for = 0.0
+			_stuck_for = 0.0
+			_stuck_best = INF
+			_turn_up(BACKSTAGE_TO)
+			return
 	match state:
 		State.SPOTTED:
 			# Dead still a beat, staring back -- then it scrambles off.
@@ -640,7 +671,7 @@ func _go_away() -> void:
 
 ## Back, somewhere out of sight RELOCATE_TO from one of the players (behind
 ## them, on the ground).
-func _turn_up() -> void:
+func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
 	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		_state_left = 2.0
@@ -650,7 +681,7 @@ func _turn_up() -> void:
 	for attempt in 16:
 		var behind := player.head.global_basis.z.rotated(Vector3.UP, randf_range(-1.2, 1.2))
 		behind.y = 0.0
-		var spot := player.global_position + behind.normalized() * randf_range(RELOCATE_TO.x, RELOCATE_TO.y)
+		var spot := player.global_position + behind.normalized() * randf_range(how_far.x, how_far.y)
 		var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 300.0, spot + Vector3.DOWN * 400.0, 1, [get_rid()]))
 		if ground.is_empty():
 			continue
