@@ -210,6 +210,11 @@ var _tilt_left := 0.0
 var _body_y := 0.0
 var _body_pitch := 0.0
 var _body_roll := 0.0
+## Hitboxes on its bones (the user's: shots hit only sometimes -- one capsule
+## down its spine missed the sprawled limbs, and the drawn body trailed the
+## real one): a capsule per part, moved onto its bones every physics tick.
+## [shape, from bone, to bone (-1: a ball at `from`), radius].
+var _hitboxes: Array = []
 
 
 ## The one Stalker (the host's): made once, near the players but hidden.
@@ -232,14 +237,7 @@ func _ready() -> void:
 	sync_to_physics = false
 	collision_layer = 1
 	collision_mask = 0
-	var shape := CollisionShape3D.new()
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.35 * SIZE
-	capsule.height = SPAN
-	shape.shape = capsule
-	shape.rotation.x = PI * 0.5 # lying along its length
-	shape.position = Vector3.UP * BODY_HEIGHT
-	add_child(shape)
+	# (Its hitboxes follow its bones: _build_hitboxes(), after the body.)
 	_health = Health.new()
 	_health.name = "Health"
 	_health.max_health = 1000000.0
@@ -248,6 +246,7 @@ func _ready() -> void:
 	for player in get_tree().get_nodes_in_group("player"):
 		add_collision_exception_with(player as PhysicsBody3D)
 	_build_body()
+	_build_hitboxes()
 	_last_position = global_position
 
 
@@ -270,9 +269,72 @@ func net_apply(value: int) -> void:
 	fear = value / 1000.0
 
 
+# ---- Hitboxes on its bones -------------------------------------------------------------
+
+func _build_hitboxes() -> void:
+	var parts := [["Hips", "Neck", 0.28], ["Neck", "Head", 0.12], ["Head", "", 0.17],
+			["LeftArm", "LeftForeArm", 0.09], ["LeftForeArm", "LeftHand", 0.08],
+			["RightArm", "RightForeArm", 0.09], ["RightForeArm", "RightHand", 0.08],
+			["LeftUpLeg", "LeftLeg", 0.11], ["LeftLeg", "LeftFoot", 0.09],
+			["RightUpLeg", "RightLeg", 0.11], ["RightLeg", "RightFoot", 0.09]]
+	for part: Array in parts:
+		var from: int = _bones.get(part[0], -1)
+		var to: int = _bones.get(part[1], -1) if part[1] != "" else -1
+		if from < 0 or (part[1] != "" and to < 0):
+			continue
+		var shape := CollisionShape3D.new()
+		var radius: float = part[2] * SIZE
+		if to < 0:
+			var ball := SphereShape3D.new()
+			ball.radius = radius
+			shape.shape = ball
+		else:
+			var capsule := CapsuleShape3D.new()
+			capsule.radius = radius
+			shape.shape = capsule
+		add_child(shape)
+		_hitboxes.append([shape, from, to, radius])
+	if _hitboxes.is_empty():
+		# No bones found: one capsule down its length, as before.
+		var shape := CollisionShape3D.new()
+		var capsule := CapsuleShape3D.new()
+		capsule.radius = 0.35 * SIZE
+		capsule.height = SPAN
+		shape.shape = capsule
+		shape.rotation.x = PI * 0.5
+		shape.position = Vector3.UP * BODY_HEIGHT
+		add_child(shape)
+	_update_hitboxes()
+
+
+## Each part's shape onto its bones, where they are this tick.
+func _update_hitboxes() -> void:
+	if _skeleton == null:
+		return
+	var skeleton_xf := _skeleton.global_transform
+	for box: Array in _hitboxes:
+		var shape := box[0] as CollisionShape3D
+		var a: Vector3 = skeleton_xf * _skeleton.get_bone_global_pose(box[1]).origin
+		if int(box[2]) < 0:
+			shape.global_transform = Transform3D(Basis.IDENTITY, a)
+			continue
+		var b: Vector3 = skeleton_xf * _skeleton.get_bone_global_pose(box[2]).origin
+		var along := b - a
+		var length := along.length()
+		if length < 0.001:
+			continue
+		var capsule := shape.shape as CapsuleShape3D
+		capsule.height = maxf(length + float(box[3]) * 2.0, float(box[3]) * 2.0 + 0.01)
+		# A capsule stands along its Y: turned onto the bone.
+		var y := along / length
+		var x := y.cross(Vector3.FORWARD if absf(y.z) < 0.9 else Vector3.RIGHT).normalized()
+		shape.global_transform = Transform3D(Basis(x, y, x.cross(y)), (a + b) * 0.5)
+
+
 # ---- Host: the brain ---------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	_update_hitboxes()
 	if NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
 		return
 	_state_left -= delta
@@ -1284,8 +1346,10 @@ func _process(delta: float) -> void:
 			limb.stepping = false
 			limb.planted = _visual.global_transform * (limb.home as Vector3)
 			limb.foot = limb.planted
+	elif NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
+		_visual.global_transform = _visual.global_transform.interpolate_with(global_transform, 1.0 - exp(-20.0 * delta))
 	else:
-		_visual.global_transform = _visual.global_transform.interpolate_with(global_transform, 1.0 - exp(-14.0 * delta))
+		_visual.global_transform = global_transform # (the host: exactly where it is -- where shots are judged)
 	var hidden := global_position.y < AWAY_DEPTH * 0.5
 	_visual.visible = not hidden
 	if hidden:
