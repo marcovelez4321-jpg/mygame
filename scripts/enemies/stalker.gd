@@ -230,6 +230,9 @@ const HUNT_HEAR := 3.0
 ## out of your view, zigzagging, frantic, then hides.
 const FLANK_SPEED := 18.0
 const FLANK_RING := 20.0
+## Slept (a bedroll, the user's): it gains this share of the trail between it
+## and you at once.
+const SLEEP_PROGRESS := 0.4
 ## Its voices (the user's sounds: StalkerVoices, a slot for everything it does
 ## or decides) -- sparse: none within VOICE_GAP of the last (bar the urgent
 ## ones: hurt, lunge, grab, driven off, thrown off), the ambient ones only by
@@ -958,6 +961,32 @@ func _leap_to(to: Vector3) -> void:
 func _to_trail_end(points: PackedVector3Array) -> void:
 	for j in range(0, points.size() - 1):
 		if _visible_from_any(_body_points(points[j], Basis.IDENTITY)):
+			continue
+		global_position = points[j] + Vector3.UP * RIDE
+		_normal = Vector3.UP
+		_velocity = Vector3.ZERO
+		_crumb = j + 1
+		_crumb_best = INF
+		return
+
+
+## You slept (Bedroll, the host's): while you did, it came on -- at once,
+## SLEEP_PROGRESS of the way down your trail from where it was to you, onto
+## a crumb no one can see it on (never past your newest). Not mid-strike,
+## mid-stunt, fleeing, gone or in someone's view (it never vanishes in sight).
+func slept(p: PlayerMovement) -> void:
+	if state in [State.DRAG, State.LUNGE, State.FLEE, State.AWAY, State.STUNT] or _seen():
+		return
+	var points: PackedVector3Array = (_trails.get(p, {}) as Dictionary).get("points", PackedVector3Array())
+	if points.size() < 3:
+		return
+	if state != State.HUNT or _hunted != p:
+		_start_hunt(p)
+	var keep := _trail_left(points, _crumb) * (1.0 - SLEEP_PROGRESS)
+	var left := _trail_left(points, _crumb)
+	for j in range(_crumb + 1, points.size() - 1):
+		left -= points[j - 1].distance_to(points[j])
+		if left > keep or _visible_from_any(_body_points(points[j], Basis.IDENTITY)):
 			continue
 		global_position = points[j] + Vector3.UP * RIDE
 		_normal = Vector3.UP

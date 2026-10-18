@@ -78,6 +78,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_i0nxx"]
 resource_name = "dragging"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("9_lnnds"), ExtResource("10_2fw24"), ExtResource("12_7g4b5"), ExtResource("5_wn7fs"), ExtResource("11_uusm0"), ExtResource("6_k5p6q"), ExtResource("8_3bn2q"), ExtResource("1_7uqb3"), ExtResource("19_cr7aa")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "dragging"
 volume_db_variance = 1.5
@@ -98,6 +99,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_846kt"]
 resource_name = "dropped"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("19_cr7aa"), ExtResource("4_ohsjd"), ExtResource("12_7g4b5")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "dropped"
 volume_db_variance = 1.5
@@ -129,6 +131,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_bp7r1"]
 resource_name = "grab"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("9_lnnds"), ExtResource("10_2fw24"), ExtResource("12_7g4b5"), ExtResource("5_wn7fs"), ExtResource("11_uusm0"), ExtResource("8_3bn2q"), ExtResource("6_k5p6q"), ExtResource("1_7uqb3")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "grab"
 volume_db_variance = 1.5
@@ -268,6 +271,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_lnnds"]
 resource_name = "thrown_off"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("7_d87ob"), ExtResource("19_cr7aa"), ExtResource("9_lnnds"), ExtResource("10_2fw24"), ExtResource("12_7g4b5"), ExtResource("5_wn7fs"), ExtResource("11_uusm0"), ExtResource("8_3bn2q"), ExtResource("20_dnk53"), ExtResource("17_t6sss")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "thrown_off"
 volume_db_variance = 1.5

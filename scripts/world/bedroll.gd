@@ -2,7 +2,8 @@ class_name Bedroll
 extends StaticBody3D
 
 ## A camp's bedroll (Camp): F to sleep (the user's: heals SLEEP_HEAL, uses
-## SLEEP_HUNGER of the hunger meter; the screen fades out and back).
+## SLEEP_HUNGER of the hunger meter; the screen fades out and back). While you
+## sleep the Stalker comes on down your trail (Stalker.slept, the user's).
 
 const SLEEP_HEAL := 50.0
 const SLEEP_HUNGER := 0.25
@@ -32,6 +33,9 @@ func use_by(player: Node) -> void:
 	if not Network.is_online() or body.multiplayer.is_server():
 		body.health.heal(SLEEP_HEAL)
 		body.virus.hunger = maxf(body.virus.hunger - SLEEP_HUNGER, 0.0)
+		var stalker := body.get_tree().get_first_node_in_group(&"stalker")
+		if stalker:
+			stalker.call(&"slept", body)
 	if body.is_multiplayer_authority():
 		_fade(body)
 
