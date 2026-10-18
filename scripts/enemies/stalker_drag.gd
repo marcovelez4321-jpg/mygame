@@ -3,10 +3,9 @@ extends Node3D
 
 ## Taken by the Stalker (the user's, 2026-10-17; stage 3), on every machine:
 ## the player goes limp -- a ragdoll of their own character, on their back --
-## and the Stalker drags it off by one foot. Their camera pulls out of their
-## head to a third-person view off to the side (DRAG_VIEW_*: the user's,
-## 2026-10-18), out of their control, so they watch themselves being hauled
-## off. Their own body is hidden meanwhile;
+## and the Stalker drags it off by one foot. Their camera rides the
+## ragdoll's head (just in front of the face), out of their control: every
+## bump and swing of the drag is felt. Their own body is hidden meanwhile;
 ## the player is carried where the ragdoll's hips are.
 ## Getting loose: spam click -- each click a tug (ESCAPE_CLICKS of them,
 ## slipping back ESCAPE_SLIP a second), the Harvestman grab's meter; or a
@@ -28,14 +27,6 @@ const VIEW_AHEAD := 0.14
 const INTO_TIME := 0.35
 const OUT_TIME := 0.5
 const VIEW_FOLLOW := 18.0
-## The view while you're dragged (the user's, 2026-10-18): pulled out of your
-## head DRAG_VIEW_DISTANCE metres, off to one side and above, framing you and
-## the Stalker together (the middle between your body and it) -- you see
-## yourself being hauled off. Followed smoothly (DRAG_VIEW_FOLLOW), stopping
-## short of walls, eased out over DRAG_VIEW_IN.
-const DRAG_VIEW_DISTANCE := 8.0
-const DRAG_VIEW_FOLLOW := 6.0
-const DRAG_VIEW_IN := 0.6
 
 var player: PlayerMovement
 var stalker: Node3D
@@ -57,8 +48,6 @@ var _time := 0.0
 var _releasing := false
 var _release_time := 0.0
 var _release_from := Transform3D.IDENTITY
-## Which side of the drag the view sits on (picked once: it never flips).
-var _view_side := 0.0
 ## Died while taken (PlayerDeath took over): its ragdoll is the body now.
 var _dead := false
 
@@ -259,29 +248,18 @@ func _process(delta: float) -> void:
 		if _release_time >= OUT_TIME:
 			queue_free()
 		return
-	if _hips == null or not player.is_multiplayer_authority():
+	if _head == null or not player.is_multiplayer_authority():
 		return
-	# You and it, from a way off to one side and above.
-	var body := _hips.global_position
-	var it := stalker.global_position if is_instance_valid(stalker) else body
-	var focus := (body + it) * 0.5 + Vector3.UP * 0.5
-	var line := Vector3(it.x - body.x, 0.0, it.z - body.z)
-	line = line.normalized() if line.length_squared() > 0.01 else Vector3.FORWARD
-	var side := line.cross(Vector3.UP).normalized()
-	if _view_side == 0.0:
-		# The side you were already facing from (so it pulls back, not across).
-		_view_side = 1.0 if side.dot(player.head.global_position - focus) >= 0.0 else -1.0
-	var way := (side * _view_side * 0.8 + Vector3.UP * 0.6 - line * 0.3).normalized()
-	var reach := DRAG_VIEW_DISTANCE
-	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(focus, focus + way * reach, 1))
-	if not hit.is_empty():
-		reach = maxf(focus.distance_to(hit.position) - 0.4, 0.5)
-	var eye := focus + way * reach
-	var look := (focus - eye).normalized()
-	var target := Transform3D(Basis.looking_at(look, Vector3.UP if absf(look.dot(Vector3.UP)) < 0.98 else Vector3.FORWARD), eye)
-	# Followed smoothly, eased out into from where you were looking.
-	_view = _view.interpolate_with(target, 1.0 - exp(-DRAG_VIEW_FOLLOW * delta)) if _time > delta else target
-	var into := smoothstep(0.0, 1.0, clampf(_time / DRAG_VIEW_IN, 0.0, 1.0))
+	var face := _head.global_basis
+	var forward := face.z.normalized() if face.z.length_squared() > 0.0001 else Vector3.UP
+	var up := face.y.normalized()
+	if absf(forward.dot(up)) > 0.99:
+		up = Vector3.UP
+	var target := Transform3D(Basis.looking_at(forward, up), _head.global_position + forward * VIEW_AHEAD)
+	# Followed a touch smoothed (the violence comes through, not the jitter),
+	# eased into from where you were looking.
+	_view = _view.interpolate_with(target, 1.0 - exp(-VIEW_FOLLOW * delta))
+	var into := smoothstep(0.0, 1.0, clampf(_time / INTO_TIME, 0.0, 1.0))
 	player.head.global_transform = _start_view.interpolate_with(_view, into)
 
 

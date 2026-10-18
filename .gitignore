@@ -8,3 +8,7 @@ autosave/
 
 # Windows' temporary copies of a DLL that's in use (the editor has Terrain3D loaded)
 addons/terrain_3d/bin/~*
+
+# Godot's hot-reload copies of extension DLLs, and Windows temp files (never commit)
+addons/**/~*
+*.TMP
