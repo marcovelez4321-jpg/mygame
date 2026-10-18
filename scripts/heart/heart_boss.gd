@@ -54,6 +54,31 @@ const THUMP_RISE := 60.0
 const THUMP_FALL := 9.0
 const GLOW := 12.0
 const DRIP_EVERY := 0.6
+## Its health and the stun (the user's): MAX_HEALTH in all, flashing white
+## each hit. Every STUN_EVERY damage it's stunned for STUN_TIME: the music
+## scratches down to a stop like a record (SCRATCH_DOWN), it does nothing but
+## beat -- a plain heartbeat, STUN_BPM at the first stun and STUN_BPM_STEP
+## faster each one after, spraying blood every beat -- and every shot into
+## it is an artery shot (HeartHitbox). Then the music spins back up like a
+## DJ's scratch (SCRATCH_UP) from right where it stopped, and it fights on.
+## At 0: it bursts, hangs still and silent, and the screen fades to black
+## over DEATH_FADE.
+const MAX_HEALTH := 700.0
+const STUN_EVERY := 150.0
+const STUN_TIME := 10.0
+const STUN_BPM := 60.0
+const STUN_BPM_STEP := 10.0
+const SCRATCH_DOWN := 0.7
+const SCRATCH_UP := 0.5
+const SCRATCH_LOW := 0.03
+const DEATH_FADE := 7.0
+## Black, then the words (the user's), then back to the game.
+const DEATH_TEXT := "You've killed the heart... but what about the brain?"
+const TEXT_IN := 1.0
+const TEXT_HOLD := 4.0
+const TEXT_OUT := 1.0
+const FADE_BACK := 2.0
+const HIT_FLASH := 0.08
 ## A kick (the user's): the cathedral's walls, columns and mezzanines judder
 ## (their meshes only -- the floor you stand on doesn't move) this far, for
 ## about this long; its lamps flicker and dim, then come back.
@@ -93,6 +118,18 @@ var _beat_age := 10.0
 var _next_beat := 0.0
 var _next_beam := 0
 var _drip_left := 0.0
+## Stunned now (shots into it are artery shots); dead.
+var stunned := false
+var dead := false
+var _stun_left := 0.0
+var _stuns := 0
+var _stun_meter := 0.0
+var _stun_beat_left := 0.0
+var _health: Health
+var _hitbox: HeartHitbox
+var _scratch: Tween
+var _spray_points: Array[Node3D] = []
+var _spray_wait := 0.0
 var _room_meshes: Array[Node3D] = []
 var _room_rests: Array[Vector3] = []
 var _lamps: Array[Light3D] = []
@@ -127,6 +164,7 @@ func _ready() -> void:
 	add_child(_light)
 	_player = AudioStreamPlayer.new()
 	add_child(_player)
+	_build_hitbox()
 	_build_chains.call_deferred() # once the cathedral's walls are in the physics
 	_find_room.call_deferred()
 
@@ -142,22 +180,226 @@ func _process(delta: float) -> void:
 	elif not inside and _active:
 		_stop()
 	_beat_age += delta
-	if _active:
+	_spray_wait -= delta
+	if dead:
+		pass # (still: no beat, no attacks)
+	elif stunned:
+		_stunned_tick(delta)
+	elif _active:
 		_tick(delta)
 	_shake_room(delta)
 	# One thump, and the light pulsing with it.
-	var thump := (1.0 - exp(-_beat_age * THUMP_RISE)) * exp(-_beat_age * THUMP_FALL)
+	var thump := 0.0 if dead else (1.0 - exp(-_beat_age * THUMP_RISE)) * exp(-_beat_age * THUMP_FALL)
 	_model.scale = Vector3.ONE * _base_scale * (1.0 + THUMP * thump)
 	_light.light_energy = 1.0 + GLOW * thump
 	_update_chains(thump)
 	# Dripping on the floor below.
 	_drip_left -= delta
-	if _drip_left <= 0.0:
+	if _drip_left <= 0.0 and not dead:
 		_drip_left = DRIP_EVERY * randf_range(0.5, 1.5)
 		var from := global_position + Vector3(randf_range(-_radii.x, _radii.x) * 0.6, -_radii.y * 0.8, randf_range(-_radii.z, _radii.z) * 0.6)
 		var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 400.0, 1))
 		if not hit.is_empty():
 			BloodFX.spawn_splatter(get_tree().current_scene, hit.position, hit.normal, randf_range(0.8, 2.0))
+
+
+# ---- Its health, the stun, its death ------------------------------------------------
+
+## Its body for shots: the model's own shape (convex), where it hangs, with
+## its Health (the host's to take damage).
+func _build_hitbox() -> void:
+	_hitbox = HeartHitbox.new()
+	_hitbox.name = "Body"
+	_hitbox.heart = self
+	add_child(_hitbox)
+	for node in _model.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		if mesh.mesh == null:
+			continue
+		# The mesh as it sits here (at its resting size).
+		var to_heart := Transform3D.IDENTITY
+		var walk: Node = mesh
+		while walk != self and walk is Node3D:
+			to_heart = (walk as Node3D).transform * to_heart
+			walk = walk.get_parent()
+		var convex := mesh.mesh.create_convex_shape(true, true)
+		var points := PackedVector3Array()
+		for p in convex.points:
+			points.append(to_heart * p)
+		convex.points = points
+		var shape := CollisionShape3D.new()
+		shape.shape = convex
+		_hitbox.add_child(shape)
+	_health = Health.new()
+	_health.name = "Health"
+	_health.max_health = MAX_HEALTH
+	_health.bleeds_out = false
+	_hitbox.add_child(_health)
+	_health.damaged.connect(_on_damaged)
+	_health.died.connect(_on_died)
+	# Spots on its surface its stunned beats spray out of.
+	for i in 6:
+		var way := Vector3(randf_range(-1.0, 1.0), randf_range(-0.6, 1.0), randf_range(-1.0, 1.0)).normalized()
+		var spot := Node3D.new()
+		_model.add_child(spot)
+		spot.position = way * _radii * 0.8 / _base_scale
+		spot.set_meta(&"out", way)
+		_spray_points.append(spot)
+
+
+## Hit (the host's Health): everyone sees it flash; every STUN_EVERY (not
+## counting what lands while it's stunned) it's stunned.
+func _on_damaged(amount: float, _attacker: int) -> void:
+	if Network.is_online() and not multiplayer.is_server():
+		return
+	Network.send_heart_event(&"hit")
+	if stunned or dead:
+		return
+	_stun_meter += amount
+	if _stun_meter >= STUN_EVERY and not _health.is_dead:
+		_stun_meter -= STUN_EVERY
+		Network.send_heart_event(&"stun")
+
+
+func _on_died(_attacker: int, _critical: bool) -> void:
+	if Network.is_online() and not multiplayer.is_server():
+		return
+	Network.send_heart_event(&"die")
+
+
+## Network.send_heart_event, on every game.
+func event(kind: StringName) -> void:
+	match kind:
+		&"hit":
+			HitFlash.flash(_model, Color.WHITE, HIT_FLASH)
+		&"stun":
+			_set_stunned(true)
+		&"recover":
+			_set_stunned(false)
+		&"die":
+			_die()
+
+
+func _set_stunned(on: bool) -> void:
+	if dead or on == stunned:
+		return
+	stunned = on
+	if on:
+		_stuns += 1
+		_stun_left = STUN_TIME
+		_stun_beat_left = 0.0
+		_scratch_down(false)
+	else:
+		_scratch_up()
+
+
+## Stunned: just its heartbeat, faster each stun, blood spraying every beat;
+## the host ends it.
+func _stunned_tick(delta: float) -> void:
+	_stun_left -= delta
+	_stun_beat_left -= delta
+	if _stun_beat_left <= 0.0:
+		_stun_beat_left = 60.0 / (STUN_BPM + STUN_BPM_STEP * (_stuns - 1))
+		_beat_age = 0.0
+		_spray_beat()
+	if _stun_left <= 0.0 and not (Network.is_online() and not multiplayer.is_server()):
+		Network.send_heart_event(&"recover")
+
+
+## A stunned beat: blood spurting out of a few spots on it.
+func _spray_beat() -> void:
+	var world := get_tree().current_scene
+	_spray_points.shuffle()
+	for i in mini(3, _spray_points.size()):
+		var spot := _spray_points[i]
+		var out: Vector3 = spot.get_meta(&"out")
+		BloodFX.spawn_artery_spurt(spot, 0.5, [_hitbox.get_rid()], Vector3.ZERO, (_model.global_basis.inverse() * out).normalized())
+		BloodFX.spawn_impact(world, spot.global_position, out, BloodFX.BLOOD_COLOR, 4.0)
+
+
+## An artery shot (while it's stunned): a spurt from where it was hit.
+func artery_spray(at: Vector3, normal: Vector3) -> void:
+	if _spray_wait > 0.0:
+		return # (a shotgun's pellets: one spurt)
+	_spray_wait = 0.15
+	var wound := Node3D.new()
+	_model.add_child(wound)
+	wound.global_position = at
+	BloodFX.spawn_artery_spurt(wound, 1.2, [_hitbox.get_rid()], Vector3.ZERO, (_model.global_basis.inverse() * normal).normalized())
+	BloodFX.spawn_impact(get_tree().current_scene, at, normal, BloodFX.BLOOD_COLOR, 3.0)
+	get_tree().create_timer(3.0).timeout.connect(wound.queue_free)
+
+
+## The record scratch: the song slowing to a stop (`end`: and staying stopped).
+func _scratch_down(end: bool) -> void:
+	if _scratch:
+		_scratch.kill()
+	if not _player.playing:
+		return
+	_scratch = create_tween()
+	_scratch.tween_property(_player, "pitch_scale", SCRATCH_LOW, SCRATCH_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_scratch.tween_callback(func() -> void:
+		if end:
+			_player.stop()
+		else:
+			_player.stream_paused = true)
+
+
+## The DJ's scratch back: spinning up to speed from where it stopped.
+func _scratch_up() -> void:
+	if _scratch:
+		_scratch.kill()
+	if _player.stream == null:
+		return
+	_player.pitch_scale = SCRATCH_LOW
+	_player.stream_paused = false
+	_scratch = create_tween()
+	_scratch.tween_property(_player, "pitch_scale", 1.0, SCRATCH_UP).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+## 0 health: a burst of blood, still and silent in its chains, and (your
+## screen) a slow fade to black.
+func _die() -> void:
+	if dead:
+		return
+	dead = true
+	stunned = false
+	_scratch_down(true)
+	var world := get_tree().current_scene
+	BloodFX.spawn_mutation_explosion(world, global_position)
+	for i in 12:
+		var way := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized()
+		BloodFX.spawn_impact(world, global_position + way * _radii * 0.9, way, BloodFX.BLOOD_COLOR, 5.0)
+	_spray_beat()
+	_drips.emitting = false
+	_light.visible = false
+	HitFlash.flash(_model, Color(0.6, 0.0, 0.0), 0.6)
+	var layer := CanvasLayer.new()
+	layer.layer = 80
+	add_child(layer)
+	var black := ColorRect.new()
+	black.color = Color(0.0, 0.0, 0.0, 0.0)
+	black.set_anchors_preset(Control.PRESET_FULL_RECT)
+	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(black)
+	var words := Label.new()
+	words.text = DEATH_TEXT
+	words.set_anchors_preset(Control.PRESET_FULL_RECT)
+	words.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	words.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.add_theme_font_size_override("font_size", 40)
+	words.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(words)
+	# To black; the words; back to the game.
+	var fade := create_tween()
+	fade.tween_property(black, "color:a", 1.0, DEATH_FADE)
+	fade.tween_property(words, "modulate:a", 1.0, TEXT_IN)
+	fade.tween_interval(TEXT_HOLD)
+	fade.tween_property(words, "modulate:a", 0.0, TEXT_OUT)
+	fade.tween_property(black, "color:a", 0.0, FADE_BACK)
+	fade.tween_callback(layer.queue_free)
 
 
 # ---- The beat ----------------------------------------------------------------------
@@ -170,6 +412,8 @@ func _start() -> void:
 	_map = _chosen_map()
 	_snares_to = -1.0
 	_player.stream = _map.song if _map else null
+	_player.pitch_scale = 1.0
+	_player.stream_paused = false
 	if _player.stream:
 		_player.play()
 

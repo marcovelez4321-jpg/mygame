@@ -300,6 +300,25 @@ func _heart_shift(spots: PackedVector3Array) -> void:
 		heart.call(&"shift", spots)
 
 
+## Host: something happening to the heart (HeartBoss.event: hit, stun,
+## recover, die), on every machine.
+func send_heart_event(kind: StringName) -> void:
+	_heart_event(kind)
+	if is_online():
+		_net_heart_event.rpc(kind)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_heart_event(kind: StringName) -> void:
+	_heart_event(kind)
+
+
+func _heart_event(kind: StringName) -> void:
+	var heart := get_tree().get_first_node_in_group(&"heart_boss") as Node3D
+	if heart:
+		heart.call(&"event", kind)
+
+
 ## Host: words on one player's screen (the bottom-middle message), wherever
 ## they are.
 func send_message(peer_id: int, text: String) -> void:

@@ -1347,7 +1347,10 @@ func _play_hit_effects(space: PhysicsDirectSpaceState3D, hit: Dictionary, direct
 	# The spurt follows the neck whether the hit killed or not (it only can't
 	# kill when artery_instant_kill is off); the hit stop is for kills only.
 	if kind == HitKind.ARTERY:
-		_spawn_artery_spurt(hit.collider)
+		if hit.collider.has_method(&"artery_spray"):
+			hit.collider.call(&"artery_spray", hit.position, hit.normal) # (its own: the heart)
+		else:
+			_spawn_artery_spurt(hit.collider)
 		if killed:
 			_hit_stop(ARTERY_HIT_STOP_SCALE, ARTERY_HIT_STOP_TIME)
 	# ANY kill close enough splashes the screen, not just artery ones --
@@ -1393,6 +1396,10 @@ func _spawn_blood(space: PhysicsDirectSpaceState3D, hit: Dictionary, direction: 
 ## closer to wins, so the neck doesn't swallow shots to the face.
 ## Runs only where resolve_shot() runs -- the host, in co-op (Rule 1).
 func _hit_kind(collider: Node, ray_origin: Vector3, direction: Vector3) -> HitKind:
+	# A target that says itself (the heart: every hit an artery shot while
+	# it's stunned -- HeartHitbox).
+	if collider.has_method(&"artery_now"):
+		return HitKind.ARTERY if collider.call(&"artery_now") else HitKind.NORMAL
 	var skeleton := collider.find_child("*Skeleton*", true, false) as Skeleton3D
 	if skeleton == null:
 		return HitKind.NORMAL

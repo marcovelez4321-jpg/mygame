@@ -30,6 +30,8 @@ var is_dead: bool = false
 ## Every blow is scaled by this (the player's Chitin skin mutation: 0.65).
 ## hurt_unscaled() skips it (eating raw meat isn't an attack).
 var damage_scale := 1.0
+## Off: wounds don't keep bleeding it (the heart: its artery hits are just hits).
+var bleeds_out := true
 
 ## Where and how hard the most recent blow landed. Only used for cosmetic
 ## reactions such as a ragdoll being knocked back; it has no effect on damage.
@@ -81,7 +83,7 @@ func hurt_unscaled(amount: float) -> void:
 ## every tick, just health draining -- but it can finish them off. A new
 ## wound adds what's left of the old one on top. Host only, like all damage.
 func bleed(total: float, duration: float, attacker_id: int = NO_ATTACKER) -> void:
-	if is_dead or total <= 0.0 or duration <= 0.0:
+	if is_dead or total <= 0.0 or duration <= 0.0 or not bleeds_out:
 		return
 	var remaining := _bleed_rate * _bleed_left + total
 	_bleed_left = maxf(_bleed_left, duration)
