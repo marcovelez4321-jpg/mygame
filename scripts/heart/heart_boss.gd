@@ -64,8 +64,9 @@ const DRIP_EVERY := 0.6
 ## DJ's scratch (SCRATCH_UP) from right where it stopped, and it fights on.
 ## At 0: it bursts, hangs still and silent, and the screen fades to black
 ## over DEATH_FADE.
-const MAX_HEALTH := 700.0
-const STUN_EVERY := 150.0
+## (Doubled, the user's 2026-10-18: were 700 and 150.)
+const MAX_HEALTH := 1400.0
+const STUN_EVERY := 300.0
 const STUN_TIME := 10.0
 const STUN_BPM := 60.0
 const STUN_BPM_STEP := 10.0
