@@ -124,10 +124,10 @@ const STANDING_HEIGHT := 1.9 * SIZE
 
 ## STAGE 2 (the user's): stunts every STUNT_EVERY, and the shared FEAR
 ## meter (hidden). A reaction within REACT_WINDOW of a stunt fills it (each
-## once a stunt): seeing it, panic firing, running off, whipping round;
-## investigating where it screamed for help (staying within
-## INVESTIGATE_RADIUS for INVESTIGATE_TIME) fills half. Each glimpse of it
-## outside a stunt counts as seeing it too. It drains over FEAR_DRAIN_TIME,
+## once a stunt you saw): seeing it, panic firing, running off, whipping
+## round; going to where it screamed for help, on purpose, fills half. A
+## clear glimpse of it outside a stunt counts as seeing it too (see
+## GLIMPSE_*). Each rise shows why under the meter. It drains over FEAR_DRAIN_TIME,
 ## and once it's full it stays full: the strike (stage 3) can come.
 const STUNT_EVERY := Vector2(30.0, 60.0)
 const REACT_WINDOW := 3.0
@@ -142,8 +142,19 @@ const FEAR_DRAIN_TIME := 300.0
 ## Full, it stays full this long (seconds) if it hasn't had you -- then the
 ## slow drain again (the user's).
 const FEAR_HOLD := 120.0
-const INVESTIGATE_RADIUS := 20.0
-const INVESTIGATE_TIME := 10.0
+## (The user's, 2026-10-18: going to the scream on purpose -- within
+## INVESTIGATE_REACH of it inside INVESTIGATE_WITHIN of hearing it.)
+const INVESTIGATE_REACH := 15.0
+const INVESTIGATE_WITHIN := 60.0
+## Glimpsed (the user's, 2026-10-18): only when it's clearly in view -- within
+## GLIMPSE_CONE of the middle of your view, GLIMPSE_RANGE off (through the
+## fog), for GLIMPSE_TIME -- once a sighting; not a hand at the screen's edge.
+## (It still hides whenever it's anywhere in your view.) Reactions (running
+## off, whipping round, panic fire) count only after a stunt you saw, or one
+## right beside you.
+const GLIMPSE_CONE := 30.0
+const GLIMPSE_RANGE := 60.0
+const GLIMPSE_TIME := 0.3
 ## Looked straight at (degrees off centre): a watching one's cue to go.
 const STARED_AT := 12.0
 const SPIN_RATE := 4.7 # rad/s: whipping round
@@ -233,6 +244,11 @@ var _reacted := {}
 var _yaws := {}
 var _help_spot := Vector3.INF
 var _help_time := 0.0
+var _clear_for := 0.0
+var _unclear_for := 0.0
+var _glimpse_counted := false
+## The reaction window's stunt was seen (or right beside them).
+var _moment_perceived := false
 var _fire_hooked := {}
 var _hook_left := 0.0
 var _skitter: AudioStreamPlayer3D
@@ -477,8 +493,15 @@ func _think(delta: float) -> void:
 			state = State.SPOTTED
 			# (Full fear: no stare -- it bolts, frantic, the moment it's seen.)
 			_state_left = SPOTTED_FREEZE if fear < 1.0 else 0.0
-			_moment()
-			_add_fear(FEAR_SEEN, "glimpsed")
+		# The fear: only clearly in view a moment, once a sighting (the user's).
+		if state != State.STUNT:
+			_clear_for = _clear_for + 0.1 if _clearly_seen() else 0.0
+			_unclear_for = _unclear_for + 0.1 if _clear_for == 0.0 else 0.0
+			if _unclear_for > 1.0:
+				_glimpse_counted = false
+			if _clear_for >= GLIMPSE_TIME and not _glimpse_counted:
+				_glimpse_counted = true
+				_add_fear(FEAR_SEEN, "glimpsed")
 	if state == State.STUNT:
 		_stunt_tick(delta)
 		return
@@ -653,7 +676,7 @@ func _grab(p: PlayerMovement) -> void:
 	if p.hand.is_holding():
 		p.hand.put_away()
 	Network.send_stalker_drag(p.get_multiplayer_authority(), true)
-	_moment()
+	_moment(true)
 
 
 ## The drag broken: by their clicks (StalkerDrag.tug(), the host's), or a
@@ -686,18 +709,22 @@ func _add_fear(amount: float, why: String) -> void:
 	if fear >= 1.0:
 		return
 	fear = minf(fear + amount, 1.0)
+	Network.send_fear_note("+%d%%  %s" % [roundi(amount * 100.0), why]) # (the note under the meter)
 	if OS.is_debug_build():
 		print("Stalker fear %3.0f%%  (+%2.0f%% %s)" % [fear * 100.0, amount * 100.0, why])
 
 
 ## A stunt's moment: reactions in the next REACT_WINDOW count (each once).
-func _moment() -> void:
+## `perceived`: they saw it (or it was right beside them) -- only then do
+## their reactions count (the user's).
+func _moment(perceived: bool = false) -> void:
 	_moment_msec = Time.get_ticks_msec()
+	_moment_perceived = perceived
 	_reacted.clear()
 
 
 func _reacting(kind: String) -> bool:
-	if Time.get_ticks_msec() - _moment_msec > int(REACT_WINDOW * 1000.0) or _reacted.has(kind):
+	if not _moment_perceived or Time.get_ticks_msec() - _moment_msec > int(REACT_WINDOW * 1000.0) or _reacted.has(kind):
 		return false
 	_reacted[kind] = true
 	return true
@@ -735,13 +762,17 @@ func _fear_tick(delta: float) -> void:
 		if flat.length() > FLEE_SPEED and flat.normalized().dot(away.normalized()) > 0.5 and _reacting("flee"):
 			_add_fear(FEAR_FLEE, "ran off")
 	if _help_spot.is_finite():
-		for node in get_tree().get_nodes_in_group("player"):
-			if (node as Node3D).global_position.distance_to(_help_spot) < INVESTIGATE_RADIUS:
-				_help_time += delta
-				break
-		if _help_time >= INVESTIGATE_TIME:
+		# Went to it on purpose: right up to it soon after hearing it (the
+		# scream's 70-140 m off: no one's there by chance).
+		_help_time += delta
+		if _help_time > INVESTIGATE_WITHIN:
 			_help_spot = Vector3.INF
-			_add_fear(FEAR_HELP, "went to see who screamed")
+		else:
+			for node in get_tree().get_nodes_in_group("player"):
+				if (node as Node3D).global_position.distance_to(_help_spot) < INVESTIGATE_REACH:
+					_help_spot = Vector3.INF
+					_add_fear(FEAR_HELP, "went to the scream")
+					break
 
 
 func _on_player_fired() -> void:
@@ -959,6 +990,30 @@ func _seen() -> bool:
 	for box: Array in _hitboxes:
 		points.append((box[0] as CollisionShape3D).global_position)
 	return _visible_from_any(points)
+
+
+## Clearly in someone's view: near the middle (GLIMPSE_CONE), within
+## GLIMPSE_RANGE, nothing in the way.
+func _clearly_seen() -> bool:
+	var points := _body_points(global_position, global_basis)
+	for box: Array in _hitboxes:
+		points.append((box[0] as CollisionShape3D).global_position)
+	var cone := cos(deg_to_rad(GLIMPSE_CONE))
+	var space := get_world_3d().direct_space_state
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player == null or player.is_dead():
+			continue
+		var eye := player.head.global_position
+		var look := -player.head.global_basis.z
+		for point in points:
+			var to := point - eye
+			var distance := to.length()
+			if distance > GLIMPSE_RANGE or look.dot(to / maxf(distance, 0.001)) < cone:
+				continue
+			if space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, point, 1, [player.get_rid(), get_rid()])).is_empty():
+				return true
+	return false
 
 
 func _visible_from_any(points: Array[Vector3]) -> bool:
@@ -1279,7 +1334,7 @@ func _stage(kind: int) -> bool:
 		Stunt.RATTLE:
 			# Its croak right behind and above you; nothing there.
 			Network.send_stalker_sound(StalkerSound.Kind.RATTLE, p.global_position - look * 3.0 + Vector3.UP * 1.6)
-			_moment()
+			_moment(true) # (right behind them)
 			return true
 		Stunt.HELP:
 			# A human voice screaming for help, far off; then it follows, unseen.
@@ -1449,7 +1504,7 @@ func _stunt_look(seen: bool) -> void:
 	var noticed := stared if _stunt == Stunt.WATCH else seen
 	if noticed and not _stunt_seen:
 		_stunt_seen = true
-		_moment()
+		_moment(true)
 		_add_fear(FEAR_SEEN, "saw it (%s)" % Stunt.keys()[_stunt].to_lower())
 		if _stunt == Stunt.BEHIND or _stunt == Stunt.WATCH:
 			_stunt_phase = 1

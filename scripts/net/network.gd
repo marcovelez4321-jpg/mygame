@@ -29,6 +29,8 @@ extends Node
 signal status_changed(text: String)
 ## The games heard on the local network changed: [{address, name, players}].
 signal lan_games_changed(games: Array)
+## The Stalker's fear went up, and why (the note under the meter).
+signal fear_note(text: String)
 
 const PORT := 7777
 const MAX_CLIENTS := 3
@@ -351,6 +353,18 @@ func send_heart_orb_pop(id: int, at: Vector3) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _net_heart_orb_pop(id: int, at: Vector3) -> void:
 	HeartOrb.pop_by_id(id, at)
+
+
+## Host: the fear meter went up -- why, on everyone's screen (HUD).
+func send_fear_note(text: String) -> void:
+	fear_note.emit(text)
+	if is_online():
+		_net_fear_note.rpc(text)
+
+
+@rpc("authority", "call_remote", "unreliable")
+func _net_fear_note(text: String) -> void:
+	fear_note.emit(text)
 
 
 ## Host: words on one player's screen (the bottom-middle message), wherever

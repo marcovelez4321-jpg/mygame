@@ -50,6 +50,9 @@ var _hunger_fill: ColorRect
 const FEAR_COLOR := Color(0.62, 0.3, 0.95, 0.95)
 var _fear_back: ColorRect
 var _fear_fill: ColorRect
+## Why the meter last went up, fading under it (the user's).
+var _fear_note: Label
+var _fear_note_tween: Tween
 ## What you're holding in your right hand says what left click does, to its
 ## left (the user's: "left click to feed off the virus").
 var _hand_label: Label
@@ -289,6 +292,14 @@ func _build_stamina_pips(count: int) -> void:
 	_fear_fill.size = Vector2(0.0, HUNGER_HEIGHT)
 	_fear_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(_fear_fill)
+	_fear_note = Label.new()
+	_fear_note.position = _fear_back.position + Vector2(0.0, HUNGER_HEIGHT + 2.0)
+	_fear_note.add_theme_font_size_override("font_size", 13)
+	_fear_note.add_theme_color_override("font_color", FEAR_COLOR)
+	_fear_note.modulate.a = 0.0
+	_fear_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(_fear_note)
+	Network.fear_note.connect(_on_fear_note)
 
 
 ## Each pip is full (PIP_WIDTH) if that charge is available, empty if it
@@ -405,6 +416,18 @@ func _on_player_damaged(_amount: float, _attacker_id: int) -> void:
 	damage_flash.color.a = DAMAGE_FLASH_ALPHA
 	_flash_tween = create_tween()
 	_flash_tween.tween_property(damage_flash, "color:a", 0.0, DAMAGE_FLASH_TIME)
+
+
+func _on_fear_note(text: String) -> void:
+	if _fear_note == null or not GameSettings.show_fear_meter:
+		return
+	_fear_note.text = text
+	if _fear_note_tween:
+		_fear_note_tween.kill()
+	_fear_note.modulate.a = 1.0
+	_fear_note_tween = create_tween()
+	_fear_note_tween.tween_interval(1.5)
+	_fear_note_tween.tween_property(_fear_note, "modulate:a", 0.0, 1.0)
 
 
 func _on_player_died(_attacker_id: int, _is_critical: bool) -> void:
