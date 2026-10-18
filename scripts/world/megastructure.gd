@@ -89,7 +89,8 @@ const OBJECT_NESTS := 4
 ## Each time it's played, each room rolls these (the user's: 50% each):
 ## a barrel, a radio, a pill bottle -- the host's roll, the same for everyone.
 @export_range(0.0, 1.0, 0.05) var fire_chance: float = 0.5
-@export_range(0.0, 1.0, 0.05) var radio_chance: float = 0.5
+## (Halved, the user's 2026-10-18: was 0.5.)
+@export_range(0.0, 1.0, 0.05) var radio_chance: float = 0.25
 @export_range(0.0, 1.0, 0.05) var pill_chance: float = 0.5
 ## (Kept short: each gang is 6-12 people with ragdolls; only the ones round
 ## you are there.)
