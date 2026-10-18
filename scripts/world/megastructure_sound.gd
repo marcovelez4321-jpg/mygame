@@ -109,7 +109,9 @@ func _process(delta: float) -> void:
 	if _inside_blend > 0.5:
 		_distant_noise(camera.global_position, delta)
 	# The open-sky wind: outside, up by the clouds -- none in a room or hall.
-	var sky := smoothstep(cloud_height - sky_wind_below, cloud_height + sky_wind_above, camera.global_position.y)
+	# (The same climb as the wind's push: barely at the cloud deck, strongest
+	# at the very top -- WorldWind.strength(), the user's.)
+	var sky := sqrt(WorldWind.strength(camera.global_position.y))
 	if _in_a_room(at):
 		sky = 0.0
 	_fade(_high_wind, wind_volume_db, sky * outside_share, delta)
