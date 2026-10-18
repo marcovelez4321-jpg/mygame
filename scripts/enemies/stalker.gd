@@ -198,9 +198,10 @@ const GRAB_RANGE := 20.0
 ## or a wall, a jump or grapple across a gap (over LEAP_GAP) kept as a leap --
 ## the last TRAIL_LENGTH of it. Out of its sight for HUNT_AFTER (any fear),
 ## it hunts the nearest player down their trail at HUNT_SPEED, crumb to
-## crumb along the very way they went, leaping their gaps; more than
-## CATCH_UP behind along it, it skips on along the trail between crumbs no
-## one can see (never ahead of them). Seeing them again, or within
+## crumb along the very way they went, leaping their gaps. Fallen more than
+## TRAIL_LENGTH behind (off the far end of their trail: further than
+## FELL_OFF from its oldest crumb), it's put back on it at that far end, 600 m
+## back, where no one can see it (the user's). Seeing them again, or within
 ## HUNT_UNTIL, it stalks again (or, at full fear, flanks). Spotted while
 ## hunting, it bolts and hides like ever, then picks the trail back up. Its
 ## skitter carries HUNT_HEAR times as far while it hunts.
@@ -209,7 +210,9 @@ const HUNT_AFTER := 3.0
 const HUNT_UNTIL := 30.0
 const CRUMB_EVERY := 3.0
 const TRAIL_LENGTH := 600.0
-const CATCH_UP := 300.0
+## Further than this from their trail's far end (with its oldest crumb the
+## one it's making for): it's fallen more than TRAIL_LENGTH behind.
+const FELL_OFF := 40.0
 const LEAP_GAP := 6.0
 ## Faster than this between crumbs (m/s), they didn't travel it: a respawn,
 ## a teleport -- the trail starts over.
@@ -867,12 +870,12 @@ func _hunt_tick(delta: float) -> void:
 		_unseen_for = 0.0
 		return
 	_crumb = clampi(_crumb, 0, points.size() - 1)
-	# Too far behind: on along the trail, unseen, to CATCH_UP from them.
+	# Fallen more than the trail's length behind: back at its far end, unseen.
 	_skip_check -= delta
 	if _skip_check <= 0.0:
 		_skip_check = 0.5
-		if _trail_left(points, _crumb) > CATCH_UP and not _seen():
-			_skip_ahead(points)
+		if _crumb == 0 and global_position.distance_to(points[0]) > FELL_OFF and not _seen():
+			_to_trail_end(points)
 	var goal := points[_crumb]
 	var gap := goal.distance_to(global_position)
 	if gap < CRUMB_REACH:
@@ -912,14 +915,10 @@ func _leap_to(to: Vector3) -> void:
 	_airborne = true
 
 
-## On along the trail to CATCH_UP from its end, at a crumb no one can see it
-## on (never past their newest: never ahead of them).
-func _skip_ahead(points: PackedVector3Array) -> void:
-	var left := _trail_left(points, _crumb)
-	for j in range(_crumb + 1, points.size() - 1):
-		left -= points[j - 1].distance_to(points[j])
-		if left > CATCH_UP * 0.9:
-			continue
+## Put back on their trail at its far end (TRAIL_LENGTH back), at the first
+## crumb from there that no one can see (never past their newest).
+func _to_trail_end(points: PackedVector3Array) -> void:
+	for j in range(0, points.size() - 1):
 		if _visible_from_any(_body_points(points[j], Basis.IDENTITY)):
 			continue
 		global_position = points[j] + Vector3.UP * RIDE
