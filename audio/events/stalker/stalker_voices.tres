@@ -1,0 +1,293 @@
+[gd_resource type="Resource" script_class="StalkerVoices" format=3]
+
+[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1_avtri"]
+[ext_resource type="Script" path="res://scripts/enemies/stalker_voices.gd" id="2_76q21"]
+
+[sub_resource type="Resource" id="Resource_banp0"]
+resource_name = "behind_you"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "behind_you"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_iavre"]
+resource_name = "ceiling_scuttle"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "ceiling_scuttle"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_khqly"]
+resource_name = "corpse_drag"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "corpse_drag"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_nk5aq"]
+resource_name = "croak_behind"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "croak_behind"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_hcvto"]
+resource_name = "doorway_dash"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "doorway_dash"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_i0nxx"]
+resource_name = "dragging"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "dragging"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_s8mf3"]
+resource_name = "driven_off"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "driven_off"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_846kt"]
+resource_name = "dropped"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "dropped"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_2wmsb"]
+resource_name = "fear_full"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "fear_full"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_8vo3s"]
+resource_name = "flanking"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "flanking"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_bp7r1"]
+resource_name = "grab"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "grab"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_gijfi"]
+resource_name = "help_scream"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "help_scream"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_lhuuv"]
+resource_name = "hiding"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "hiding"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_yfy0f"]
+resource_name = "hunting"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "hunting"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_epmto"]
+resource_name = "hurt"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "hurt"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_dkml2"]
+resource_name = "leap"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "leap"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_7uqb3"]
+resource_name = "leaves"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "leaves"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_06flu"]
+resource_name = "lunge"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "lunge"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_ohsjd"]
+resource_name = "lure"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "lure"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_wn7fs"]
+resource_name = "runs_away"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "runs_away"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_k5p6q"]
+resource_name = "spotted"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "spotted"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_d87ob"]
+resource_name = "starts_hunting"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "starts_hunting"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_3bn2q"]
+resource_name = "starts_stalking"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "starts_stalking"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_lnnds"]
+resource_name = "thrown_off"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "thrown_off"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_2fw24"]
+resource_name = "turns_up"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "turns_up"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[sub_resource type="Resource" id="Resource_uusm0"]
+resource_name = "watching"
+script = ExtResource("1_avtri")
+clip_folder = "res://audio/sfx/stalker"
+clip_prefix = "watching"
+volume_db_variance = 1.5
+pitch_variance = 0.06
+unit_size = 14.0
+bus = "Enemies"
+
+[resource]
+script = ExtResource("2_76q21")
+hurt = SubResource("Resource_epmto")
+driven_off = SubResource("Resource_s8mf3")
+leaves = SubResource("Resource_7uqb3")
+lunge = SubResource("Resource_06flu")
+grab = SubResource("Resource_bp7r1")
+dragging = SubResource("Resource_i0nxx")
+thrown_off = SubResource("Resource_lnnds")
+dropped = SubResource("Resource_846kt")
+starts_stalking = SubResource("Resource_3bn2q")
+starts_hunting = SubResource("Resource_d87ob")
+hunting = SubResource("Resource_yfy0f")
+flanking = SubResource("Resource_8vo3s")
+turns_up = SubResource("Resource_2fw24")
+fear_full = SubResource("Resource_2wmsb")
+spotted = SubResource("Resource_k5p6q")
+runs_away = SubResource("Resource_wn7fs")
+hiding = SubResource("Resource_lhuuv")
+croak_behind = SubResource("Resource_nk5aq")
+help_scream = SubResource("Resource_gijfi")
+lure = SubResource("Resource_ohsjd")
+behind_you = SubResource("Resource_banp0")
+watching = SubResource("Resource_uusm0")
+ceiling_scuttle = SubResource("Resource_iavre")
+doorway_dash = SubResource("Resource_hcvto")
+corpse_drag = SubResource("Resource_khqly")
+leap = SubResource("Resource_dkml2")

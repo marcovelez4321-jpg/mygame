@@ -17,7 +17,33 @@ const HELP := preload("res://audio/dragon-studio-scary-scream-401725.mp3")
 const RATE := 22050
 const UNIT_SIZE := 8.0
 
+## The user's sounds, a slot for everything it does (StalkerVoices).
+const VOICES := "res://audio/events/stalker/stalker_voices.tres"
+
 static var _rattles: Array[AudioStreamWAV] = []
+static var _voices: StalkerVoices
+
+
+## The `slot`'s sound (StalkerVoices) at `at`, through the halls' echo; an
+## empty slot falls back to the old made-up sound where there was one, else
+## stays silent.
+static func voice(slot: StringName, at: Vector3, world: Node, volume_db: float = 0.0) -> void:
+	if world == null or not world.is_inside_tree():
+		return
+	if _voices == null and ResourceLoader.exists(VOICES):
+		_voices = load(VOICES) as StalkerVoices
+	var event: SoundEvent = _voices.event(slot) if _voices else null
+	var clip: AudioStream = event.pick_clip() if event else null
+	if clip:
+		HallEcho.play(clip, at, world, event.roll_pitch_scale(), event.roll_volume_db() + volume_db)
+		return
+	match slot:
+		&"croak_behind", &"lunge", &"behind_you", &"watching":
+			play(Kind.RATTLE, at, world)
+		&"driven_off":
+			play(Kind.SHRIEK, at, world)
+		&"help_scream":
+			play(Kind.HELP, at, world)
 static var _shriek: AudioStreamWAV
 
 

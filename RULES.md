@@ -1793,3 +1793,11 @@ them:
 - **Stalker eye glow halved (2026-10-18).** The user's: the blue glare round each eye is drawn at half strength (`EYE_GLOW` 0.5). The white-blue eye points themselves are unchanged.
 - **Watch yourself get dragged (2026-10-18).** The user's: while the Stalker drags you, the view pulls out of your head (over 0.6 s) to 8 m off to one side and above, framing you and the Stalker together (the middle between your body and it). It follows smoothly and stops short of walls, the side picked once so it never flips. It eases back to your eyes when you get up, or the death view takes over from it (`StalkerDrag.DRAG_VIEW_*`).
 - **Drag camera back to the old one (2026-10-18).** The user preferred it: the 8 m third-person drag view is reverted, and the camera rides the ragdoll's head again. Also, Godot's hot-reload `~` DLL copies and `.TMP` files are now in .gitignore, and the ones that had slipped into commits are untracked.
+- **A sound slot for everything the Stalker does (2026-10-18).** The user's: they have many screech samples, plus "help me" / "follow me" lines to make players paranoid. `StalkerVoices` (`audio/events/stalker/stalker_voices.tres`) has 26 slots, each a `SoundEvent`:
+  - hurt: hurt, driven_off, leaves;
+  - attacking: lunge, grab, dragging, thrown_off, dropped;
+  - stalking and hunting: starts_stalking, starts_hunting, hunting, flanking, turns_up, fear_full;
+  - seen and hiding: spotted, runs_away, hiding;
+  - stunts: croak_behind, help_scream, lure, behind_you, watching, ceiling_scuttle, doorway_dash, corpse_drag, leap.
+
+  Fill a slot by dragging clips in, or drop files named `<slot>_<n>` into `audio/sfx/stalker` (README there). One plays at random, through the halls' echo, on every machine (`Network.send_stalker_voice`). Empty slots are silent, except the croak, shriek and help scream, which fall back to the old sounds. It's kept sparse: no voice within 6 s of the last, except the urgent ones; everyday ones play only 40% of the time; hunting voices come every 12-20 s, dragging every 4-7 s. **The lure** is a new sound-only stunt in its usual rotation: "help me / follow me" from out of sight nearby, whispered right behind you, or far off through the echo, picked at random. Players may still linger; nothing about that changed (the user's call).

@@ -367,6 +367,19 @@ func _net_fear_note(text: String) -> void:
 	fear_note.emit(text)
 
 
+## Host: one of the Stalker's voices (StalkerVoices slot `slot`) at `at`,
+## here and on every machine.
+func send_stalker_voice(slot: StringName, at: Vector3, volume_db: float = 0.0) -> void:
+	StalkerSound.voice(slot, at, get_tree().current_scene, volume_db)
+	if is_online():
+		_net_stalker_voice.rpc(slot, at, volume_db)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_stalker_voice(slot: StringName, at: Vector3, volume_db: float) -> void:
+	StalkerSound.voice(slot, at, get_tree().current_scene, volume_db)
+
+
 ## Host: words on one player's screen (the bottom-middle message), wherever
 ## they are.
 func send_message(peer_id: int, text: String) -> void:

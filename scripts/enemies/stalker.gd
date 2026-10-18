@@ -27,7 +27,7 @@ extends AnimatableBody3D
 
 enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
-enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP }
+enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE }
 
 const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Character_Monster_03.fbx")
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
@@ -82,6 +82,11 @@ var _crumb_best := INF
 var _crumb_stall := 0.0
 var _skip_check := 0.0
 var _flee_side := 1.0
+var _voice_msec := -100000
+var _hurt_voice_msec := -100000
+var _hunt_voice_left := 0.0
+var _drag_voice_left := 0.0
+var _was_full := false
 ## How long it's been heading for its hiding spot (never there by STUCK_TIME:
 ## it waits where it is -- not hiding for ever, never stalking or staging).
 var _hiding_for := 0.0
@@ -224,7 +229,17 @@ const HUNT_HEAR := 3.0
 ## GRAB_RANGE it lunges. Spotted further off: no stare, it bolts sideways
 ## out of your view, zigzagging, frantic, then hides.
 const FLANK_SPEED := 18.0
-const FLANK_RING := 20.0 
+const FLANK_RING := 20.0
+## Its voices (the user's sounds: StalkerVoices, a slot for everything it does
+## or decides) -- sparse: none within VOICE_GAP of the last (bar the urgent
+## ones: hurt, lunge, grab, driven off, thrown off), the ambient ones only by
+## chance (VOICE_CHANCE), the repeating ones well spaced (HUNT_VOICE_EVERY,
+## DRAG_VOICE_EVERY).
+const VOICE_GAP := 6.0
+const VOICE_CHANCE := 0.4
+const HURT_VOICE_GAP := 1.5
+const HUNT_VOICE_EVERY := Vector2(12.0, 20.0)
+const DRAG_VOICE_EVERY := Vector2(4.0, 7.0) 
 var _cooldown_left := 0.0
 var _hide_fast := false
 var _victim: PlayerMovement
@@ -496,6 +511,7 @@ func _think(delta: float) -> void:
 			_stunt_look(seen)
 		elif seen and state != State.HIDE and state != State.SPOTTED:
 			state = State.SPOTTED
+			_say(&"spotted", false, 0.6)
 			# (Full fear: no stare -- it bolts, frantic, the moment it's seen.)
 			_state_left = SPOTTED_FREEZE if fear < 1.0 else 0.0
 		# The fear: only clearly in view a moment, once a sighting (the user's).
@@ -547,17 +563,20 @@ func _think(delta: float) -> void:
 				state = State.WAIT
 				_state_left = WAIT_TIME
 				_desired = Vector3.ZERO
+				_say(&"hiding", false, VOICE_CHANCE * 0.5)
 			else:
 				_desired = (_hide_to - global_position).normalized() * (SPRINT if _hide_fast else SCRAMBLE)
 		State.WAIT:
 			_desired = Vector3.ZERO
 			if _state_left <= 0.0:
 				state = State.STALK
+				_say(&"starts_stalking", false, VOICE_CHANCE)
 		State.STALK:
 			# The fear's full and they're not looking at it: round behind them.
 			if fear >= 1.0 and _cooldown_left <= 0.0 and nearest.drag == null and not _seen():
 				_victim = nearest
 				state = State.APPROACH
+				_say(&"flanking", false, VOICE_CHANCE)
 				return
 			_stunt_left_every -= delta
 			if _stunt_left_every <= 0.0 and _cooldown_left <= 0.0:
@@ -653,9 +672,14 @@ func _strike_tick(delta: float) -> void:
 				_let_go(false) # missed: off into hiding
 		State.DRAG:
 			_desired = _drag_way * DRAG_PULL
+			_drag_voice_left -= delta
+			if _drag_voice_left <= 0.0:
+				_drag_voice_left = randf_range(DRAG_VOICE_EVERY.x, DRAG_VOICE_EVERY.y)
+				_say(&"dragging", true)
 			if _state_left <= 0.0:
 				# Not loose in time: badly hurt, left there in the dark; it runs off.
 				p.health.hurt_unscaled(DRAG_DAMAGE)
+				_say(&"dropped", true)
 				_let_go(true)
 
 
@@ -664,7 +688,7 @@ func _lunge_at(p: PlayerMovement) -> void:
 	_victim = p
 	state = State.LUNGE
 	_state_left = LUNGE_TIME
-	Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * BODY_HEIGHT)
+	_say(&"lunge", true)
 
 
 func _grab(p: PlayerMovement) -> void:
@@ -681,6 +705,8 @@ func _grab(p: PlayerMovement) -> void:
 	if p.hand.is_holding():
 		p.hand.put_away()
 	Network.send_stalker_drag(p.get_multiplayer_authority(), true)
+	_drag_voice_left = randf_range(DRAG_VOICE_EVERY.x, DRAG_VOICE_EVERY.y)
+	_say(&"grab", true)
 	_moment(true)
 
 
@@ -693,6 +719,7 @@ func drag_broken() -> void:
 	var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 	var throw := (way * cos(0.35) + Vector3.UP * sin(0.35)) * THROW_SPEED
 	_victim.health.hurt_unscaled(THROW_DAMAGE)
+	_say(&"thrown_off", true)
 	_let_go(false, throw)
 
 
@@ -714,6 +741,9 @@ func _add_fear(amount: float, why: String) -> void:
 	if fear >= 1.0:
 		return
 	fear = minf(fear + amount, 1.0)
+	if fear >= 1.0 and not _was_full:
+		_say(&"fear_full")
+	_was_full = fear >= 1.0
 	Network.send_fear_note("+%d%%  %s" % [roundi(amount * 100.0), why]) # (the note under the meter)
 	if OS.is_debug_build():
 		print("Stalker fear %3.0f%%  (+%2.0f%% %s)" % [fear * 100.0, amount * 100.0, why])
@@ -839,6 +869,8 @@ func _record_trails() -> void:
 func _start_hunt(p: PlayerMovement) -> void:
 	_hunted = p
 	state = State.HUNT
+	_say(&"starts_hunting", false, VOICE_CHANCE)
+	_hunt_voice_left = randf_range(HUNT_VOICE_EVERY.x, HUNT_VOICE_EVERY.y)
 	_crumb_best = INF
 	_crumb_stall = 0.0
 	var points: PackedVector3Array = (_trails.get(p, {}) as Dictionary).get("points", PackedVector3Array())
@@ -872,6 +904,10 @@ func _hunt_tick(delta: float) -> void:
 		_unseen_for = 0.0
 		return
 	_crumb = clampi(_crumb, 0, points.size() - 1)
+	_hunt_voice_left -= delta
+	if _hunt_voice_left <= 0.0:
+		_hunt_voice_left = randf_range(HUNT_VOICE_EVERY.x, HUNT_VOICE_EVERY.y)
+		_say(&"hunting")
 	# Fallen more than the trail's length behind: back at its far end, unseen.
 	_skip_check -= delta
 	if _skip_check <= 0.0:
@@ -957,8 +993,21 @@ func _place_on_trail(p: PlayerMovement, how_far: Vector2) -> bool:
 		_velocity = Vector3.ZERO
 		state = State.WAIT
 		_state_left = WAIT_TIME
+		_say(&"turns_up", false, VOICE_CHANCE)
 		return true
 	return false
+
+
+## A voice (StalkerVoices `slot`) from it (or `at`). `urgent`: past the
+## VOICE_GAP; `chance`: only that often (ambient ones). The host's: everyone hears.
+func _say(slot: StringName, urgent: bool = false, chance: float = 1.0, at: Vector3 = Vector3.INF, volume_db: float = 0.0) -> void:
+	var now := Time.get_ticks_msec()
+	if not urgent and now - _voice_msec < int(VOICE_GAP * 1000.0):
+		return
+	if randf() > chance:
+		return
+	_voice_msec = now
+	Network.send_stalker_voice(slot, at if at.is_finite() else global_position + Vector3.UP * BODY_HEIGHT, volume_db)
 
 
 func _nearest_player() -> PlayerMovement:
@@ -1041,6 +1090,7 @@ func _visible_from_any(points: Array[Vector3]) -> bool:
 
 ## Into hiding: straight off away from the players first (`fast`: flat out).
 func _start_hide(fast: bool) -> void:
+	_say(&"runs_away", false, VOICE_CHANCE)
 	_hide_fast = fast
 	_flee_side = 1.0 if randf() < 0.5 else -1.0
 	_hide_to = Vector3.INF
@@ -1195,6 +1245,9 @@ func _on_damaged(amount: float, attacker: int) -> void:
 	if state == State.FLEE or state == State.AWAY:
 		return
 	_hurt += amount
+	if _hurt < DRIVE_OFF and Time.get_ticks_msec() - _hurt_voice_msec > int(HURT_VOICE_GAP * 1000.0):
+		_hurt_voice_msec = Time.get_ticks_msec()
+		_say(&"hurt", true)
 	# Shot off the one it's dragging by someone else.
 	if state == State.DRAG and is_instance_valid(_victim) and attacker != _victim.get_multiplayer_authority():
 		_freed_by_others += amount
@@ -1207,13 +1260,14 @@ func _on_damaged(amount: float, attacker: int) -> void:
 		state = State.FLEE
 		_state_left = FLEE_TIME
 		_airborne = false
-		Network.send_stalker_sound(StalkerSound.Kind.SHRIEK, global_position + Vector3.UP * BODY_HEIGHT)
+		_say(&"driven_off", true)
 	elif state == State.STALK or state == State.WAIT:
 		_start_hide(false)
 
 
 ## Gone for a while (driven off): out of the world entirely.
 func _go_away() -> void:
+	_say(&"leaves", true)
 	state = State.AWAY
 	_state_left = randf_range(AWAY_TIME.x, AWAY_TIME.y)
 	_hurt = 0.0
@@ -1301,13 +1355,22 @@ func _start_stunt() -> bool:
 	if players.is_empty():
 		return false
 	_stunt_target = players[randi() % players.size()] as PlayerMovement
-	var kinds: Array = [Stunt.BEHIND, Stunt.CEILING, Stunt.DOORWAY, Stunt.WATCH, Stunt.RATTLE, Stunt.DRAG, Stunt.HELP]
+	var kinds: Array = [Stunt.BEHIND, Stunt.CEILING, Stunt.DOORWAY, Stunt.WATCH, Stunt.RATTLE, Stunt.DRAG, Stunt.HELP, Stunt.LURE]
 	kinds.shuffle()
 	if _climbing_outside(_stunt_target) and randf() < 0.5:
 		kinds.push_front(Stunt.LEAP)
 	for kind: int in kinds:
 		if _stage(kind):
 			Network.send_message(_stunt_target.get_multiplayer_authority(), TINGLE)
+			match kind:
+				Stunt.CEILING:
+					_say(&"ceiling_scuttle")
+				Stunt.DOORWAY:
+					_say(&"doorway_dash")
+				Stunt.DRAG:
+					_say(&"corpse_drag")
+				Stunt.LEAP:
+					_say(&"leap")
 			return true
 	return false
 
@@ -1332,9 +1395,32 @@ func _stage(kind: int) -> bool:
 	_stunt_seen = false
 	_stunt_away_for = 0.0
 	match kind:
+		Stunt.LURE:
+			# "Help me" / "follow me" (the user's voices), from one of three
+			# places, any: out of sight nearby, right behind them, or far off
+			# through the echo. A sound only; once a stunt, so it's sparse.
+			var at := Vector3.INF
+			var volume := 0.0
+			match randi() % 3:
+				0:
+					for attempt in 8:
+						var hit := _ground_at(p.global_position + Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU) * randf_range(15.0, 30.0))
+						if not hit.is_empty() and not _visible_from_any(_body_points(hit.position, Basis.IDENTITY)):
+							at = (hit.position as Vector3) + Vector3.UP * 1.5
+							break
+				1:
+					at = p.global_position - look * 2.5 + Vector3.UP * 1.6
+					volume = -6.0 # (a whisper)
+				_:
+					at = p.global_position + Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU) * randf_range(70.0, 120.0) + Vector3.UP * 3.0
+			if not at.is_finite():
+				return false
+			_say(&"lure", true, 1.0, at, volume)
+			_moment(at.distance_to(p.global_position) < 5.0) # (right behind them: they'd notice)
+			return true
 		Stunt.RATTLE:
 			# Its croak right behind and above you; nothing there.
-			Network.send_stalker_sound(StalkerSound.Kind.RATTLE, p.global_position - look * 3.0 + Vector3.UP * 1.6)
+			_say(&"croak_behind", true, 1.0, p.global_position - look * 3.0 + Vector3.UP * 1.6)
 			_moment(true) # (right behind them)
 			return true
 		Stunt.HELP:
@@ -1346,7 +1432,7 @@ func _stage(kind: int) -> bool:
 					continue
 				_help_spot = hit.position
 				_help_time = 0.0
-				Network.send_stalker_sound(StalkerSound.Kind.HELP, _help_spot + Vector3.UP * 1.5)
+				_say(&"help_scream", true, 1.0, _help_spot + Vector3.UP * 1.5)
 				_moment()
 				return true
 			return false
@@ -1457,7 +1543,7 @@ func _stunt_tick(delta: float) -> void:
 			_stunt_rattle_left -= delta
 			if _stunt_rattle_left <= 0.0 and _stunt_phase == 0:
 				_stunt_rattle_left = 999.0
-				Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * 0.8)
+				_say(&"behind_you", true, 1.0, global_position + Vector3.UP * 0.8)
 				_moment()
 			if _stunt_phase == 1 and _state_left <= 0.0:
 				_end_stunt()
@@ -1478,8 +1564,8 @@ func _stunt_tick(delta: float) -> void:
 			_heading = _flat(p.global_position - global_position)
 			_stunt_rattle_left -= delta
 			if _stunt_rattle_left <= 0.0:
-				_stunt_rattle_left = randf_range(3.0, 5.0)
-				Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * 0.8)
+				_stunt_rattle_left = randf_range(5.0, 8.0)
+				_say(&"watching", false, 1.0, global_position + Vector3.UP * 0.8)
 			# Looked away for a second: it moves on.
 			var look := -p.head.global_basis.z
 			var to := (global_position - p.head.global_position).normalized()
