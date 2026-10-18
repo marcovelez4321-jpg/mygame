@@ -13,6 +13,10 @@ extends RefCounted
 ## draws it all.
 
 const DAMAGE := 15.0 # (the user's: was 50)
+## Caught by a beam and this launch within SAME_TIME of each other: only the
+## beam's damage counts (the user's) -- a kick on someone a beam just hit does
+## no damage; a beam on someone the kick just hit gives the kick's back.
+const SAME_TIME := 0.3
 const LAUNCH := 30.0
 const CHUNKS := 4
 ## Everyone inside's screen: a bit of a shake (the user's), degrees.
@@ -114,8 +118,23 @@ static func hit(heart: Node3D, room: AABB, spots: PackedVector3Array, decides: b
 		if player == null or player.is_dead():
 			continue
 		if player.is_on_floor() or player.is_on_wall() or player.grapple.is_perched():
-			player.health.take_damage(DAMAGE, Health.NO_ATTACKER, Vector3.UP, player.global_position, 1.0)
+			if not _recent(player, &"heart_laser_msec"):
+				player.health.take_damage(DAMAGE, Health.NO_ATTACKER, Vector3.UP, player.global_position, 1.0)
+				player.set_meta(&"heart_kick_msec", Time.get_ticks_msec())
 			player.launch(Vector3.UP * LAUNCH)
+
+
+## A beam's hit on `player` (BloodBeam): if the kick hurt them a moment ago,
+## that's given back -- the beam's is the damage that counts.
+static func laser_over_kick(player: PlayerMovement) -> void:
+	if _recent(player, &"heart_kick_msec"):
+		player.health.heal(DAMAGE)
+		player.remove_meta(&"heart_kick_msec")
+	player.set_meta(&"heart_laser_msec", Time.get_ticks_msec())
+
+
+static func _recent(player: Node, key: StringName) -> bool:
+	return player.has_meta(key) and Time.get_ticks_msec() - int(player.get_meta(key)) <= int(SAME_TIME * 1000.0)
 
 
 ## A curtain of dust pouring down from `at`: a long thin strip of it

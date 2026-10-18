@@ -193,6 +193,7 @@ func _physics_process(_delta: float) -> void:
 		if body.distance_to(_from + _direction * along) > THICKNESS * 0.5 * widening + PLAYER_RADIUS:
 			continue
 		_hit_players[player] = true
+		HeartQuake.laser_over_kick(player) # (with the kick at once: the beam's damage only)
 		player.health.take_damage(DAMAGE, Health.NO_ATTACKER, _direction, body, 1.0)
 		# Blasted backwards, off the floor (a push along the ground is eaten by it).
 		var push := _direction * PUSH

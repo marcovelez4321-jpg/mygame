@@ -319,6 +319,40 @@ func _heart_event(kind: StringName) -> void:
 		heart.call(&"event", kind)
 
 
+## Host: a heart orb (HeartOrb) swelling out at `at` (off the heart along
+## `out`) for `warn`, then after player `peer`'s body -- on every machine.
+func send_heart_orb(id: int, at: Vector3, out: Vector3, peer: int, warn: float) -> void:
+	_heart_orb(id, at, out, peer, warn, true)
+	if is_online():
+		_net_heart_orb.rpc(id, at, out, peer, warn)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_heart_orb(id: int, at: Vector3, out: Vector3, peer: int, warn: float) -> void:
+	_heart_orb(id, at, out, peer, maxf(warn - half_ping(), 0.0), false)
+
+
+func _heart_orb(id: int, at: Vector3, out: Vector3, peer: int, warn: float, decides: bool) -> void:
+	var heart := get_tree().get_first_node_in_group(&"heart_boss") as Node3D
+	var skip: Array[RID] = []
+	if heart:
+		var rid: RID = heart.call(&"body_rid")
+		if rid.is_valid():
+			skip.append(rid)
+	HeartOrb.spawn(get_tree().current_scene, at, out, body_of(peer), id, decides, warn, skip)
+
+
+## Host: heart orb `id` popped at `at`, on every machine.
+func send_heart_orb_pop(id: int, at: Vector3) -> void:
+	if is_online() and multiplayer.is_server():
+		_net_heart_orb_pop.rpc(id, at)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_heart_orb_pop(id: int, at: Vector3) -> void:
+	HeartOrb.pop_by_id(id, at)
+
+
 ## Host: words on one player's screen (the bottom-middle message), wherever
 ## they are.
 func send_message(peer_id: int, text: String) -> void:

@@ -54,7 +54,7 @@ var _dead := false
 
 ## Starts it for `player` (here), dragged by `stalker`.
 static func begin(who: PlayerMovement, by: Node3D) -> StalkerDrag:
-	var existing: Variant = who.get_meta(&"stalker_drag", null)
+	var existing: Variant = (who.get_meta(&"stalker_drag") if who.has_meta(&"stalker_drag") else null)
 	if existing is StalkerDrag and is_instance_valid(existing):
 		return existing
 	var drag := StalkerDrag.new()
@@ -66,7 +66,7 @@ static func begin(who: PlayerMovement, by: Node3D) -> StalkerDrag:
 
 ## Ends it for `player` (here), if it's on: they get up (release()).
 static func finish(who: PlayerMovement, throw: Vector3 = Vector3.ZERO) -> void:
-	var existing: Variant = who.get_meta(&"stalker_drag", null)
+	var existing: Variant = (who.get_meta(&"stalker_drag") if who.has_meta(&"stalker_drag") else null)
 	if existing is StalkerDrag and is_instance_valid(existing):
 		(existing as StalkerDrag).release(throw)
 
@@ -202,7 +202,7 @@ static func _flat(v: Vector3) -> Vector3:
 func _exit_tree() -> void:
 	if not is_instance_valid(player):
 		return
-	if player.get_meta(&"stalker_drag", null) == self:
+	if (player.get_meta(&"stalker_drag") if player.has_meta(&"stalker_drag") else null) == self:
 		player.remove_meta(&"stalker_drag")
 	player.drag = null
 	player.weapons.unlatch_leech(self)

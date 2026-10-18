@@ -46,7 +46,7 @@ var _drag: StalkerDrag
 
 ## Dead: the ragdoll here, and (your own body) the pull-back and fade.
 static func begin(who: PlayerMovement, carrying: Vector3) -> PlayerDeath:
-	var existing: Variant = who.get_meta(&"player_death", null)
+	var existing: Variant = (who.get_meta(&"player_death") if who.has_meta(&"player_death") else null)
 	if existing is PlayerDeath and is_instance_valid(existing):
 		return existing
 	var death := PlayerDeath.new()
@@ -58,7 +58,7 @@ static func begin(who: PlayerMovement, carrying: Vector3) -> PlayerDeath:
 
 ## Alive again (PlayerMovement.respawn): the body's gone, you wake up.
 static func wake(who: PlayerMovement) -> void:
-	var existing: Variant = who.get_meta(&"player_death", null)
+	var existing: Variant = (who.get_meta(&"player_death") if who.has_meta(&"player_death") else null)
 	if existing is PlayerDeath and is_instance_valid(existing):
 		(existing as PlayerDeath).queue_free()
 	if who.is_multiplayer_authority():
@@ -78,7 +78,7 @@ func _ready() -> void:
 	var flat := Vector3(momentum.x, 0.0, momentum.z)
 	var facing := -player.global_basis.z
 	_back = -(flat.normalized() if flat.length() > 1.0 else Vector3(facing.x, 0.0, facing.z).normalized())
-	var drag: Variant = player.get_meta(&"stalker_drag", null)
+	var drag: Variant = (player.get_meta(&"stalker_drag") if player.has_meta(&"stalker_drag") else null)
 	if drag is StalkerDrag and is_instance_valid(drag):
 		# Died in the Stalker's grip: no second body -- the dragged one goes
 		# limp where it lies, and the view pulls back from where it was.
@@ -175,7 +175,7 @@ func _process(delta: float) -> void:
 func _exit_tree() -> void:
 	if not is_instance_valid(player):
 		return
-	if player.get_meta(&"player_death", null) == self:
+	if (player.get_meta(&"player_death") if player.has_meta(&"player_death") else null) == self:
 		player.remove_meta(&"player_death")
 	if is_instance_valid(_drag):
 		_drag.queue_free()

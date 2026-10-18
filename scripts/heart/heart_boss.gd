@@ -79,6 +79,13 @@ const TEXT_HOLD := 4.0
 const TEXT_OUT := 1.0
 const FADE_BACK := 2.0
 const HIT_FLASH := 0.08
+## Hi-hats (the user's): a blood orb each (HeartOrb), swelling out of a
+## random spot on it the beat before; at most MAX_ORBS about at once.
+const MAX_ORBS := 10
+## The song loops crossfading (the user's): its last LOOP_FADE seconds blend
+## into its start, and the map starts over with it.
+const LOOP_FADE := 2.0
+const SILENT_DB := -40.0
 ## A kick (the user's): the cathedral's walls, columns and mezzanines judder
 ## (their meshes only -- the floor you stand on doesn't move) this far, for
 ## about this long; its lamps flicker and dim, then come back.
@@ -148,8 +155,12 @@ var _active := false
 var _player: AudioStreamPlayer
 ## The map it's playing (yours if you've picked one: PlayerMovement.heart_song).
 var _map: BeatMap
-## The song's snares up to here have had their holes opened.
+## The song's snares up to here have had their holes opened; hats, their orbs.
 var _snares_to := -1.0
+var _hats_to := -1.0
+## The song as it fades out over a loop (the next pass is _player).
+var _tail: AudioStreamPlayer
+var _fade: Tween
 
 
 func _ready() -> void:
@@ -164,6 +175,8 @@ func _ready() -> void:
 	add_child(_light)
 	_player = AudioStreamPlayer.new()
 	add_child(_player)
+	_tail = AudioStreamPlayer.new()
+	add_child(_tail)
 	_build_hitbox()
 	_build_chains.call_deferred() # once the cathedral's walls are in the physics
 	_find_room.call_deferred()
@@ -334,6 +347,10 @@ func artery_spray(at: Vector3, normal: Vector3) -> void:
 func _scratch_down(end: bool) -> void:
 	if _scratch:
 		_scratch.kill()
+	if _fade:
+		_fade.kill()
+	_tail.stop()
+	_player.volume_db = 0.0
 	if not _player.playing:
 		return
 	_scratch = create_tween()
@@ -411,6 +428,8 @@ func _start() -> void:
 	_next_beam = 0
 	_map = _chosen_map()
 	_snares_to = -1.0
+	_hats_to = -1.0
+	_player.volume_db = 0.0
 	_player.stream = _map.song if _map else null
 	_player.pitch_scale = 1.0
 	_player.stream_paused = false
@@ -421,6 +440,30 @@ func _start() -> void:
 func _stop() -> void:
 	_active = false
 	_player.stop()
+	_tail.stop()
+
+
+## The song's end blending into its start (LOOP_FADE): the playing pass
+## becomes the tail and fades out; the other player starts it over, fading
+## in, and the map starts again with it.
+func _loop() -> void:
+	if _fade:
+		_fade.kill()
+	var old := _player
+	_player = _tail
+	_tail = old
+	_player.stream = _tail.stream
+	_player.pitch_scale = 1.0
+	_player.stream_paused = false
+	_player.volume_db = SILENT_DB
+	_player.play()
+	_time = 0.0
+	_snares_to = -1.0
+	_hats_to = -1.0
+	_fade = create_tween().set_parallel(true)
+	_fade.tween_property(_player, "volume_db", 0.0, LOOP_FADE).set_trans(Tween.TRANS_SINE)
+	_fade.tween_property(_tail, "volume_db", SILENT_DB, LOOP_FADE).set_trans(Tween.TRANS_SINE)
+	_fade.chain().tween_callback(_tail.stop)
 
 
 ## Your pick (the heart_song in your player's inspector), else its own.
@@ -444,8 +487,15 @@ func _tick(delta: float) -> void:
 		for at in _map.between(BeatMap.Drum.SNARE, _snares_to, ahead):
 			_fire(at - _time)
 		_snares_to = maxf(_snares_to, ahead)
-		if not _player.playing:
-			_start() # the song's over: round again
+		for at in _map.between(BeatMap.Drum.HAT, _hats_to, ahead):
+			_orb(at - _time)
+		_hats_to = maxf(_hats_to, ahead)
+		# Near its end: crossfading round to the start.
+		var length := _player.stream.get_length() if _player.stream else 0.0
+		if _player.playing and length > LOOP_FADE * 2.0 and _player.get_playback_position() >= length - LOOP_FADE:
+			_loop()
+		elif not _player.playing:
+			_start() # (stopped some other way: round again)
 		return
 	# No map: test_bpm, kick and snare taking turns.
 	var beat := 60.0 / maxf(test_bpm, 1.0)
@@ -615,6 +665,30 @@ func _shake_room(delta: float) -> void:
 
 func _song_time() -> float:
 	return _player.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
+
+
+## A hi-hat's orb, swelling out of a random spot on it for `warn`, then off
+## after a player inside (the host's call).
+func _orb(warn: float) -> void:
+	if Network.is_online() and not multiplayer.is_server():
+		return
+	if HeartOrb.alive.size() >= MAX_ORBS:
+		return
+	var inside: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player and not player.is_dead() and _room_world().has_point(player.global_position + Vector3.UP):
+			inside.append(player)
+	if inside.is_empty():
+		return
+	var out := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)).normalized()
+	var at := global_position + out * _radii * 0.9
+	Network.send_heart_orb(HeartOrb.next_id(), at, out, inside[randi() % inside.size()].get_multiplayer_authority(), maxf(warn, 0.05))
+
+
+## Its body (what its orbs pass through).
+func body_rid() -> RID:
+	return _hitbox.get_rid() if _hitbox else RID()
 
 
 ## A hole opening on it, `warn` seconds before it blasts (the host's call).
