@@ -60,6 +60,7 @@ func _start() -> void:
 	if not _init_steam():
 		return
 	available = true
+	why_not = ""
 	for pair: Array in [["lobby_created", _on_lobby_created], ["lobby_joined", _on_lobby_joined],
 			["join_requested", _on_join_requested], ["join_game_requested", _on_join_game_requested]]:
 		if _steam.has_signal(pair[0]):

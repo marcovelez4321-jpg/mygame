@@ -11,6 +11,14 @@ The code is in place: `scripts/net/steam_coop.gd` (`SteamCoop`, a child of the `
 2. Unzip it so you have `addons/godotsteam/` in the project (with its `.gdextension` file and the `win64` folder holding `steam_api64.dll`).
 3. Restart the Godot editor.
 
+### The Steam edition of Godot (important)
+
+Godot from Steam ships its own, older `steam_api64.dll` in its install folder. Windows loads that one first, so GodotSteam fails in the editor with "Error 127: The specified procedure could not be found". Fixed 2026-10-18: GodotSteam's newer `steam_api64.dll` (10.83, Steamworks SDK 1.65) was copied over Godot's (10.24) in `C:\Program Files (x86)\Steam\steamapps\common\Godot Engine\`. The original is kept beside it as `steam_api64.dll.godot-original.bak`. Newer Steam DLLs work with older programs, so Godot itself is fine.
+
+- **If Steam updates Godot and puts the old DLL back:** close Godot and copy `addons/godotsteam/win64/steam_api64.dll` over Godot's again.
+- **To undo:** delete Godot's `steam_api64.dll` and rename the `.bak` back.
+- **Exported games aren't affected:** they load GodotSteam's own DLL.
+
 ## 2. App ID
 
 - Until the game has its own Steam App ID, it uses **480** (Spacewar, Valve's free test app). It's set in `SteamCoop.APP_ID` and in `steam_appid.txt` at the project root (which Steam reads when you run from the editor).
@@ -41,6 +49,6 @@ The export needs GodotSteam's files next to the `.exe`: `steam_api64.dll`, and t
 
 ## Not done yet
 
-- Untested: the extension isn't installed on the dev PC yet, and testing needs two Steam accounts.
+- Installed and checked on the dev PC (2026-10-18): GodotSteam 4.23.1 loads, SteamMultiplayerPeer is there, and Steam starts with app 480. Not yet tested between two accounts.
 - If the host leaves, everyone's sent home (no host migration), the same as IP co-op.
 - No lobby browser: friends join by invite or Join Game only, which is what friends-only lobbies are for.
