@@ -24,7 +24,8 @@ const CHAIN_MODEL := "res://art/heart_boss/chain/chain.FBX"
 ## this many more off random spots on it, every way.
 @export var aim_at_players: bool = true
 @export var random_beams: int = 5
-## And one at where they're heading (the user's), led the way the flying
+## And one at where each player inside is heading (the user's: in co-op,
+## one for each of you), led the way the flying
 ## roaches lead their spit (FlyingRoach._spit_at) with the same values: their
 ## sideways speed fully (x PREDICTION), toward/away only PREDICTION_TOWARD of
 ## it, a random GUESS share of that lead each time plus up to GUESS_SIDEWAYS m
@@ -712,12 +713,16 @@ func _fire(warn: float) -> void:
 		if not inside.is_empty():
 			var chosen := inside[randi() % inside.size()] as PlayerMovement
 			target = chosen.global_position + Vector3.UP
+			# A predicting beam for every player in there (the user's: in
+			# co-op, one leading each of you), where they'll be by the blast
+			# (the roaches' lead).
 			if predicting_beam:
-				# Where they'll be by the blast (the roaches' lead).
-				var lead := _predict(chosen, global_position, warn)
-				var lead_way := (lead - global_position).normalized()
-				var lead_from := global_position + lead_way * _radii * 0.85
-				Network.send_blood_beam(lead_from, (lead - lead_from).normalized(), maxf(warn, 0.05))
+				for node in inside:
+					var player := node as PlayerMovement
+					var lead := _predict(player, global_position, warn)
+					var lead_way := (lead - global_position).normalized()
+					var lead_from := global_position + lead_way * _radii * 0.85
+					Network.send_blood_beam(lead_from, (lead - lead_from).normalized(), maxf(warn, 0.05))
 	var way := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 0.5), randf_range(-1.0, 1.0)).normalized()
 	if target.is_finite():
 		way = (target - global_position).normalized().slerp(way, 0.3).normalized()
