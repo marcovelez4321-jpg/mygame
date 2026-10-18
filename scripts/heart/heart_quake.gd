@@ -48,6 +48,10 @@ const RUBBLE_COLOR := Color(0.5, 0.48, 0.45)
 
 static var _dust_mesh: QuadMesh
 static var _rubble_mesh: BoxMesh
+## Particle materials, shared (made once per kind and size, not ~30 new ones
+## every kick): key -> ParticleProcessMaterial.
+static var _materials := {}
+static var _fade_ramp: GradientTexture1D
 
 
 ## The host: where this kick's chunks fall from -- every other one over a
@@ -145,12 +149,17 @@ static func sheet(world: Node, at: Vector3, length: float, turn: float) -> void:
 	holder.global_position = at
 	holder.rotation.y = turn
 	var dust_fall := dust_particles(70, 5.0, Vector2(1.0, 3.0), 3.0)
-	var process := dust_fall.process_material as ParticleProcessMaterial
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(length * 0.5, 0.5, 1.0)
-	process.direction = Vector3.DOWN
-	process.spread = 8.0
-	process.gravity = Vector3(0.0, -7.0, 0.0)
+	var span := maxf(roundf(length / 5.0) * 5.0, 5.0)
+	var key := "sheet|%d" % int(span)
+	if not _materials.has(key):
+		var process := (dust_fall.process_material as ParticleProcessMaterial).duplicate() as ParticleProcessMaterial
+		process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		process.emission_box_extents = Vector3(span * 0.5, 0.5, 1.0)
+		process.direction = Vector3.DOWN
+		process.spread = 8.0
+		process.gravity = Vector3(0.0, -7.0, 0.0)
+		_materials[key] = process
+	dust_fall.process_material = _materials[key]
 	dust_fall.one_shot = true
 	dust_fall.explosiveness = 0.6
 	dust_fall.local_coords = false
@@ -188,19 +197,23 @@ static func rubble(world: Node, at: Vector3, size: float) -> void:
 	particles.local_coords = false
 	particles.draw_pass_1 = _rubble_mesh
 	particles.visibility_aabb = AABB(Vector3(-20.0, -200.0, -20.0), Vector3(40.0, 220.0, 40.0))
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	process.emission_sphere_radius = size
-	process.direction = Vector3.UP
-	process.spread = 180.0
-	process.initial_velocity_min = 1.0
-	process.initial_velocity_max = 5.0
-	process.gravity = Vector3(0.0, -20.0, 0.0)
-	process.scale_min = 0.6 * size
-	process.scale_max = 2.0 * size
-	process.angular_velocity_min = -300.0
-	process.angular_velocity_max = 300.0
-	particles.process_material = process
+	var bucket := maxf(roundf(size * 4.0) / 4.0, 0.25)
+	var key := "rubble|%d" % int(bucket * 4.0)
+	if not _materials.has(key):
+		var process := ParticleProcessMaterial.new()
+		process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		process.emission_sphere_radius = bucket
+		process.direction = Vector3.UP
+		process.spread = 180.0
+		process.initial_velocity_min = 1.0
+		process.initial_velocity_max = 5.0
+		process.gravity = Vector3(0.0, -20.0, 0.0)
+		process.scale_min = 0.6 * bucket
+		process.scale_max = 2.0 * bucket
+		process.angular_velocity_min = -300.0
+		process.angular_velocity_max = 300.0
+		_materials[key] = process
+	particles.process_material = _materials[key]
 	world.add_child(particles)
 	particles.global_position = at
 	particles.emitting = true
@@ -233,22 +246,28 @@ static func dust_particles(amount: int, lifetime: float, speed: Vector2, size: f
 	particles.draw_pass_1 = _dust_mesh
 	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	particles.visibility_aabb = AABB(Vector3(-30.0, -30.0, -30.0), Vector3(60.0, 60.0, 60.0))
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	process.emission_sphere_radius = size * 0.4
-	process.direction = Vector3.UP
-	process.spread = 75.0
-	process.initial_velocity_min = speed.x
-	process.initial_velocity_max = speed.y
-	process.gravity = Vector3(0.0, -1.5, 0.0)
-	process.damping_min = 1.0
-	process.damping_max = 2.0
-	process.scale_min = size * 0.5
-	process.scale_max = size
-	var fade := Gradient.new()
-	fade.colors = PackedColorArray([DUST_COLOR, Color(DUST_COLOR, 0.0)])
-	var ramp := GradientTexture1D.new()
-	ramp.gradient = fade
-	process.color_ramp = ramp
-	particles.process_material = process
+	# (Sizes to the nearest half metre, so a few materials serve them all.)
+	var bucket := maxf(roundf(size * 2.0) / 2.0, 0.5)
+	var key := "dust|%d|%d|%d" % [int(speed.x * 2.0), int(speed.y * 2.0), int(bucket * 2.0)]
+	if not _materials.has(key):
+		if _fade_ramp == null:
+			var fade := Gradient.new()
+			fade.colors = PackedColorArray([DUST_COLOR, Color(DUST_COLOR, 0.0)])
+			_fade_ramp = GradientTexture1D.new()
+			_fade_ramp.gradient = fade
+		var process := ParticleProcessMaterial.new()
+		process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		process.emission_sphere_radius = bucket * 0.4
+		process.direction = Vector3.UP
+		process.spread = 75.0
+		process.initial_velocity_min = speed.x
+		process.initial_velocity_max = speed.y
+		process.gravity = Vector3(0.0, -1.5, 0.0)
+		process.damping_min = 1.0
+		process.damping_max = 2.0
+		process.scale_min = bucket * 0.5
+		process.scale_max = bucket
+		process.color_ramp = _fade_ramp
+		_materials[key] = process
+	particles.process_material = _materials[key]
 	return particles

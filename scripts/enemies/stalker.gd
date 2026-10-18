@@ -714,8 +714,12 @@ func _on_player_fired() -> void:
 
 ## In the heart's cathedral (HeartBoss.room_contains).
 func _in_cathedral(point: Vector3) -> bool:
-	var heart := get_tree().get_first_node_in_group(&"heart_boss")
-	return heart != null and bool(heart.call(&"room_contains", point))
+	if not is_instance_valid(_heart):
+		_heart = get_tree().get_first_node_in_group(&"heart_boss")
+	return _heart != null and bool(_heart.call(&"room_contains", point))
+
+
+var _heart: Node # (found once: asked several times a tick)
 
 
 ## Out of the cathedral, unseen: down in the hall under it, by the foot of

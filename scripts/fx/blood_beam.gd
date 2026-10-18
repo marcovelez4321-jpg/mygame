@@ -53,6 +53,15 @@ const SOUND_RANGE := 90.0
 const SOUND_UNIT := 14.0
 const CHARGE_DB := -4.0
 const ROAR_DB := 2.0
+## A volley's beams all at once (7, and 7 ricochets): only so many light the
+## room, whine or roar at a time -- past that they'd blend into one anyway,
+## and every light and voice costs every frame.
+const MAX_LIT := 4
+const MAX_CHARGING := 4
+const MAX_ROARING := 6
+static var _lit := 0
+static var _charging := 0
+static var _roaring := 0
 
 var _from := Vector3.ZERO
 var _direction := Vector3.FORWARD
@@ -79,6 +88,9 @@ var _spray: GPUParticles3D
 var _mist: GPUParticles3D
 var _charge: AudioStreamPlayer3D
 var _roar: AudioStreamPlayer3D
+var _has_light := false
+var _has_charge := false
+var _has_roar := false
 
 static var _glow_texture: GradientTexture2D
 static var _charge_sound: AudioStreamWAV
@@ -114,6 +126,9 @@ func _ready() -> void:
 	if not hit.is_empty() and _bounces > 0:
 		# On off what it hits, at the mirror angle, blasting with it.
 		_bounce.call_deferred(hit.position as Vector3, _direction.bounce(_hit_normal))
+	_has_light = _lit < MAX_LIT
+	if _has_light:
+		_lit += 1
 	_build_hole()
 	_build_beam()
 	_light = OmniLight3D.new()
@@ -121,15 +136,27 @@ func _ready() -> void:
 	_light.light_energy = 0.0
 	_light.omni_range = LIGHT_RANGE
 	_light.shadow_enabled = false
+	_light.visible = _has_light
 	add_child(_light)
 	_light.position = _direction * 2.0
 	_make_sounds()
 	_charge = _voice(_charge_sound, CHARGE_DB)
 	_roar = _voice(_roar_sound, ROAR_DB)
-	if not _ricochet and _warn > 0.05:
+	if not _ricochet and _warn > 0.05 and _charging < MAX_CHARGING:
 		# The whine, timed to peak as it blasts.
+		_has_charge = true
+		_charging += 1
 		_charge.pitch_scale = clampf(0.75 / _warn, 0.6, 2.5)
 		_charge.play()
+
+
+func _exit_tree() -> void:
+	if _has_light:
+		_lit -= 1
+	if _has_charge:
+		_charging -= 1
+	if _has_roar:
+		_roaring -= 1
 
 
 func _process(delta: float) -> void:
@@ -220,9 +247,15 @@ func _fire() -> void:
 		BloodFX.spawn_splatter(world, reach, _hit_normal, THICKNESS * 0.9)
 	_light.light_color = Color(1.0, 0.18, 0.12)
 	_charge.stop()
-	_roar.pitch_scale = randf_range(0.85, 1.15)
-	_follow_listener()
-	_roar.play()
+	if _has_charge:
+		_has_charge = false
+		_charging -= 1
+	if _roaring < MAX_ROARING:
+		_has_roar = true
+		_roaring += 1
+		_roar.pitch_scale = randf_range(0.85, 1.15)
+		_follow_listener()
+		_roar.play()
 	var camera := get_viewport().get_camera_3d() as CameraJuice
 	if camera:
 		var at := camera.global_position
@@ -365,13 +398,16 @@ func _build_beam() -> void:
 		shape.custom_aabb = AABB(Vector3(-radius * 3.0, -_length * 0.5, -radius * 3.0), Vector3(radius * 6.0, _length, radius * 6.0))
 		_pivot.add_child(shape)
 	# Droplets flying off its sides the whole way along, and a red mist.
-	_spray = _particles(mini(int(_length * 4.0) + 60, 600), 0.8, BloodFX.droplet_mesh(), BloodFX.BLOOD_COLOR, Vector2(3.0, 11.0), Vector3(0.0, -14.0, 0.0), Vector2(1.0, 2.5))
-	_mist = _particles(mini(int(_length * 0.8) + 20, 160), 1.2, _mist_mesh(), Color(0.7, 0.04, 0.03, 0.35), Vector2(0.5, 2.5), Vector3(0.0, -1.0, 0.0), Vector2(1.5, 4.0))
+	# (A ricochet: half the spray, no mist -- it's the beam's tail end.)
+	var spray := mini(int(_length * 4.0) + 60, 600) / (2 if _ricochet else 1)
+	_spray = _particles(spray, 0.8, BloodFX.droplet_mesh(), BloodFX.BLOOD_COLOR, Vector2(3.0, 11.0), Vector3(0.0, -14.0, 0.0), Vector2(1.0, 2.5))
+	_mist = _particles(1 if _ricochet else mini(int(_length * 0.8) + 20, 160), 1.2, _mist_mesh(), Color(0.7, 0.04, 0.03, 0.35), Vector2(0.5, 2.5), Vector3(0.0, -1.0, 0.0), Vector2(1.5, 4.0))
 	_impact_light = OmniLight3D.new()
 	_impact_light.light_color = Color(1.0, 0.15, 0.1)
 	_impact_light.light_energy = 0.0
 	_impact_light.omni_range = LIGHT_RANGE * 0.4
 	_impact_light.shadow_enabled = false
+	_impact_light.visible = _has_light
 	add_child(_impact_light)
 	_impact_light.position = _direction * maxf(_length - 2.0, 0.0)
 
@@ -402,8 +438,14 @@ func _particles(amount: int, lifetime: float, mesh: Mesh, color: Color, speed: V
 	return particles
 
 
+static var _mist_quad: QuadMesh
+
+
 static func _mist_mesh() -> QuadMesh:
+	if _mist_quad:
+		return _mist_quad
 	var quad := QuadMesh.new()
+	_mist_quad = quad
 	quad.size = Vector2(1.5, 1.5)
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

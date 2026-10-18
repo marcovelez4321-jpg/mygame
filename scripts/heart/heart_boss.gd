@@ -205,7 +205,9 @@ func _process(delta: float) -> void:
 	var thump := 0.0 if dead else (1.0 - exp(-_beat_age * THUMP_RISE)) * exp(-_beat_age * THUMP_FALL)
 	_model.scale = Vector3.ONE * _base_scale * (1.0 + THUMP * thump)
 	_light.light_energy = 1.0 + GLOW * thump
-	_update_chains(thump)
+	if absf(thump - _chain_pulse) > 0.004:
+		_chain_pulse = thump
+		_update_chains(thump)
 	# Dripping on the floor below.
 	_drip_left -= delta
 	if _drip_left <= 0.0 and not dead:
@@ -593,6 +595,7 @@ func _physics_process(delta: float) -> void:
 ## Network.send_heart_kick, on every game.
 func quake(spots: PackedVector3Array, decides: bool) -> void:
 	_quake_age = 0.0
+	_shaking = true
 	# A shift under way: this kick's lurch.
 	if _lurches_done < LURCHES and not _pieces.is_empty():
 		_lurches_done += 1
@@ -647,7 +650,11 @@ func _find_room() -> void:
 
 ## The kick's judder and flicker, easing off.
 func _shake_room(delta: float) -> void:
+	if not _shaking:
+		return
 	_quake_age += delta
+	if _quake_age > maxf(JUDDER_TIME, FLICKER_TIME):
+		_shaking = false # (this pass puts everything back at rest)
 	var left := clampf(1.0 - _quake_age / JUDDER_TIME, 0.0, 1.0)
 	for i in _room_meshes.size():
 		if not is_instance_valid(_room_meshes[i]):
@@ -742,8 +749,11 @@ func _predict(target: PlayerMovement, from_point: Vector3, time: float) -> Vecto
 # ---- Who's here -----------------------------------------------------------------
 
 func _room_world() -> AABB:
-	var stack := get_parent() as Node3D
-	return stack.global_transform * room if stack else room
+	if not _room_known and is_inside_tree():
+		var stack := get_parent() as Node3D
+		_room_box = stack.global_transform * room if stack else room
+		_room_known = true
+	return _room_box
 
 
 func _anyone_inside() -> bool:
@@ -768,6 +778,12 @@ func _nearest_distance() -> float:
 
 var _base_scale := 1.0
 var _looks_on := true
+var _chain_pulse := 0.0
+## Its cathedral in the world (the Stack never moves: worked out once).
+var _room_box := AABB()
+var _room_known := false
+## A kick's judder and flicker running (else _shake_room does nothing).
+var _shaking := false
 
 
 func _set_looks(on: bool) -> void:
@@ -895,24 +911,31 @@ func _build_chains() -> void:
 
 
 ## Every link along its chain's sag; a beat jolts them (`pulse` 0..1).
+## (Cheap, per frame: each link's turn worked out once, at rest -- a jolt
+## barely turns them -- only where they sit is redone; and only when the
+## pulse has moved: _process skips it while the heart's at rest.)
 func _update_chains(pulse: float) -> void:
+	var swell := _model.scale.x / _base_scale
 	for chain in _chains:
-		var start: Vector3 = global_position + (chain.from as Vector3) * _model.scale.x / _base_scale
+		var start: Vector3 = global_position + (chain.from as Vector3) * swell
 		var finish: Vector3 = chain.to
 		var links: int = chain.links
-		var length := start.distance_to(finish)
-		var droop := length * sag * (1.0 - 0.35 * pulse * float(chain.jolt))
+		var droop := start.distance_to(finish) * sag * (1.0 - 0.35 * pulse * float(chain.jolt)) * 4.0
 		var multimesh: MultiMesh = chain.multimesh
+		var bases: Array = chain.get("bases", [])
+		var first := bases.is_empty()
 		var previous := start
 		for i in links:
 			var t := (i + 0.5) / links
-			var at := start.lerp(finish, t) + Vector3.DOWN * droop * 4.0 * t * (1.0 - t)
-			var next_t := (i + 1.5) / links
-			var ahead := start.lerp(finish, next_t) + Vector3.DOWN * droop * 4.0 * next_t * (1.0 - next_t)
-			var along := (ahead - previous).normalized()
-			previous = at
-			var basis := _link_basis(along, int(chain.axis), i % 2 == 1) * Basis.from_scale(Vector3.ONE * float(chain.scale))
-			multimesh.set_instance_transform(i, Transform3D(basis, at))
+			var at := start.lerp(finish, t) + Vector3.DOWN * droop * t * (1.0 - t)
+			if first:
+				var next_t := (i + 1.5) / links
+				var ahead := start.lerp(finish, next_t) + Vector3.DOWN * droop * next_t * (1.0 - next_t)
+				bases.append(_link_basis((ahead - previous).normalized(), int(chain.axis), i % 2 == 1) * Basis.from_scale(Vector3.ONE * float(chain.scale)))
+				previous = at
+			multimesh.set_instance_transform(i, Transform3D(bases[i], at))
+		if first:
+			chain["bases"] = bases
 
 
 ## A link's turn: its long axis (`axis` of the model) along the chain, every

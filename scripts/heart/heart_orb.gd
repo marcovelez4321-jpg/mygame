@@ -41,6 +41,7 @@ var _mesh: MeshInstance3D
 var _health: Health
 
 static var _material: StandardMaterial3D
+static var _ball: SphereMesh # (one shared by every orb)
 
 
 static func next_id() -> int:
@@ -92,13 +93,14 @@ func _ready() -> void:
 		_material.emission_energy_multiplier = 0.35
 		_material.rim_enabled = true
 		_material.rim = 0.6
+	if _ball == null:
+		_ball = SphereMesh.new()
+		_ball.radius = RADIUS
+		_ball.height = RADIUS * 2.0
+		_ball.radial_segments = 16
+		_ball.rings = 8
 	_mesh = MeshInstance3D.new()
-	var ball := SphereMesh.new()
-	ball.radius = RADIUS
-	ball.height = RADIUS * 2.0
-	ball.radial_segments = 16
-	ball.rings = 8
-	_mesh.mesh = ball
+	_mesh.mesh = _ball
 	_mesh.material_override = _material
 	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_mesh)
