@@ -239,10 +239,14 @@ func _build_hitbox() -> void:
 		while walk != self and walk is Node3D:
 			to_heart = (walk as Node3D).transform * to_heart
 			walk = walk.get_parent()
-		var convex := mesh.mesh.create_convex_shape(true, true)
+		# Its exact outline (not simplified: that cut in under its bulges),
+		# as big as it swells on a thump -- so a shot that looks like a hit
+		# on it is one, mid-beat too.
+		var convex := mesh.mesh.create_convex_shape(true, false)
+		var swollen := 1.0 + THUMP * 0.75
 		var points := PackedVector3Array()
 		for p in convex.points:
-			points.append(to_heart * p)
+			points.append(to_heart * p * swollen)
 		convex.points = points
 		var shape := CollisionShape3D.new()
 		shape.shape = convex
