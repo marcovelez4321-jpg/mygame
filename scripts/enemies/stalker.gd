@@ -294,6 +294,8 @@ var _hitboxes: Array = []
 ## the dark (no fog on them): two hot points that stay a few pixels big
 ## however far off it is. No glow round them. Walls still hide them.
 const EYE_COLOR := Color(0.3, 0.62, 1.0)
+## How strong the blue glare round each eye is (the user's: half, 2026-10-18).
+const EYE_GLOW := 0.5
 const EYE_CORE := 0.12 # m (the eye itself, up close)
 ## The glare: screen-steady (fixed_size: as if this big at 1 m) -- a pinpoint,
 ## ~6 px (the user's: at 0.045 it was ~20 px an eye, over its whole body far off).
@@ -1811,7 +1813,7 @@ func _update_eyes() -> void:
 
 func _build_eyes() -> void:
 	var core := _glow_material(Color(0.9, 0.97, 1.0), false)
-	var glare := _glow_material(EYE_COLOR, true)
+	var glare := _glow_material(Color(EYE_COLOR, EYE_GLOW), true)
 	for i in 2:
 		var eye := MeshInstance3D.new()
 		var quad := QuadMesh.new()
