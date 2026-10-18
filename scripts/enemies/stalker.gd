@@ -14,7 +14,8 @@ extends AnimatableBody3D
 ##   to watch it skitter off) to a spot none of them can see, and waits there.
 ##   DRIVEN OFF, NEVER KILLED: DRIVE_OFF damage and it flees and is gone,
 ##   back AWAY_TIME later.
-##   Everyone far off (RELOCATE_FAR): it turns up again out of sight, nearer.
+##   Lost them: it hunts them down their trail (HUNT; it used to turn up
+##   out of nowhere -- now only back from AWAY, and down their trail then).
 ## Stunts, the fear meter and the strike come next (stages 2-3).
 ## Its body (every screen): two-bone IK on each arm and leg, planted hands
 ## and feet stepping in diagonal pairs -- jerky, broken-jointed (The Grudge)
@@ -24,7 +25,7 @@ extends AnimatableBody3D
 ## (NetEntities: its transform carries the surface it's on), and works the
 ## body out from that.
 
-enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG }
+enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
 enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP }
 
@@ -69,6 +70,18 @@ var _stuck_for := 0.0
 var _stuck_best := INF
 ## Indoors, how long it's had no way through to them (another floor, a wall).
 var _cut_for := 0.0
+## Each player's trail: player -> {points, leaps (1: a jump to that crumb),
+## length, aired, msec}.
+var _trails := {}
+## Who it's hunting, the crumb it's making for, and how long it's not seen them.
+var _hunted: PlayerMovement
+var _crumb := 0
+var _unseen_for := 0.0
+var _sight_check := 0.0
+var _crumb_best := INF
+var _crumb_stall := 0.0
+var _skip_check := 0.0
+var _flee_side := 1.0
 ## How long it's been heading for its hiding spot (never there by STUCK_TIME:
 ## it waits where it is -- not hiding for ever, never stalking or staging).
 var _hiding_for := 0.0
@@ -165,7 +178,39 @@ const COOLDOWN := Vector2(120.0, 180.0)
 
 const RUSHED_RANGE := 20.0
 const RUSHED_SPEED := 1.25
-const GRAB_RANGE := 10.0 
+## (The user's, 2026-10-18: 20 -- get within 20 m of it, looking at it or
+## not, and it lunges for the grab; was 10, an instant grab.)
+const GRAB_RANGE := 20.0
+
+## HUNTING (the user's, 2026-10-18): it follows your trail. Every player
+## leaves one -- a crumb every CRUMB_EVERY metres wherever they touch ground
+## or a wall, a jump or grapple across a gap (over LEAP_GAP) kept as a leap --
+## the last TRAIL_LENGTH of it. Out of its sight for HUNT_AFTER (any fear),
+## it hunts the nearest player down their trail at HUNT_SPEED, crumb to
+## crumb along the very way they went, leaping their gaps; more than
+## CATCH_UP behind along it, it skips on along the trail between crumbs no
+## one can see (never ahead of them). Seeing them again, or within
+## HUNT_UNTIL, it stalks again (or, at full fear, flanks). Spotted while
+## hunting, it bolts and hides like ever, then picks the trail back up. Its
+## skitter carries HUNT_HEAR times as far while it hunts.
+const HUNT_SPEED := 25.0
+const HUNT_AFTER := 3.0
+const HUNT_UNTIL := 30.0
+const CRUMB_EVERY := 3.0
+const TRAIL_LENGTH := 600.0
+const CATCH_UP := 300.0
+const LEAP_GAP := 6.0
+## Faster than this between crumbs (m/s), they didn't travel it: a respawn,
+## a teleport -- the trail starts over.
+const TRAIL_BREAK_SPEED := 120.0
+const CRUMB_REACH := 3.5
+const HUNT_HEAR := 3.0
+## FULL FEAR, not being looked at (the user's): it flanks round behind you
+## at FLANK_SPEED on a ring FLANK_RING out, then creeps in -- and within
+## GRAB_RANGE it lunges. Spotted further off: no stare, it bolts sideways
+## out of your view, zigzagging, frantic, then hides.
+const FLANK_SPEED := 18.0
+const FLANK_RING := 20.0 
 var _cooldown_left := 0.0
 var _hide_fast := false
 var _victim: PlayerMovement
@@ -380,6 +425,7 @@ func _physics_process(delta: float) -> void:
 	if NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
 		return
 	_state_left -= delta
+	_record_trails()
 	match state:
 		State.AWAY:
 			if _state_left <= 0.0:
@@ -402,26 +448,17 @@ func _physics_process(delta: float) -> void:
 
 func _think(delta: float) -> void:
 	_fear_tick(delta)
-	# The heart's cathedral is off limits (the user's): it never follows you
-	# in -- caught in there, it slips out unseen and waits below.
-	if state != State.DRAG and _in_cathedral(global_position) and not _seen():
-		_leave_cathedral()
-		return
-	if (state == State.APPROACH or state == State.LUNGE) and is_instance_valid(_victim) and _in_cathedral(_victim.global_position):
-		_victim = null
-		_start_hide(false) # (they got in there: it lets them go, for now)
-		return
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	if state == State.APPROACH and is_instance_valid(_victim) and _cut_off_tick(delta, _victim):
 		return
 	if state == State.APPROACH or state == State.LUNGE or state == State.DRAG:
 		_strike_tick(delta)
 		return
-	# Too close: grabbed (not while it's cooling down after a drag).
+	# Within GRAB_RANGE (looking at it or not): it lunges for them (not while
+	# it's cooling down after a drag).
 	var near := _nearest_player()
 	if near and _cooldown_left <= 0.0 and state != State.STUNT and near.drag == null and near.global_position.distance_to(global_position) < GRAB_RANGE:
-		_victim = near
-		_grab(near)
+		_lunge_at(near)
 		return
 	# Rushed at: off flat out to cover.
 	if near and state != State.HIDE and state != State.STUNT:
@@ -438,7 +475,8 @@ func _think(delta: float) -> void:
 			_stunt_look(seen)
 		elif seen and state != State.HIDE and state != State.SPOTTED:
 			state = State.SPOTTED
-			_state_left = SPOTTED_FREEZE
+			# (Full fear: no stare -- it bolts, frantic, the moment it's seen.)
+			_state_left = SPOTTED_FREEZE if fear < 1.0 else 0.0
 			_moment()
 			_add_fear(FEAR_SEEN, "glimpsed")
 	if state == State.STUNT:
@@ -449,33 +487,17 @@ func _think(delta: float) -> void:
 		_desired = Vector3.ZERO
 		return
 	var distance := nearest.global_position.distance_to(global_position)
-	# Everyone's far off: turn up again somewhere nearer, unseen.
-	_far_for = _far_for + delta if distance > RELOCATE_FAR else 0.0
-	if _far_for > RELOCATE_AFTER:
-		_far_for = 0.0
-		_turn_up()
-		return
-	# Backstage: too far behind, or hung up and not closing in -- and nobody
-	# watching -- it slips round and turns up closer.
-	if state == State.STALK and _cut_off_tick(delta, nearest):
-		return
-	if state == State.STALK:
-		_leash_for = _leash_for + delta if distance > LEASH else 0.0
-		if distance < _stuck_best - STUCK_GAIN:
-			_stuck_best = distance
-			_stuck_for = 0.0
-		elif distance > STALK_DISTANCE + 8.0:
-			_stuck_for += delta
-		else:
-			_stuck_best = distance
-			_stuck_for = 0.0
-		if (_leash_for > LEASH_TIME or _stuck_for > STUCK_TIME) and not _seen():
-			_leash_for = 0.0
-			_stuck_for = 0.0
-			_stuck_best = INF
-			_turn_up(BACKSTAGE_TO)
-			return
+	# Lost sight of them HUNT_AFTER (any fear): it hunts them down their trail
+	# (no more turning up out of nowhere: it runs the way they went).
+	_sight_check -= delta
+	if _sight_check <= 0.0:
+		_sight_check = 0.2
+		_unseen_for = 0.0 if _sees(nearest) else _unseen_for + 0.2
+	if (state == State.STALK or state == State.WAIT) and _unseen_for >= HUNT_AFTER and distance > HUNT_UNTIL:
+		_start_hunt(nearest)
 	match state:
+		State.HUNT:
+			_hunt_tick(delta)
 		State.SPOTTED:
 			# Dead still a beat, staring back -- then it scrambles off.
 			_desired = Vector3.ZERO
@@ -487,7 +509,7 @@ func _think(delta: float) -> void:
 			# user's) -- then to cover further off.
 			if _run_off_left > 0.0:
 				_run_off_left -= delta
-				_desired = _away_from_players() * SPRINT
+				_desired = _flee_dir() * SPRINT
 				if _run_off_left <= 0.0:
 					_hide_to = _hiding_spot()
 				return
@@ -504,13 +526,11 @@ func _think(delta: float) -> void:
 			if _state_left <= 0.0:
 				state = State.STALK
 		State.STALK:
-			# The fear's full: someone caught off guard is taken.
-			if fear >= 1.0 and _cooldown_left <= 0.0:
-				var exposed := _exposed_player()
-				if exposed:
-					_victim = exposed
-					state = State.APPROACH
-					return
+			# The fear's full and they're not looking at it: round behind them.
+			if fear >= 1.0 and _cooldown_left <= 0.0 and nearest.drag == null and not _seen():
+				_victim = nearest
+				state = State.APPROACH
+				return
 			_stunt_left_every -= delta
 			if _stunt_left_every <= 0.0 and _cooldown_left <= 0.0:
 				_stunt_left_every = randf_range(STUNT_EVERY.x, STUNT_EVERY.y)
@@ -546,7 +566,7 @@ func _think(delta: float) -> void:
 func _exposed_player() -> PlayerMovement:
 	for node in get_tree().get_nodes_in_group("player"):
 		var p := node as PlayerMovement
-		if p == null or p.is_dead() or p.drag != null or _in_cathedral(p.global_position):
+		if p == null or p.is_dead() or p.drag != null:
 			continue
 		if _off_guard(p):
 			return p
@@ -574,19 +594,28 @@ func _strike_tick(delta: float) -> void:
 		return
 	match state:
 		State.APPROACH:
-			# In unseen behind them; seen, it hides as ever (and tries again).
+			# Within reach: it lunges, seen or not (the user's).
+			if global_position.distance_to(p.global_position) < GRAB_RANGE:
+				_lunge_at(p)
+				return
+			# In unseen behind them; seen further off, it bolts and hides (and tries again).
 			if _seen():
 				state = State.SPOTTED
 				_state_left = SPOTTED_FREEZE
 				_moment()
 				return
-			var behind := p.global_position - _flat(-p.head.global_basis.z) * APPROACH_BEHIND
-			var to := behind - global_position
-			_desired = to.normalized() * SPRINT if to.length() > 1.0 else Vector3.ZERO
-			if global_position.distance_to(p.global_position) < LUNGE_FROM and _off_guard(p):
-				state = State.LUNGE
-				_state_left = LUNGE_TIME
-				Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * BODY_HEIGHT)
+			# Flanking: round them on a ring FLANK_RING out, toward their back
+			# (out of their sight), then in from behind.
+			var back := -_flat(-p.head.global_basis.z)
+			var bearing := _flat(global_position - p.global_position)
+			var round_to := bearing.signed_angle_to(back, Vector3.UP)
+			var goal := p.global_position + back * APPROACH_BEHIND
+			if absf(round_to) > 0.5:
+				goal = p.global_position + bearing.rotated(Vector3.UP, clampf(round_to, -1.0, 1.0)) * FLANK_RING
+			var to := goal - global_position
+			_desired = to.normalized() * FLANK_SPEED if to.length() > 1.0 else Vector3.ZERO
+			if global_position.distance_to(p.global_position) < GRAB_RANGE:
+				_lunge_at(p)
 		State.LUNGE:
 			var to := p.global_position - global_position
 			_desired = to.normalized() * LUNGE
@@ -600,6 +629,14 @@ func _strike_tick(delta: float) -> void:
 				# Not loose in time: badly hurt, left there in the dark; it runs off.
 				p.health.hurt_unscaled(DRAG_DAMAGE)
 				_let_go(true)
+
+
+## Lunging for them (and grabbing on reaching them: _strike_tick's LUNGE).
+func _lunge_at(p: PlayerMovement) -> void:
+	_victim = p
+	state = State.LUNGE
+	_state_left = LUNGE_TIME
+	Network.send_stalker_sound(StalkerSound.Kind.RATTLE, global_position + Vector3.UP * BODY_HEIGHT)
 
 
 func _grab(p: PlayerMovement) -> void:
@@ -712,31 +749,184 @@ func _on_player_fired() -> void:
 		_add_fear(FEAR_FIRE, "panic fired")
 
 
-## In the heart's cathedral (HeartBoss.room_contains).
-func _in_cathedral(point: Vector3) -> bool:
-	if not is_instance_valid(_heart):
-		_heart = get_tree().get_first_node_in_group(&"heart_boss")
-	return _heart != null and bool(_heart.call(&"room_contains", point))
+# ---- Hunting: following your trail -----------------------------------------------
+
+## Every player's trail: a crumb every CRUMB_EVERY metres where they touch
+## ground or a wall; a gap they jumped (over LEAP_GAP) marked as a leap; a
+## jump in the trail too fast to have been travelled (a respawn) starts it
+## over; the last TRAIL_LENGTH kept.
+func _record_trails() -> void:
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p == null or p.is_dead():
+			continue
+		var trail: Dictionary = _trails.get(p, {})
+		if trail.is_empty():
+			trail = {points = PackedVector3Array(), leaps = PackedByteArray(), length = 0.0, aired = false, msec = 0}
+			_trails[p] = trail
+		if not (p.is_on_floor() or p.is_on_wall() or p.grapple.is_perched()):
+			trail.aired = true
+			continue
+		var at := p.global_position
+		var points: PackedVector3Array = trail.points
+		var leaps: PackedByteArray = trail.leaps
+		var now := Time.get_ticks_msec()
+		if not points.is_empty():
+			var gap := points[points.size() - 1].distance_to(at)
+			if gap < CRUMB_EVERY:
+				if gap < CRUMB_EVERY * 0.5:
+					trail.aired = false # (a hop on the spot)
+				continue
+			var seconds := maxf((now - int(trail.msec)) / 1000.0, 0.05)
+			if gap / seconds > TRAIL_BREAK_SPEED:
+				points.clear()
+				leaps.clear()
+				trail.length = 0.0
+			else:
+				trail.length = float(trail.length) + gap
+		points.append(at)
+		leaps.append(1 if trail.aired and points.size() > 1 and points[points.size() - 2].distance_to(at) > LEAP_GAP else 0)
+		trail.aired = false
+		trail.msec = now
+		while float(trail.length) > TRAIL_LENGTH and points.size() > 2:
+			trail.length = float(trail.length) - points[0].distance_to(points[1])
+			points.remove_at(0)
+			leaps.remove_at(0)
+			if p == _hunted:
+				_crumb = maxi(_crumb - 1, 0)
+		trail.points = points
+		trail.leaps = leaps
 
 
-var _heart: Node # (found once: asked several times a tick)
+## Hunting `p`: making for the crumb of theirs nearest it (or, off their trail
+## and unseen, turning up on it).
+func _start_hunt(p: PlayerMovement) -> void:
+	_hunted = p
+	state = State.HUNT
+	_crumb_best = INF
+	_crumb_stall = 0.0
+	var points: PackedVector3Array = (_trails.get(p, {}) as Dictionary).get("points", PackedVector3Array())
+	var best := INF
+	_crumb = maxi(points.size() - 1, 0)
+	for i in points.size():
+		var d := points[i].distance_squared_to(global_position)
+		if d < best:
+			best = d
+			_crumb = i
 
 
-## Out of the cathedral, unseen: down in the hall under it, by the foot of
-## the stairs up -- waiting for whoever's up there to come down.
-func _leave_cathedral() -> void:
-	var entry := get_tree().get_first_node_in_group(&"cathedral_spawn") as Node3D
-	if entry == null:
-		_go_away()
+## The trail from crumb `from` on to its newest end (metres).
+static func _trail_left(points: PackedVector3Array, from: int) -> float:
+	var total := 0.0
+	for i in range(maxi(from, 0), points.size() - 1):
+		total += points[i].distance_to(points[i + 1])
+	return total
+
+
+func _hunt_tick(delta: float) -> void:
+	var p := _hunted
+	if not is_instance_valid(p) or p.is_dead():
+		state = State.STALK
 		return
-	var below := _ray(entry.global_position + Vector3.DOWN * 30.0, entry.global_position + Vector3.DOWN * 400.0)
-	if below.is_empty() or _visible_from_any(_body_points(below.position, Basis.IDENTITY)):
-		return # (try again next tick)
-	global_position = (below.position as Vector3) + (below.normal as Vector3) * RIDE
-	_normal = below.normal
-	_velocity = Vector3.ZERO
-	state = State.WAIT
-	_state_left = WAIT_TIME
+	var points: PackedVector3Array = (_trails.get(p, {}) as Dictionary).get("points", PackedVector3Array())
+	var leaps: PackedByteArray = (_trails.get(p, {}) as Dictionary).get("leaps", PackedByteArray())
+	# Found them: back to stalking (or flanking).
+	if _sees(p) or p.global_position.distance_to(global_position) < HUNT_UNTIL or points.is_empty():
+		state = State.STALK
+		_unseen_for = 0.0
+		return
+	_crumb = clampi(_crumb, 0, points.size() - 1)
+	# Too far behind: on along the trail, unseen, to CATCH_UP from them.
+	_skip_check -= delta
+	if _skip_check <= 0.0:
+		_skip_check = 0.5
+		if _trail_left(points, _crumb) > CATCH_UP and not _seen():
+			_skip_ahead(points)
+	var goal := points[_crumb]
+	var gap := goal.distance_to(global_position)
+	if gap < CRUMB_REACH:
+		_arrive(points, leaps)
+		return
+	# Getting nowhere toward it (hung up): on to the next.
+	if gap < _crumb_best - 0.5:
+		_crumb_best = gap
+		_crumb_stall = 0.0
+	else:
+		_crumb_stall += delta
+		if _crumb_stall > 2.0:
+			_arrive(points, leaps)
+			return
+	_desired = (goal - global_position).normalized() * HUNT_SPEED
+
+
+## Made the crumb: on to the next -- with a leap, if they jumped it.
+func _arrive(points: PackedVector3Array, leaps: PackedByteArray) -> void:
+	_crumb_best = INF
+	_crumb_stall = 0.0
+	if _crumb >= points.size() - 1:
+		_desired = (_hunted.global_position - global_position).normalized() * HUNT_SPEED # (their newest: straight at them)
+		return
+	_crumb += 1
+	if _crumb < leaps.size() and leaps[_crumb] == 1:
+		_leap_to(points[_crumb])
+		_crumb = mini(_crumb + 1, points.size() - 1)
+
+
+## A leap across a gap they jumped, landing where they landed.
+func _leap_to(to: Vector3) -> void:
+	var from := global_position
+	var flight := clampf(from.distance_to(to) / HUNT_SPEED, 0.5, 3.0)
+	_velocity = (to + Vector3.UP * RIDE - from) / flight + Vector3.UP * 0.5 * GRAVITY * flight
+	_heading = _velocity.normalized()
+	_airborne = true
+
+
+## On along the trail to CATCH_UP from its end, at a crumb no one can see it
+## on (never past their newest: never ahead of them).
+func _skip_ahead(points: PackedVector3Array) -> void:
+	var left := _trail_left(points, _crumb)
+	for j in range(_crumb + 1, points.size() - 1):
+		left -= points[j - 1].distance_to(points[j])
+		if left > CATCH_UP * 0.9:
+			continue
+		if _visible_from_any(_body_points(points[j], Basis.IDENTITY)):
+			continue
+		global_position = points[j] + Vector3.UP * RIDE
+		_normal = Vector3.UP
+		_velocity = Vector3.ZERO
+		_crumb = j + 1
+		_crumb_best = INF
+		return
+
+
+## Whether it can see `p` (their head, nothing in the way).
+func _sees(p: PlayerMovement) -> bool:
+	var me := global_position + global_basis.y * BODY_HEIGHT
+	return _ray(me, p.head.global_position).is_empty()
+
+
+## Turned up somewhere on `p`'s trail `how_far` (metres along it) back from
+## them, where no one can see it; false if there's no such spot.
+func _place_on_trail(p: PlayerMovement, how_far: Vector2) -> bool:
+	var points: PackedVector3Array = (_trails.get(p, {}) as Dictionary).get("points", PackedVector3Array())
+	if points.size() < 3:
+		return false
+	var back := 0.0
+	for j in range(points.size() - 2, 0, -1):
+		back += points[j].distance_to(points[j + 1])
+		if back < how_far.x:
+			continue
+		if back > how_far.y:
+			break
+		if _visible_from_any(_body_points(points[j], Basis.IDENTITY)):
+			continue
+		global_position = points[j] + Vector3.UP * RIDE
+		_normal = Vector3.UP
+		_velocity = Vector3.ZERO
+		state = State.WAIT
+		_state_left = WAIT_TIME
+		return true
+	return false
 
 
 func _nearest_player() -> PlayerMovement:
@@ -744,7 +934,7 @@ func _nearest_player() -> PlayerMovement:
 	var best_distance := INF
 	for node in get_tree().get_nodes_in_group("player"):
 		var player := node as PlayerMovement
-		if player == null or player.is_dead() or _in_cathedral(player.global_position):
+		if player == null or player.is_dead():
 			continue
 		var distance := player.global_position.distance_squared_to(global_position)
 		if distance < best_distance:
@@ -796,6 +986,7 @@ func _visible_from_any(points: Array[Vector3]) -> bool:
 ## Into hiding: straight off away from the players first (`fast`: flat out).
 func _start_hide(fast: bool) -> void:
 	_hide_fast = fast
+	_flee_side = 1.0 if randf() < 0.5 else -1.0
 	_hide_to = Vector3.INF
 	_run_off_left = RUN_OFF_TIME
 	_hiding_for = 0.0
@@ -916,6 +1107,23 @@ func _hiding_spot() -> Vector3:
 	return global_position + _away_from_players() * 25.0
 
 
+## Out of sight the fastest way (the user's: frantic, not sitting there in
+## view): sideways out of the nearest one's view as much as away from them,
+## zigzagging.
+func _flee_dir() -> Vector3:
+	var viewer := _nearest_player()
+	if viewer == null:
+		return _away_from_players()
+	var look := _flat(-viewer.head.global_basis.z)
+	var to_me := _flat(global_position - viewer.global_position)
+	var lateral := to_me - look * to_me.dot(look)
+	if lateral.length_squared() < 0.01:
+		lateral = look.cross(Vector3.UP) * _flee_side
+	lateral = lateral.normalized()
+	var way := (lateral * 0.8 + to_me * 0.45).normalized().rotated(Vector3.UP, sin(Time.get_ticks_msec() * 0.009) * 0.4)
+	return _flat_perpendicular(_normal, way)
+
+
 func _away_from_players() -> Vector3:
 	var away := Vector3.ZERO
 	for node in get_tree().get_nodes_in_group("player"):
@@ -974,19 +1182,20 @@ func _cut_off_tick(delta: float, p: PlayerMovement) -> bool:
 	_cut_for = _cut_for + delta if blocked else 0.0
 	if _cut_for > STUCK_TIME and not _seen():
 		_cut_for = 0.0
-		_stuck_for = 0.0
-		_stuck_best = INF
-		_turn_up(BACKSTAGE_TO)
+		_start_hunt(p) # (down their trail: the way they really went)
 		return true
 	return false
 
 
 func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
-	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool: return not _in_cathedral((n as Node3D).global_position))
+	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		_state_left = 2.0
 		return
 	var player := players[randi() % players.size()] as PlayerMovement
+	# Back down their trail if it can (it came the way they went).
+	if _place_on_trail(player, how_far):
+		return
 	var space := get_world_3d().direct_space_state
 	for attempt in 16:
 		var behind := player.head.global_basis.z.rotated(Vector3.UP, randf_range(-1.2, 1.2))
@@ -1032,7 +1241,7 @@ func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
 ## outside). False if none could be staged this time.
 func _start_stunt() -> bool:
 	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool:
-		return n is PlayerMovement and not (n as PlayerMovement).is_dead() and not _in_cathedral((n as Node3D).global_position))
+		return n is PlayerMovement and not (n as PlayerMovement).is_dead())
 	if players.is_empty():
 		return false
 	_stunt_target = players[randi() % players.size()] as PlayerMovement
@@ -1599,7 +1808,8 @@ static func _glow_material(color: Color, steady: bool) -> StandardMaterial3D:
 ## Its hands and feet on the floor as it goes: the spiders' skitter, slower
 ## and heavier (StalkerSound placeholders), louder the faster it moves.
 func _update_skitter(camera: Camera3D) -> void:
-	var near := camera != null and camera.global_position.distance_to(global_position) < SpiderSound.HEAR_DISTANCE
+	var reach := SpiderSound.HEAR_DISTANCE * (HUNT_HEAR if state == State.HUNT else 1.0)
+	var near := camera != null and camera.global_position.distance_to(global_position) < reach
 	if not near:
 		if _skitter:
 			_skitter.queue_free()
@@ -1609,13 +1819,13 @@ func _update_skitter(camera: Camera3D) -> void:
 		_skitter = AudioStreamPlayer3D.new()
 		_skitter.stream = SpiderSound.skitter(7)
 		_skitter.unit_size = SpiderSound.UNIT_SIZE * 1.4
-		_skitter.max_distance = SpiderSound.HEAR_DISTANCE
+		_skitter.max_distance = SpiderSound.HEAR_DISTANCE * HUNT_HEAR
 		_skitter.pitch_scale = 0.45 # (the user's: lower, heavier)
 		_skitter.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
 		_visual.add_child(_skitter)
 		_skitter.play(randf())
 	var level := clampf(_smooth_velocity.length() / CRAWL, 0.0, 1.0)
-	_skitter.volume_db = SpiderSound.SKITTER_DB + 2.0 + linear_to_db(maxf(level, 0.0005))
+	_skitter.volume_db = SpiderSound.SKITTER_DB + 2.0 + (4.0 if state == State.HUNT else 0.0) + linear_to_db(maxf(level, 0.0005))
 	_skitter.stream_paused = level < 0.05
 
 
