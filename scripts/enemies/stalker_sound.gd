@@ -24,9 +24,13 @@ static var _rattles: Array[AudioStreamWAV] = []
 static var _voices: StalkerVoices
 
 
-## The `slot`'s sound (StalkerVoices) at `at`, through the halls' echo; an
-## empty slot falls back to the old made-up sound where there was one, else
-## stays silent.
+## The `slot`'s sound (StalkerVoices) at `at`; an empty slot falls back to
+## the old made-up sound where there was one (the grab always has one: the
+## user's, every grab heard), else stays silent.
+## Where it is decides how it sounds (the user's): in a megastructure, through
+## the halls' echo; out in the open, dry and clear close by, muffled like a
+## distant call further off, and only very far -- out toward the fog line --
+## with the echo rolling under it (_open_air).
 static func voice(slot: StringName, at: Vector3, world: Node, volume_db: float = 0.0) -> void:
 	if world == null or not world.is_inside_tree():
 		return
@@ -35,15 +39,63 @@ static func voice(slot: StringName, at: Vector3, world: Node, volume_db: float =
 	var event: SoundEvent = _voices.event(slot) if _voices else null
 	var clip: AudioStream = event.pick_clip() if event else null
 	if clip:
-		HallEcho.play(clip, at, world, event.roll_pitch_scale(), event.roll_volume_db() + volume_db)
+		if HallEcho.inside(at):
+			HallEcho.play(clip, at, world, event.roll_pitch_scale(), event.roll_volume_db() + volume_db)
+		else:
+			_open_air(clip, at, world, event.roll_pitch_scale(), event.roll_volume_db() + volume_db)
 		return
 	match slot:
 		&"croak_behind", &"lunge", &"behind_you", &"watching":
 			play(Kind.RATTLE, at, world)
-		&"driven_off":
+		&"driven_off", &"grab":
 			play(Kind.SHRIEK, at, world)
 		&"help_scream":
 			play(Kind.HELP, at, world)
+
+
+## Out in the open: the call itself, dry close by and muffled the further
+## off it is (a distant call); from ECHO_FROM of the way to the fog line out,
+## the echo fading in under it -- only the far ones reverberate.
+const ECHO_FROM := 0.6
+const FOG_FALLBACK := 242.0
+
+
+static func _open_air(clip: AudioStream, at: Vector3, world: Node, pitch: float, volume_db: float) -> void:
+	Radio._ensure_buses()
+	var camera := world.get_viewport().get_camera_3d()
+	var distance := camera.global_position.distance_to(at) if camera else 0.0
+	var air: Environment = world.get_viewport().world_3d.environment if world.get_viewport().world_3d else null
+	var fog_line := air.fog_depth_end if air and air.fog_enabled and air.fog_depth_end > 0.0 else FOG_FALLBACK
+	var call := AudioStreamPlayer3D.new()
+	call.stream = clip
+	call.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+	call.unit_size = 14.0
+	call.max_distance = fog_line * 1.3
+	call.volume_db = volume_db
+	call.pitch_scale = pitch
+	# Further off, duller: the highs gone, a call from a long way away.
+	call.attenuation_filter_cutoff_hz = 2200.0
+	call.attenuation_filter_db = -30.0
+	world.add_child(call)
+	call.global_position = at
+	call.finished.connect(call.queue_free)
+	call.play()
+	var far := smoothstep(fog_line * ECHO_FROM, fog_line, distance)
+	if far <= 0.0:
+		return
+	var echo := AudioStreamPlayer3D.new()
+	echo.stream = clip
+	echo.bus = Radio.ECHO_BUS
+	echo.unit_size = 40.0
+	echo.max_distance = fog_line * 1.5
+	echo.volume_db = volume_db + lerpf(-24.0, 0.0, far)
+	echo.pitch_scale = pitch
+	echo.attenuation_filter_cutoff_hz = 1800.0
+	echo.attenuation_filter_db = -18.0
+	world.add_child(echo)
+	echo.global_position = at
+	echo.finished.connect(echo.queue_free)
+	echo.play()
 static var _shriek: AudioStreamWAV
 
 

@@ -1,11 +1,30 @@
-[gd_resource type="Resource" script_class="StalkerVoices" format=3]
+[gd_resource type="Resource" script_class="StalkerVoices" format=3 uid="uid://dll1lixm7jyql"]
 
-[ext_resource type="Script" path="res://scripts/sound_event.gd" id="1_avtri"]
-[ext_resource type="Script" path="res://scripts/enemies/stalker_voices.gd" id="2_76q21"]
+[ext_resource type="AudioStream" uid="uid://n0vmfv5vrl5b" path="res://audio/events/stalker/stalkersounds/iseeyou1.ogg" id="1_7uqb3"]
+[ext_resource type="Script" uid="uid://dpm4dmxv0u4h" path="res://scripts/sound_event.gd" id="1_avtri"]
+[ext_resource type="Script" uid="uid://cfqo4hsut5x1y" path="res://scripts/enemies/stalker_voices.gd" id="2_76q21"]
+[ext_resource type="AudioStream" uid="uid://h83grffaitns" path="res://audio/events/stalker/stalkersounds/ineedhelp3loud.ogg" id="3_06flu"]
+[ext_resource type="AudioStream" uid="uid://6l74j6n1u5ib" path="res://audio/events/stalker/stalkersounds/rllylongscreetch1.ogg" id="4_ohsjd"]
+[ext_resource type="AudioStream" uid="uid://blfk385qthvg" path="res://audio/events/stalker/stalkersounds/screetch3.ogg" id="5_wn7fs"]
+[ext_resource type="AudioStream" uid="uid://brmangd6g5wnk" path="res://audio/events/stalker/stalkersounds/hello1.ogg" id="6_k5p6q"]
+[ext_resource type="AudioStream" uid="uid://df7l3daqgussw" path="res://audio/events/stalker/stalkersounds/followme3pig.ogg" id="7_d87ob"]
+[ext_resource type="AudioStream" uid="uid://dns4y8x0jwxer" path="res://audio/events/stalker/stalkersounds/screetch5.ogg" id="8_3bn2q"]
+[ext_resource type="AudioStream" uid="uid://b6fou0tyuvm2c" path="res://audio/events/stalker/stalkersounds/screetch1.ogg" id="9_lnnds"]
+[ext_resource type="AudioStream" uid="uid://bjal06tqvlrma" path="res://audio/events/stalker/stalkersounds/screetch2.ogg" id="10_2fw24"]
+[ext_resource type="AudioStream" uid="uid://dsa54et5gv25j" path="res://audio/events/stalker/stalkersounds/screetch4.ogg" id="11_uusm0"]
+[ext_resource type="AudioStream" uid="uid://nxyghwmv7hos" path="res://audio/events/stalker/stalkersounds/screetch2loud.ogg" id="12_7g4b5"]
+[ext_resource type="AudioStream" uid="uid://ctrqrcft4binv" path="res://audio/events/stalker/stalkersounds/followme1.ogg" id="13_gqrf8"]
+[ext_resource type="AudioStream" uid="uid://233knldn71a6" path="res://audio/events/stalker/stalkersounds/followme2.ogg" id="14_j3mnr"]
+[ext_resource type="AudioStream" uid="uid://dixem8udngeov" path="res://audio/events/stalker/stalkersounds/ineedhelp1.ogg" id="15_xk4af"]
+[ext_resource type="AudioStream" uid="uid://s4n7xuprohb0" path="res://audio/events/stalker/stalkersounds/ineedhelp2.ogg" id="16_xb4wd"]
+[ext_resource type="AudioStream" uid="uid://ds2t3wujnrmya" path="res://audio/events/stalker/stalkersounds/longscreetch2.ogg" id="17_t6sss"]
+[ext_resource type="AudioStream" uid="uid://d4dxgkxpuln0y" path="res://audio/events/stalker/stalkersounds/johnscreetch.ogg" id="19_cr7aa"]
+[ext_resource type="AudioStream" uid="uid://djn11qqlr656e" path="res://audio/events/stalker/stalkersounds/longscreetch1.ogg" id="20_dnk53"]
 
 [sub_resource type="Resource" id="Resource_banp0"]
 resource_name = "behind_you"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("1_7uqb3")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "behind_you"
 volume_db_variance = 1.5
@@ -16,6 +35,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_iavre"]
 resource_name = "ceiling_scuttle"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("3_06flu")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "ceiling_scuttle"
 volume_db_variance = 1.5
@@ -26,6 +46,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_khqly"]
 resource_name = "corpse_drag"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("4_ohsjd")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "corpse_drag"
 volume_db_variance = 1.5
@@ -46,6 +67,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_hcvto"]
 resource_name = "doorway_dash"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("5_wn7fs"), ExtResource("6_k5p6q")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "doorway_dash"
 volume_db_variance = 1.5
@@ -96,6 +118,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_8vo3s"]
 resource_name = "flanking"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("7_d87ob")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "flanking"
 volume_db_variance = 1.5
@@ -136,6 +159,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_yfy0f"]
 resource_name = "hunting"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("8_3bn2q")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "hunting"
 volume_db_variance = 1.5
@@ -146,6 +170,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_epmto"]
 resource_name = "hurt"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("9_lnnds"), ExtResource("10_2fw24"), ExtResource("5_wn7fs"), ExtResource("11_uusm0"), ExtResource("8_3bn2q")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "hurt"
 volume_db_variance = 1.5
@@ -156,6 +181,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_dkml2"]
 resource_name = "leap"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("9_lnnds"), ExtResource("10_2fw24"), ExtResource("12_7g4b5"), ExtResource("5_wn7fs"), ExtResource("8_3bn2q")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "leap"
 volume_db_variance = 1.5
@@ -176,6 +202,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_06flu"]
 resource_name = "lunge"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("6_k5p6q")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "lunge"
 volume_db_variance = 1.5
@@ -186,6 +213,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_ohsjd"]
 resource_name = "lure"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("13_gqrf8"), ExtResource("14_j3mnr"), ExtResource("7_d87ob"), ExtResource("15_xk4af"), ExtResource("16_xb4wd"), ExtResource("3_06flu")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "lure"
 volume_db_variance = 1.5
@@ -196,6 +224,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_wn7fs"]
 resource_name = "runs_away"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("17_t6sss"), ExtResource("4_ohsjd")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "runs_away"
 volume_db_variance = 1.5
@@ -206,6 +235,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_k5p6q"]
 resource_name = "spotted"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("19_cr7aa"), ExtResource("9_lnnds"), ExtResource("10_2fw24"), ExtResource("12_7g4b5"), ExtResource("5_wn7fs"), ExtResource("11_uusm0"), ExtResource("8_3bn2q")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "spotted"
 volume_db_variance = 1.5
@@ -216,6 +246,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_d87ob"]
 resource_name = "starts_hunting"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("20_dnk53")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "starts_hunting"
 volume_db_variance = 1.5
@@ -226,6 +257,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_3bn2q"]
 resource_name = "starts_stalking"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("1_7uqb3")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "starts_stalking"
 volume_db_variance = 1.5
@@ -246,6 +278,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_2fw24"]
 resource_name = "turns_up"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("6_k5p6q"), ExtResource("5_wn7fs")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "turns_up"
 volume_db_variance = 1.5
@@ -256,6 +289,7 @@ bus = "Enemies"
 [sub_resource type="Resource" id="Resource_uusm0"]
 resource_name = "watching"
 script = ExtResource("1_avtri")
+clips = Array[AudioStream]([ExtResource("19_cr7aa")])
 clip_folder = "res://audio/sfx/stalker"
 clip_prefix = "watching"
 volume_db_variance = 1.5
