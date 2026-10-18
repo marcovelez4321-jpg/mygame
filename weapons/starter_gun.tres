@@ -9,6 +9,7 @@
 
 [resource]
 script = ExtResource("1")
+max_range = 200.0
 weapon_name = "Pistol"
 magazine_size = 6
 recoil_pattern = Array[Vector2]([Vector2(0, 0.55), Vector2(0.05, 0.6), Vector2(-0.05, 0.7), Vector2(0.1, 0.75), Vector2(0.15, 0.8), Vector2(0.25, 0.7), Vector2(0.3, 0.6), Vector2(0.3, 0.5), Vector2(0.2, 0.45), Vector2(-0.1, 0.45), Vector2(-0.3, 0.4), Vector2(-0.4, 0.4), Vector2(-0.35, 0.35), Vector2(-0.2, 0.35), Vector2(0.2, 0.35), Vector2(0.35, 0.3)])

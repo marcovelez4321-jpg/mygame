@@ -8,6 +8,7 @@
 
 [resource]
 script = ExtResource("1")
+max_range = 200.0
 weapon_name = "Revolver"
 damage = 50.0
 fire_interval = 0.6
