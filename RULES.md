@@ -1817,3 +1817,5 @@ them:
 - 2026-10-19: Every Stalker voice line plays 1.25x faster at the same pitch (StalkerSound.VOICE_SPEED). Each line is sped up with pitch_scale, then fed through HallEcho.sped_bus, an AudioEffectPitchShift that puts the pitch back before the usual bus and its echo. The echo itself is unchanged, and the two looping clips stay looping (both the user's choice).
 
 - 2026-10-19: The heart's record scratches take twice as long: SCRATCH_DOWN 0.7 -> 1.4 s and SCRATCH_UP 0.5 -> 1.0 s. The slow-down on death uses SCRATCH_DOWN too, so it's longer as well.
+
+- 2026-10-19: The heart's blood orbs fly three times as fast (HeartOrb.SPEED 6 -> 18 m/s). Their turn rate is unchanged, so they swing round in wider arcs.

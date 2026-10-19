@@ -13,7 +13,8 @@ extends AnimatableBody3D
 ## (Network.send_heart_orb, send_heart_orb_pop); everyone else's chases the
 ## same player and pops when the host says.
 
-const SPEED := 6.0
+## (Three times as fast, the user's 2026-10-19: was 6.)
+const SPEED := 18.0
 const DAMAGE := 15.0
 const LIFETIME := 8.0
 const RADIUS := 0.8
