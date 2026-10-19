@@ -55,6 +55,8 @@ func _physics_process(_delta: float) -> void:
 		if not is_instance_valid(requester) or ends.is_empty():
 			continue
 		var body := requester as Node3D
+		if body == null or not body.is_inside_tree():
+			continue # (taken out of the level while it waited)
 		_query.map = body.get_world_3d().navigation_map
 		_query.start_position = ends[0]
 		_query.target_position = ends[1]
