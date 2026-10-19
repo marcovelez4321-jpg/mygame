@@ -19,6 +19,9 @@ const UNIT_SIZE := 8.0
 
 ## The user's sounds, a slot for everything it does (StalkerVoices).
 const VOICES := "res://audio/events/stalker/stalker_voices.tres"
+## The user's: every voice line this much faster, its pitch kept the same
+## (HallEcho.sped_bus).
+const VOICE_SPEED := 1.25
 
 static var _rattles: Array[AudioStreamWAV] = []
 static var _voices: StalkerVoices
@@ -40,7 +43,7 @@ static func voice(slot: StringName, at: Vector3, world: Node, volume_db: float =
 	var clip: AudioStream = event.pick_clip() if event else null
 	if clip:
 		if HallEcho.inside(at):
-			HallEcho.play(clip, at, world, event.roll_pitch_scale(), event.roll_volume_db() + volume_db)
+			HallEcho.play(clip, at, world, event.roll_pitch_scale(), event.roll_volume_db() + volume_db, VOICE_SPEED)
 		else:
 			_open_air(clip, at, world, event.roll_pitch_scale(), event.roll_volume_db() + volume_db)
 		return
@@ -68,11 +71,11 @@ static func _open_air(clip: AudioStream, at: Vector3, world: Node, pitch: float,
 	var fog_line := air.fog_depth_end if air and air.fog_enabled and air.fog_depth_end > 0.0 else FOG_FALLBACK
 	var call := AudioStreamPlayer3D.new()
 	call.stream = clip
-	call.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+	call.bus = HallEcho.sped_bus(&"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master", VOICE_SPEED)
 	call.unit_size = 14.0
 	call.max_distance = fog_line * 1.3
 	call.volume_db = volume_db
-	call.pitch_scale = pitch
+	call.pitch_scale = pitch * VOICE_SPEED
 	# Further off, duller: the highs gone, a call from a long way away.
 	call.attenuation_filter_cutoff_hz = 2200.0
 	call.attenuation_filter_db = -30.0
@@ -85,11 +88,11 @@ static func _open_air(clip: AudioStream, at: Vector3, world: Node, pitch: float,
 		return
 	var echo := AudioStreamPlayer3D.new()
 	echo.stream = clip
-	echo.bus = Radio.ECHO_BUS
+	echo.bus = HallEcho.sped_bus(Radio.ECHO_BUS, VOICE_SPEED)
 	echo.unit_size = 40.0
 	echo.max_distance = fog_line * 1.5
 	echo.volume_db = volume_db + lerpf(-24.0, 0.0, far)
-	echo.pitch_scale = pitch
+	echo.pitch_scale = pitch * VOICE_SPEED
 	echo.attenuation_filter_cutoff_hz = 1800.0
 	echo.attenuation_filter_db = -18.0
 	world.add_child(echo)

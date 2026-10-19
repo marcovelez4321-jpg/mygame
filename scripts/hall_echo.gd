@@ -29,7 +29,8 @@ static func inside(point: Vector3) -> bool:
 ## close, the tinny one further off, and far away a muffled echo rolling
 ## through the halls, its long reverb fading slowly after. One shot of
 ## `clip` at `at` (global), mixed for where the camera is as it starts.
-static func play(clip: AudioStream, at: Vector3, world: Node, pitch: float = 1.0, volume_db: float = 0.0) -> void:
+## `speed`: played that much faster, its pitch kept (sped_bus).
+static func play(clip: AudioStream, at: Vector3, world: Node, pitch: float = 1.0, volume_db: float = 0.0, speed: float = 1.0) -> void:
 	if clip == null or world == null or not world.is_inside_tree():
 		return
 	Radio._ensure_buses()
@@ -48,11 +49,11 @@ static func play(clip: AudioStream, at: Vector3, world: Node, pitch: float = 1.0
 	for voice: Array in voices:
 		var player := AudioStreamPlayer3D.new()
 		player.stream = clip
-		player.bus = voice[0]
+		player.bus = sped_bus(voice[0], speed)
 		player.max_distance = voice[1]
 		player.unit_size = voice[2]
 		player.volume_db = voice[3] + volume_db
-		player.pitch_scale = pitch
+		player.pitch_scale = pitch * speed
 		player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
 		if voice[0] == Radio.ECHO_BUS:
 			player.attenuation_filter_cutoff_hz = 2500.0
@@ -61,6 +62,25 @@ static func play(clip: AudioStream, at: Vector3, world: Node, pitch: float = 1.0
 		player.global_position = at
 		player.finished.connect(player.queue_free)
 		player.play()
+
+
+## A bus that takes a sound played `speed` times fast (pitch_scale) and puts
+## its pitch back where it was (AudioEffectPitchShift), then on into
+## `target` and its effects: faster, same voice. Made once per pair.
+static func sped_bus(target: StringName, speed: float) -> StringName:
+	if is_equal_approx(speed, 1.0) or AudioServer.get_bus_index(target) == -1:
+		return target
+	var bus_name := StringName("%s x%.2f" % [target, speed])
+	if AudioServer.get_bus_index(bus_name) == -1:
+		AudioServer.add_bus()
+		var index := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(index, bus_name)
+		AudioServer.set_bus_send(index, target)
+		var back := AudioEffectPitchShift.new()
+		back.pitch_scale = 1.0 / speed
+		back.oversampling = 4
+		AudioServer.add_bus_effect(index, back)
+	return bus_name
 
 
 ## Only the echo: the radio's far, muffled voice with its long reverb, laid

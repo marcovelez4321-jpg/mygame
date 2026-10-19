@@ -1813,3 +1813,5 @@ them:
 - 2026-10-19: Reverted: the Stalker's body is back at its old height (BODY_HEIGHT 0.6 x SIZE). The user preferred it.
 
 - 2026-10-19: Invite friends still tries Steam's overlay invite window, which is often missing when the game runs from the editor. It now also lists your online Steam friends (online, away or busy, sorted by name) in the Co-op panel. Clicking one invites them straight to the lobby (SteamCoop.invite_friend / inviteUserToLobby), no overlay needed.
+
+- 2026-10-19: Every Stalker voice line plays 1.25x faster at the same pitch (StalkerSound.VOICE_SPEED). Each line is sped up with pitch_scale, then fed through HallEcho.sped_bus, an AudioEffectPitchShift that puts the pitch back before the usual bus and its echo. The echo itself is unchanged, and the two looping clips stay looping (both the user's choice).
