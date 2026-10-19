@@ -17,8 +17,12 @@ extends Node3D
 
 ## How often it checks (seconds).
 const CHECK_EVERY := 0.15
+## Twice real size (the user's): 20 x 16 m, 6 m storeys. The map's built at
+## it (tools/house_bake.gd), and the Flesh Tree's roots over the house and
+## the red weed round it follow it.
+const SIZE := 2.0
 ## The house in its own space, porch and roof included: "someone's in".
-@export var bounds := AABB(Vector3(-5.3, -0.5, -6.6), Vector3(10.6, 11.0, 11.2))
+@export var bounds := AABB(Vector3(-5.3, -0.5, -6.6) * SIZE, Vector3(10.6, 11.0, 11.2) * SIZE)
 
 var _front_door: MapDoor
 ## Shown only with the door open or someone in.
@@ -86,12 +90,25 @@ func _show(on: bool) -> void:
 			node.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 
 
-## Onto the yard's ground (the terrain under it, not the house itself).
+## Onto the yard's ground: the terrain's own height there (never a ray from
+## high up -- the Flesh Tree's limbs and the player were over it, and it sat
+## on them, floating). Without a terrain, a short ray from just above.
 func _sit_on_ground() -> void:
+	var terrain := get_tree().current_scene.get_node_or_null(^"Terrain3D") if get_tree().current_scene else null
+	if terrain:
+		var data: Object = terrain.get(&"data")
+		if data and data.has_method(&"get_height"):
+			var height: float = data.call(&"get_height", global_position)
+			if not is_nan(height):
+				global_position.y = height - 0.05
+				return
 	var skip: Array[RID] = []
 	for node in find_children("*", "CollisionObject3D", true, false):
 		skip.append((node as CollisionObject3D).get_rid())
-	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 200.0, global_position + Vector3.DOWN * 200.0, 1, skip)
+	for node in get_tree().get_nodes_in_group("player"):
+		if node is CollisionObject3D:
+			skip.append((node as CollisionObject3D).get_rid())
+	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 3.0, global_position + Vector3.DOWN * 10.0, 1, skip)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
 		global_position.y = (hit.position as Vector3).y - 0.05

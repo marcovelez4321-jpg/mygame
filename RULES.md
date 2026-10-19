@@ -1842,3 +1842,5 @@ them:
   - **Size and cost:** 0.5-2 m tall. Four shapes made once; every bush is a MultiMesh instance, drawn within 220 m.
   - **Behaviour:** you pass straight through it. It writhes slowly, and its tendrils curl toward any player within 5 m (the players' positions go to the shader each frame).
   - **Co-op:** a fixed seed means the same weed in every game.
+
+- 2026-10-19: Grandma's house is twice as big (the user's): GrandmasHouse.SIZE 2, giving 20 x 16 m and 6 m storeys. The bake builds at it, and the tree's roots over the house, the house bounds and the red weed's house exclusion and wall patches all follow it. Grounding fix: it was floating, because its ray down from 200 m up landed on the Flesh Tree's limbs or the player. It now takes the terrain's own height there (Terrain3DData.get_height), else a short ray from just above that skips the players. Collision was checked headless: walls, floors, roof, stairs and door all stop a ray.

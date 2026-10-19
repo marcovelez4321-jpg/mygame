@@ -35,7 +35,7 @@
 [ext_resource type="Resource" uid="uid://cd1tqnoroiq4t" path="res://weapons/sniper.tres" id="32_v085t"]
 [ext_resource type="Script" uid="uid://c657pav6cgvj" path="res://scripts/world/flesh_tree.gd" id="40_fleshtree"]
 [ext_resource type="PackedScene" path="res://scenes/world/grandmas_house.tscn" id="41_grandmashouse"]
-[ext_resource type="Script" path="res://scripts/world/red_weed.gd" id="42_redweed"]
+[ext_resource type="Script" uid="uid://jub25k7nvls4" path="res://scripts/world/red_weed.gd" id="42_redweed"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
 _shader_parameters = {
@@ -87,7 +87,6 @@ _shader_parameters = {
 }
 shader_override_enabled = true
 shader_override = ExtResource("1_k6tl3")
-show_checkered = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0kkto"]
 transparency = 4
@@ -136,7 +135,6 @@ material = SubResource("Terrain3DMaterial_fxg6t")
 assets = SubResource("Terrain3DAssets_pb6gh")
 collision_mode = 3
 vertex_spacing = 4.0
-show_checkered = true
 top_level = true
 metadata/_edit_lock_ = true
 
@@ -334,9 +332,9 @@ weapons = Array[ExtResource("23_k6tl3")]([ExtResource("24_5vhu7"), ExtResource("
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 40)
 script = ExtResource("40_fleshtree")
 
-[node name="GrandmasHouse" parent="." instance=ExtResource("41_grandmashouse")]
+[node name="GrandmasHouse" parent="." unique_id=690274129 instance=ExtResource("41_grandmashouse")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 0)
 
-[node name="RedWeed" type="Node3D" parent="."]
+[node name="RedWeed" type="Node3D" parent="." unique_id=100207937]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 0)
 script = ExtResource("42_redweed")

@@ -5,8 +5,9 @@ extends RefCounted
 ## once it has stood in for the autoloads. Re-running overwrites the map and
 ## the scene: once the map's been edited in TrenchBroom, rebuild it with the
 ## scene's own FuncGodotMap ("Map", its Build button) instead.
-##   Outside, like the user's reference: real size (10 x 8 m, two 3 m
-##   storeys), Plaster_19 walls with a Plaster_20 band between the floors, a
+##   Outside, like the user's reference, twice real size (GrandmasHouse.SIZE,
+##   the user's: 20 x 16 m, two 6 m storeys; every measure below is real
+##   size, doubled where the faces are made), Plaster_19 walls with a Plaster_20 band between the floors, a
 ##   Roofs_01 gable roof, a centre bay under its own gable, a porch with two
 ##   posts and a pediment, dark opaque panes in near-black Wood_22 frames
 ##   with cross bars, a Wood_22 front door. Front (-Z) toward the Stack.
@@ -28,6 +29,9 @@ const SCRIPT := "res://scripts/world/grandmas_house.gd"
 const WINDOW_PNG := "res://trenchbroom/textures/House/window_dark.png"
 ## TrenchBroom units a metre (func_godot's default map settings).
 const UNITS := 32.0
+## Twice real size (the user's): GrandmasHouse.SIZE, read here without
+## naming the class (so the bake compiles in --script mode).
+const SIZE := 2.0
 
 const WALL := "Plaster_19-256x256"
 const TRIM := "Plaster_20-256x256"
@@ -95,8 +99,8 @@ func run(tree: SceneTree) -> void:
 	lamp.name = "Lamp"
 	lamp.light_color = Color(1.0, 0.78, 0.5)
 	lamp.light_energy = 1.4
-	lamp.omni_range = 8.0
-	lamp.position = Vector3(-1.5, CEIL_0 - 0.4, 0.0)
+	lamp.omni_range = 8.0 * SIZE
+	lamp.position = Vector3(-1.5, CEIL_0 - 0.4, 0.0) * SIZE
 	house.add_child(lamp)
 	lamp.owner = house
 	var scene := PackedScene.new()
@@ -346,7 +350,7 @@ func _inside() -> void:
 	_locked_door("house_bathroom", "z", 1.6, 2.4, 0.75, 1.0, FLOOR_1, up_door)
 	_wall(_interior, "x", 1.0, w, 0.9, 1.1, FLOOR_1, CEIL_1, [], 0)
 	# Grandma, in the living room, facing the front door.
-	_points.append(["npc_grandma", Vector3(-2.6, FLOOR_0, -1.2), {"angle": "180"}])
+	_points.append(["npc_grandma", Vector3(-2.6, FLOOR_0, -1.2) * SIZE, {"angle": "180"}])
 
 
 func _locked_door(name: String, along: String, a0: float, a1: float, t0: float, t1: float, y0: float, y1: float) -> void:
@@ -455,9 +459,10 @@ func _box(lo: Vector3, hi: Vector3, texture: String, faces: Dictionary = {}) -> 
 	]
 
 
-## A brush face: the plane through `point` facing out along `normal`.
+## A brush face: the plane through `point` facing out along `normal` (the
+## house at GrandmasHouse.SIZE).
 func _f(point: Vector3, normal: Vector3, texture: String) -> Dictionary:
-	return {p = point, n = normal.normalized(), tex = texture}
+	return {p = point * SIZE, n = normal.normalized(), tex = texture}
 
 
 # ---- The map ---------------------------------------------------------------------------------

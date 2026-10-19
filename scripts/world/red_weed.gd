@@ -110,7 +110,8 @@ func _grow() -> void:
 		add_child(shown)
 	# Creeping up the back wall of the house (between its windows).
 	if house:
-		for patch: Array in [[Vector3(-3.0, 0.0, 4.0), 3.0, 3.4], [Vector3(0.6, 0.0, 4.0), 2.4, 4.2]]:
+		var size := GrandmasHouse.SIZE
+		for patch: Array in [[Vector3(-3.0, 0.0, 4.0) * size, 3.0 * size, 3.4 * size], [Vector3(0.6, 0.0, 4.0) * size, 2.4 * size, 4.2 * size]]:
 			var creeper := MeshInstance3D.new()
 			creeper.mesh = _creeper_mesh(rng, patch[1], patch[2])
 			creeper.material_override = _material
@@ -128,9 +129,10 @@ func _try_spot(spots: Array[Vector3], at: Vector2, house: Node3D) -> void:
 	var spot := Vector3(at.x, ground, at.y)
 	if house:
 		var local := house.to_local(spot)
-		if AABB(Vector3(-6.5, -5.0, -8.0), Vector3(13.0, 20.0, 13.5)).has_point(local):
+		var size := GrandmasHouse.SIZE
+		if AABB(Vector3(-6.5, -5.0, -8.0) * size, Vector3(13.0, 20.0, 13.5) * size).has_point(local):
 			return
-		if absf(local.x) < 2.5 and local.z < -6.0 and local.z > -40.0:
+		if absf(local.x) < 2.5 * size and local.z < -6.0 * size and local.z > -40.0:
 			return # (the way up to the door)
 	spots.append(spot)
 

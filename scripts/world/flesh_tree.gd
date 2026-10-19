@@ -55,8 +55,8 @@ const POD_COUNT := 3
 ## Two more over Grandma's house (the user's, 2026-10-19): one over its roof
 ## and off the front-left corner, one onto the back of the roof and down its
 ## back wall between the windows -- solid like the rest (walk them, grapple
-## them). Their paths in the house's own space (GrandmasHouse: front -Z, the
-## ground at 0), from where they leave the ground behind it to where they
+## them). Their paths in the house's own space at real size (GrandmasHouse:
+## front -Z, the ground at 0; scaled by its SIZE, radii too), from where they leave the ground behind it to where they
 ## dive back in; [points, radius leaving the trunk, radius at the end].
 const HOUSE_ROOTS := [
 	[[Vector3(-2.5, 1.0, 14.0), Vector3(-2.8, 4.5, 8.0), Vector3(-3.0, 7.4, 4.6), Vector3(-3.0, 8.95, 2.0),
@@ -376,14 +376,14 @@ func _house_roots(muscle: SurfaceTool, base_radius: float) -> void:
 	for spec: Array in HOUSE_ROOTS:
 		var path := PackedVector3Array()
 		for point: Vector3 in spec[0]:
-			path.append(to_local(house.to_global(point)))
+			path.append(to_local(house.to_global(point * GrandmasHouse.SIZE)))
 		var toward := Vector3(path[0].x, 0.0, path[0].z).normalized()
 		path.insert(0, toward * base_radius * 0.6 + Vector3.UP * base_radius * 0.3)
 		var smooth := _smoothed(path, 5)
 		var radii := PackedFloat32Array()
 		for i in smooth.size():
 			var u := float(i) / maxi(smooth.size() - 1, 1)
-			radii.append(lerpf(spec[1], spec[2], pow(u, 0.6)))
+			radii.append(lerpf(spec[1], spec[2], pow(u, 0.6)) * GrandmasHouse.SIZE)
 		_tube(muscle, smooth, radii, Vector3.UP, true)
 
 
