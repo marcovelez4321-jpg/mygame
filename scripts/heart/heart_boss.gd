@@ -70,8 +70,9 @@ const STUN_EVERY := 300.0
 const STUN_TIME := 10.0
 const STUN_BPM := 60.0
 const STUN_BPM_STEP := 10.0
-const SCRATCH_DOWN := 0.7
-const SCRATCH_UP := 0.5
+## (Twice as long, the user's 2026-10-19: were 0.7 and 0.5.)
+const SCRATCH_DOWN := 1.4
+const SCRATCH_UP := 1.0
 const SCRATCH_LOW := 0.03
 const DEATH_FADE := 7.0
 ## Black, then the words (the user's), then back to the game.

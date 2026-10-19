@@ -318,6 +318,7 @@ directional_shadow_max_distance = 90.0
 
 [node name="Player" parent="." unique_id=1710340998 instance=ExtResource("29_fyxt2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
+spawn_in_cathedral = true
 heart_song = ExtResource("21_lludv")
 
 [node name="HUD" parent="." unique_id=1218208162 instance=ExtResource("30_0goju")]
