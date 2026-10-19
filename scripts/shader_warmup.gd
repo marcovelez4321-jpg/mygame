@@ -41,7 +41,7 @@ func _run() -> void:
 	BloodFX.spawn_mutation_explosion(world, at)
 	BurningBarrel.place(world, at + Vector3.DOWN * 1.5)
 	for model in [CarryItem.meat_model(false, false), CarryItem.meat_model(false, true), CarryItem.meat_model(true, false),
-			FleshTree.pod_model(Virus.WINGS)]:
+			FleshTree.pod_model(Virus.WINGS), HeartOrb.look_model()]:
 		if model:
 			world.add_child(model)
 			_made.append(model)

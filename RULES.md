@@ -1821,3 +1821,5 @@ them:
 - 2026-10-19: The heart's blood orbs fly three times as fast (HeartOrb.SPEED 6 -> 18 m/s). Their turn rate is unchanged, so they swing round in wider arcs.
 
 - 2026-10-19: Blood orbs steer like heat-seeking missiles. They turn at most 45 degrees a second (HeartOrb.TURN_RATE, replacing the old eased TURN), so at 18 m/s a late dodge makes them overshoot and swing wide. Ones that can't come round in time pop on the wall they fly into.
+
+- 2026-10-19: Hitch fix: the blood orb's look (HeartOrb.look_model) is now shown in ShaderWarmup at level start. Its shader used to compile when the first orb swelled out, freezing the game for a moment.

@@ -69,6 +69,33 @@ static func spawn(world: Node, at: Vector3, out: Vector3, toward: Node3D, orb_id
 	return orb
 
 
+## Its look: the glossy blood ball (one mesh and material shared by every
+## orb). ShaderWarmup shows one at the level's start so its shader's compiled
+## before the first hi-hat -- the user's freeze when the first one swelled out.
+static func look_model() -> MeshInstance3D:
+	if _material == null:
+		_material = StandardMaterial3D.new()
+		_material.albedo_color = COLOR
+		_material.roughness = 0.08
+		_material.metallic_specular = 0.9
+		_material.emission_enabled = true
+		_material.emission = Color(0.5, 0.02, 0.02)
+		_material.emission_energy_multiplier = 0.35
+		_material.rim_enabled = true
+		_material.rim = 0.6
+	if _ball == null:
+		_ball = SphereMesh.new()
+		_ball.radius = RADIUS
+		_ball.height = RADIUS * 2.0
+		_ball.radial_segments = 16
+		_ball.rings = 8
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = _ball
+	mesh.material_override = _material
+	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mesh
+
+
 ## The host's word: orb `orb_id` popped at `at` (every game).
 static func pop_by_id(orb_id: int, at: Vector3) -> void:
 	var orb: Variant = alive.get(orb_id, null)
@@ -86,26 +113,7 @@ func _ready() -> void:
 	sphere.radius = RADIUS
 	shape.shape = sphere
 	add_child(shape)
-	if _material == null:
-		_material = StandardMaterial3D.new()
-		_material.albedo_color = COLOR
-		_material.roughness = 0.08
-		_material.metallic_specular = 0.9
-		_material.emission_enabled = true
-		_material.emission = Color(0.5, 0.02, 0.02)
-		_material.emission_energy_multiplier = 0.35
-		_material.rim_enabled = true
-		_material.rim = 0.6
-	if _ball == null:
-		_ball = SphereMesh.new()
-		_ball.radius = RADIUS
-		_ball.height = RADIUS * 2.0
-		_ball.radial_segments = 16
-		_ball.rings = 8
-	_mesh = MeshInstance3D.new()
-	_mesh.mesh = _ball
-	_mesh.material_override = _material
-	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_mesh = look_model()
 	add_child(_mesh)
 	_health = Health.new()
 	_health.name = "Health"
