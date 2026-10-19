@@ -278,18 +278,13 @@ func _release_catches() -> void:
 
 func _draw() -> void:
 	_immediate.clear_surfaces()
-	var shapes: Array[PackedVector3Array] = []
+	_immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _look())
 	for t in _tendrils:
 		if t.done and t.catch_time < 0.0:
 			continue
 		var points := _caught_shape(t) if is_instance_valid(t.catch) else _lash_shape(t)
 		if points.size() >= 2:
-			shapes.append(points)
-	if shapes.is_empty():
-		return # (nothing out: an empty surface is an error)
-	_immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _look())
-	for points in shapes:
-		_tube(points)
+			_tube(points)
 	_immediate.surface_end()
 
 

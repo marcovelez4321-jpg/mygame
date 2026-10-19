@@ -1807,3 +1807,5 @@ them:
 - 2026-10-18: Sleeping at a bedroll moves the Stalker 40% of the way down your trail at once (Stalker.slept, SLEEP_PROGRESS 0.4). The 40% is of the trail between it and you, and it lands on a crumb no one can see, never past your newest. It does nothing mid-drag, lunge, flee, stunt, while away, or while someone can see it.
 
 - 2026-10-19: Crash fix: PathRequests skips a waiting request whose enemy has left the level (it read a null world's navigation_map). SeededGrowth draws nothing when no tendril is out, instead of erroring with an empty ImmediateMesh surface.
+
+- 2026-10-19: The Stalker's body rides 25% lower to the ground (BODY_HEIGHT 0.6 -> 0.45 x SIZE). Its hands and feet stay planted, and its eye line and fallback hitbox drop with it.

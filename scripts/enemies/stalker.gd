@@ -121,7 +121,8 @@ const GRAVITY := 22.0
 const AWAY_DEPTH := -5000.0
 ## The body (looks): how high the spine rides, the hands' and feet's spots
 ## round it, how far one strays before it steps, how high and how fast.
-const BODY_HEIGHT := 0.6 * SIZE
+## BODY_HEIGHT: 25% lower than it was (0.6), the user's -- low to the ground.
+const BODY_HEIGHT := 0.45 * SIZE
 const STRIDE := 0.5 * SIZE
 const STEP_HEIGHT := 0.28 * SIZE
 const STEP_TIME := 0.32 * sqrt(SIZE)
