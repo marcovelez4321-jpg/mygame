@@ -18,8 +18,10 @@ const SPEED := 18.0
 const DAMAGE := 15.0
 const LIFETIME := 8.0
 const RADIUS := 0.8
-## How fast it swings round toward them (its heading eased this much a second).
-const TURN := 2.5
+## Like a heat-seeking missile (the user's 2026-10-19): fast, but it can only
+## turn this many degrees a second -- dodge late and it overshoots, swings
+## wide, and if it can't come round in time it flies into a wall.
+const TURN_RATE := 45.0
 ## Where on them it aims (their middle).
 const CHEST := 0.9
 const COLOR := Color(0.42, 0.02, 0.03)
@@ -161,11 +163,16 @@ func _physics_process(delta: float) -> void:
 		_pop(hit.position, hit.normal)
 
 
-## On toward them, swinging round as they move.
+## On toward them, turning at most TURN_RATE toward where they are now.
 func _drift(delta: float) -> void:
 	if is_instance_valid(target):
 		var want := ((target.global_position + Vector3.UP * CHEST) - global_position).normalized()
-		_heading = _heading.slerp(want, clampf(TURN * delta, 0.0, 1.0)).normalized()
+		var off := _heading.angle_to(want)
+		if off > 0.0001:
+			var axis := _heading.cross(want)
+			if axis.length_squared() < 0.000001:
+				axis = _heading.cross(Vector3.UP if absf(_heading.y) < 0.9 else Vector3.RIGHT) # (dead behind it: either way round)
+			_heading = _heading.rotated(axis.normalized(), minf(off, deg_to_rad(TURN_RATE) * delta)).normalized()
 	global_position += _heading * SPEED * delta
 
 

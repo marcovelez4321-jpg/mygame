@@ -1819,3 +1819,5 @@ them:
 - 2026-10-19: The heart's record scratches take twice as long: SCRATCH_DOWN 0.7 -> 1.4 s and SCRATCH_UP 0.5 -> 1.0 s. The slow-down on death uses SCRATCH_DOWN too, so it's longer as well.
 
 - 2026-10-19: The heart's blood orbs fly three times as fast (HeartOrb.SPEED 6 -> 18 m/s). Their turn rate is unchanged, so they swing round in wider arcs.
+
+- 2026-10-19: Blood orbs steer like heat-seeking missiles. They turn at most 45 degrees a second (HeartOrb.TURN_RATE, replacing the old eased TURN), so at 18 m/s a late dodge makes them overshoot and swing wide. Ones that can't come round in time pop on the wall they fly into.
