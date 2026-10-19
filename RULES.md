@@ -1834,3 +1834,11 @@ them:
   - **No loading screen (the HL2 way, like areaportals):** GrandmasHouse shows the inside only while the front door's open or a player's in the house. That covers the func_detail house_interior, the locked doors, Grandma and the lamp. Otherwise they're hidden, and Grandma and the doors are asleep. Hidden rooms keep their collision.
   - **How it's built:** tools/make_grandmas_house.gd (house_bake.gd) writes maps/grandmas_house.map (TrenchBroom, 32 units/m, editable; the stairs have a clip ramp) and builds scenes/world/grandmas_house.tscn with func_godot. After TrenchBroom edits, use the scene's Map > Build. test_world_bake places the house too, so re-baking the world keeps it.
   - **Spawn:** the player's start (0, 33.5, 0) is now in Grandma's living room.
+
+- 2026-10-19: The Flesh Tree's roots take over Grandma's house (the user's: a few draping, 2 roots, solid). FleshTree.HOUSE_ROOTS paths are in house space: one runs over the roof ridge and off the front-left corner, the other onto the back slope and down the back wall between the windows. They're part of the tree's one muscle mesh and trimesh collider, so you can walk and grapple them. The house joins the group grandmas_house so the tree can find it.
+- 2026-10-19: The red weed (RedWeed, shaders/red_weed.gdshader), the user's picks:
+  - **Look:** Spielberg's 2005 War of the Worlds. Knotted mounds of glossy blood-red vines with ropey runners creeping out over the ground, thin drooping tendrils curling at their ends, and swollen pods.
+  - **Where:** 40 bushes 21-38 m from the trunk (thicker near it), 16 round the yard's edge 30-52 m out (never on the house, porch or path to the door), and two patches climbing the house's back wall between the windows.
+  - **Size and cost:** 0.5-2 m tall. Four shapes made once; every bush is a MultiMesh instance, drawn within 220 m.
+  - **Behaviour:** you pass straight through it. It writhes slowly, and its tendrils curl toward any player within 5 m (the players' positions go to the shader each frame).
+  - **Co-op:** a fixed seed means the same weed in every game.

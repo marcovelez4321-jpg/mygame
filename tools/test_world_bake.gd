@@ -387,6 +387,13 @@ func _bake() -> void:
 		house.position = Vector3(0.0, shape.yard_level * shape.height, 0.0)
 		root.add_child(house)
 		house.owner = root
+	# The red weed (the user's, 2026-10-19): round the tree, the yard's edges
+	# and up the house's back wall (it finds the tree and the house itself).
+	var weed := RedWeed.new()
+	weed.name = "RedWeed"
+	weed.position = Vector3(0.0, shape.yard_level * shape.height, 0.0)
+	root.add_child(weed)
+	weed.owner = root
 
 	# The player in Grandma's yard, on the ground.
 	var player := (load(PLAYER_SCENE) as PackedScene).instantiate() as Node3D

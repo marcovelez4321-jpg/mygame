@@ -30,6 +30,7 @@ var _check_left := 0.0
 
 
 func _ready() -> void:
+	add_to_group(&"grandmas_house") # (FleshTree's roots and the red weed find it)
 	var map := get_node_or_null(^"Map")
 	if map:
 		for node in map.get_children():

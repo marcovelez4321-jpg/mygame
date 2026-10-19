@@ -35,6 +35,7 @@
 [ext_resource type="Resource" uid="uid://cd1tqnoroiq4t" path="res://weapons/sniper.tres" id="32_v085t"]
 [ext_resource type="Script" uid="uid://c657pav6cgvj" path="res://scripts/world/flesh_tree.gd" id="40_fleshtree"]
 [ext_resource type="PackedScene" path="res://scenes/world/grandmas_house.tscn" id="41_grandmashouse"]
+[ext_resource type="Script" path="res://scripts/world/red_weed.gd" id="42_redweed"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
 _shader_parameters = {
@@ -335,3 +336,7 @@ script = ExtResource("40_fleshtree")
 
 [node name="GrandmasHouse" parent="." instance=ExtResource("41_grandmashouse")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 0)
+
+[node name="RedWeed" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 0)
+script = ExtResource("42_redweed")

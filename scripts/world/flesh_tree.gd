@@ -52,6 +52,19 @@ const POD_COUNT := 3
 @export var root_reach: float = 55.0
 ## How high a root arches before it dives back into the ground.
 @export var root_arch: float = 8.0
+## Two more over Grandma's house (the user's, 2026-10-19): one over its roof
+## and off the front-left corner, one onto the back of the roof and down its
+## back wall between the windows -- solid like the rest (walk them, grapple
+## them). Their paths in the house's own space (GrandmasHouse: front -Z, the
+## ground at 0), from where they leave the ground behind it to where they
+## dive back in; [points, radius leaving the trunk, radius at the end].
+const HOUSE_ROOTS := [
+	[[Vector3(-2.5, 1.0, 14.0), Vector3(-2.8, 4.5, 8.0), Vector3(-3.0, 7.4, 4.6), Vector3(-3.0, 8.95, 2.0),
+		Vector3(-3.1, 10.6, 0.0), Vector3(-3.3, 8.95, -2.0), Vector3(-3.8, 7.0, -4.3), Vector3(-5.4, 4.5, -5.0),
+		Vector3(-6.6, 1.5, -6.0), Vector3(-7.2, -1.5, -6.6)], 2.0, 0.4],
+	[[Vector3(1.2, 1.5, 15.0), Vector3(1.4, 6.0, 9.5), Vector3(1.5, 8.45, 2.5), Vector3(1.5, 7.0, 4.6),
+		Vector3(1.6, 5.0, 4.7), Vector3(1.7, 2.5, 4.75), Vector3(1.9, 0.3, 4.9), Vector3(2.2, -1.5, 5.4)], 1.9, 0.35],
+]
 @export_group("Shape")
 ## How crooked everything is (share of a part's thickness).
 @export var gnarl: float = 0.35
@@ -318,6 +331,7 @@ func _build(steps: int, layout_seed: int) -> void:
 			root.append(way * (base_radius * 0.6 + reach * u) + Vector3.UP * (base_radius * 0.3 * (1.0 - u) + sin(u * PI) * root_arch * scale_up - u * 4.0) + crook)
 			root_radii.append(lerpf(base_radius * 0.35, base_radius * 0.06, u))
 		_tube(muscle, root, root_radii, Vector3.UP, true)
+	_house_roots(muscle, base_radius)
 
 	# Pods hang off the three highest limbs (round different sides).
 	_pod_spots.clear()
@@ -351,6 +365,44 @@ func _build(steps: int, layout_seed: int) -> void:
 	for i in _pods.size():
 		if is_instance_valid(_pods[i]) and i < _pod_spots.size():
 			_pods[i].global_position = to_global(_pod_spots[i])
+
+
+## The roots over Grandma's house (HOUSE_ROOTS), if she has one here: out of
+## the trunk's foot toward it, then along their paths, smoothed.
+func _house_roots(muscle: SurfaceTool, base_radius: float) -> void:
+	var house := get_tree().get_first_node_in_group(&"grandmas_house") as Node3D
+	if house == null:
+		return
+	for spec: Array in HOUSE_ROOTS:
+		var path := PackedVector3Array()
+		for point: Vector3 in spec[0]:
+			path.append(to_local(house.to_global(point)))
+		var toward := Vector3(path[0].x, 0.0, path[0].z).normalized()
+		path.insert(0, toward * base_radius * 0.6 + Vector3.UP * base_radius * 0.3)
+		var smooth := _smoothed(path, 5)
+		var radii := PackedFloat32Array()
+		for i in smooth.size():
+			var u := float(i) / maxi(smooth.size() - 1, 1)
+			radii.append(lerpf(spec[1], spec[2], pow(u, 0.6)))
+		_tube(muscle, smooth, radii, Vector3.UP, true)
+
+
+## `points` as a smooth curve through them (Catmull-Rom), `steps` a stretch.
+static func _smoothed(points: PackedVector3Array, steps: int) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var count := points.size()
+	for i in count - 1:
+		var p0 := points[maxi(i - 1, 0)]
+		var p1 := points[i]
+		var p2 := points[i + 1]
+		var p3 := points[mini(i + 2, count - 1)]
+		for s in steps:
+			var t := float(s) / steps
+			var t2 := t * t
+			var t3 := t2 * t
+			out.append(0.5 * ((2.0 * p1) + (p2 - p0) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t3))
+	out.append(points[count - 1])
+	return out
 
 
 ## About `creatures` of the user's eldritch things grown into the trunk and
