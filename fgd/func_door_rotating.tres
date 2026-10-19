@@ -28,9 +28,14 @@ class_properties = {
 "Silver": 1,
 "Gold": 2
 },
-"message": ""
+"message": "",
+"use": {
+"Walk up": 0,
+"Press F": 1
+}
 }
 class_property_descriptions = {
+"use": ["Walk up: opens as you come near. Press F: opens only when a player presses F on it, and shuts by itself once they're through.", 0],
 "targetname": "Name a button or lever uses to open this. Leave empty for a door that opens when you walk up.",
 "distance": "How far it swings, in degrees. Negative swings the other way.",
 "axis": ["The line it swings around. Normal doors: Vertical.", 0],

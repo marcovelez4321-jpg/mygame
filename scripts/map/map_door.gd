@@ -10,12 +10,20 @@ extends MapMover
 ##     names it) opens it. Walking up just shows its message, if it has one.
 ##   - key: locked until the player carries that key (Quake 1's silver/gold
 ##     key doors). The key isn't used up, so one key can open several doors.
+##   - use 1: opens only when a player presses F on it ("[F] Open"), never
+##     on walking up, and swings shut by itself once nobody's left in its
+##     doorway (DOORWAY) -- walked all the way through (the user's, 2026-10-19:
+##     Grandma's front door).
 
 ## How far from the closed door a player has to be for it to open by itself
 ## -- Quake 1's touch field reaches 60 units past the door (doors.qc).
 const TOUCH_RANGE_UNITS := 60.0
 ## Seconds between repeats of "You need the gold key" while you stand there.
 const MESSAGE_COOLDOWN := 2.0
+## A press-to-open door (use 1) shuts once no player's within this (m) of it,
+## and not before it's been open this long (s).
+const DOORWAY := 1.5
+const SHUT_AFTER := 0.8
 ## wait's default in TrenchBroom: 3 seconds for a door that opens by itself,
 ## stays open for one a button or lever opens -- so a lever-and-door pair
 ## works without the mapper touching wait.
@@ -31,6 +39,10 @@ var key_name: String = ""
 var message: String = ""
 var _unlocked := false
 var _message_cooldown := 0.0
+## use 1: F opens it (PlayerMovement's usable things: can_use(), use_by()).
+var use_to_open := false
+var use_prompt: String = "Open"
+var _open_for := 0.0
 
 
 func describe() -> String:
@@ -46,6 +58,10 @@ func _setup() -> void:
 	wait = float(prop("wait", WAIT_AUTO))
 	if is_equal_approx(wait, WAIT_AUTO):
 		wait = -1.0 if not targetname.is_empty() else 3.0
+	use_to_open = int(prop("use", 0)) == 1 and targetname.is_empty() and key_name.is_empty()
+	if use_to_open:
+		wait = -1.0 # (it shuts when the doorway's clear instead)
+		add_to_group(PlayerMovement.USABLE_GROUP)
 	MapIO.register_targetname(self, targetname)
 	set_sounds(MOVE_SOUND, STOP_SOUND)
 
@@ -77,9 +93,27 @@ func _keep_processing() -> bool:
 	return true
 
 
+## F on a press-to-open door that's shut (or shutting).
+func can_use() -> bool:
+	return use_to_open and not is_opening()
+
+
+func use_by(_player: Node) -> void:
+	if can_use():
+		_open_for = 0.0
+		open()
+
+
 func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
 	_message_cooldown = maxf(_message_cooldown - delta, 0.0)
+	if use_to_open:
+		# Open: shut again once everyone's through (or gone).
+		if is_opening():
+			_open_for += delta
+			if _open_for > SHUT_AFTER and players_in(closed_box(DOORWAY)).is_empty():
+				close()
+		return
 	if is_opening():
 		return
 	var nearby := players_in(closed_box(MapIO.units_to_meters(TOUCH_RANGE_UNITS)))

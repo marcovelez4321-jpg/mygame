@@ -87,7 +87,14 @@ func run(tree: SceneTree) -> void:
 	map.name = "Map"
 	map.set("map_settings", settings)
 	map.set("local_map_file", MAP)
-	map.call("build")
+	# Headless (--script) the renderer's a stand-in, and now and then it drops
+	# a mesh (an empty door): built again till every piece has its mesh.
+	for attempt in 6:
+		map.call("build")
+		var empty := _empty_meshes(map)
+		if empty.is_empty():
+			break
+		print("empty meshes ", empty, " -- building again")
 	var house := Node3D.new()
 	house.name = "GrandmasHouse"
 	house.set_script(load(SCRIPT))
@@ -109,6 +116,16 @@ func run(tree: SceneTree) -> void:
 		error = ResourceSaver.save(scene, SCENE)
 	print("house: ", map.get_child_count(), " entities -> ", SCENE, " (error ", error, ")")
 	house.free()
+
+
+## The pieces whose built mesh came out empty.
+func _empty_meshes(map: Node) -> Array[String]:
+	var empty: Array[String] = []
+	for node in map.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (node as MeshInstance3D).mesh
+		if node.scene_file_path.is_empty() and node.owner == map and (mesh == null or mesh.get_aabb().size == Vector3.ZERO):
+			empty.append(str(node.get_parent().name))
+	return empty
 
 
 ## Owns what func_godot made (owned by the map) to the house; scenes it
@@ -160,7 +177,7 @@ func _outside() -> void:
 		[-0.5, 0.5, FLOOR_0, FLOOR_0 + 2.2], [-0.5, 0.5, up1, up1 + WINDOW_H]], -1)
 	_window("x", -0.5, 0.5, BAY_FRONT, BAY_FRONT + T, up1, up1 + WINDOW_H, -1)
 	_door_frame(_world, "x", -0.5, 0.5, BAY_FRONT, BAY_FRONT + T, FLOOR_0, FLOOR_0 + 2.2)
-	_door({}, "x", -0.5, 0.5, BAY_FRONT, BAY_FRONT + T, FLOOR_0, FLOOR_0 + 2.2)
+	_door({"use": "1"}, "x", -0.5, 0.5, BAY_FRONT, BAY_FRONT + T, FLOOR_0, FLOOR_0 + 2.2) # (F opens it, it shuts once you're through: the user's)
 	_wall(_world, "z", BAY_FRONT + T, -d, -BAY_HALF, -BAY_HALF + T, 0.0, WALL_TOP, [], -1)
 	_wall(_world, "z", BAY_FRONT + T, -d, BAY_HALF - T, BAY_HALF, 0.0, WALL_TOP, [], 1)
 	# The band between the floors (Plaster_20), proud of the walls.

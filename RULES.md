@@ -1851,3 +1851,5 @@ them:
   - **Reward:** 14 virus points for every player (Virus.gain_points).
   - **Co-op:** shared and host-owned. Network.quests is mirrored to everyone and sent to late joiners. Network.ask_quest carries 'accept' and 'hand_in', and Network.send_backpack_take keeps the owner's pack in step. It survives deaths and reloads.
   - **Pickup look:** keys and the cigarettes float 1 m over the floor, spinning and bobbing like San Andreas pickups (CarryItem.SPIN_KINDS). They're frozen till taken (walk into or grapple), and only the model turns, so nothing moves on the network.
+
+- 2026-10-19: Grandma's front door was invisible. Headless bakes run a stand-in renderer that now and then drops a mesh, and the last rebake lost the front, study, kitchen and cellar doors. The bake now rebuilds until no piece's mesh is empty. The front door is press-to-open (the user's): MapDoor 'use' 1, also offered in TrenchBroom on func_door and func_door_rotating. F opens it ('[F] Open'), walking up doesn't, and it shuts by itself 0.8 s or more after opening, once no player is within 1.5 m of it (walked all the way through).
