@@ -35,6 +35,7 @@ const PROMPTS := {
 	Backpack.Kind.GRENADES: "left click to ready",
 	Backpack.Kind.CAMP_KIT: "left click to place the camp",
 	Backpack.Kind.KEY: "a key: F at a locked door (it's used up)",
+	Backpack.Kind.CIGARETTES: "the last pack of cigarettes: for Grandma",
 }
 
 ## What's in it (CarryItem.to_data()); {} = nothing.
@@ -173,7 +174,7 @@ func take_from_backpack(code: int) -> void:
 			var rounds := weapons.take_ammo(_ammo_type(kind))
 			if rounds > 0:
 				taken = {kind = kind, amount = rounds}
-		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY:
+		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY, Backpack.Kind.CIGARETTES:
 			if kind == Backpack.Kind.CAMP_KIT and backpack.camp_kits == 0:
 				backpack.craft_camp_kit() # crafted from scrap and silk (the user's)
 			if backpack.take(kind, 1):
@@ -345,7 +346,7 @@ func store(item: Dictionary) -> bool:
 		Backpack.Kind.GRENADES:
 			if not _stow_grenade(amount):
 				return false
-		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY:
+		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY, Backpack.Kind.CIGARETTES:
 			if backpack.add(kind as Backpack.Kind, amount) < amount:
 				return false
 		_:

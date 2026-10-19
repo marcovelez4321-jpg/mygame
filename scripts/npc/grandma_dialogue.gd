@@ -5,7 +5,8 @@ extends Resource
 ## dialogue/grandma.tres. Click it in the FileSystem dock and edit it all
 ## in the Inspector -- no code. Every Grandma in every level reads this same
 ## file. Lines with several entries (greetings, goodbyes) pick one at random
-## each time.
+## each time. (Her missions and portals are gone -- the user's, 2026-10-19;
+## she gives quests now: GrandmaQuests.)
 
 ## The name shown above her lines.
 @export var speaker_name: String = "Grandma"
@@ -18,17 +19,24 @@ extends Resource
 	"You look skinny. Come here.",
 	"Did you call your mother? Don't lie to me.",
 ]
-## Your replies to her greeting.
-@export var reply_mission: String = "Let's do a mission."
+## Asking about work (shown while she has a quest you haven't taken).
+@export var reply_need_anything: String = "Need anything, Grandma?"
 @export var reply_just_saying_hi: String = "Just saying hi."
 
-@export_group("Missions")
-## Her answer when you ask for a mission; the mission list appears under it.
-@export_multiline var mission_prompt: String = "Bet."
-## The last option in the mission list, to back out.
-@export var reply_never_mind: String = "Never mind."
-## If there are no missions in res://missions at all.
-@export_multiline var no_missions_line: String = "Nothing for you right now, baby. Go get some sun."
+@export_group("Quest: the cigarettes")
+## Asking you for them (the user's).
+@export_multiline var cigarettes_offer: String = "Come sit with Grandma. I need my cigarettes, sweetheart... there's one pack left, up in the towers. I can smell it."
+## Where it is, under her ask and her reminder: {where} becomes which tower
+## and how high (e.g. "the second-tallest tower, about halfway up").
+@export_multiline var cigarettes_hint: String = "It's in {where}."
+@export var reply_accept: String = "I'll find them."
+@export var reply_decline: String = "Not right now."
+## While you're looking (the user's).
+@export var reply_ask_about: String = "About those cigarettes..."
+@export_multiline var cigarettes_reminder: String = "Still no cigarettes? Grandma's patient. Grandma's always patient."
+## Handing them in (the user's).
+@export var reply_hand_in: String = "I found your cigarettes."
+@export_multiline var cigarettes_done: String = "There's my good baby. Let Grandma give you something... special."
 
 @export_group("Goodbye")
 ## What she says after "Just saying hi."
@@ -36,5 +44,5 @@ extends Resource
 	"Alright, baby. Love you.",
 	"Mm-hm. Don't be a stranger.",
 ]
-## The only reply after a goodbye; closes the conversation.
+## Leaving the conversation.
 @export var reply_leave: String = "[Leave]"

@@ -31,6 +31,8 @@ signal status_changed(text: String)
 signal lan_games_changed(games: Array)
 ## The Stalker's fear went up, and why (the note under the meter).
 signal fear_note(text: String)
+## Grandma's quests changed (quests).
+signal quests_changed
 
 const PORT := 7777
 const MAX_CLIENTS := 3
@@ -56,6 +58,10 @@ var _ping_left := 0.0
 const PING_EVERY := 1.0
 ## Host: peer id -> the character it picked (its body's look on every machine).
 var _characters := {}
+## Grandma's quests (GrandmaQuests): id -> {state, hint}. The host's,
+## mirrored to every game (late joiners get them as they load in); kept
+## through deaths and reloads (this node lives through them).
+var quests := {}
 ## LAN: the host's announcer, the listener, and what it's heard
 ## (address -> {address, name, players, heard: msec}).
 var _announcer: PacketPeerUDP
@@ -367,6 +373,53 @@ func _net_fear_note(text: String) -> void:
 	fear_note.emit(text)
 
 
+## Host: a quest's state and Grandma's hint (GrandmaQuests), here and on
+## every game.
+func send_quest(id: StringName, state: int, hint: String) -> void:
+	_set_quest(id, state, hint)
+	if is_online():
+		_net_quest.rpc(id, state, hint)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_quest(id: StringName, state: int, hint: String) -> void:
+	_set_quest(id, state, hint)
+
+
+func _set_quest(id: StringName, state: int, hint: String) -> void:
+	quests[id] = {state = state, hint = hint}
+	quests_changed.emit()
+
+
+## Anyone: something done at Grandma's (GrandmaQuests.act: "accept",
+## "hand_in"), for the host to decide.
+func ask_quest(id: StringName, action: StringName) -> void:
+	if not is_online() or multiplayer.is_server():
+		GrandmaQuests.act(get_tree(), multiplayer.get_unique_id() if is_online() else 1, id, action)
+	else:
+		_net_ask_quest.rpc_id(1, id, action)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_ask_quest(id: StringName, action: StringName) -> void:
+	if multiplayer.is_server():
+		GrandmaQuests.act(get_tree(), multiplayer.get_remote_sender_id(), id, action)
+
+
+## Host: `amount` of `kind` taken out of a player's pack -- their own copy
+## of it too (the host's copy's already done).
+func send_backpack_take(peer: int, kind: int, amount: int) -> void:
+	if is_online() and peer != multiplayer.get_unique_id():
+		_net_backpack_take.rpc_id(peer, kind, amount)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_backpack_take(kind: int, amount: int) -> void:
+	var body := body_of(multiplayer.get_unique_id())
+	if body:
+		body.backpack.take(kind as Backpack.Kind, amount)
+
+
 ## Host: one of the Stalker's voices (StalkerVoices slot `slot`) at `at`,
 ## here and on every machine.
 func send_stalker_voice(slot: StringName, at: Vector3, volume_db: float = 0.0) -> void:
@@ -512,6 +565,8 @@ func _ready_to_play(character: String) -> void:
 		var body := body_of(other)
 		if other != 1 and other != id and body:
 			_spawn_body.rpc_id(id, other, body.global_position, str(_characters[other]))
+	for quest: StringName in quests:
+		_net_quest.rpc_id(id, quest, int(quests[quest].state), str(quests[quest].hint))
 	var at := (host_body.global_position if host_body else Vector3.ZERO) + _beside()
 	_spawn_body(id, at, character)
 	_spawn_body.rpc(id, at, character)

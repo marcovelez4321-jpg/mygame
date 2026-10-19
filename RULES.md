@@ -1844,3 +1844,10 @@ them:
   - **Co-op:** a fixed seed means the same weed in every game.
 
 - 2026-10-19: Grandma's house is twice as big (the user's): GrandmasHouse.SIZE 2, giving 20 x 16 m and 6 m storeys. The bake builds at it, and the tree's roots over the house, the house bounds and the red weed's house exclusion and wall patches all follow it. Grounding fix: it was floating, because its ray down from 200 m up landed on the Flesh Tree's limbs or the player. It now takes the terrain's own height there (Terrain3DData.get_height), else a short ray from just above that skips the players. Collision was checked headless: walls, floors, roof, stairs and door all stop a ray.
+
+- 2026-10-19: Grandma is a Fallout-style quest giver now (the user's): her missions and portals are gone from grandma.gd and grandma_dialogue.gd. GrandmaQuests holds her quests, one so far.
+  - **The quest:** CIGARETTES, the last pack in the world (Backpack.Kind.CIGARETTES, the PSX pack's cigs_packet_1). StackSecrets puts exactly one somewhere inside the Stack: any hall key spot or window room, any tower, any height. It's never made while someone carries one, and never once she has it.
+  - **Grandma's lines:** the user's 'sweet but off' set. She hints which tower and how high (GrandmaQuests.where_in, from the Stack's nest_columns: e.g. 'the second-tallest tower, about halfway up').
+  - **Reward:** 14 virus points for every player (Virus.gain_points).
+  - **Co-op:** shared and host-owned. Network.quests is mirrored to everyone and sent to late joiners. Network.ask_quest carries 'accept' and 'hand_in', and Network.send_backpack_take keeps the owner's pack in step. It survives deaths and reloads.
+  - **Pickup look:** keys and the cigarettes float 1 m over the floor, spinning and bobbing like San Andreas pickups (CarryItem.SPIN_KINDS). They're frozen till taken (walk into or grapple), and only the model turns, so nothing moves on the network.

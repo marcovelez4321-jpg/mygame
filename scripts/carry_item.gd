@@ -35,6 +35,15 @@ const MEAT_SIZE := 6.0
 const ITEM_SIZE := 2.0
 ## Seen (and its flies) out to this far.
 const SEEN_RANGE := 60.0
+## Keys and Grandma's cigarettes hang in the air turning, like San Andreas's
+## pickups (the user's, 2026-10-19): HOVER m over the floor, spinning and
+## bobbing, held still (frozen) till taken -- walked into or grappled. Only
+## the model turns (its own pivot), so nothing moves on the network.
+const SPIN_KINDS := [Backpack.Kind.KEY, Backpack.Kind.CIGARETTES]
+const HOVER := 1.0
+const SPIN_SPEED := 2.0 # radians a second
+const BOB := 0.12
+const BOB_SPEED := 2.2
 const FLIES_RANGE := 15.0
 
 ## The user's models (New assets/): Flesh2 is raw, Flesh cooked.
@@ -69,6 +78,8 @@ var mutation: StringName
 var _expire_left := -1.0
 
 var _model: Node3D
+var _spinner: Node3D
+var _spin_time := 0.0
 var _shape: CollisionShape3D
 var _flies: GPUParticles3D
 ## Whoever just dropped it: ignored till they've stepped off it.
@@ -105,8 +116,16 @@ static func spawn(where: Node, at: Vector3, data: Dictionary) -> CarryItem:
 func _place(where: Node, at: Vector3) -> CarryItem:
 	var level := where.get_tree().current_scene if where.is_inside_tree() else null
 	(level if level else where).add_child(self)
-	global_position = _above_ground(at)
+	global_position = _hover_spot(at) if kind in SPIN_KINDS else _above_ground(at)
 	return self
+
+
+## HOVER m over whatever floor is under `at` (a pickup's float).
+func _hover_spot(at: Vector3) -> Vector3:
+	var query := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 1.0, at + Vector3.DOWN * 6.0)
+	query.collision_mask = 1
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return (hit.position as Vector3) + Vector3.UP * HOVER if not hit.is_empty() else at
 
 
 ## Never made inside the ground (the user's: chunks clipped through the
@@ -174,6 +193,10 @@ func _ready() -> void:
 	_cook_left = randf() * COOK_EVERY # a pile of them don't all look at once
 	_refresh_look()
 	_make_pickup_zone()
+	if kind in SPIN_KINDS:
+		freeze = true
+		_spin_time = randf() * TAU # (not all in step)
+	set_process(kind in SPIN_KINDS)
 	# Only fresh meat on the host has anything to do (age, cook).
 	set_physics_process(kind == Backpack.Kind.MEAT and not NetEntities.is_puppet(self) \
 			and (not Network.is_online() or multiplayer.is_server()))
@@ -213,6 +236,15 @@ func _physics_process(delta: float) -> void:
 		_refresh_look()
 	if kind != Backpack.Kind.MEAT or is_rotten():
 		set_physics_process(false) # cooked or rotten: nothing more happens to it
+
+
+## A pickup's float: turning and bobbing (its model only).
+func _process(delta: float) -> void:
+	if _spinner == null:
+		return
+	_spin_time += delta
+	_spinner.rotation.y = _spin_time * SPIN_SPEED
+	_spinner.position.y = sin(_spin_time * BOB_SPEED) * BOB
 
 
 ## Fresh meat `step` seconds older (`target`: a CarryItem, or a chunk's data
@@ -339,7 +371,13 @@ func _refresh_look() -> void:
 	_model = model_for(to_data(), _player_grenade())
 	if _model == null:
 		_model = _lump()
-	add_child(_model)
+	if kind in SPIN_KINDS:
+		if _spinner == null:
+			_spinner = Node3D.new()
+			add_child(_spinner)
+		_spinner.add_child(_model)
+	else:
+		add_child(_model)
 	var box := BackpackView._bounds(_model)
 	var longest := maxf(box.size.x, maxf(box.size.y, box.size.z))
 	var fit := world_size() / maxf(longest, 0.0001)

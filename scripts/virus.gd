@@ -146,6 +146,16 @@ func eat_raw(rotten: bool, boss: bool, glued: bool = false) -> void:
 		FleshTree.ripen_for(_player)
 
 
+## Points given (a quest's reward: GrandmaQuests). The host's.
+func gain_points(amount: int) -> void:
+	if not _decides() or amount <= 0:
+		return
+	points += amount
+	_changed()
+	if points >= POINTS_TO_MUTATE:
+		FleshTree.ripen_for(_player)
+
+
 ## Cooked meat eaten: food, and it heals (glued: more of both).
 func eat_cooked(glued: bool = false) -> void:
 	if not _decides():

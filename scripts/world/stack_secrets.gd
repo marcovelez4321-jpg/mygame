@@ -58,6 +58,18 @@ func _ready() -> void:
 	for room in _stack.room_boxes:
 		if dice.randf() < WINDOW_ROOM_KEY:
 			_sites.append({at = Megastructure._on_room_floor(dice, room), what = "key"})
+	# Grandma's cigarettes (GrandmaQuests): the last pack, somewhere inside --
+	# any hall floor or window room, any tower, any height -- till she has it.
+	# Where it is goes to Grandma, for her hint.
+	var quest := GrandmaQuests.CIGARETTES
+	if GrandmaQuests.state(quest) != GrandmaQuests.State.DONE:
+		var places: Array = Array(_stack.secret_keys)
+		places.append_array(_stack.room_boxes)
+		if not places.is_empty():
+			var place: Variant = places[dice.randi() % places.size()]
+			var at: Vector3 = Megastructure._on_room_floor(dice, place) if place is AABB else place
+			_sites.append({at = at, what = "cigarettes"})
+			Network.send_quest(quest, GrandmaQuests.state(quest), GrandmaQuests.where_in(_stack, at))
 
 
 static func _shuffle(list: Array, dice: RandomNumberGenerator) -> void:
@@ -93,6 +105,18 @@ func _fill(site: Dictionary) -> void:
 			_item(_stack.to_global(site.at) + Vector3.UP * 0.5, {kind = Backpack.Kind.KEY, amount = 1})
 		"climber":
 			_climber(_stack.to_global(site.at))
+		"cigarettes":
+			if not _cigarettes_carried():
+				_item(_stack.to_global(site.at) + Vector3.UP * 0.5, {kind = Backpack.Kind.CIGARETTES, amount = 1})
+
+
+## Someone already has the last pack on them (it's never made twice).
+func _cigarettes_carried() -> bool:
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player and player.backpack and player.backpack.cigarettes > 0:
+			return true
+	return false
 
 
 func _loot(box: AABB) -> void:
