@@ -48,6 +48,7 @@ const MORE_MONOLITHS := 40
 ## about 1.5 km from the yard, in view of it), the flat plateau its towers
 ## stand on (radius, metres), and how far the stand-in monoliths keep away.
 const STACK_SCENE := "res://scenes/megastructures/the_stack.scn"
+const HOUSE_SCENE := "res://scenes/world/grandmas_house.tscn"
 const STACK_AT := Vector2(250.0, -1450.0)
 const STACK_PLATEAU := 560.0 # wide enough for the hive's far corner (~530 m out)
 const STACK_CLEAR := 720.0
@@ -378,6 +379,14 @@ func _bake() -> void:
 	flesh_tree.position = Vector3(0.0, shape.yard_level * shape.height, 40.0)
 	root.add_child(flesh_tree)
 	flesh_tree.owner = root
+	# Grandma's house (the user's, 2026-10-19; tools/make_grandmas_house.gd) in
+	# the middle of the yard, its front toward the Stack.
+	if ResourceLoader.exists(HOUSE_SCENE):
+		var house := (load(HOUSE_SCENE) as PackedScene).instantiate() as Node3D
+		house.name = "GrandmasHouse"
+		house.position = Vector3(0.0, shape.yard_level * shape.height, 0.0)
+		root.add_child(house)
+		house.owner = root
 
 	# The player in Grandma's yard, on the ground.
 	var player := (load(PLAYER_SCENE) as PackedScene).instantiate() as Node3D

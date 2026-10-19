@@ -14,7 +14,7 @@
 [ext_resource type="Script" uid="uid://cku7pyx3p03gi" path="res://scripts/world/cloud_deck.gd" id="13_c2v4b"]
 [ext_resource type="Script" uid="uid://8l5laalbjcbl" path="res://scripts/world/skyline_layer.gd" id="14_oysqe"]
 [ext_resource type="PackedScene" uid="uid://oyvp4qmljkeg" path="res://scenes/enemy/harvestman/harvestman_leech.tscn" id="15_25kst"]
-[ext_resource type="Resource" path="res://audio/music/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).beats.tres" id="21_lludv"]
+[ext_resource type="Resource" uid="uid://b8alc3xyadac1" path="res://audio/music/Freddie Gibbs & The Alchemist - Skinny Suge II (Official Visualizer).beats.tres" id="21_lludv"]
 [ext_resource type="PackedScene" uid="uid://dwh531b4rtkwn" path="res://scenes/enemy/spider_pack.tscn" id="22_3nfe5"]
 [ext_resource type="Script" uid="uid://bqnqrbuh7wgqg" path="res://scripts/weapon_data.gd" id="23_k6tl3"]
 [ext_resource type="Resource" uid="uid://4o8gxqlvnutb" path="res://weapons/starter_gun.tres" id="24_5vhu7"]
@@ -34,6 +34,7 @@
 [ext_resource type="Script" uid="uid://b6c6fwaffk3y6" path="res://scripts/world/loadout.gd" id="32_ldemw"]
 [ext_resource type="Resource" uid="uid://cd1tqnoroiq4t" path="res://weapons/sniper.tres" id="32_v085t"]
 [ext_resource type="Script" uid="uid://c657pav6cgvj" path="res://scripts/world/flesh_tree.gd" id="40_fleshtree"]
+[ext_resource type="PackedScene" path="res://scenes/world/grandmas_house.tscn" id="41_grandmashouse"]
 
 [sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_fxg6t"]
 _shader_parameters = {
@@ -85,6 +86,7 @@ _shader_parameters = {
 }
 shader_override_enabled = true
 shader_override = ExtResource("1_k6tl3")
+show_checkered = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0kkto"]
 transparency = 4
@@ -133,6 +135,7 @@ material = SubResource("Terrain3DMaterial_fxg6t")
 assets = SubResource("Terrain3DAssets_pb6gh")
 collision_mode = 3
 vertex_spacing = 4.0
+show_checkered = true
 top_level = true
 metadata/_edit_lock_ = true
 
@@ -318,7 +321,6 @@ directional_shadow_max_distance = 90.0
 
 [node name="Player" parent="." unique_id=1710340998 instance=ExtResource("29_fyxt2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 33.5, 0)
-spawn_in_cathedral = true
 heart_song = ExtResource("21_lludv")
 
 [node name="HUD" parent="." unique_id=1218208162 instance=ExtResource("30_0goju")]
@@ -330,3 +332,6 @@ weapons = Array[ExtResource("23_k6tl3")]([ExtResource("24_5vhu7"), ExtResource("
 [node name="FleshTree" type="Node3D" parent="." unique_id=34791758]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 40)
 script = ExtResource("40_fleshtree")
+
+[node name="GrandmasHouse" parent="." instance=ExtResource("41_grandmashouse")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 31.5, 0)

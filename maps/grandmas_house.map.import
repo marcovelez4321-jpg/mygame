@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://d05so8q2fmlbb"
+path="res://.godot/imported/grandmas_house.map-8f39fc20ae0eac54c7db056a84c9271c.tres"
+
+[deps]
+
+source_file="res://maps/grandmas_house.map"
+dest_files=["res://.godot/imported/grandmas_house.map-8f39fc20ae0eac54c7db056a84c9271c.tres"]
+
+[params]
+
