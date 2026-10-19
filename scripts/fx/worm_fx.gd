@@ -146,6 +146,21 @@ func _ready() -> void:
 	add_child(_rumble)
 
 
+## A still one (ShaderWarmup): a patch of its dirt at `at`, its clods, haze,
+## landing ring, dust and rubble going -- no rumble.
+static func warm_up(world: Node, at: Vector3) -> WormFX:
+	var fx := WormFX.new()
+	world.add_child(fx)
+	fx.shockwave(at, 3.0)
+	fx.process_mode = Node.PROCESS_MODE_DISABLED
+	fx._dirt.multimesh.set_instance_transform(0, Transform3D(Basis.from_scale(Vector3.ONE * 2.0), at))
+	fx._clods.global_position = at
+	fx._haze.global_position = at
+	fx._clods.emitting = true
+	fx._haze.emitting = true
+	return fx
+
+
 ## Every frame from the worm: the dirt mound over its head while it's
 ## tunnelling shallow enough (bigger the shallower) or ploughing through the
 ## floor line (`underground` covers that too: the worm says so), with clods

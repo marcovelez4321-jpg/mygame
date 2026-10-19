@@ -171,6 +171,15 @@ static func _in_line_of_sight(space: PhysicsDirectSpaceState3D, from: Vector3, t
 ## host's "explosion at X" message without redoing the damage.
 static func play_effects(world: Node3D, center: Vector3, radius: float, knockback: float) -> void:
 	var scene := world.get_tree().current_scene
+	var root := play_visuals(scene, center, radius)
+	SoundPlayer.play_3d(BOOM_SOUND, center, scene)
+	_shake_local_player(world, center, radius)
+	launch_ragdolls(root, center, radius, knockback)
+
+
+## Only the look (fireball, burning chunks, smoke, flash) -- no sound, no
+## shake, no push. ShaderWarmup shows one at the level's start.
+static func play_visuals(scene: Node, center: Vector3, radius: float) -> Node3D:
 	var root := Node3D.new()
 	scene.add_child(root)
 	root.global_position = center
@@ -178,10 +187,8 @@ static func play_effects(world: Node3D, center: Vector3, radius: float, knockbac
 	_add_fire_chunks(root, radius)
 	_add_smoke(root, radius)
 	_add_flash(root, radius)
-	SoundPlayer.play_3d(BOOM_SOUND, center, scene)
-	_shake_local_player(world, center, radius)
-	launch_ragdolls(root, center, radius, knockback)
-	world.get_tree().create_timer(2.5).timeout.connect(root.queue_free)
+	scene.get_tree().create_timer(2.5).timeout.connect(root.queue_free)
+	return root
 
 
 ## Throws every ragdoll in range as ONE piece: every bone of a body gets the

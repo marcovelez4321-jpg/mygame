@@ -95,6 +95,20 @@ func take_launcher_visual(launcher_rocket: Node3D, rest_basis: Basis) -> void:
 	_visual_turn_end = (global_basis.inverse() * rest_basis).orthonormalized().get_rotation_quaternion()
 
 
+## A rocket that never flies (ShaderWarmup): its flame lit, its trail and
+## launch puff going, nothing else -- no motor, no blast.
+static func warm_up(world: Node, at: Vector3) -> Rocket:
+	var rocket := Rocket.new()
+	rocket._done = true
+	rocket._direction = Vector3.FORWARD
+	rocket.process_mode = Node.PROCESS_MODE_DISABLED
+	world.add_child(rocket)
+	rocket.global_position = at
+	rocket._flame.visible = true
+	rocket._trail.emitting = true
+	return rocket
+
+
 func _ready() -> void:
 	# Deferred: the shooter's viewmodel hands over the real launcher rocket
 	# right after launch(); only build a stand-in if nobody did (co-op).

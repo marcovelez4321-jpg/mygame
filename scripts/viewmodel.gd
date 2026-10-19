@@ -786,6 +786,16 @@ func _spawn_backblast(at: Vector3, backward: Vector3) -> void:
 	light.create_tween().tween_property(light, "light_energy", 0.0, 0.2)
 	get_tree().create_timer(0.25).timeout.connect(light.queue_free)
 
+	var smoke := backblast_smoke(backward)
+	world.add_child(smoke)
+	smoke.global_position = at
+	smoke.emitting = true
+	smoke.finished.connect(smoke.queue_free)
+
+
+## The launcher's backblast smoke, puffing out `backward` (one shot). Its own
+## builder so ShaderWarmup can show one at the level's start.
+static func backblast_smoke(backward: Vector3) -> GPUParticles3D:
 	var smoke := GPUParticles3D.new()
 	smoke.amount = 14
 	smoke.lifetime = 1.0
@@ -803,10 +813,7 @@ func _spawn_backblast(at: Vector3, backward: Vector3) -> void:
 	material.gravity = Vector3(0.0, 0.4, 0.0)
 	material.color = Color(0.8, 0.76, 0.7, 0.7)
 	smoke.process_material = material
-	world.add_child(smoke)
-	smoke.global_position = at
-	smoke.emitting = true
-	smoke.finished.connect(smoke.queue_free)
+	return smoke
 
 
 ## The same tilt-down/tilt-up shape _on_weapon_switched() uses, minus the

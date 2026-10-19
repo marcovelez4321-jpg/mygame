@@ -482,6 +482,13 @@ func _set_flies(on: bool) -> void:
 		return
 	if _flies:
 		return
+	_flies = make_flies()
+	_flies.position = Vector3.UP * 0.15
+	add_child(_flies)
+
+
+## The flies round rotting meat (ShaderWarmup shows some at the level's start).
+static func make_flies() -> GPUParticles3D:
 	if _fly_process == null:
 		_fly_process = ParticleProcessMaterial.new()
 		_fly_process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
@@ -502,16 +509,15 @@ func _set_flies(on: bool) -> void:
 		black.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		black.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		_fly_dot.material = black
-	_flies = GPUParticles3D.new()
-	_flies.amount = 6
-	_flies.lifetime = 1.6
-	_flies.local_coords = true
-	_flies.process_material = _fly_process
-	_flies.draw_pass_1 = _fly_dot
-	_flies.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_flies.visibility_range_end = FLIES_RANGE
-	_flies.position = Vector3.UP * 0.15
-	add_child(_flies)
+	var flies := GPUParticles3D.new()
+	flies.amount = 6
+	flies.lifetime = 1.6
+	flies.local_coords = true
+	flies.process_material = _fly_process
+	flies.draw_pass_1 = _fly_dot
+	flies.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flies.visibility_range_end = FLIES_RANGE
+	return flies
 
 
 static func _scene(path: String) -> PackedScene:
