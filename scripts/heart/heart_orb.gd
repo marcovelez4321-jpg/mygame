@@ -13,18 +13,31 @@ extends AnimatableBody3D
 ## (Network.send_heart_orb, send_heart_orb_pop); everyone else's chases the
 ## same player and pops when the host says.
 
-## (Three times as fast, the user's 2026-10-19: was 6.)
-const SPEED := 18.0
+## (The user's 2026-10-19: three times as fast, 6 -> 18; then 15% faster.)
+const SPEED := 20.7
 const DAMAGE := 15.0
 const LIFETIME := 8.0
 const RADIUS := 0.8
 ## Like a heat-seeking missile (the user's 2026-10-19): fast, but it can only
 ## turn this many degrees a second -- dodge late and it overshoots, swings
-## wide, and if it can't come round in time it flies into a wall.
-const TURN_RATE := 45.0
+## wide, and if it can't come round in time it flies into a wall. (45, then
+## 25% less, the user's.)
+const TURN_RATE := 33.75
 ## Where on them it aims (their middle).
 const CHEST := 0.9
 const COLOR := Color(0.42, 0.02, 0.03)
+## Its trail (the user's, 2026-10-19: like Skarlet's blood orb, MK11): a
+## glossy blood streak tapering off behind it over TRAIL_TIME, wobbling,
+## with bubbles of blood beading off it and shrinking away. Godot has no
+## trail node (its trails are particles'), so the streak is drawn here
+## (Trail), like a trail renderer: its path, a ribbon facing the camera.
+const TRAIL_TIME := 0.6
+## The streak's width where it leaves the orb (just inside its own).
+const TRAIL_WIDTH := RADIUS * 1.6
+const BUBBLES := 20
+const BUBBLE_SIZE := RADIUS * 0.25
+## How hard it blows apart when it pops (BloodFX.spawn_burst's strength).
+const POP_BURST := 0.5
 
 ## Live orbs by id (every game), for the host's pops and the cap.
 static var alive := {}
@@ -42,9 +55,14 @@ var _age := 0.0
 var _popped := false
 var _mesh: MeshInstance3D
 var _health: Health
+var _trail: Trail
+var _bubbles: GPUParticles3D
 
 static var _material: StandardMaterial3D
 static var _ball: SphereMesh # (one shared by every orb)
+static var _trail_material: StandardMaterial3D
+static var _bubble_process: ParticleProcessMaterial
+static var _bubble_mesh: SphereMesh
 
 
 static func next_id() -> int:
@@ -74,15 +92,7 @@ static func spawn(world: Node, at: Vector3, out: Vector3, toward: Node3D, orb_id
 ## before the first hi-hat -- the user's freeze when the first one swelled out.
 static func look_model() -> MeshInstance3D:
 	if _material == null:
-		_material = StandardMaterial3D.new()
-		_material.albedo_color = COLOR
-		_material.roughness = 0.08
-		_material.metallic_specular = 0.9
-		_material.emission_enabled = true
-		_material.emission = Color(0.5, 0.02, 0.02)
-		_material.emission_energy_multiplier = 0.35
-		_material.rim_enabled = true
-		_material.rim = 0.6
+		_material = _glossy()
 	if _ball == null:
 		_ball = SphereMesh.new()
 		_ball.radius = RADIUS
@@ -94,6 +104,72 @@ static func look_model() -> MeshInstance3D:
 	mesh.material_override = _material
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mesh
+
+
+## Glossy blood: its own look, the streak's and the bubbles'.
+static func _glossy() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = COLOR
+	material.roughness = 0.08
+	material.metallic_specular = 0.9
+	material.emission_enabled = true
+	material.emission = Color(0.5, 0.02, 0.02)
+	material.emission_energy_multiplier = 0.35
+	material.rim_enabled = true
+	material.rim = 0.6
+	return material
+
+
+## Bubbles of blood beading off it as it goes, left behind in the air,
+## shrinking away over TRAIL_TIME (no drips: the user's).
+static func make_bubbles() -> GPUParticles3D:
+	if _bubble_process == null:
+		_bubble_process = ParticleProcessMaterial.new()
+		_bubble_process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		_bubble_process.emission_sphere_radius = RADIUS * 0.6
+		_bubble_process.spread = 180.0
+		_bubble_process.initial_velocity_min = 0.3
+		_bubble_process.initial_velocity_max = 1.2
+		_bubble_process.gravity = Vector3.ZERO
+		_bubble_process.damping_min = 1.0
+		_bubble_process.damping_max = 2.0
+		_bubble_process.scale_min = 0.5
+		_bubble_process.scale_max = 1.0
+		var shrink := Curve.new()
+		shrink.add_point(Vector2(0.0, 1.0))
+		shrink.add_point(Vector2(1.0, 0.0))
+		var shrink_texture := CurveTexture.new()
+		shrink_texture.curve = shrink
+		_bubble_process.scale_curve = shrink_texture
+		_bubble_mesh = SphereMesh.new()
+		_bubble_mesh.radius = BUBBLE_SIZE
+		_bubble_mesh.height = BUBBLE_SIZE * 2.0
+		_bubble_mesh.radial_segments = 8
+		_bubble_mesh.rings = 4
+		if _material == null:
+			_material = _glossy()
+		_bubble_mesh.material = _material
+	var bubbles := GPUParticles3D.new()
+	bubbles.amount = BUBBLES
+	bubbles.lifetime = TRAIL_TIME
+	bubbles.local_coords = false
+	bubbles.process_material = _bubble_process
+	bubbles.draw_pass_1 = _bubble_mesh
+	bubbles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return bubbles
+
+
+## A streak and bubbles on their own at `at` (ShaderWarmup).
+static func warm_up(world: Node, at: Vector3) -> Array[Node]:
+	var trail := Trail.new()
+	world.add_child(trail)
+	for i in 6:
+		trail.add_point(at + Vector3.RIGHT * i * 0.5)
+	var bubbles := make_bubbles()
+	world.add_child(bubbles)
+	bubbles.global_position = at
+	bubbles.emitting = true
+	return [trail, bubbles]
 
 
 ## The host's word: orb `orb_id` popped at `at` (every game).
@@ -141,6 +217,8 @@ func _physics_process(delta: float) -> void:
 		_mesh.scale = Vector3.ONE * lerpf(0.15, 1.0, full * full) * (1.0 + quiver)
 		return
 	_age += delta
+	if _trail == null:
+		_start_trail()
 	# Wobbling as it goes, like a bubble.
 	var wobble := sin(_age * 9.0) * 0.08
 	_mesh.scale = Vector3(1.0 - wobble, 1.0 + wobble, 1.0 - wobble)
@@ -184,6 +262,16 @@ func _drift(delta: float) -> void:
 	global_position += _heading * SPEED * delta
 
 
+## Off the heart: its streak and bubbles start behind it.
+func _start_trail() -> void:
+	_trail = Trail.new()
+	_trail.follow = self
+	add_child(_trail)
+	_bubbles = make_bubbles()
+	add_child(_bubbles)
+	_bubbles.emitting = true
+
+
 ## The host: popped here -- everywhere.
 func _pop(at: Vector3, normal: Vector3) -> void:
 	if _popped:
@@ -198,12 +286,82 @@ func _burst(at: Vector3, normal: Vector3) -> void:
 		return
 	_popped = true
 	var world := get_tree().current_scene
+	# A small blood explosion (the user's: every pop -- shot, hit, or run
+	# into something): the burst every way, the spray off what it hit.
+	BloodFX.spawn_burst(world, at, POP_BURST, BloodFX.BLOOD_COLOR)
 	BloodFX.spawn_impact(world, at, normal, BloodFX.BLOOD_COLOR, 3.0)
-	for i in 3:
-		var way := Vector3(randf_range(-1.0, 1.0), randf_range(-0.2, 1.0), randf_range(-1.0, 1.0)).normalized()
-		BloodFX.spawn_impact(world, at, way, BloodFX.BLOOD_COLOR, 2.0)
+	# Its streak and bubbles stay where they are and fade out.
+	if _trail:
+		_trail.follow = null
+		_trail.reparent(world)
+	if _bubbles:
+		_bubbles.reparent(world)
+		_bubbles.emitting = false
+		get_tree().create_timer(TRAIL_TIME + 0.1).timeout.connect(_bubbles.queue_free)
 	var below := get_world_3d().direct_space_state.intersect_ray(
 			PhysicsRayQueryParameters3D.create(at, at - normal * 3.0 + Vector3.DOWN * 3.0, 1, [get_rid()]))
 	if not below.is_empty():
 		BloodFX.spawn_splatter(world, below.position, below.normal, RADIUS * 2.5)
 	queue_free()
+
+
+## Its streak: where it's been over TRAIL_TIME, drawn as a ribbon facing the
+## camera, TRAIL_WIDTH where it leaves the orb narrowing to nothing, its
+## width wobbling like something wet. Once the orb's gone it stops growing
+## and its tail runs out, then it goes.
+class Trail extends MeshInstance3D:
+	var follow: Node3D
+	var _points := PackedVector3Array()
+	var _born := PackedFloat32Array()
+	var _time := 0.0
+	var _immediate := ImmediateMesh.new()
+
+	func _ready() -> void:
+		top_level = true
+		global_transform = Transform3D.IDENTITY
+		mesh = _immediate
+		if HeartOrb._trail_material == null:
+			HeartOrb._trail_material = HeartOrb._glossy()
+			HeartOrb._trail_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		material_override = HeartOrb._trail_material
+		cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	func add_point(at: Vector3) -> void:
+		_points.append(at)
+		_born.append(_time)
+
+	func _process(delta: float) -> void:
+		_time += delta
+		if is_instance_valid(follow):
+			if _points.is_empty() or _points[_points.size() - 1].distance_squared_to(follow.global_position) > 0.0025:
+				add_point(follow.global_position)
+		while not _born.is_empty() and _time - _born[0] > HeartOrb.TRAIL_TIME:
+			_points.remove_at(0)
+			_born.remove_at(0)
+		if not is_instance_valid(follow) and _points.size() < 2:
+			queue_free()
+			return
+		_draw()
+
+	func _draw() -> void:
+		_immediate.clear_surfaces()
+		var count := _points.size()
+		var camera := get_viewport().get_camera_3d()
+		if count < 2 or camera == null:
+			return # (nothing to draw: an empty surface is an error)
+		var eye := camera.global_position
+		_immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+		for i in count:
+			var point := _points[i]
+			var age := _time - _born[i]
+			var t := clampf(age / HeartOrb.TRAIL_TIME, 0.0, 1.0)
+			var width := HeartOrb.TRAIL_WIDTH * (1.0 - t) * (1.0 + 0.18 * sin(age * 30.0 + i * 0.7))
+			var along := _points[mini(i + 1, count - 1)] - _points[maxi(i - 1, 0)]
+			var to_eye := (eye - point).normalized()
+			var side := along.cross(to_eye)
+			side = side.normalized() if side.length_squared() > 0.000001 else Vector3.UP
+			_immediate.surface_set_normal(to_eye)
+			_immediate.surface_add_vertex(point + side * width * 0.5)
+			_immediate.surface_set_normal(to_eye)
+			_immediate.surface_add_vertex(point - side * width * 0.5)
+		_immediate.surface_end()

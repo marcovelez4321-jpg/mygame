@@ -89,6 +89,8 @@ func _effects(world: Node, facing: Vector3, forward: Vector3) -> void:
 	_made.append(SeededGrowth.burst(world, at + Vector3.DOWN * 1.5, Vector3.UP, false, null))
 	_made.append(Rocket.warm_up(world, at))
 	_made.append(WormFX.warm_up(world, at + Vector3.DOWN * 1.5))
+	_made.append_array(HeartOrb.warm_up(world, at)) # (left running: the streak draws as it goes)
+	BloodFX.spawn_burst(world, at, HeartOrb.POP_BURST)
 	var smoke := _keep(Viewmodel.backblast_smoke(facing), world, at)
 	(smoke as GPUParticles3D).emitting = true
 	var flash := MuzzleFlash.new()

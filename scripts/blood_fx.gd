@@ -313,6 +313,12 @@ static func _get_trail_mesh(settings: BloodTrailSettings) -> TubeTrailMesh:
 ## normal kill's spray. Called once, from enemy_ragdoll.gd's
 ## _explode_and_spawn_mutant().
 ## color: the body's own blood (a big one bursting: BigOnes).
+## A small burst of blood every way (the mutation explosion's core alone),
+## `strength` times as many drops and as fast (1: the full core).
+static func spawn_burst(world: Node, center: Vector3, strength: float = 1.0, color: Color = Color(0, 0, 0, 0)) -> void:
+	_spawn_blast_core(world, center, color, strength)
+
+
 static func spawn_mutation_explosion(world: Node, center: Vector3, color: Color = Color(0, 0, 0, 0)) -> void:
 	_spawn_blast_core(world, center, color)
 	for i in MUTATION_ARC_COUNT:
@@ -329,9 +335,9 @@ static func spawn_mutation_explosion(world: Node, center: Vector3, color: Color 
 ## in every direction (spread 180, no single surface normal to kick off of)
 ## instead of one directional cone -- this is what reads as "burst" rather
 ## than "sprayed".
-static func _spawn_blast_core(world: Node, center: Vector3, color: Color = Color(0, 0, 0, 0)) -> void:
+static func _spawn_blast_core(world: Node, center: Vector3, color: Color = Color(0, 0, 0, 0), strength: float = 1.0) -> void:
 	var particles := GPUParticles3D.new()
-	particles.amount = 60
+	particles.amount = maxi(int(60 * strength), 4)
 	particles.lifetime = 0.6
 	particles.one_shot = true
 	particles.explosiveness = 1.0
@@ -340,8 +346,8 @@ static func _spawn_blast_core(world: Node, center: Vector3, color: Color = Color
 	var mat := ParticleProcessMaterial.new()
 	mat.direction = Vector3.UP
 	mat.spread = 180.0
-	mat.initial_velocity_min = 5.0
-	mat.initial_velocity_max = 11.0
+	mat.initial_velocity_min = 5.0 * strength
+	mat.initial_velocity_max = 11.0 * strength
 	mat.gravity = Vector3(0.0, -9.8, 0.0)
 	mat.scale_min = 0.4
 	mat.scale_max = 0.9
