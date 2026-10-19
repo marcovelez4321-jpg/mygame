@@ -1809,3 +1809,5 @@ them:
 - 2026-10-19: Crash fix: PathRequests skips a waiting request whose enemy has left the level (it read a null world's navigation_map). SeededGrowth draws nothing when no tendril is out, instead of erroring with an empty ImmediateMesh surface.
 
 - 2026-10-19: The Stalker's body rides 25% lower to the ground (BODY_HEIGHT 0.6 -> 0.45 x SIZE). Its hands and feet stay planted, and its eye line and fallback hitbox drop with it.
+
+- 2026-10-19: Reverted: the Stalker's body is back at its old height (BODY_HEIGHT 0.6 x SIZE). The user preferred it.
