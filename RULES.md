@@ -1811,3 +1811,5 @@ them:
 - 2026-10-19: The Stalker's body rides 25% lower to the ground (BODY_HEIGHT 0.6 -> 0.45 x SIZE). Its hands and feet stay planted, and its eye line and fallback hitbox drop with it.
 
 - 2026-10-19: Reverted: the Stalker's body is back at its old height (BODY_HEIGHT 0.6 x SIZE). The user preferred it.
+
+- 2026-10-19: Invite friends still tries Steam's overlay invite window, which is often missing when the game runs from the editor. It now also lists your online Steam friends (online, away or busy, sorted by name) in the Co-op panel. Clicking one invites them straight to the lobby (SteamCoop.invite_friend / inviteUserToLobby), no overlay needed.

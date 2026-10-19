@@ -8,8 +8,10 @@ extends Node
 ## and ClassDB, so the game compiles and runs without the extension.
 ##   HOST (Host on Steam): a friends-only Steam lobby, and the game hosted
 ##   over Steam's own relays (SteamMultiplayerPeer: no ports, no addresses).
-##   Invite friends opens Steam's invite list; friends can also right-click
-##   you in Steam and Join Game.
+##   Invite friends opens Steam's invite list (its overlay -- often missing
+##   when the game's run from the editor) and the game's own list of your
+##   online friends, one click to invite each (inviteUserToLobby: no overlay
+##   needed). Friends can also right-click you in Steam and Join Game.
 ##   JOIN: accepting an invite -- in the game, from the friends list, or by
 ##   launching the game from it (+connect_lobby <id>) -- joins the lobby and
 ##   connects to its owner over Steam.
@@ -25,6 +27,8 @@ const LOBBY_FRIENDS_ONLY := 1 # Steam's k_ELobbyTypeFriendsOnly
 const RESULT_OK := 1 # k_EResultOK
 const ENTER_OK := 1 # k_EChatRoomEnterResponseSuccess
 const VIRTUAL_PORT := 0
+const FRIENDS_IMMEDIATE := 4 # k_EFriendFlagImmediate: your real friends
+const PERSONA_OFFLINE := 0
 ## The lobby holds the host and Network.MAX_CLIENTS others.
 const MAX_MEMBERS := 4
 
@@ -137,10 +141,32 @@ func _on_lobby_created(result: int, id: int) -> void:
 	state_changed.emit()
 
 
-## Steam's invite list, for the lobby we're hosting (or in).
+## Steam's invite list, for the lobby we're hosting (or in) -- if its overlay's
+## there.
 func invite() -> void:
 	if available and lobby_id != 0:
 		_steam.call("activateGameOverlayInviteDialog", lobby_id)
+
+
+## Your friends who are online (or away, busy...), by name: [{id, name}].
+func online_friends() -> Array[Dictionary]:
+	var friends: Array[Dictionary] = []
+	if not available:
+		return friends
+	for i in int(_steam.call("getFriendCount", FRIENDS_IMMEDIATE)):
+		var id: int = _steam.call("getFriendByIndex", i, FRIENDS_IMMEDIATE)
+		if int(_steam.call("getFriendPersonaState", id)) == PERSONA_OFFLINE:
+			continue
+		friends.append({id = id, name = str(_steam.call("getFriendPersonaName", id))})
+	friends.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a.name as String).nocasecmp_to(b.name) < 0)
+	return friends
+
+
+## Sends `friend` an invite to our lobby, straight through Steam (no overlay).
+func invite_friend(friend: int) -> bool:
+	if not available or lobby_id == 0:
+		return false
+	return bool(_steam.call("inviteUserToLobby", lobby_id, friend))
 
 
 # ---- Joining --------------------------------------------------------------------

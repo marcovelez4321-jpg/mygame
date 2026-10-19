@@ -496,10 +496,38 @@ func _build_coop_panel() -> void:
 	steam_invite.text = "Invite friends"
 	steam_invite.custom_minimum_size = Vector2(0, 36)
 	steam_invite.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	steam_invite.pressed.connect(func() -> void: Network.steam.invite())
 	steam_row.add_child(steam_host)
 	steam_row.add_child(steam_invite)
 	vbox.add_child(steam_row)
+	# Your online friends, one click to invite each (the user's: works without
+	# Steam's overlay, which often isn't there when run from the editor).
+	var friends_scroll := ScrollContainer.new()
+	friends_scroll.custom_minimum_size = Vector2(0, 160)
+	friends_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	friends_scroll.visible = false
+	var friends_list := VBoxContainer.new()
+	friends_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	friends_scroll.add_child(friends_list)
+	vbox.add_child(friends_scroll)
+	steam_invite.pressed.connect(func() -> void:
+		Network.steam.invite()
+		for child in friends_list.get_children():
+			child.queue_free()
+		var friends: Array[Dictionary] = Network.steam.online_friends()
+		if friends.is_empty():
+			var none := Label.new()
+			none.text = "  (no friends online)"
+			friends_list.add_child(none)
+		for friend in friends:
+			var button := Button.new()
+			button.text = "Invite %s" % friend.name
+			button.custom_minimum_size = Vector2(0, 30)
+			button.pressed.connect(func() -> void:
+				var sent: bool = Network.steam.invite_friend(friend.id)
+				button.text = ("Invited %s" if sent else "Couldn't invite %s") % friend.name
+				button.disabled = sent)
+			friends_list.add_child(button)
+		friends_scroll.visible = true)
 	var steam_note := Label.new()
 	steam_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	steam_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -509,6 +537,8 @@ func _build_coop_panel() -> void:
 		var ready: bool = Network.steam.available
 		steam_host.disabled = not ready
 		steam_invite.disabled = not (ready and Network.steam.lobby_id != 0)
+		if steam_invite.disabled:
+			friends_scroll.visible = false
 		steam_note.text = "Steam: accept a friend's invite to join them." if ready else "Steam invites are off: %s" % Network.steam.why_not
 	show_steam.call()
 	Network.steam.state_changed.connect(func() -> void: show_steam.call())
