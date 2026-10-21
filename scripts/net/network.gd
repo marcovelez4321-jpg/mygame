@@ -376,19 +376,19 @@ func _net_fear_note(text: String) -> void:
 ## Host: one of the Stalker's signs (StalkerSigns.play: the wrong silence,
 ## what it leaves behind...) shown on one player's game (`peer`), or every
 ## game (`peer` 0).
-func send_stalker_sign(peer: int, kind: StringName, at: Vector3 = Vector3.ZERO, dir: Vector3 = Vector3.ZERO) -> void:
+func send_stalker_sign(peer: int, kind: StringName, at: Vector3 = Vector3.ZERO, dir: Vector3 = Vector3.ZERO, text: String = "") -> void:
 	if peer == 0 or not is_online() or peer == multiplayer.get_unique_id():
-		StalkerSigns.play(get_tree(), kind, at, dir)
+		StalkerSigns.play(get_tree(), kind, at, dir, text)
 	if is_online():
 		if peer == 0:
-			_net_stalker_sign.rpc(kind, at, dir)
+			_net_stalker_sign.rpc(kind, at, dir, text)
 		elif peer != multiplayer.get_unique_id():
-			_net_stalker_sign.rpc_id(peer, kind, at, dir)
+			_net_stalker_sign.rpc_id(peer, kind, at, dir, text)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _net_stalker_sign(kind: StringName, at: Vector3, dir: Vector3) -> void:
-	StalkerSigns.play(get_tree(), kind, at, dir)
+func _net_stalker_sign(kind: StringName, at: Vector3, dir: Vector3, text: String) -> void:
+	StalkerSigns.play(get_tree(), kind, at, dir, text)
 
 
 ## Host: a quest's state and Grandma's hint (GrandmaQuests), here and on

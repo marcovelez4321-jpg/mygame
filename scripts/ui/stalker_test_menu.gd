@@ -8,7 +8,8 @@ extends CanvasLayer
 
 ## Events past its stunts (Stalker.test_event).
 const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits close)"], ["camp", "Camp visit"], ["eat", "Eat (nearest meat or body)"],
-		["sign", "Small sign (random)"], ["tracks", "Sign: tracks across"], ["kill", "Sign: a kill ahead"], ["peak", "Big moment now"], ["home", "Home in its lair"]]
+		["sign", "Small sign (random)"], ["tracks", "Sign: tracks across"], ["kill", "Sign: a kill ahead"], ["peak", "Big moment now"], ["home", "Home in its lair"],
+		["comeback", "Comeback (session start)"], ["forget", "Forget me (wipe its memory)"]]
 
 var _panel: PanelContainer
 var _result: Label

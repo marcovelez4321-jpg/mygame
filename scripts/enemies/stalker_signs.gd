@@ -35,8 +35,10 @@ static func bus() -> StringName:
 
 
 ## A sign shown here (Network.send_stalker_sign, on every game it's for).
-static func play(tree: SceneTree, kind: StringName, at: Vector3, dir: Vector3) -> void:
+static func play(tree: SceneTree, kind: StringName, at: Vector3, dir: Vector3, text: String = "") -> void:
 	match kind:
+		&"scratch":
+			scratch(tree, at, dir, text)
 		&"silence_on":
 			silence(tree, true)
 		&"silence_off":
@@ -243,21 +245,27 @@ static func window_shadow_off() -> void:
 	tween.tween_callback(card.queue_free)
 
 
+static var _figure_texture: ImageTexture
+
+
 ## A pane lit pale and cold from outside, the shadow of something standing
 ## against it: too tall, thin, its arms hanging past its hips, small antlers.
-static func _silhouette() -> ImageTexture:
-	if _window_texture:
+## `glow` false: the figure alone (on nothing).
+static func _silhouette(glow: bool = true) -> ImageTexture:
+	if glow and _window_texture:
 		return _window_texture
+	if not glow and _figure_texture:
+		return _figure_texture
 	var w := 64
 	var h := 96
 	var image := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	var glow := Color(0.72, 0.78, 0.84)
+	var light := Color(0.72, 0.78, 0.84)
 	for y in h:
 		for x in w:
 			var u := (x - w * 0.5) / (w * 0.5)
 			var v := (y - h * 0.45) / (h * 0.6)
-			var a := clampf(1.0 - (u * u * 0.6 + v * v * 0.5), 0.0, 1.0) * 0.85
-			image.set_pixel(x, y, Color(glow, a))
+			var a := clampf(1.0 - (u * u * 0.6 + v * v * 0.5), 0.0, 1.0) * 0.85 if glow else 0.0
+			image.set_pixel(x, y, Color(light, a))
 	var dark := Color(0.04, 0.04, 0.05, 1.0)
 	var fill := func(x0: int, y0: int, x1: int, y1: int) -> void:
 		for y in range(maxi(y0, 0), mini(y1, h)):
@@ -280,8 +288,62 @@ static func _silhouette() -> ImageTexture:
 	fill.call(mid - 5, 12, mid - 3, 20) # antlers: one stub, one with a tine
 	fill.call(mid + 3, 9, mid + 5, 19)
 	fill.call(mid + 5, 12, mid + 8, 14)
-	_window_texture = ImageTexture.create_from_image(image)
-	return _window_texture
+	var texture := ImageTexture.create_from_image(image)
+	if glow:
+		_window_texture = texture
+	else:
+		_figure_texture = texture
+	return texture
+
+
+## Your name scratched into the ground (the user's: its lair, by your bedroll)
+## -- each letter gouged on its own, crooked -- along `facing`; `facing.y`, if
+## set: a tally under it, one mark for each time it got you.
+static func scratch(tree: SceneTree, at: Vector3, facing: Vector3, text: String) -> void:
+	var world := tree.current_scene as Node3D
+	if world == null or text.is_empty():
+		return
+	var holder := Node3D.new()
+	var parent: Node = world
+	for node in tree.get_nodes_in_group(StalkerLair.GROUP) + tree.get_nodes_in_group(Camp.GROUP):
+		if (node as Node3D).global_position.distance_to(at) < 12.0:
+			parent = node
+	parent.add_child(holder)
+	holder.global_position = at
+	var flat := Vector3(facing.x, 0.0, facing.z)
+	holder.global_basis = Basis(Vector3.UP, atan2(flat.x, flat.z) if flat.length() > 0.01 else 0.0)
+	var dice := RandomNumberGenerator.new()
+	dice.seed = hash(text)
+	var letters := text.to_upper()
+	var step := 0.85
+	for i in letters.length():
+		_gouge(holder, letters[i], Vector3((i - (letters.length() - 1) * 0.5) * step, 0.03, 0.0), dice)
+	# The tally: in fives, one mark a time it got you.
+	var tally := mini(int(facing.y), 30)
+	for i in tally:
+		var group := i / 5
+		var x := (group * 1.1) - (tally / 5) * 0.55 + (i % 5) * 0.16
+		if i % 5 == 4:
+			var cross := _gouge(holder, "/", Vector3(group * 1.1 - (tally / 5) * 0.55 + 0.32, 0.03, 1.4), dice)
+			cross.scale = Vector3(1.6, 1.0, 1.0)
+		else:
+			_gouge(holder, "|", Vector3(x, 0.03, 1.4), dice)
+
+
+static func _gouge(holder: Node3D, letter: String, at: Vector3, dice: RandomNumberGenerator) -> Label3D:
+	var mark := Label3D.new()
+	mark.text = letter
+	mark.font_size = 160
+	mark.pixel_size = 0.006
+	mark.outline_size = 0
+	mark.modulate = Color(0.07, 0.05, 0.05, 0.9)
+	mark.double_sided = true
+	mark.shaded = false
+	mark.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	holder.add_child(mark)
+	mark.position = at + Vector3(dice.randf_range(-0.08, 0.08), 0.0, dice.randf_range(-0.12, 0.12))
+	mark.rotation = Vector3(-PI * 0.5, 0.0, dice.randf_range(-0.22, 0.22))
+	return mark
 
 
 ## Its camp visit (the user's: tracks and the fire out -- no totem): round

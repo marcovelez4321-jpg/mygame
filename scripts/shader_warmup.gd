@@ -25,17 +25,26 @@ const DATA_FOLDERS := ["res://weapons", "res://weapons/hand"]
 const MAX_SCENES := 200
 
 var _made: Array[Node] = []
+var _cover: ColorRect
+## The cover lifts over this (s); from your second session (StalkerMemory),
+## its silhouette stands in the fog as it does -- PHANTOM_FAR off, PHANTOM_STEP
+## closer each session (to PHANTOM_NEAR) -- once a launch (the user's).
+const COVER_FADE := 1.4
+const PHANTOM_FAR := 60.0
+const PHANTOM_NEAR := 15.0
+const PHANTOM_STEP := 8.0
+static var _phantom_shown := false
 var _at := Vector3.ZERO
 var _side := Vector3.RIGHT
 
 
 func _ready() -> void:
 	layer = 127
-	var cover := ColorRect.new()
-	cover.color = Color.BLACK
-	cover.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(cover)
+	_cover = ColorRect.new()
+	_cover.color = Color.BLACK
+	_cover.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_cover)
 	_run.call_deferred()
 
 
@@ -62,7 +71,46 @@ func _run() -> void:
 	for node in _made:
 		if is_instance_valid(node) and node.is_inside_tree():
 			node.queue_free()
-	queue_free()
+	_lift(camera)
+
+
+## The cover lifting (slowly) -- and, from the second session, it standing
+## out there in the fog for a moment as it does.
+func _lift(camera: Camera3D) -> void:
+	StalkerMemory.note_session()
+	var phantom: Node3D = null
+	if StalkerMemory.sessions() >= 2 and not _phantom_shown and is_instance_valid(camera):
+		_phantom_shown = true
+		phantom = _phantom(camera, clampf(PHANTOM_FAR - (StalkerMemory.sessions() - 2) * PHANTOM_STEP, PHANTOM_NEAR, PHANTOM_FAR))
+	var tween := create_tween()
+	tween.tween_property(_cover, "color:a", 0.0, COVER_FADE)
+	tween.tween_interval(0.25)
+	tween.tween_callback(func() -> void:
+		if is_instance_valid(phantom):
+			phantom.queue_free()
+		queue_free())
+
+
+## Its silhouette, `far` ahead of where you look, standing on the ground.
+func _phantom(camera: Camera3D, far: float) -> Node3D:
+	var world := get_tree().current_scene as Node3D
+	if world == null:
+		return null
+	var ahead := -camera.global_basis.z
+	ahead = Vector3(ahead.x, 0.0, ahead.z).normalized() if Vector2(ahead.x, ahead.z).length() > 0.01 else Vector3.FORWARD
+	var spot := camera.global_position + ahead * far
+	var hit := world.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 60.0, spot + Vector3.DOWN * 120.0, 1))
+	if hit.is_empty():
+		return null
+	var figure := Sprite3D.new()
+	figure.texture = StalkerSigns._silhouette(false)
+	figure.pixel_size = 3.8 / 96.0
+	figure.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	figure.shaded = false
+	figure.modulate = Color(0.03, 0.03, 0.04)
+	world.add_child(figure)
+	figure.global_position = (hit.position as Vector3) + Vector3.UP * 1.9
+	return figure
 
 
 ## Every effect, the way the game sets it off -- the look only (no sound, no

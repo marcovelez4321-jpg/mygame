@@ -98,6 +98,9 @@ func _process(_delta: float) -> void:
 		if (node as Node3D).global_position.distance_to(global_position) < LOOT_REACH:
 			_loot_left = false
 			_loot()
+			var stalker := get_tree().get_first_node_in_group(&"stalker")
+			if stalker:
+				stalker.call(&"scratch_name_at_lair") # (your name, and the tally)
 			return
 
 

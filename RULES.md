@@ -1948,3 +1948,11 @@ them:
   - **F9:** 'Home in its lair'.
 
 - 2026-10-21: The director's tension builds over 20 min at base pace (TENSION_TIME 1200, the user's; was 10 min).
+
+- 2026-10-21: The Stalker remembers you between sessions (the user's picks; StalkerMemory, user://stalker_memory.cfg, the host's). It reads only the clock and the Steam name, and writes nothing outside the game's own save folder.
+  - **Saved** every 60 s and on quitting or leaving the level: how many times it got you (grabs), your spin and stare habits, hunger, tension, your routes, what it's seen you do, its shot spots, where you logged off, and your last camp slept at.
+  - **Time away:** 24 h+, it's starving (crosses fire) and furious, tension full, and a big moment comes within ~3 min. Under 4 h, tension starts at least 80%.
+  - **The comeback** (from the 2nd session), one at random: its tracks closing on where you logged off; waiting upright at your last camp as you come within 60 m (then scrambling off at 24 m, like 'In your path'); three knocks at Grandma's door if you're inside ~25 s in (else its breathing); its breathing right behind you as you wake (~3.5 s in).
+  - **Your name:** your Steam name (StalkerMemory.player_name; none without Steam) is scratched letter by letter into the ground of its lair, with a tally of the times it got you (in fives, up to 30), the first time someone comes near the lair each session. After a camp visit it's scratched by your bedroll. Both use the new 'scratch' sign (StalkerSigns.scratch, Label3D gouges); Network.send_stalker_sign now carries words.
+  - **Loading cover:** ShaderWarmup now lifts over 1.4 s. From your 2nd session (each game counts its own), its silhouette stands in the fog ahead as it lifts: 60 m off, 8 m closer each session, down to 15 m. Once a launch.
+  - **F9:** 'Comeback' and 'Forget me (wipe its memory)'.

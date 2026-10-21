@@ -222,6 +222,29 @@ var _spins := 0
 var _stares := 0
 var _grudge := {}
 var _bait_look := Vector3.ZERO
+## IT REMEMBERS YOU BETWEEN SESSIONS (the user's, 2026-10-21; StalkerMemory,
+## the host's): what it's learnt is saved (every SAVE_EVERY, and on quitting)
+## and back next time. TIME AWAY (the user's: hungry and bold): gone
+## AWAY_LONG or more -- starving and furious, a big moment within a few
+## minutes; back within AWAY_SHORT -- tension high from the start, it never
+## left. THE COMEBACK (from your second session): one of four, at random --
+## its tracks leading to where you logged off; waiting at your last camp when
+## you come near it; three knocks at Grandma's door if you're inside; its
+## breathing right behind you as you wake. YOUR NAME (Steam's) scratched in
+## its lair with a tally of the times it got you, and by your bedroll after it
+## came to your camp.
+const SAVE_EVERY := 60.0
+const AWAY_LONG := 24.0
+const AWAY_SHORT := 4.0
+const COMEBACK_CAMP := 60.0
+var _got_you := 0
+var _logoff := Vector3.INF
+var _last_camp := Vector3.INF
+var _comeback := &""
+var _comeback_left := 0.0
+var _save_left := SAVE_EVERY
+var _memory_loaded := false
+
 ## ITS LAIR (the user's: the flooded depths -- StalkerLair, every game's own).
 ## HOME: driven off, it goes home to heal (if nobody's near the lair); and
 ## whenever someone comes within LAIR_NOTICE of it, LAIR_CHANCE it's simply
@@ -688,6 +711,138 @@ func _ready() -> void:
 	_build_hitboxes()
 	_last_position = global_position
 	_find_lair.call_deferred()
+	if not NetEntities.is_puppet(self) and (not Network.is_online() or multiplayer.is_server()):
+		_memory_load.call_deferred()
+
+
+## What it remembers of you from before (StalkerMemory), and how long you've
+## been gone.
+func _memory_load() -> void:
+	StalkerMemory.note_session()
+	_got_you = int(StalkerMemory.get_value("got_you", 0))
+	_spins = int(StalkerMemory.get_value("spins", 0))
+	_stares = int(StalkerMemory.get_value("stares", 0))
+	hunger = float(StalkerMemory.get_value("hunger", hunger))
+	tension = float(StalkerMemory.get_value("tension", tension))
+	_route_cells = StalkerMemory.get_value("routes", {})
+	_seen_doing = StalkerMemory.get_value("seen_doing", {})
+	_logoff = StalkerMemory.get_value("logoff", Vector3.INF)
+	_last_camp = StalkerMemory.get_value("last_camp", Vector3.INF)
+	_shot_spots.clear()
+	for spot: Vector3 in StalkerMemory.get_value("shot_spots", []):
+		_shot_spots.append([spot, Time.get_ticks_msec()])
+	var away := StalkerMemory.hours_away()
+	if away >= AWAY_LONG:
+		hunger = 1.0 # (starving: it crosses fire)
+		_furious_left = FURIOUS_TIME
+		tension = 1.0
+		_since_big = BIG_GAP * 0.7 # (a big moment within a few minutes)
+	elif away >= 0.0 and away < AWAY_SHORT:
+		tension = maxf(tension, 0.8) # (it never left)
+	if StalkerMemory.sessions() >= 2:
+		var ways: Array[StringName] = [&"knock", &"breath"]
+		if _logoff.is_finite():
+			ways.append(&"tracks")
+		if _last_camp.is_finite():
+			ways.append(&"camp")
+		_comeback = ways[randi() % ways.size()]
+		_comeback_left = {&"tracks": 5.0, &"camp": 1200.0, &"knock": 25.0, &"breath": 3.5}[_comeback]
+	_memory_loaded = true
+
+
+## What it's learnt, kept (StalkerMemory).
+func _memory_save() -> void:
+	if not _memory_loaded:
+		return
+	var me := PlayerMovement.local_player(get_tree())
+	StalkerMemory.set_value("last_end", Time.get_unix_time_from_system())
+	if me and not me.is_dead():
+		StalkerMemory.set_value("logoff", me.global_position)
+	StalkerMemory.set_value("last_camp", _last_camp)
+	StalkerMemory.set_value("got_you", _got_you)
+	StalkerMemory.set_value("spins", _spins)
+	StalkerMemory.set_value("stares", _stares)
+	StalkerMemory.set_value("hunger", hunger)
+	StalkerMemory.set_value("tension", tension)
+	StalkerMemory.set_value("routes", _route_cells)
+	StalkerMemory.set_value("seen_doing", _seen_doing)
+	var spots: Array = []
+	for spot: Array in _shot_spots:
+		spots.append(spot[0])
+	StalkerMemory.set_value("shot_spots", spots)
+	StalkerMemory.save()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE:
+		_memory_save()
+
+
+## The comeback, once a session: its time come (and its place, for the camp).
+func _comeback_tick(delta: float) -> void:
+	if _comeback == &"":
+		return
+	_comeback_left -= delta
+	var players := get_tree().get_nodes_in_group("player").filter(func(node: Node) -> bool:
+		return node is PlayerMovement and not (node as PlayerMovement).is_dead())
+	if players.is_empty():
+		return
+	var p := players[0] as PlayerMovement
+	match _comeback:
+		&"tracks":
+			if _comeback_left <= 0.0:
+				# Two lines of its tracks, closing on where you logged off.
+				for side: float in [-1.0, 1.0]:
+					var way := Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU)
+					Network.send_stalker_sign(0, &"tracks", _logoff + way * 9.0 * side, way)
+				_comeback = &""
+		&"camp":
+			for node in players:
+				var near := node as PlayerMovement
+				if near.global_position.distance_to(_last_camp) < COMEBACK_CAMP and (state == State.STALK or state == State.WAIT or state == State.HUNT):
+					var hit := _ground_at(_last_camp + Vector3(2.0, 3.0, 0.0))
+					if not hit.is_empty() and _place(hit.position, hit.normal, near.global_position - (hit.position as Vector3), true):
+						_stunt_target = near
+						_stunt = Stunt.PATH
+						_stunt_phase = 0
+						_stunt_seen = false
+						upright = true
+						_stunt_left_set(90.0) # (waiting at your camp; within reach it scrambles off)
+						_comeback = &""
+						return
+			if _comeback_left <= 0.0:
+				_comeback = &""
+		&"knock":
+			if _comeback_left > 0.0:
+				return
+			var house := get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
+			if house and house.has_inside(p.global_position):
+				if state == State.AWAY:
+					_turn_up()
+				state = State.STALK
+				_forced_kind = Stunt.KNOCK
+				_pending_target = p
+				_pending_left = SILENCE_LEAD
+				_silence(p.get_multiplayer_authority())
+				_comeback = &""
+			else:
+				_comeback = &"breath" # (not in the house: its breathing instead)
+		&"breath":
+			if _comeback_left > 0.0:
+				return
+			var hit := _ground_at(p.global_position + p.head.global_basis.z * randf_range(6.0, 8.0) + Vector3.UP * 3.0)
+			if not hit.is_empty() and _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+				state = State.WAIT
+				_state_left = 8.0
+			_comeback = &""
+
+
+## Your name scratched in its lair, with the tally (StalkerLair: the first
+## time someone comes near it this session).
+func scratch_name_at_lair() -> void:
+	var who := StalkerMemory.player_name()
+	if _lair_at.is_finite() and not who.is_empty():
+		Network.send_stalker_sign(0, &"scratch", _lair_at + Vector3(0.0, 0.0, -3.0), Vector3(1.0, _got_you, 0.0), who)
 
 
 ## Its lair: found from the Stack's shape (every game the same), built here.
@@ -1060,6 +1215,7 @@ func _lunge_at(p: PlayerMovement) -> void:
 
 
 func _grab(p: PlayerMovement) -> void:
+	_got_you += 1 # (the tally in its lair)
 	state = State.DRAG
 	_state_left = DRAG_TIME
 	_freed_by_others = 0.0
@@ -1344,6 +1500,8 @@ func _to_trail_end(points: PackedVector3Array) -> void:
 ## mid-stunt, fleeing, gone or in someone's view (it never vanishes in sight).
 func slept(p: PlayerMovement, bed: Node3D = null) -> void:
 	_noticed(p, &"sleep")
+	if bed:
+		_last_camp = bed.global_position
 	if bed and randf() < CAMP_VISIT_CHANCE:
 		camp_visit(bed)
 	_slept_on_trail(p)
@@ -1352,6 +1510,10 @@ func slept(p: PlayerMovement, bed: Node3D = null) -> void:
 ## It came while they slept: its signs round `bed` (every game).
 func camp_visit(bed: Node3D) -> void:
 	Network.send_stalker_sign(0, &"camp_visit", bed.global_position, bed.global_basis.z)
+	var who := StalkerMemory.player_name()
+	if not who.is_empty():
+		# Your name, scratched by your bed.
+		Network.send_stalker_sign(0, &"scratch", bed.global_position + bed.global_basis.x * 1.8, bed.global_basis.z, who)
 
 
 func _slept_on_trail(p: PlayerMovement) -> void:
@@ -1905,6 +2067,18 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 			return "Small sign" if _small_sign() else "No small sign fit here"
 		&"tracks", &"kill":
 			return "Sign: %s" % event if _small_sign(event) else "Didn't fit here"
+		&"comeback":
+			var ways: Array[StringName] = [&"knock", &"breath"]
+			if _logoff.is_finite():
+				ways.append(&"tracks")
+			if _last_camp.is_finite():
+				ways.append(&"camp")
+			_comeback = ways[randi() % ways.size()]
+			_comeback_left = 2.0 if _comeback != &"camp" else 1200.0
+			return "Comeback: %s%s" % [_comeback, " (go near your last camp)" if _comeback == &"camp" else ""]
+		&"forget":
+			StalkerMemory.forget()
+			return "It's forgotten you (its saved memory wiped)"
 		&"home":
 			if not _lair_at.is_finite():
 				return "No lair (no Stack here)"
@@ -2012,6 +2186,11 @@ func _big_allowed() -> bool:
 func _brain_tick(delta: float) -> void:
 	_memory_tick(delta)
 	_fire_tick(delta)
+	_comeback_tick(delta)
+	_save_left -= delta
+	if _save_left <= 0.0:
+		_save_left = SAVE_EVERY
+		_memory_save()
 	hunger = minf(hunger + delta / HUNGER_TIME, 1.0)
 	curiosity = maxf(curiosity - delta / CURIOUS_FADE, 0.0)
 	if _wounded_left > 0.0:
@@ -2156,7 +2335,7 @@ func _avoid_push(at: Vector3) -> Vector3:
 
 
 func _noticed(p: PlayerMovement, what: StringName) -> void:
-	var key := "%d:%s" % [p.get_instance_id(), what]
+	var key := String(what) # (kept between sessions: what it's seen you do)
 	if _seen_doing.has(key):
 		return
 	_seen_doing[key] = true
