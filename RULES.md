@@ -1946,3 +1946,5 @@ them:
   - **Inside:** 7 bone piles in blood, 9 torn clothes, 3 climbers' packs (BackpackView's pack). Loot is the host's, made when a player first comes within 150 m: 2 ammo boxes, pills, 2-3 scrap, 1-2 silk, and a key half the time.
   - **HOME (new state):** driven off, it goes home for its AWAY time if nobody's within 150 m of the lair. Coming within 120 m of the lair (once an approach), 35% of the time it's there. Either way it stands upright, still, facing you, and doesn't hide. Within 30 m it rises in warning (1.5 s) and attacks (a lunge). A visit ends after 3 min, or once everyone's past 150 m.
   - **F9:** 'Home in its lair'.
+
+- 2026-10-21: The director's tension builds over 20 min at base pace (TENSION_TIME 1200, the user's; was 10 min).

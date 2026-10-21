@@ -136,7 +136,7 @@ const STANDING_HEIGHT := 1.9 * SIZE
 ## and once it's full it stays full: the strike (stage 3) can come.
 ## THE DIRECTOR (the user's, 2026-10-21: no timer -- Left 4 Dead's AI
 ## Director, Alien: Isolation's menace): how much it may show itself now.
-##   BUILD -- TENSION rises (TENSION_TIME at its base pace; faster in a fight,
+##   BUILD -- TENSION rises (TENSION_TIME, 20 min, at its base pace; faster in a fight,
 ##   moving fast, with raw meat on someone (it smells it), the fear up); small
 ##   SIGNS of it keep coming -- never more than SIGN_GAP apart (rolled; the
 ##   user's: liberal for now, narrowed later), sooner as tension rises: its
@@ -151,7 +151,7 @@ enum Phase { BUILD, PEAK, RELAX }
 const SIGN_GAP := Vector2(240.0, 1200.0)
 const BIG_GAP := 600.0
 const RELAX_TIME := 60.0
-const TENSION_TIME := 600.0
+const TENSION_TIME := 1200.0 # (the user's: 20 min at its base pace; was 10)
 ## ITS BRAIN (the user's, 2026-10-21): drives and moods choosing which stunt
 ## fits -- the director says when, the situation what can happen, the brain
 ## what it wants. It never tires (the user's: no sleep).
