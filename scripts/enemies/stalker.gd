@@ -25,7 +25,7 @@ extends AnimatableBody3D
 ## (NetEntities: its transform carries the surface it's on), and works the
 ## body out from that.
 
-enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT, EAT }
+enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT, EAT, HOME }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
 enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW, PACER, PATH, CROSS, GRAPPLE, SNATCH, FIGHT_WATCH, FALLEN, AMONG }
 
@@ -222,6 +222,23 @@ var _spins := 0
 var _stares := 0
 var _grudge := {}
 var _bait_look := Vector3.ZERO
+## ITS LAIR (the user's: the flooded depths -- StalkerLair, every game's own).
+## HOME: driven off, it goes home to heal (if nobody's near the lair); and
+## whenever someone comes within LAIR_NOTICE of it, LAIR_CHANCE it's simply
+## there (the user's) -- upright, still, watching, ready. Within LAIR_DEFEND
+## of it, it rises in warning (LAIR_WARN) and attacks. A visit ends HOME_VISIT
+## on, or once they're past LAIR_LEAVE.
+const LAIR_NOTICE := 120.0
+const LAIR_LEAVE := 150.0
+const LAIR_CHANCE := 0.35
+const LAIR_DEFEND := 30.0
+const LAIR_WARN := 1.5
+const HOME_VISIT := 180.0
+var _lair_at := Vector3.INF
+var _near_lair := {}
+var _home_warn := -1.0
+var _home_healing := false
+
 ## FIRE (the user's: it hates it -- wendigo lore): it keeps FIRE_AVOID from
 ## anything burning (barrels, campfires: FireSource), places nothing there, and
 ## won't strike at anyone by one; closer than FIRE_BURN it's hurt (FIRE_DPS,
@@ -670,6 +687,20 @@ func _ready() -> void:
 	_build_body()
 	_build_hitboxes()
 	_last_position = global_position
+	_find_lair.call_deferred()
+
+
+## Its lair: found from the Stack's shape (every game the same), built here.
+func _find_lair() -> void:
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_lair_at = StalkerLair.find_spot(get_tree())
+	if not _lair_at.is_finite() or get_tree().get_first_node_in_group(StalkerLair.GROUP):
+		return
+	var lair := StalkerLair.new()
+	lair.name = "StalkerLair"
+	get_tree().current_scene.add_child(lair)
+	lair.global_position = _lair_at
 
 
 # ---- Co-op (NetEntities: a script-made one) ------------------------------------------
@@ -798,7 +829,7 @@ func _think(delta: float) -> void:
 	_silence_tick(delta)
 	_brain_tick(delta)
 	_director_tick(delta)
-	if state != State.STUNT and (upright or head_averted):
+	if state != State.STUNT and state != State.HOME and (upright or head_averted):
 		upright = false # (a stunt cut short: back down on all fours)
 		head_averted = false
 	if state == State.APPROACH and is_instance_valid(_victim) and _cut_off_tick(delta, _victim):
@@ -810,11 +841,11 @@ func _think(delta: float) -> void:
 	# it's cooling down after a drag).
 	var near := _nearest_player()
 	_no_grab_left = maxf(_no_grab_left - delta, 0.0)
-	if near and _cooldown_left <= 0.0 and _no_grab_left <= 0.0 and state != State.STUNT and near.drag == null and near.global_position.distance_to(global_position) < GRAB_RANGE:
+	if near and _cooldown_left <= 0.0 and _no_grab_left <= 0.0 and state != State.STUNT and state != State.HOME and near.drag == null and near.global_position.distance_to(global_position) < GRAB_RANGE:
 		_lunge_at(near)
 		return
 	# Rushed at: off flat out to cover.
-	if near and state != State.HIDE and state != State.STUNT:
+	if near and state != State.HIDE and state != State.STUNT and state != State.HOME:
 		var to_me := global_position - near.global_position
 		var closing := Vector3(near.velocity.x, 0.0, near.velocity.z).dot(_flat(to_me))
 		if to_me.length() < RUSHED_RANGE and closing > RUSHED_SPEED:
@@ -826,7 +857,7 @@ func _think(delta: float) -> void:
 		var seen := _seen()
 		if state == State.STUNT:
 			_stunt_look(seen)
-		elif seen and state != State.HIDE and state != State.SPOTTED:
+		elif seen and state != State.HIDE and state != State.SPOTTED and state != State.HOME:
 			state = State.SPOTTED
 			_say(&"spotted", false, 0.6)
 			# (Full fear: no stare -- it bolts, frantic, the moment it's seen.)
@@ -879,6 +910,8 @@ func _think(delta: float) -> void:
 			_hunt_tick(delta)
 		State.EAT:
 			_eat_tick(delta)
+		State.HOME:
+			_home_tick(delta)
 		State.SPOTTED:
 			# Dead still a beat, staring back -- then it scrambles off.
 			_desired = Vector3.ZERO
@@ -1661,6 +1694,52 @@ func _go_away() -> void:
 	_hurt = 0.0
 	_velocity = Vector3.ZERO
 	global_position = Vector3(global_position.x, AWAY_DEPTH, global_position.z)
+	# Home to heal, if nobody's by its lair.
+	if _lair_at.is_finite() and not _anyone_within(_lair_at, LAIR_LEAVE):
+		_go_home(_state_left, true)
+
+
+## Home in its lair: upright, still, watching. `healing`: driven off (gone the
+## AWAY time); else a visit.
+func _go_home(time: float, healing: bool) -> void:
+	_place(_lair_at, Vector3.UP, Vector3.FORWARD, false)
+	state = State.HOME
+	_state_left = time
+	_home_healing = healing
+	_home_warn = -1.0
+	upright = true
+
+
+func _anyone_within(at: Vector3, reach: float) -> bool:
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p and not p.is_dead() and p.global_position.distance_to(at) < reach:
+			return true
+	return false
+
+
+## At home: facing whoever's nearest; one within LAIR_DEFEND: it rises in
+## warning, then attacks. Its time up (or a visit, everyone gone): back out.
+func _home_tick(delta: float) -> void:
+	_velocity = Vector3.ZERO
+	_desired = Vector3.ZERO
+	upright = true
+	var near := _nearest_player()
+	if near:
+		_heading = _flat(near.global_position - global_position)
+	if near and near.global_position.distance_to(global_position) < LAIR_DEFEND and near.drag == null:
+		if _home_warn < 0.0:
+			_home_warn = LAIR_WARN
+			_say(&"spotted", true)
+			_moment(true)
+		_home_warn -= delta
+		if _home_warn <= 0.0:
+			upright = false
+			_lunge_at(near) # (it defends its home)
+		return
+	if _state_left <= 0.0 or (not _home_healing and not _anyone_within(global_position, LAIR_LEAVE)):
+		upright = false
+		_turn_up()
 
 
 ## Back, somewhere out of sight RELOCATE_TO from one of the players (behind
@@ -1826,6 +1905,11 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 			return "Small sign" if _small_sign() else "No small sign fit here"
 		&"tracks", &"kill":
 			return "Sign: %s" % event if _small_sign(event) else "Didn't fit here"
+		&"home":
+			if not _lair_at.is_finite():
+				return "No lair (no Stack here)"
+			_go_home(HOME_VISIT, false)
+			return "Home in its lair (the flooded depths), watching"
 		&"peak":
 			_since_big = BIG_GAP
 			tension = 1.0
@@ -1963,6 +2047,7 @@ func _brain_tick(delta: float) -> void:
 ## Its memory, each tick: old shot spots forgotten, the routes counted, the
 ## camps watched, grudges fading.
 func _memory_tick(delta: float) -> void:
+	_lair_tick()
 	var now := Time.get_ticks_msec()
 	_shot_spots = _shot_spots.filter(func(spot: Array) -> bool: return now - int(spot[1]) < int(SHOT_MEMORY * 1000.0))
 	for peer: int in _grudge.keys():
@@ -1994,6 +2079,24 @@ func _memory_tick(delta: float) -> void:
 					if bed:
 						Network.send_stalker_sign(0, &"tracks", bed.global_position, Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU))
 						_presence()
+
+
+## Someone coming up on its lair (within LAIR_NOTICE, once an approach):
+## LAIR_CHANCE it's there.
+func _lair_tick() -> void:
+	if not _lair_at.is_finite():
+		return
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p == null or p.is_dead():
+			continue
+		var gap := p.global_position.distance_to(_lair_at)
+		if gap > LAIR_LEAVE:
+			_near_lair[p] = false
+		elif gap < LAIR_NOTICE and not _near_lair.get(p, false):
+			_near_lair[p] = true
+			if (state == State.STALK or state == State.WAIT or state == State.HUNT) and randf() < LAIR_CHANCE:
+				_go_home(HOME_VISIT, false)
 
 
 ## Well-trodden: a square of the land they've come through TRODDEN times.

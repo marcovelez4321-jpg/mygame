@@ -1940,3 +1940,9 @@ them:
   - **Grudges:** damage per attacker, fading over 15 min. Over 50, that player is picked for 60% of its stunts and is the one the full-fear strike goes for.
   - **Fire:** it keeps 15 m from anything burning (FireSource: barrels, campfires), places no stunt within 15 m of one, and won't strike at someone by one. Within 3 m it burns at 80 damage/s (it can be driven off). Starving (hunger full), it crosses fire anyway.
   - **F9:** the readout shows its memory.
+
+- 2026-10-21: The Stalker's lair (the user's: the flooded depths; bones and remains, climbers' gear, loot; it's there when driven off, and by chance whenever you come).
+  - **Where:** StalkerLair, on top of a half-sunk block in the Stack's drowned hall: the one furthest from the shaft, found from the Stack's shape so every game builds the same nest.
+  - **Inside:** 7 bone piles in blood, 9 torn clothes, 3 climbers' packs (BackpackView's pack). Loot is the host's, made when a player first comes within 150 m: 2 ammo boxes, pills, 2-3 scrap, 1-2 silk, and a key half the time.
+  - **HOME (new state):** driven off, it goes home for its AWAY time if nobody's within 150 m of the lair. Coming within 120 m of the lair (once an approach), 35% of the time it's there. Either way it stands upright, still, facing you, and doesn't hide. Within 30 m it rises in warning (1.5 s) and attacks (a lunge). A visit ends after 3 min, or once everyone's past 150 m.
+  - **F9:** 'Home in its lair'.

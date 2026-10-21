@@ -381,13 +381,26 @@ static func bones(tree: SceneTree, at: Vector3) -> void:
 	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3.UP * 2.0, at + Vector3.DOWN * 3.0, 1))
 	var ground: Vector3 = (hit.position as Vector3) if not hit.is_empty() else at
 	BloodFX.spawn_splatter(world, ground, Vector3.UP, 1.4, Color(0.18, 0.02, 0.02))
+	var dice := RandomNumberGenerator.new()
+	dice.randomize()
+	var pile := bone_pile(dice)
+	world.add_child(pile)
+	pile.global_position = ground
+	pile.global_basis = Basis(Vector3.UP, randf() * TAU)
+	tree.create_timer(BONES_LAST).timeout.connect(func() -> void:
+		if is_instance_valid(pile):
+			pile.queue_free())
+
+
+## A pile of bones (a few long ones, a curve of ribs off a spine), from `dice`.
+static func bone_pile(dice: RandomNumberGenerator) -> MeshInstance3D:
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in 4: # long bones, scattered
-		var a := randf() * TAU
-		var from := Vector3(randf_range(-0.4, 0.4), 0.04, randf_range(-0.4, 0.4))
-		_bone_stick(tool, from, from + Vector3(cos(a), 0.0, sin(a)) * randf_range(0.35, 0.55), 0.03)
-	var spine := Vector3(randf_range(-0.2, 0.2), 0.05, randf_range(-0.2, 0.2))
+		var a := dice.randf() * TAU
+		var from := Vector3(dice.randf_range(-0.4, 0.4), 0.04, dice.randf_range(-0.4, 0.4))
+		_bone_stick(tool, from, from + Vector3(cos(a), 0.0, sin(a)) * dice.randf_range(0.35, 0.55), 0.03)
+	var spine := Vector3(dice.randf_range(-0.2, 0.2), 0.05, dice.randf_range(-0.2, 0.2))
 	for r in 5: # a curve of ribs off a spine
 		var base := spine + Vector3(0.0, 0.0, r * 0.07)
 		for side: float in [-1.0, 1.0]:
@@ -400,12 +413,7 @@ static func bones(tree: SceneTree, at: Vector3) -> void:
 	look.roughness = 0.8
 	look.cull_mode = BaseMaterial3D.CULL_DISABLED
 	pile.material_override = look
-	world.add_child(pile)
-	pile.global_position = ground
-	pile.global_basis = Basis(Vector3.UP, randf() * TAU)
-	tree.create_timer(BONES_LAST).timeout.connect(func() -> void:
-		if is_instance_valid(pile):
-			pile.queue_free())
+	return pile
 
 
 static func _bone_stick(tool: SurfaceTool, from: Vector3, to: Vector3, radius: float) -> void:
