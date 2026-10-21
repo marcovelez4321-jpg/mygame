@@ -25,6 +25,80 @@ const VOICE_SPEED := 1.25
 
 static var _rattles: Array[AudioStreamWAV] = []
 static var _voices: StalkerVoices
+static var _breath: AudioStreamWAV
+static var _knock: AudioStreamWAV
+const CHEWS := [preload("res://audio/sfx/body/bone_crunch_01.wav"), preload("res://audio/sfx/body/bone_crunch_02.wav")]
+
+
+## The user's clip for `slot` (StalkerVoices), or null.
+static func clip_for(slot: StringName) -> AudioStream:
+	if _voices == null and ResourceLoader.exists(VOICES):
+		_voices = load(VOICES) as StalkerVoices
+	var event: SoundEvent = _voices.event(slot) if _voices else null
+	return event.pick_clip() if event else null
+
+
+## Its breathing, a loop (the user's "breathing" clip, else made here): slow,
+## wet -- a long drawn breath in, a held beat, a ragged rattling breath out.
+static func breathing() -> AudioStream:
+	var clip := clip_for(&"breathing")
+	if clip:
+		return clip
+	if _breath:
+		return _breath
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 6601
+	var seconds := 4.6
+	var frames := int(RATE * seconds)
+	var samples := PackedFloat32Array()
+	samples.resize(frames)
+	var low := 0.0
+	for i in frames:
+		var t := float(i) / RATE
+		var noise := dice.randf_range(-1.0, 1.0)
+		var level := 0.0
+		var cutoff := 0.05
+		if t < 1.7: # in: rising, hissing
+			var u := t / 1.7
+			level = sin(u * PI) * 0.8
+			cutoff = lerpf(0.04, 0.12, u)
+		elif t > 2.0 and t < 3.9: # out: lower, rougher, wet clicks in it
+			var u := (t - 2.0) / 1.9
+			level = sin(u * PI) * (0.9 + 0.3 * sin(t * 37.0))
+			cutoff = lerpf(0.09, 0.03, u)
+			if dice.randf() < 0.0025:
+				noise += dice.randf_range(2.0, 4.0) * (1.0 if dice.randf() < 0.5 else -1.0)
+		low += (noise - low) * cutoff
+		samples[i] = low * level
+	_breath = _wav(samples)
+	_breath.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_breath.loop_end = frames
+	return _breath
+
+
+## Three slow knocks on wood (the user's "knock" clip, else made here).
+static func knocks() -> AudioStream:
+	var clip := clip_for(&"knock")
+	if clip:
+		return clip
+	if _knock:
+		return _knock
+	var frames := int(RATE * 3.0)
+	var samples := PackedFloat32Array()
+	samples.resize(frames)
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 1313
+	for knock in 3:
+		var start := int(RATE * (0.1 + knock * 0.95))
+		for k in int(RATE * 0.25):
+			var i := start + k
+			if i >= frames:
+				break
+			var s := float(k) / RATE
+			var decay := exp(-s * 28.0)
+			samples[i] += (sin(TAU * 95.0 * s) * 0.9 + sin(TAU * 210.0 * s) * 0.4 + dice.randf_range(-1.0, 1.0) * 0.5 * exp(-s * 120.0)) * decay
+	_knock = _wav(samples)
+	return _knock
 
 
 ## The `slot`'s sound (StalkerVoices) at `at`; an empty slot falls back to
@@ -54,6 +128,10 @@ static func voice(slot: StringName, at: Vector3, world: Node, volume_db: float =
 			play(Kind.SHRIEK, at, world)
 		&"help_scream":
 			play(Kind.HELP, at, world)
+		&"knock":
+			_at(knocks(), at, world, 6.0, 1.0)
+		&"chewing":
+			_at(CHEWS[randi() % CHEWS.size()], at, world, -2.0, randf_range(0.8, 1.0))
 
 
 ## Out in the open: the call itself, dry close by and muffled the further

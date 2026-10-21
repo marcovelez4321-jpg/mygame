@@ -73,6 +73,14 @@ extends Resource
 ## Leaping between towers, far off.
 @export var leap: SoundEvent
 
+@export_group("The wendigo")
+## Its breathing when it's close and unseen (looped).
+@export var breathing: SoundEvent
+## Three slow knocks at Grandma's front door.
+@export var knock: SoundEvent
+## Eating meat or a body it found lying.
+@export var chewing: SoundEvent
+
 
 ## The slot called `slot` (null if there's none).
 func event(slot: StringName) -> SoundEvent:

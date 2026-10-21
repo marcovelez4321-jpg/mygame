@@ -350,6 +350,14 @@ const FROSTBITE := Color(0.3, 0.29, 0.38)
 const SKIN_ROUGHNESS := 0.42
 const ANTLER_COLOR := Color(0.78, 0.74, 0.64)
 
+## Its breathing (the user's, 2026-10-21): within BREATH_RANGE of you and out
+## of your sight, slow and wet from where it is, louder the closer -- each
+## game for its own camera.
+const BREATH_RANGE := 15.0
+const BREATH_DB := 2.0
+var _breath: AudioStreamPlayer3D
+var _breath_level := 0.0
+
 ## Where the eyes sit on the head bone (a person's, scaled to its size).
 const EYE_FORWARD := 0.09
 const EYE_UP := 0.08
@@ -2198,6 +2206,10 @@ func _process(delta: float) -> void:
 		if _skitter:
 			_skitter.queue_free()
 			_skitter = null
+		if _breath:
+			_breath.queue_free()
+			_breath = null
+			_breath_level = 0.0
 		return
 	var moved := (global_position - _last_position) / maxf(delta, 0.0001)
 	_last_position = global_position
@@ -2205,6 +2217,7 @@ func _process(delta: float) -> void:
 		_smooth_velocity = _smooth_velocity.lerp(moved, 1.0 - exp(-15.0 * delta))
 	var camera := get_viewport().get_camera_3d()
 	_update_skitter(camera)
+	_update_breath(camera, delta)
 	if camera and camera.global_position.distance_to(global_position) > 90.0:
 		_update_eyes() # (seen from any way off)
 		return # too far to make out its limbs
@@ -2306,6 +2319,39 @@ func _update_skitter(camera: Camera3D) -> void:
 	var level := clampf(_smooth_velocity.length() / CRAWL, 0.0, 1.0)
 	_skitter.volume_db = SpiderSound.SKITTER_DB + 2.0 + (4.0 if state == State.HUNT else 0.0) + linear_to_db(maxf(level, 0.0005))
 	_skitter.stream_paused = level < 0.05
+
+
+## Its breathing on your screen's camera: close and unseen, fading in; in
+## sight, or off away, fading out.
+func _update_breath(camera: Camera3D, delta: float) -> void:
+	var want := 0.0
+	if camera:
+		var at := global_position + global_basis.y * BODY_HEIGHT
+		var distance := camera.global_position.distance_to(at)
+		if distance < BREATH_RANGE:
+			var in_view := camera.is_position_in_frustum(at) and _ray(camera.global_position, at).is_empty()
+			if not in_view:
+				want = 1.0 - smoothstep(BREATH_RANGE * 0.5, BREATH_RANGE, distance) * 0.7
+	_breath_level = move_toward(_breath_level, want, delta * 0.6)
+	if _breath_level <= 0.001:
+		if _breath:
+			_breath.queue_free()
+			_breath = null
+		return
+	if _breath == null:
+		_breath = AudioStreamPlayer3D.new()
+		_breath.stream = StalkerSound.breathing()
+		_breath.bus = StalkerSigns.bus()
+		_breath.unit_size = 3.0
+		_breath.max_distance = BREATH_RANGE * 1.3
+		_breath.attenuation_filter_cutoff_hz = 20500.0
+		_breath.finished.connect(func() -> void: # (a user's clip that doesn't loop: again)
+			if is_instance_valid(_breath):
+				_breath.play())
+		_visual.add_child(_breath)
+		_breath.position = Vector3.UP * BODY_HEIGHT
+		_breath.play(randf() * 2.0)
+	_breath.volume_db = BREATH_DB + linear_to_db(maxf(_breath_level, 0.0005))
 
 
 ## Hands and feet: planted till the body's carried them too far, then a step

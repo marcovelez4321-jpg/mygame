@@ -1865,3 +1865,5 @@ them:
   - **Stretched:** its joints are moved apart, so the skin stretches without the limbs fattening. Arms 1.4x, fingers 1.5x, legs 1.15x, and the waist 20% thinner (Spine squeezed, Spine2 set back).
   - **Skin:** grey-blue (SKIN_TINT), a little glossy (roughness 0.42). Each vertex is shaded by its hand and foot bone weights, so the hands and feet are darkest (FROSTBITE) and the forearms and shins a little.
   - **Antlers:** small broken ones out of the skull on a BoneAttachment3D, bone-coloured. The right has one tine; the left is snapped half-grown and ragged.
+
+- 2026-10-21: Wendigo Stalker, chunk 3: breathing (the user's: when it's close). Within 15 m of your camera and out of your sight, its slow wet breathing fades in from where it is (louder closer), and fades out in sight or further off. Each game handles this for its own camera. New StalkerVoices slots: breathing, knock and chewing. The fallbacks are a generated breath loop, three generated knocks, and the bone_crunch clips.
