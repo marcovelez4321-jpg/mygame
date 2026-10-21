@@ -405,6 +405,28 @@ const WINDOW_HOLD := 15.0
 var _house: GrandmasHouse
 var _window_at := Vector3.INF
 
+## HOLDING (the user's, 2026-10-21: hand-accurate, immersive): its right arm
+## really reaches (IK) for what it takes, and what it's got it holds in that
+## hand -- a body by the HEAD (the ragdoll's head pulled to the hand, the rest
+## dragging loose behind it) or a small thing whole. Ragdolls are each game's
+## own, so every game holds its own copy: the host names the body by where it
+## is (Network.send_stalker_sign "reach" / "hold" / "let_go"), and net_state
+## says it's still reaching / holding. GRIP: where the hand holds it, in its
+## own space (by its hip, the body trailing), times SIZE.
+const HOLD_BIT := 1 << 13
+const REACH_BIT := 1 << 14
+const REACH_TIME := 0.3
+const GRIP := Vector3(0.5, 0.3, 0.35)
+const HOLD_PULL := 10.0
+var holding := false
+var reaching := false
+var _held: Node3D
+var _reach: Node3D
+var _reach_t := 0.0
+## Clients: a body named before its puppet's here -- looked for a moment.
+var _sign_pending := {}
+var _grip_limb := -1
+
 ## HUNGER (the user's, 2026-10-21: it draws it, and hunts): raw meat on a
 ## player and it stalks them MEAT_CLOSER as far back (and stunts come twice as
 ## often: _meat_carrier); rotten meat on one and it hunts them straight down
@@ -498,13 +520,20 @@ func net_restore(_data: Dictionary) -> void:
 
 ## The fear meter, sent with each update (for the HUD's meter everywhere).
 func net_state() -> int:
-	return int(round(fear * 1000.0)) | (UPRIGHT_BIT if upright else 0) | (AVERT_BIT if head_averted else 0)
+	return int(round(fear * 1000.0)) | (UPRIGHT_BIT if upright else 0) | (AVERT_BIT if head_averted else 0) \
+			| (HOLD_BIT if holding else 0) | (REACH_BIT if reaching else 0)
 
 
 func net_apply(value: int) -> void:
 	fear = (value & 2047) / 1000.0
 	upright = value & UPRIGHT_BIT != 0
 	head_averted = value & AVERT_BIT != 0
+	holding = value & HOLD_BIT != 0
+	reaching = value & REACH_BIT != 0
+	if not holding and _held:
+		_release_held()
+	if not reaching:
+		_reach = null
 
 
 # ---- Hitboxes on its bones -------------------------------------------------------------
@@ -573,6 +602,7 @@ func _update_hitboxes() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_hitboxes()
+	_hold_tick(delta)
 	if NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
 		return
 	_state_left -= delta
@@ -1843,11 +1873,19 @@ func _stage(kind: int) -> bool:
 		Stunt.DOORWAY, Stunt.DRAG:
 			# Across your way ahead, from cover to cover (a doorway, a gap):
 			# skittering past -- or dragging a body after it.
-			var middle := _ground_at(eye + look * randf_range(16.0, 26.0))
+			# Across where they're going (moving fast: where they'll be), from
+			# cover to cover -- or out on the open land (the user's), from out of
+			# their view on one side to out of it on the other.
+			var ahead := Vector3(p.velocity.x, 0.0, p.velocity.z) * 1.5
+			var middle := _ground_at(eye + look * randf_range(16.0, 26.0) + ahead)
 			if middle.is_empty():
 				return false
 			var from := _cover_beside(middle.position, -side, p)
 			var to := _cover_beside(middle.position, side, p)
+			if not from.is_finite():
+				from = _out_of_view_beside(middle.position, -side)
+			if not to.is_finite():
+				to = _out_of_view_beside(middle.position, side)
 			if not from.is_finite() or not to.is_finite():
 				return false
 			if not _place(from, Vector3.UP, to - from, true):
@@ -1863,6 +1901,7 @@ func _stage(kind: int) -> bool:
 				_corpse.global_position = from + (from - to).normalized() * 1.4 + Vector3.UP * 0.3
 				var health := _corpse.get_node(^"Health") as Health
 				health.take_damage(health.current_health + 1.0)
+				hold.call_deferred(_corpse) # (by the head, in its hand -- once it's a ragdoll)
 			return true
 		Stunt.WATCH:
 			# Off to the side in the dark, dead still, head tilted, rattling --
@@ -1980,8 +2019,7 @@ func _stunt_tick(delta: float) -> void:
 				return
 			var pace := _mover_pace(delta, 1.0 - to.length() / maxf(_mover_length, 0.1))
 			_desired = to.normalized() * (DRAG_SPEED if _stunt == Stunt.DRAG else SCRAMBLE) * pace
-			if _stunt == Stunt.DRAG:
-				_drag_corpse(delta)
+
 		Stunt.WATCH:
 			_velocity = Vector3.ZERO
 			_heading = _flat(p.global_position - global_position)
@@ -2156,10 +2194,8 @@ func _end_stunt() -> void:
 	_silence_off_in = SILENCE_AFTER # (the world's sounds come back)
 	upright = false
 	head_averted = false
-	if is_instance_valid(_corpse):
-		var ragdoll := _corpse.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
-		if ragdoll:
-			ragdoll.carry({})
+	if holding or reaching:
+		let_go()
 	_corpse = null
 	if _stunt == Stunt.WINDOW:
 		Network.send_stalker_sign(0, &"window_off", _window_at)
@@ -2183,6 +2219,18 @@ func _drag_corpse(delta: float) -> void:
 	var hold := global_position + global_basis.z * 0.9 + Vector3.UP * 0.35
 	var pull := ((hold - foot.global_position) * 10.0 - foot.linear_velocity) * ragdoll.total_mass() * delta * 0.6
 	ragdoll.carry({foot: pull}, 0.7)
+
+
+## Out on open land: a spot beside `point` along `way`, far enough out that
+## it's past the edge of everyone's view (or lost in the fog) -- or INF.
+func _out_of_view_beside(point: Vector3, way: Vector3) -> Vector3:
+	for k: float in [8.0, 12.0, 18.0, 26.0, 34.0, 44.0]:
+		var hit := _ground_at(point + way * k + Vector3.UP * 4.0)
+		if hit.is_empty():
+			continue
+		if not _visible_from_any(_body_points(hit.position, Basis.IDENTITY)):
+			return hit.position
+	return Vector3.INF
 
 
 ## Somewhere beside `point` (along `way`, 4-10 m out) none of the players
@@ -2386,6 +2434,8 @@ func _build_body() -> void:
 		_limbs.append({upper = upper, lower = lower, end = end, group = spec[3], arm = arm, out = out, home = home,
 				planted = _visual.global_transform * home, foot = _visual.global_transform * home,
 				stepping = false, t = 0.0, from = Vector3.ZERO, to = Vector3.ZERO, length = _limb_length(upper, lower, end)})
+		if spec[0] == "RightArm":
+			_grip_limb = _limbs.size() - 1
 	_frostbite_skin()
 	_build_antlers()
 	_build_eyes()
@@ -2759,6 +2809,139 @@ func _update_breath(camera: Camera3D, delta: float) -> void:
 	_breath.volume_db = BREATH_DB + linear_to_db(maxf(_breath_level, 0.0005))
 
 
+## The host: its arm reaching for `body` (its head) -- every game.
+func reach_for(body: Node3D) -> void:
+	reaching = true
+	Network.send_stalker_sign(0, &"reach", _head_of(body))
+
+
+## The host: `body` in its hand now, by the head -- every game.
+func hold(body: Node3D) -> void:
+	reaching = false
+	holding = true
+	Network.send_stalker_sign(0, &"hold", _head_of(body))
+
+
+## The host: lets go of what it holds (or stops reaching) -- every game.
+func let_go() -> void:
+	holding = false
+	reaching = false
+	Network.send_stalker_sign(0, &"let_go")
+
+
+## A hold sign here (StalkerSigns): the body nearest `at` -- a body or a live
+## thing -- reached for, held, or let go of.
+func sign_hold(kind: StringName, at: Vector3) -> void:
+	match kind:
+		&"let_go":
+			_sign_pending.clear()
+			_release_held()
+			_reach = null
+		_:
+			var body := _body_near(at)
+			if body == null:
+				_sign_pending = {kind = kind, at = at, left = 1.5} # (its puppet's not here yet)
+				return
+			_sign_pending.clear()
+			if kind == &"reach":
+				_reach = body
+				_reach_t = 0.0
+			else:
+				_reach = null
+				_held = body
+				if body.get_node_or_null(^"EnemyRagdoll") == null:
+					_carry_whole(body)
+
+
+## The body (a corpse or a live thing) nearest `at`, within reach of it.
+func _body_near(at: Vector3) -> Node3D:
+	var best: Node3D = null
+	var best_distance := 4.0
+	for group: StringName in [&"corpses", &"enemies"]:
+		for node in get_tree().get_nodes_in_group(group):
+			var body := node as Node3D
+			if body == null:
+				continue
+			var distance := _head_of(body).distance_to(at)
+			if distance < best_distance:
+				best_distance = distance
+				best = body
+	return best
+
+
+## Where a body's head is: its ragdoll's head, its skeleton's, or above it.
+func _head_of(body: Node3D) -> Vector3:
+	if not is_instance_valid(body):
+		return global_position
+	var ragdoll := body.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+	if ragdoll:
+		var head := ragdoll.bone_named("Head")
+		if head and head.is_inside_tree() and (body.get_node_or_null(^"Health") as Health) and (body.get_node(^"Health") as Health).is_dead:
+			return head.global_position
+	for node in body.find_children("*", "Skeleton3D", true, false):
+		var skeleton := node as Skeleton3D
+		for i in skeleton.get_bone_count():
+			if skeleton.get_bone_name(i).ends_with("Head"):
+				return skeleton.global_transform * skeleton.get_bone_global_pose(i).origin
+	return body.global_position + Vector3.UP * 0.8
+
+
+## Its gripping hand, where it is now.
+func _hand_point() -> Vector3:
+	if _grip_limb < 0 or _skeleton == null:
+		return global_position
+	return _skeleton.global_transform * _skeleton.get_bone_global_pose(_limbs[_grip_limb].end).origin
+
+
+## Every game, each tick: the held body's head pulled to the hand (the rest
+## of the ragdoll dragging after it), or a small thing carried in it whole;
+## a body named before its puppet came looked for again.
+func _hold_tick(delta: float) -> void:
+	if not _sign_pending.is_empty():
+		_sign_pending.left = float(_sign_pending.left) - delta
+		if float(_sign_pending.left) <= 0.0:
+			_sign_pending.clear()
+		else:
+			var pending: Dictionary = _sign_pending.duplicate()
+			sign_hold(pending.kind, pending.at)
+	if not is_instance_valid(_held):
+		_held = null
+		return
+	var hand := _hand_point()
+	var ragdoll := _held.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+	if ragdoll:
+		var head := ragdoll.bone_named("Head")
+		if head == null:
+			head = ragdoll.bone_named("Neck")
+		if head == null:
+			return # (not a ragdoll yet: next tick)
+		var pull := ((hand - head.global_position) * HOLD_PULL - head.linear_velocity) * ragdoll.total_mass() * delta * 0.6
+		ragdoll.carry({head: pull}, 0.75)
+	else:
+		_held.global_position = hand + Vector3.DOWN * 0.2
+
+
+## A small thing carried whole (no ragdoll: a rat, a roach): out of the
+## physics, still, its own self switched off -- in the hand from now on.
+func _carry_whole(body: Node3D) -> void:
+	body.set_meta(&"culled", true) # (taken: no drops)
+	body.process_mode = Node.PROCESS_MODE_DISABLED
+	if body is RigidBody3D:
+		(body as RigidBody3D).freeze = true
+	if body is CollisionObject3D:
+		(body as CollisionObject3D).collision_layer = 0
+		(body as CollisionObject3D).collision_mask = 0
+
+
+## Lets go of the held body: a ragdoll falls free (full weight again).
+func _release_held() -> void:
+	if is_instance_valid(_held):
+		var ragdoll := _held.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+		if ragdoll:
+			ragdoll.carry({})
+	_held = null
+
+
 ## Hands and feet: planted till the body's carried them too far, then a step
 ## -- one diagonal pair at a time, in jerks (The Grudge: broken joints).
 func _update_limbs(delta: float) -> void:
@@ -2770,7 +2953,20 @@ func _update_limbs(delta: float) -> void:
 		if limb.stepping:
 			busy[limb.group] = true
 	var standing := _upright_blend > 0.5
-	for limb in _limbs:
+	for index in _limbs.size():
+		var limb := _limbs[index]
+		if index == _grip_limb and (is_instance_valid(_held) or is_instance_valid(_reach)):
+			# Its gripping hand: reaching out for it, or holding it by its hip.
+			var target: Vector3
+			if is_instance_valid(_held):
+				target = xf * Vector3(GRIP.x * float(limb.out), GRIP.y, GRIP.z) * SIZE if not standing \
+						else _skeleton.global_transform * _skeleton.get_bone_global_pose(limb.upper).origin + Vector3.DOWN * float(limb.length) * 0.9
+			else:
+				_reach_t += delta
+				target = (limb.planted as Vector3).lerp(_head_of(_reach), smoothstep(0.0, 1.0, _reach_t / REACH_TIME))
+			limb.stepping = false
+			limb.foot = target
+			continue
 		if standing and limb.arm:
 			# Standing: its long arms hanging at its sides, nearly to its knees.
 			var shoulder := _skeleton.global_transform * _skeleton.get_bone_global_pose(limb.upper).origin

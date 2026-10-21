@@ -476,6 +476,11 @@ func _net_seed(at: Vector3, normal: Vector3) -> void:
 		SeededGrowth.burst(get_tree().current_scene, at, normal, false, _player)
 
 
+## Where it's stuck (global), or INF if it isn't pulling you anywhere.
+func anchor_point() -> Vector3:
+	return _anchor_point() if is_pulling() and is_instance_valid(_anchor) else Vector3.INF
+
+
 ## True while the line is holding you (gravity and ground movement change).
 func is_pulling() -> bool:
 	return _rope == Rope.PULL or _rope == Rope.PERCH or _rope == Rope.RIDE or _rope == Rope.TOUCH

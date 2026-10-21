@@ -1890,3 +1890,11 @@ them:
   - **Rotten meat:** it hunts that player straight down their trail (from STALK or WAIT, while they're past HUNT_UNTIL).
   - **Eating (new State.EAT):** raw meat or a body lying within 80 m that nobody can see (not climbers, not its own stunt corpse, not dragged ones), it goes to and eats for 7 s, chewing every ~0.9 s (the 'chewing' slot; bone_crunch stand-ins). It leaves only bones (StalkerSigns.bones: long bones and a curve of ribs in a dark stain, for 10 min). Seen while eating, it hides like ever.
   - **Test menu:** F9 gets 'Eat (nearest meat or body)'.
+
+- 2026-10-21: Wendigo Stalker, holding (the user's: hand-accurate, a human dragged by the head in its hand, ragdoll physics, immersive).
+  - **Reach and grip:** its right arm reaches with IK for what it takes (REACH_TIME 0.3 s), then grips it by its hip (GRIP).
+  - **Ragdolls:** a ragdoll's head is pulled to the real hand bone each tick (HOLD_PULL; the rest drags loose behind, carried at 75% weight). A thing with no ragdoll is carried whole in the hand.
+  - **Co-op:** ragdolls are each game's own, so every game holds its own copy. The host names the body by where its head is (signs 'reach', 'hold', 'let_go'; clients look again for 1.5 s if the puppet isn't there yet), and net_state carries HOLD and REACH.
+  - **Corpse drag:** now by the head, in its hand (was a foot).
+  - **Open world:** the skitter-past and corpse-drag stunts now work out on open land. With no cover beside the path, they come from past the edge of everyone's view (_out_of_view_beside), and when the player's moving fast they aim 1.5 s ahead of them.
+  - **Grapple:** PlayerGrapple.anchor_point() added, for the grapple stunt.

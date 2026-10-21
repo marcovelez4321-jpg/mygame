@@ -51,6 +51,10 @@ static func play(tree: SceneTree, kind: StringName, at: Vector3, dir: Vector3) -
 			camp_visit(tree, at, dir)
 		&"bones":
 			bones(tree, at)
+		&"reach", &"hold", &"let_go":
+			var stalker := tree.get_first_node_in_group(&"stalker")
+			if stalker:
+				stalker.call(&"sign_hold", kind, at)
 
 
 ## The world's sounds fading out (`on`) or back.
