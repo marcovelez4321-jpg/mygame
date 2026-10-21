@@ -1930,3 +1930,13 @@ them:
     - something new: watching, your path, the angel.
   - **Hurt (25+ damage):** WOUNDED for 90 s (stalks at 1.8x, no big moments, its hind leg limps: slow, dragging steps on every game via net_state), then FURIOUS for 3 min (stalks at 0.6x; the fake charge, behind you, the snatch, your path and crossing first; tension x1.5).
   - **F9:** the readout shows mood, hunger, curiosity (and what about), and the wounded and furious timers.
+
+- 2026-10-21: The Stalker's memory (the user's: all four) and fear of fire (the user's: hates it; starving, it crosses it):
+  - **Shot:** it remembers where it was shot (merged within 5 m) for 10 min and steers round those spots (15 m).
+  - **Routes:** it counts each player's way through the land in 40 m squares. Where you've come through 3+ times it waits in your path (put first, walking pace too), and its signs fall along your ways.
+  - **Camps:** back at a camp after being 150 m+ away, half the time its tracks are round your bedroll.
+  - **Spinning:** whip round at its sounds twice and it's learnt it. 'Behind you' becomes the bait: a croak behind you, and once you turn, it's standing where you were looking.
+  - **Staring:** stare it down 3 times (watching, the fight-watch) and it stops showing itself in front of you: those go last.
+  - **Grudges:** damage per attacker, fading over 15 min. Over 50, that player is picked for 60% of its stunts and is the one the full-fear strike goes for.
+  - **Fire:** it keeps 15 m from anything burning (FireSource: barrels, campfires), places no stunt within 15 m of one, and won't strike at someone by one. Within 3 m it burns at 80 damage/s (it can be driven off). Starving (hunger full), it crosses fire anyway.
+  - **F9:** the readout shows its memory.

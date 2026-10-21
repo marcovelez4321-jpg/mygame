@@ -189,6 +189,49 @@ var wounded := false
 var _seen_doing := {}
 var _still_for := {}
 
+## ITS MEMORY (the user's, 2026-10-21: all four):
+##   WHERE IT WAS SHOT -- it steers clear of those spots (SHOT_AVOID) for
+##   SHOT_MEMORY.
+##   CAMPS AND ROUTES -- the land's cut into ROUTE_CELL squares and it counts
+##   the ones you go through; on a well-trodden one (TRODDEN) it waits in your
+##   path there first, and its tracks and kills turn up along your ways. Back
+##   at a camp you've used after being away (CAMP_AWAY), now and then its
+##   tracks are round it (it was there while you were gone).
+##   HABITS -- you whip round at its sounds (SPIN_HABIT times): it baits you
+##   (a sound behind you, then it's where you were looking); you stare it
+##   down (STARE_HABIT times): it stops showing itself in front of you.
+##   GRUDGES -- in co-op, whoever hurt it most (over GRUDGE_MIN) it goes after
+##   more: its stunts (GRUDGE_PICK of the time) and strikes; fades GRUDGE_FADE.
+const SHOT_MEMORY := 600.0
+const SHOT_AVOID := 15.0
+const ROUTE_CELL := 40.0
+const TRODDEN := 3
+const CAMP_AWAY := 150.0
+const CAMP_SIGNS := 0.5
+const SPIN_HABIT := 2
+const STARE_HABIT := 3
+const GRUDGE_MIN := 50.0
+const GRUDGE_PICK := 0.6
+const GRUDGE_FADE := 900.0
+var _shot_spots: Array = [] # [where, msec]
+var _route_cells := {}
+var _last_cell := {}
+var _away_from_camp := {}
+var _sound_msec := -100000
+var _spins := 0
+var _stares := 0
+var _grudge := {}
+var _bait_look := Vector3.ZERO
+## FIRE (the user's: it hates it -- wendigo lore): it keeps FIRE_AVOID from
+## anything burning (barrels, campfires: FireSource), places nothing there, and
+## won't strike at anyone by one; closer than FIRE_BURN it's hurt (FIRE_DPS,
+## like damage: it can drive it off). STARVING (hunger full) it crosses the
+## fire anyway (the user's: a sign things are bad).
+const FIRE_AVOID := 15.0
+const FIRE_BURN := 3.0
+const FIRE_DPS := 80.0
+var _burn_left := 0.0
+
 ## The stunts that are only a sound (and their signs): small, not big.
 const SOUND_STUNTS := [Stunt.RATTLE, Stunt.LURE, Stunt.HELP]
 var phase := Phase.BUILD
@@ -867,8 +910,10 @@ func _think(delta: float) -> void:
 				_say(&"starts_stalking", false, VOICE_CHANCE)
 		State.STALK:
 			# The fear's full and they're not looking at it: round behind them.
-			if fear >= 1.0 and _cooldown_left <= 0.0 and nearest.drag == null and not _seen() and _big_allowed():
-				_victim = nearest
+			var prey := _grudge_target() if _grudge_target() else nearest
+			if fear >= 1.0 and _cooldown_left <= 0.0 and prey.drag == null and not _seen() and _big_allowed() \
+					and (hunger >= 1.0 or not _fire_near(prey.global_position, FIRE_AVOID)):
+				_victim = prey
 				state = State.APPROACH
 				_say(&"flanking", false, VOICE_CHANCE)
 				return
@@ -1082,6 +1127,8 @@ func _fear_tick(delta: float) -> void:
 			continue
 		if turned > SPIN_RATE and _reacting("spin"):
 			_add_fear(FEAR_SPIN, "whipped round")
+			if Time.get_ticks_msec() - _sound_msec < int(REACT_WINDOW * 1000.0):
+				_spins += 1 # (spun round at its sound: a habit it learns)
 		var flat := Vector3(player.velocity.x, 0.0, player.velocity.z)
 		var away := player.global_position - global_position
 		away.y = 0.0
@@ -1574,6 +1621,15 @@ func _on_damaged(amount: float, attacker: int) -> void:
 	if state == State.FLEE or state == State.AWAY:
 		return
 	_hurt += amount
+	if attacker != Health.NO_ATTACKER:
+		_grudge[attacker] = float(_grudge.get(attacker, 0.0)) + amount
+		var fresh := true
+		for spot: Array in _shot_spots:
+			if (spot[0] as Vector3).distance_to(global_position) < 5.0:
+				spot[1] = Time.get_ticks_msec()
+				fresh = false
+		if fresh:
+			_shot_spots.append([global_position, Time.get_ticks_msec()])
 	if amount >= HURT_MOOD or _hurt >= HURT_MOOD:
 		_wounded_left = WOUNDED_TIME
 		_furious_left = 0.0
@@ -1714,6 +1770,14 @@ func _start_stunt() -> bool:
 	if house and house.has_inside(_stunt_target.global_position):
 		kinds.insert(randi() % (kinds.size() + 1), Stunt.KNOCK)
 		kinds.insert(randi() % (kinds.size() + 1), Stunt.WINDOW)
+	if _stares >= STARE_HABIT:
+		# Stared down too often: nothing in front of them now -- behind, the sides.
+		for front: int in [Stunt.WATCH, Stunt.PATH, Stunt.ANGEL, Stunt.FIGHT_WATCH]:
+			if kinds.has(front):
+				kinds.erase(front)
+				kinds.append(front)
+	if _trodden(_stunt_target.global_position) and not kinds.has(Stunt.PATH) and _stares < STARE_HABIT:
+		kinds.push_front(Stunt.PATH) # (their usual way: it waits along it)
 	var wanted := _mood_stunts()
 	for i in range(wanted.size() - 1, -1, -1):
 		if kinds.has(wanted[i]):
@@ -1860,8 +1924,10 @@ func _big_allowed() -> bool:
 
 
 ## Its drives, each tick (the host's): hunger rising, curiosity at what the
-## players do (and fading), the hurt moods running out.
+## players do (and fading), the hurt moods running out; its memory; fire.
 func _brain_tick(delta: float) -> void:
+	_memory_tick(delta)
+	_fire_tick(delta)
 	hunger = minf(hunger + delta / HUNGER_TIME, 1.0)
 	curiosity = maxf(curiosity - delta / CURIOUS_FADE, 0.0)
 	if _wounded_left > 0.0:
@@ -1892,6 +1958,98 @@ func _brain_tick(delta: float) -> void:
 			_curious(delta * 0.04, &"quiet")
 		if _fighting(p):
 			_curious(delta * 0.04, &"fight")
+
+
+## Its memory, each tick: old shot spots forgotten, the routes counted, the
+## camps watched, grudges fading.
+func _memory_tick(delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	_shot_spots = _shot_spots.filter(func(spot: Array) -> bool: return now - int(spot[1]) < int(SHOT_MEMORY * 1000.0))
+	for peer: int in _grudge.keys():
+		_grudge[peer] = float(_grudge[peer]) * exp(-delta / GRUDGE_FADE)
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p == null or p.is_dead():
+			continue
+		var cell := Vector2i(floori(p.global_position.x / ROUTE_CELL), floori(p.global_position.z / ROUTE_CELL))
+		if _last_cell.get(p, Vector2i(999999, 999999)) != cell:
+			_last_cell[p] = cell
+			_route_cells[cell] = int(_route_cells.get(cell, 0)) + 1
+		# Back at a camp they've used, after being away: its tracks round it, now and then.
+		var nearest_camp: Node3D = null
+		for camp in get_tree().get_nodes_in_group(Camp.GROUP):
+			if nearest_camp == null or (camp as Node3D).global_position.distance_to(p.global_position) < nearest_camp.global_position.distance_to(p.global_position):
+				nearest_camp = camp
+		if nearest_camp:
+			var gap := nearest_camp.global_position.distance_to(p.global_position)
+			if gap > CAMP_AWAY:
+				_away_from_camp[p] = true
+			elif gap < 40.0 and _away_from_camp.get(p, false):
+				_away_from_camp[p] = false
+				if randf() < CAMP_SIGNS:
+					var bed: Node3D = null
+					for child in nearest_camp.get_children():
+						if child is Bedroll:
+							bed = child
+					if bed:
+						Network.send_stalker_sign(0, &"tracks", bed.global_position, Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU))
+						_presence()
+
+
+## Well-trodden: a square of the land they've come through TRODDEN times.
+func _trodden(at: Vector3) -> bool:
+	return int(_route_cells.get(Vector2i(floori(at.x / ROUTE_CELL), floori(at.z / ROUTE_CELL)), 0)) >= TRODDEN
+
+
+## The player it holds a grudge against (over GRUDGE_MIN), or null.
+func _grudge_target() -> PlayerMovement:
+	var best: PlayerMovement = null
+	var most := GRUDGE_MIN
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p and not p.is_dead() and float(_grudge.get(p.get_multiplayer_authority(), 0.0)) > most:
+			most = float(_grudge[p.get_multiplayer_authority()])
+			best = p
+	return best
+
+
+## Fire, each tick: closer than FIRE_BURN to one, it burns (like damage).
+func _fire_tick(delta: float) -> void:
+	_burn_left -= delta
+	if _burn_left > 0.0 or global_position.y < AWAY_DEPTH * 0.5:
+		return
+	_burn_left = 0.25
+	if _fire_near(global_position, FIRE_BURN):
+		_health.take_damage(FIRE_DPS * 0.25)
+
+
+## Whether there's a fire burning within `reach` of `at`.
+static func _fire_near(at: Vector3, reach: float) -> bool:
+	for fire in FireSource._fires:
+		if is_instance_valid(fire) and fire.is_inside_tree() and fire.global_position.distance_to(at) < reach:
+			return true
+	return false
+
+
+## Keeps clear of fire (unless starving) and of where it was shot: a push
+## away from them, for its crawl.
+func _avoid_push(at: Vector3) -> Vector3:
+	var push := Vector3.ZERO
+	if hunger < 1.0:
+		for fire in FireSource._fires:
+			if is_instance_valid(fire) and fire.is_inside_tree():
+				var away := at - fire.global_position
+				away.y = 0.0
+				var d := away.length()
+				if d < FIRE_AVOID and d > 0.01:
+					push += away / d * (1.0 - d / FIRE_AVOID)
+	for spot: Array in _shot_spots:
+		var away: Vector3 = at - (spot[0] as Vector3)
+		away.y = 0.0
+		var d := away.length()
+		if d < SHOT_AVOID and d > 0.01:
+			push += away / d * (1.0 - d / SHOT_AVOID)
+	return push * SPRINT
 
 
 func _noticed(p: PlayerMovement, what: StringName) -> void:
@@ -2002,6 +2160,7 @@ func _small_sign(only: StringName = &"") -> bool:
 		match kind:
 			&"rattle", &"lure", &"help":
 				_stunt_target = p
+				_sound_msec = Time.get_ticks_msec()
 				var stunt: int = {&"rattle": Stunt.RATTLE, &"lure": Stunt.LURE, &"help": Stunt.HELP}[kind]
 				if _stage(stunt):
 					_last_pick = "sign: " + String(kind)
@@ -2030,10 +2189,13 @@ func _small_sign(only: StringName = &"") -> bool:
 
 ## Its brain, for the F9 menu: the director, its fear, what it's doing.
 func debug_text() -> String:
-	return "Phase %s   tension %d%%\nBig moment allowed in %ds (gap %ds)   next sign in %ds\nMood %s   hunger %d%%   curiosity %d%% (%s)   wounded %ds   furious %ds\nFear %d%%   state %s   last: %s" % [
+	var grudge := _grudge_target()
+	return "Phase %s   tension %d%%\nBig moment allowed in %ds (gap %ds)   next sign in %ds\nMood %s   hunger %d%%   curiosity %d%% (%s)   wounded %ds   furious %ds\nMemory: %d shot spots, %d squares walked, spins %d/%d, stares %d/%d, grudge: %s\nFear %d%%   state %s   last: %s" % [
 			Phase.keys()[phase], roundi(tension * 100.0), maxi(int(BIG_GAP - _since_big), 0), int(BIG_GAP),
 			int(_sign_left), Mood.keys()[mood()], roundi(hunger * 100.0), roundi(curiosity * 100.0), _curious_about,
-			int(_wounded_left), int(_furious_left), roundi(fear * 100.0), State.keys()[state], _last_pick]
+			int(_wounded_left), int(_furious_left), _shot_spots.size(), _route_cells.size(), _spins, SPIN_HABIT, _stares, STARE_HABIT,
+			("peer %d" % grudge.get_multiplayer_authority()) if grudge else "none",
+			roundi(fear * 100.0), State.keys()[state], _last_pick]
 
 
 ## A stunt's due: its player picked, and the world goes quiet round them
@@ -2044,6 +2206,9 @@ func _prepare_stunt() -> void:
 	if players.is_empty():
 		return
 	_pending_target = players[randi() % players.size()] as PlayerMovement
+	var grudge := _grudge_target()
+	if grudge and randf() < GRUDGE_PICK:
+		_pending_target = grudge # (the one who hurt it most)
 	if _fighting(_pending_target) or _fight_ending(_pending_target):
 		_pending_left = 0.0 # (in a fight: no silence -- the user's)
 		return
@@ -2281,6 +2446,15 @@ func _stage(kind: int) -> bool:
 				return true
 			return false
 		Stunt.BEHIND:
+			if _spins >= SPIN_HABIT:
+				# They whip round at its sounds (it's learnt): a croak behind them,
+				# and when they turn, it's where they were looking.
+				_bait_look = look
+				_say(&"croak_behind", true, 1.0, p.global_position - look * 3.0 + Vector3.UP * 1.6)
+				_sound_msec = Time.get_ticks_msec()
+				_stunt_phase = 10
+				_stunt_left_set(3.0)
+				return true
 			# Right behind you, still, staring -- there when you turn round.
 			var hit := _ground_at(p.global_position - look * 3.5)
 			if hit.is_empty() or not _place(hit.position, hit.normal, (p.global_position - (hit.position as Vector3)), true):
@@ -2425,6 +2599,8 @@ func _stage(kind: int) -> bool:
 		Stunt.PATH:
 			var going := _flat(p.velocity)
 			var speed := Vector2(p.velocity.x, p.velocity.z).length()
+			if speed < FAST_SPEED:
+				speed = FAST_SPEED # (walking their usual way: it waits further along it)
 			for seconds: float in [PATH_AHEAD.y, PATH_AHEAD.x, (PATH_AHEAD.x + PATH_AHEAD.y) * 0.5]:
 				for off: float in [0.0, 8.0, -8.0, 15.0, -15.0]:
 					var spot := p.global_position + going * speed * seconds + going.cross(Vector3.UP) * off
@@ -2556,6 +2732,19 @@ func _stunt_tick(delta: float) -> void:
 		return
 	match _stunt:
 		Stunt.BEHIND:
+			if _stunt_phase == 10:
+				# The bait: once they've turned (or a beat), it's where they were looking.
+				var now_look := _flat(-p.head.global_basis.z)
+				if now_look.dot(_bait_look) < -0.2 or _state_left <= 0.0:
+					var hit := _ground_at(p.global_position + _bait_look * 3.5)
+					if hit.is_empty() or not _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+						_end_stunt()
+						return
+					upright = true
+					_stunt_phase = 0
+					_state_left = BEHIND_HOLD
+					_stunt_rattle_left = 3.0
+				return
 			_velocity = Vector3.ZERO
 			_heading = _flat(p.global_position - global_position)
 			_stunt_rattle_left -= delta
@@ -2617,6 +2806,8 @@ func _stunt_tick(delta: float) -> void:
 			var to := (global_position + Vector3.UP * SIZE - p.head.global_position).normalized()
 			var stared := (-p.head.global_basis.z).dot(to) > cos(deg_to_rad(STARED_AT)) and _visible_to(p, _standing_points(global_position))
 			if stared or _fight_quiet >= FIGHT_OVER:
+				if stared:
+					_stares += 1
 				_end_stunt()
 				return
 		Stunt.FALLEN:
@@ -2870,7 +3061,9 @@ func _stunt_look(seen: bool) -> void:
 		_stunt_seen = true
 		_moment(true)
 		_add_fear(FEAR_SEEN, "saw it (%s)" % Stunt.keys()[_stunt].to_lower())
-		if _stunt == Stunt.BEHIND or _stunt == Stunt.WATCH:
+		if _stunt == Stunt.WATCH:
+			_stares += 1 # (stared it down)
+		if (_stunt == Stunt.BEHIND and _stunt_phase == 0) or _stunt == Stunt.WATCH:
 			_stunt_phase = 1
 			_state_left = SPOTTED_FREEZE # (a beat looking back at you, then off)
 
@@ -2953,6 +3146,8 @@ func _cover_beside(point: Vector3, way: Vector3, _player: PlayerMovement) -> Vec
 ## Put down at `at` on a surface facing `normal`, facing `toward`. `hidden`:
 ## only if none of the players can see it there (false: not placed).
 func _place(at: Vector3, normal: Vector3, toward: Vector3, hidden: bool) -> bool:
+	if hunger < 1.0 and _fire_near(at, FIRE_AVOID):
+		return false # (never by a fire: it hates it -- unless it's starving)
 	var up := normal.normalized()
 	var forward := _flat_perpendicular(up, toward)
 	if hidden and _visible_from_any(_body_points(at, Basis(forward.cross(up), up, -forward))):
@@ -2981,7 +3176,10 @@ static func _flat(v: Vector3) -> Vector3:
 
 func _crawl(delta: float) -> void:
 	var up := _normal
-	var wanted := _desired - up * _desired.dot(up)
+	var steer := _desired
+	if state in [State.STALK, State.HUNT, State.HIDE, State.WAIT, State.EAT]:
+		steer += _avoid_push(global_position)
+	var wanted := steer - up * steer.dot(up)
 	var into := -_desired.dot(up)
 	if into > 0.0 and absf(up.y) < WALL_DOT:
 		wanted += _flat_perpendicular(up, Vector3.UP) * into # on a wall, through it: up and over
