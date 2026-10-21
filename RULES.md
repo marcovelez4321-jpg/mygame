@@ -1912,3 +1912,11 @@ them:
   - **FALLEN** (as a fight ends: shots within 25 s, nobody alive within 25 m, a body you can't see within 45 m): it's crouched over the body, head down, eating (chewing). Seen, it looks up at you 1.2 s, then drags it off by the head.
   - **AMONG:** from just past the edge of your view beside one of the chargers, it joins the charge upright. A fake charge: it never comes within 24 m (outside its grab range), 1.8 s at most, then it veers off scrambling.
   - **Grace after stunts:** no grab for 4 s after any stunt (it's leaving), and 'In your path' now flees at 24 m. Without this, it would have lunged right after scrambling off.
+
+- 2026-10-21: The Stalker as it was before the brain is saved as tag and branch 'stalker-v1-before-brain' (commit 2ff610f; the user's, to go back to).
+- 2026-10-21: The director replaces the stunt clock (the user's values):
+  - **BUILD:** tension rises over 10 min at base. That's faster with the fear up (x(1+fear)), raw meat on someone (x2), a fight (x1.4) or moving fast (x1.25).
+  - **Signs:** small signs keep coming, never more than 4-20 min apart (SIGN_GAP, rolled; liberal for now, to be narrowed), sooner as tension rises. They are: its distant sounds (the rattle, lure and help scream, now small rather than big), breathing (it waits hidden 9-12 m behind you for 15 s), tracks (12 prints crossing your way ahead), and a kill (bones and blood 25-45 m ahead, out of your sight). A glimpse of it counts as a sign.
+  - **PEAK:** tension full and 10 min (BIG_GAP) since the last big moment, so a big stunt is picked by the situation. A strike counts as big: the full-fear approach waits for it, and any lunge spends it.
+  - **RELAX:** 1 min of nothing after a big moment.
+  - **F9:** shows the director (phase, tension, time till a big moment's allowed, next sign, fear, state, last pick), with buttons for a small sign, tracks, a kill, and 'Big moment now'.

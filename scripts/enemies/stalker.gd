@@ -127,16 +127,40 @@ const STEP_HEIGHT := 0.28 * SIZE
 const STEP_TIME := 0.32 * sqrt(SIZE)
 const STANDING_HEIGHT := 1.9 * SIZE
 
-## STAGE 2 (the user's): stunts every STUNT_EVERY, and the shared FEAR
+## STAGE 2 (the user's): stunts when THE DIRECTOR allows (below), and the shared FEAR
 ## meter (hidden). A reaction within REACT_WINDOW of a stunt fills it (each
 ## once a stunt you saw): seeing it, panic firing, running off, whipping
 ## round; going to where it screamed for help, on purpose, fills half. A
 ## clear glimpse of it outside a stunt counts as seeing it too (see
 ## GLIMPSE_*). Each rise shows why under the meter. It drains over FEAR_DRAIN_TIME,
 ## and once it's full it stays full: the strike (stage 3) can come.
-## (The user's, 2026-10-21: fewer, longer -- 3 to 5 minutes apart; twice as
-## often while anyone carries raw meat: it smells it.)
-const STUNT_EVERY := Vector2(180.0, 300.0)
+## THE DIRECTOR (the user's, 2026-10-21: no timer -- Left 4 Dead's AI
+## Director, Alien: Isolation's menace): how much it may show itself now.
+##   BUILD -- TENSION rises (TENSION_TIME at its base pace; faster in a fight,
+##   moving fast, with raw meat on someone (it smells it), the fear up); small
+##   SIGNS of it keep coming -- never more than SIGN_GAP apart (rolled; the
+##   user's: liberal for now, narrowed later), sooner as tension rises: its
+##   distant sounds, its breathing close by, its tracks across your way, a
+##   kill on your route.
+##   PEAK -- tension full and BIG_GAP since the last big moment: a big one (a
+##   stunt you see; a strike counts too).
+##   RELAX -- RELAX_TIME of nothing after a big moment.
+## What it does within that is the situation's (the stunts' pick) -- and next,
+## its brain's (drives, moods).
+enum Phase { BUILD, PEAK, RELAX }
+const SIGN_GAP := Vector2(240.0, 1200.0)
+const BIG_GAP := 600.0
+const RELAX_TIME := 60.0
+const TENSION_TIME := 600.0
+## The stunts that are only a sound (and their signs): small, not big.
+const SOUND_STUNTS := [Stunt.RATTLE, Stunt.LURE, Stunt.HELP]
+var phase := Phase.BUILD
+var tension := 0.0
+var _since_big := 0.0
+var _sign_left := 600.0
+var _relax_left := 0.0
+var _big_retry := 0.0
+var _last_pick := ""
 ## The wrong silence (StalkerSigns): the world goes quiet round the stunt's
 ## player this long before it's staged; back SILENCE_AFTER after it's done
 ## (a sound-only one: SOUND_STUNT_HOLD after it).
@@ -270,7 +294,7 @@ var _stunt_to := Vector3.ZERO
 var _stunt_seen := false
 var _stunt_away_for := 0.0
 var _stunt_rattle_left := 0.0
-var _stunt_left_every := 40.0
+
 ## A stunt about to be staged once the silence has fallen (its player, and
 ## how long yet), and whose game is silent (0: no one's), till when.
 var _pending_target: PlayerMovement
@@ -691,6 +715,7 @@ func _think(delta: float) -> void:
 	_fear_tick(delta)
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	_silence_tick(delta)
+	_director_tick(delta)
 	if state != State.STUNT and (upright or head_averted):
 		upright = false # (a stunt cut short: back down on all fours)
 		head_averted = false
@@ -732,6 +757,7 @@ func _think(delta: float) -> void:
 				_glimpse_counted = false
 			if _clear_for >= GLIMPSE_TIME and not _glimpse_counted:
 				_glimpse_counted = true
+				_presence() # (seen: a sign of it, for the director)
 				_add_fear(FEAR_SEEN, "glimpsed")
 	if state == State.STUNT:
 		_stunt_tick(delta)
@@ -802,16 +828,12 @@ func _think(delta: float) -> void:
 				_say(&"starts_stalking", false, VOICE_CHANCE)
 		State.STALK:
 			# The fear's full and they're not looking at it: round behind them.
-			if fear >= 1.0 and _cooldown_left <= 0.0 and nearest.drag == null and not _seen():
+			if fear >= 1.0 and _cooldown_left <= 0.0 and nearest.drag == null and not _seen() and _big_allowed():
 				_victim = nearest
 				state = State.APPROACH
 				_say(&"flanking", false, VOICE_CHANCE)
 				return
-			# Twice as fast while anyone carries raw meat (the user's: it smells it).
-			_stunt_left_every -= delta * (2.0 if _meat_carrier(false) else 1.0)
-			if _stunt_left_every <= 0.0 and _cooldown_left <= 0.0 and _pending_left < 0.0:
-				_stunt_left_every = randf_range(STUNT_EVERY.x, STUNT_EVERY.y)
-				_prepare_stunt()
+
 			# Round to a spot STALK_DISTANCE from them, on the side it's on.
 			var away := global_position - nearest.global_position
 			away.y = 0.0
@@ -913,6 +935,7 @@ func _strike_tick(delta: float) -> void:
 
 ## Lunging for them (and grabbing on reaching them: _strike_tick's LUNGE).
 func _lunge_at(p: PlayerMovement) -> void:
+	_big_moment() # (a strike: a big moment)
 	_victim = p
 	state = State.LUNGE
 	_state_left = LUNGE_TIME
@@ -1622,7 +1645,9 @@ func _start_stunt() -> bool:
 		return false
 	_stunt_target = _pending_target if is_instance_valid(_pending_target) and not _pending_target.is_dead() else players[randi() % players.size()] as PlayerMovement
 	_pending_target = null
-	var kinds: Array = [Stunt.BEHIND, Stunt.CEILING, Stunt.DOORWAY, Stunt.WATCH, Stunt.RATTLE, Stunt.DRAG, Stunt.HELP, Stunt.LURE]
+	# (Its sounds -- the rattle, the lure, the help scream -- are small signs
+	# now: the director's, not a big moment's.)
+	var kinds: Array = [Stunt.BEHIND, Stunt.CEILING, Stunt.DOORWAY, Stunt.WATCH, Stunt.DRAG]
 	kinds.shuffle()
 	if _climbing_outside(_stunt_target) and randf() < 0.5:
 		kinds.push_front(Stunt.LEAP)
@@ -1650,8 +1675,13 @@ func _start_stunt() -> bool:
 		kinds = [_forced_kind]
 	for kind: int in kinds:
 		if _stage(kind):
+			_last_pick = Stunt.keys()[kind]
 			if state != State.STUNT:
 				_silence_off_in = SOUND_STUNT_HOLD # (a sound only: the quiet lifts after it)
+			if kind in SOUND_STUNTS:
+				_presence()
+			else:
+				_big_moment()
 			match kind:
 				Stunt.CEILING:
 					_say(&"ceiling_scuttle")
@@ -1680,6 +1710,16 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 	_pending_left = -1.0
 	var peer := player.get_multiplayer_authority()
 	match event:
+		&"sign":
+			return "Small sign" if _small_sign() else "No small sign fit here"
+		&"tracks", &"kill":
+			return "Sign: %s" % event if _small_sign(event) else "Didn't fit here"
+		&"peak":
+			_since_big = BIG_GAP
+			tension = 1.0
+			phase = Phase.PEAK
+			_big_retry = 0.0
+			return "Big moment allowed now (the director picks)"
 		&"silence":
 			_silence(peer)
 			_silence_off_in = 10.0
@@ -1724,6 +1764,118 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 	return "%s in %d s" % [Stunt.keys()[kind].capitalize(), int(SILENCE_LEAD)]
 
 
+## The director, each tick (the host's): the phase, the tension, a small
+## sign when one's due, a big moment when it's allowed.
+func _director_tick(delta: float) -> void:
+	_since_big += delta
+	if phase == Phase.RELAX:
+		_relax_left -= delta
+		if _relax_left <= 0.0:
+			phase = Phase.BUILD
+			_roll_sign()
+		return
+	var pace := 1.0 + fear
+	if _meat_carrier(false):
+		pace *= 2.0 # (it smells it)
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player and _fighting(player):
+			pace *= 1.4
+			break
+	for node in get_tree().get_nodes_in_group("player"):
+		if _fast(node as PlayerMovement):
+			pace *= 1.25
+			break
+	tension = minf(tension + delta / TENSION_TIME * pace, 1.0)
+	phase = Phase.PEAK if _big_allowed() else Phase.BUILD
+	var free := (state == State.STALK or state == State.WAIT or state == State.HUNT) and _cooldown_left <= 0.0 and _pending_left < 0.0
+	if phase == Phase.PEAK and free:
+		_big_retry -= delta
+		if _big_retry <= 0.0:
+			_big_retry = 5.0
+			if state != State.STALK:
+				state = State.STALK
+			_prepare_stunt()
+		return
+	_sign_left -= delta * (1.0 + tension * 1.5) # (sooner as tension rises)
+	if _sign_left <= 0.0 and free:
+		if _small_sign():
+			_presence()
+		else:
+			_sign_left = 10.0
+
+
+## A big moment may come now: not relaxing, BIG_GAP since the last, tension full.
+func _big_allowed() -> bool:
+	return phase != Phase.RELAX and _since_big >= BIG_GAP and tension >= 1.0
+
+
+## A big moment came (a stunt you see, a strike): tension spent, the quiet.
+func _big_moment() -> void:
+	_since_big = 0.0
+	tension = 0.0
+	phase = Phase.RELAX
+	_relax_left = RELAX_TIME
+	_presence()
+
+
+## A sign of it (or a glimpse): the next sign's gap starts over.
+func _presence() -> void:
+	_roll_sign()
+
+
+func _roll_sign() -> void:
+	_sign_left = randf_range(SIGN_GAP.x, SIGN_GAP.y)
+
+
+## A small sign, on one of them: its distant sounds, its breathing close by,
+## its tracks across their way, a kill on their route. False: none fit.
+func _small_sign(only: StringName = &"") -> bool:
+	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool:
+		return n is PlayerMovement and not (n as PlayerMovement).is_dead())
+	if players.is_empty():
+		return false
+	var p := players[randi() % players.size()] as PlayerMovement
+	var kinds: Array = [&"rattle", &"lure", &"help", &"tracks", &"kill", &"breathe"] if only == &"" else [only]
+	kinds.shuffle()
+	var going := _flat(p.velocity) if Vector2(p.velocity.x, p.velocity.z).length() > 2.0 else _flat(-p.head.global_basis.z)
+	for kind: StringName in kinds:
+		match kind:
+			&"rattle", &"lure", &"help":
+				_stunt_target = p
+				var stunt: int = {&"rattle": Stunt.RATTLE, &"lure": Stunt.LURE, &"help": Stunt.HELP}[kind]
+				if _stage(stunt):
+					_last_pick = "sign: " + String(kind)
+					return true
+			&"tracks":
+				var hit := _ground_at(p.global_position + going * randf_range(18.0, 30.0) + Vector3.UP * 4.0)
+				if not hit.is_empty():
+					Network.send_stalker_sign(0, &"tracks", hit.position, going.cross(Vector3.UP))
+					_last_pick = "sign: tracks"
+					return true
+			&"kill":
+				var hit := _ground_at(p.global_position + going * randf_range(25.0, 45.0) + going.cross(Vector3.UP) * randf_range(-6.0, 6.0) + Vector3.UP * 4.0)
+				if not hit.is_empty() and not _visible_to(p, [(hit.position as Vector3) + Vector3.UP * 0.3]):
+					Network.send_stalker_sign(0, &"kill", hit.position)
+					_last_pick = "sign: kill"
+					return true
+			&"breathe":
+				var hit := _ground_at(p.global_position - going * randf_range(9.0, 12.0) + Vector3.UP * 3.0)
+				if not hit.is_empty() and _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+					state = State.WAIT
+					_state_left = 15.0
+					_last_pick = "sign: breathe"
+					return true
+	return false
+
+
+## Its brain, for the F9 menu: the director, its fear, what it's doing.
+func debug_text() -> String:
+	return "Phase %s   tension %d%%\nBig moment allowed in %ds (gap %ds)   next sign in %ds\nFear %d%%   state %s   last: %s" % [
+			Phase.keys()[phase], roundi(tension * 100.0), maxi(int(BIG_GAP - _since_big), 0), int(BIG_GAP),
+			int(_sign_left), roundi(fear * 100.0), State.keys()[state], _last_pick]
+
+
 ## A stunt's due: its player picked, and the world goes quiet round them
 ## first (SILENCE_LEAD); _silence_tick stages it then.
 func _prepare_stunt() -> void:
@@ -1756,7 +1908,7 @@ func _silence_tick(delta: float) -> void:
 					Network.send_message(target.get_multiplayer_authority(), "(test) %s didn't fit here" % Stunt.keys()[_forced_kind].capitalize())
 				_pending_target = null
 				_unsilence()
-				_stunt_left_every = 5.0 # (none fit here: tried again shortly)
+				_big_retry = 5.0 # (none fit here: tried again shortly)
 			_forced_kind = -1
 	if _silence_off_in >= 0.0:
 		_silence_off_in -= delta

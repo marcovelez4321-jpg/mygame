@@ -7,10 +7,13 @@ extends CanvasLayer
 ## the Stalker); a client's says so. The HUD makes one.
 
 ## Events past its stunts (Stalker.test_event).
-const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits close)"], ["camp", "Camp visit"], ["eat", "Eat (nearest meat or body)"]]
+const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits close)"], ["camp", "Camp visit"], ["eat", "Eat (nearest meat or body)"],
+		["sign", "Small sign (random)"], ["tracks", "Sign: tracks across"], ["kill", "Sign: a kill ahead"], ["peak", "Big moment now"]]
 
 var _panel: PanelContainer
 var _result: Label
+## Its brain right now (the director, its fear, what it's doing).
+var _brain: Label
 var _was_mouse := Input.MOUSE_MODE_CAPTURED
 
 
@@ -26,6 +29,9 @@ func _ready() -> void:
 	var title := Label.new()
 	title.text = "Stalker events (F9 to close)"
 	box.add_child(title)
+	_brain = Label.new()
+	_brain.add_theme_font_size_override("font_size", 13)
+	box.add_child(_brain)
 	var grid := GridContainer.new()
 	grid.columns = 3
 	box.add_child(grid)
@@ -36,6 +42,13 @@ func _ready() -> void:
 	_result = Label.new()
 	_result.text = ""
 	box.add_child(_result)
+
+
+func _process(_delta: float) -> void:
+	if not _panel.visible:
+		return
+	var stalker := get_tree().get_first_node_in_group(&"stalker")
+	_brain.text = str(stalker.call(&"debug_text")) if stalker and (not Network.is_online() or multiplayer.is_server()) else "(no Stalker here yet)"
 
 
 func _add_button(parent: Node, event: StringName, text: String) -> void:

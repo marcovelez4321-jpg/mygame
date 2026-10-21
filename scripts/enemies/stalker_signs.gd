@@ -51,6 +51,14 @@ static func play(tree: SceneTree, kind: StringName, at: Vector3, dir: Vector3) -
 			camp_visit(tree, at, dir)
 		&"bones":
 			bones(tree, at)
+		&"tracks":
+			tracks(tree, at, dir)
+		&"kill":
+			bones(tree, at)
+			var world := tree.current_scene as Node3D
+			if world:
+				for i in 3:
+					BloodFX.spawn_splatter(world, at + Vector3(randf_range(-1.5, 1.5), 0.3, randf_range(-1.5, 1.5)), Vector3.UP, randf_range(0.6, 1.1))
 		&"reach", &"hold", &"let_go":
 			var stalker := tree.get_first_node_in_group(&"stalker")
 			if stalker:
@@ -412,3 +420,30 @@ static func _bone_stick(tool: SurfaceTool, from: Vector3, to: Vector3, radius: f
 		var o1 := (side * cos(a1) + up * sin(a1)) * radius
 		for corner: Vector3 in [from + o0, to + o0, to + o1, from + o0, to + o1, from + o1]:
 			tool.add_vertex(corner)
+
+
+## Its tracks across your way (a sign: it crossed here not long ago): a line
+## of long hand and foot prints across `at`, along `across`.
+static func tracks(tree: SceneTree, at: Vector3, across: Vector3) -> void:
+	var world := tree.current_scene as Node3D
+	if world == null:
+		return
+	var space := world.get_world_3d().direct_space_state
+	var way := Vector3(across.x, 0.0, across.z).normalized() if Vector2(across.x, across.z).length() > 0.01 else Vector3.RIGHT
+	var side := way.cross(Vector3.UP)
+	for i in 12:
+		var spot := at + way * (-9.0 + i * 1.6) + side * (0.35 if i % 2 == 0 else -0.35)
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 3.0, spot + Vector3.DOWN * 4.0, 1))
+		if hit.is_empty():
+			continue
+		var mark := Decal.new()
+		var hand := i % 2 == 0
+		mark.texture_albedo = _print(hand)
+		mark.size = Vector3(0.45, 1.0, 0.95) if hand else Vector3(0.35, 1.0, 0.85)
+		mark.modulate = Color(0.08, 0.07, 0.07, 0.9)
+		world.add_child(mark)
+		mark.global_position = (hit.position as Vector3) + Vector3.UP * 0.2
+		mark.global_basis = Basis(Vector3.UP, atan2(way.x, way.z))
+		tree.create_timer(TRACKS_LAST).timeout.connect(func() -> void:
+			if is_instance_valid(mark):
+				mark.queue_free())
