@@ -49,6 +49,8 @@ static func play(tree: SceneTree, kind: StringName, at: Vector3, dir: Vector3) -
 			window_shadow_off()
 		&"camp_visit":
 			camp_visit(tree, at, dir)
+		&"bones":
+			bones(tree, at)
 
 
 ## The world's sounds fading out (`on`) or back.
@@ -352,3 +354,57 @@ static func _print(hand: bool) -> ImageTexture:
 	else:
 		_foot_texture = texture
 	return texture
+
+
+## What it leaves of what it ate (the user's): bones -- a few long ones, a
+## curve of ribs -- in a dark stain. They stay BONES_LAST.
+const BONES_LAST := 600.0
+
+
+static func bones(tree: SceneTree, at: Vector3) -> void:
+	var world := tree.current_scene as Node3D
+	if world == null:
+		return
+	var space := world.get_world_3d().direct_space_state
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3.UP * 2.0, at + Vector3.DOWN * 3.0, 1))
+	var ground: Vector3 = (hit.position as Vector3) if not hit.is_empty() else at
+	BloodFX.spawn_splatter(world, ground, Vector3.UP, 1.4, Color(0.18, 0.02, 0.02))
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in 4: # long bones, scattered
+		var a := randf() * TAU
+		var from := Vector3(randf_range(-0.4, 0.4), 0.04, randf_range(-0.4, 0.4))
+		_bone_stick(tool, from, from + Vector3(cos(a), 0.0, sin(a)) * randf_range(0.35, 0.55), 0.03)
+	var spine := Vector3(randf_range(-0.2, 0.2), 0.05, randf_range(-0.2, 0.2))
+	for r in 5: # a curve of ribs off a spine
+		var base := spine + Vector3(0.0, 0.0, r * 0.07)
+		for side: float in [-1.0, 1.0]:
+			_bone_stick(tool, base, base + Vector3(side * 0.22, 0.12, 0.03), 0.012)
+	tool.generate_normals()
+	var pile := MeshInstance3D.new()
+	pile.mesh = tool.commit()
+	var look := StandardMaterial3D.new()
+	look.albedo_color = Color(0.82, 0.77, 0.68)
+	look.roughness = 0.8
+	look.cull_mode = BaseMaterial3D.CULL_DISABLED
+	pile.material_override = look
+	world.add_child(pile)
+	pile.global_position = ground
+	pile.global_basis = Basis(Vector3.UP, randf() * TAU)
+	tree.create_timer(BONES_LAST).timeout.connect(func() -> void:
+		if is_instance_valid(pile):
+			pile.queue_free())
+
+
+static func _bone_stick(tool: SurfaceTool, from: Vector3, to: Vector3, radius: float) -> void:
+	var along := (to - from).normalized()
+	var side := along.cross(Vector3.UP if absf(along.y) < 0.9 else Vector3.RIGHT).normalized()
+	var up := side.cross(along)
+	var sides := 5
+	for s in sides:
+		var a0 := TAU * s / sides
+		var a1 := TAU * (s + 1) / sides
+		var o0 := (side * cos(a0) + up * sin(a0)) * radius
+		var o1 := (side * cos(a1) + up * sin(a1)) * radius
+		for corner: Vector3 in [from + o0, to + o0, to + o1, from + o0, to + o1, from + o1]:
+			tool.add_vertex(corner)

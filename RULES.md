@@ -1884,3 +1884,9 @@ them:
 - 2026-10-21: Wendigo Stalker, chunk 6, the camp visit (the user's: 1 in 4 sleeps; tracks, fire out, antler totem). Sleeping at a bedroll (Bedroll passes itself to Stalker.slept), one sleep in 4 (CAMP_VISIT_CHANCE) it came while you slept, and every game shows its signs (StalkerSigns.camp_visit). There are 14 long-fingered hand and foot prints circling the bedroll, gone after 10 min. The camp's fire is put out (Camp.put_out: no flames, light or cooking). A little totem of three lashed sticks, crowned with a small antler and with a bone hung off it, stands stuck in the ground by your head and stays with the camp. The F9 menu gets a 'Camp visit' button (the nearest camp).
 
 - 2026-10-21: The camp visit's totem is gone (the user's). Only the tracks round the bedroll and the fire out remain.
+
+- 2026-10-21: Wendigo Stalker, chunk 7, hunger (the user's: draws and hunts):
+  - **Raw meat:** with raw meat in a player's pack, it stalks them at half the distance (MEAT_CLOSER), and stunts come twice as often.
+  - **Rotten meat:** it hunts that player straight down their trail (from STALK or WAIT, while they're past HUNT_UNTIL).
+  - **Eating (new State.EAT):** raw meat or a body lying within 80 m that nobody can see (not climbers, not its own stunt corpse, not dragged ones), it goes to and eats for 7 s, chewing every ~0.9 s (the 'chewing' slot; bone_crunch stand-ins). It leaves only bones (StalkerSigns.bones: long bones and a curve of ribs in a dark stain, for 10 min). Seen while eating, it hides like ever.
+  - **Test menu:** F9 gets 'Eat (nearest meat or body)'.

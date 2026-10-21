@@ -25,7 +25,7 @@ extends AnimatableBody3D
 ## (NetEntities: its transform carries the surface it's on), and works the
 ## body out from that.
 
-enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT }
+enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT, EAT }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
 enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW }
 
@@ -405,6 +405,22 @@ const WINDOW_HOLD := 15.0
 var _house: GrandmasHouse
 var _window_at := Vector3.INF
 
+## HUNGER (the user's, 2026-10-21: it draws it, and hunts): raw meat on a
+## player and it stalks them MEAT_CLOSER as far back (and stunts come twice as
+## often: _meat_carrier); rotten meat on one and it hunts them straight down
+## their trail. Meat or a body left lying within FOOD_RANGE, nobody seeing
+## it: it goes to it and eats (EAT_TIME, chewing every CHEW_EVERY), leaving
+## only bones (StalkerSigns).
+const MEAT_CLOSER := 0.5
+const FOOD_RANGE := 80.0
+const FOOD_LOOK_EVERY := 2.0
+const EAT_TIME := 7.0
+const CHEW_EVERY := 0.9
+var _food: Node3D
+var _food_look_left := 0.0
+var _chew_left := 0.0
+var _eating_for := 0.0
+
 ## Its breathing (the user's, 2026-10-21): within BREATH_RANGE of you and out
 ## of your sight, slow and wet from where it is, louder the closer -- each
 ## game for its own camera.
@@ -642,9 +658,28 @@ func _think(delta: float) -> void:
 		_unseen_for = 0.0 if _sees(nearest) else _unseen_for + 0.2
 	if (state == State.STALK or state == State.WAIT) and _unseen_for >= HUNT_AFTER and distance > HUNT_UNTIL:
 		_start_hunt(nearest)
+	# Rotten meat on someone: it hunts them straight down their trail.
+	if state == State.STALK or state == State.WAIT:
+		var rotten := _meat_carrier(true)
+		if rotten and rotten.global_position.distance_to(global_position) > HUNT_UNTIL:
+			_start_hunt(rotten)
+	# Food lying about, nobody seeing it: it goes to eat (not while a stunt's
+	# coming, nor at full fear).
+	if (state == State.STALK or state == State.WAIT) and fear < 1.0 and _pending_left < 0.0:
+		_food_look_left -= delta
+		if _food_look_left <= 0.0:
+			_food_look_left = FOOD_LOOK_EVERY
+			var food := _food_near()
+			if food:
+				_food = food
+				_eating_for = 0.0
+				_chew_left = 0.0
+				state = State.EAT
 	match state:
 		State.HUNT:
 			_hunt_tick(delta)
+		State.EAT:
+			_eat_tick(delta)
 		State.SPOTTED:
 			# Dead still a beat, staring back -- then it scrambles off.
 			_desired = Vector3.ZERO
@@ -690,7 +725,7 @@ func _think(delta: float) -> void:
 			var away := global_position - nearest.global_position
 			away.y = 0.0
 			away = away.normalized() if away.length_squared() > 0.01 else Vector3.BACK
-			var spot := nearest.global_position + away * STALK_DISTANCE
+			var spot := nearest.global_position + away * STALK_DISTANCE * (MEAT_CLOSER if _carries_raw(nearest) else 1.0)
 			if HallEcho.inside(nearest.global_position):
 				# Indoors: on their side of the walls (in their room, on their floor).
 				var eye := nearest.head.global_position
@@ -1543,6 +1578,15 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 			_silence(peer)
 			_silence_off_in = 10.0
 			return "Wrong silence (10 s)"
+		&"eat":
+			var food := _food_near()
+			if food == null:
+				return "No meat or body lying unseen within %d m" % int(FOOD_RANGE)
+			_food = food
+			_eating_for = 0.0
+			_chew_left = 0.0
+			state = State.EAT
+			return "Going to eat (listen for it)"
 		&"camp":
 			var bed: Node3D = null
 			for camp in get_tree().get_nodes_in_group(Camp.GROUP):
@@ -1622,6 +1666,69 @@ func _unsilence() -> void:
 		Network.send_stalker_sign(_silenced_peer, &"silence_off")
 	_silenced_peer = 0
 	_silence_off_in = -1.0
+
+
+## Whether `p` has raw (unrotten) meat in their pack (it smells it).
+func _carries_raw(p: PlayerMovement) -> bool:
+	if p == null or p.backpack == null:
+		return false
+	for chunk: Dictionary in p.backpack.meat:
+		if int(chunk.get("kind", Backpack.Kind.MEAT)) == Backpack.Kind.MEAT and not CarryItem.is_rotten_data(chunk):
+			return true
+	return false
+
+
+## The nearest meat or body lying within FOOD_RANGE that nobody can see.
+func _food_near() -> Node3D:
+	var best: Node3D = null
+	var best_distance := FOOD_RANGE
+	var candidates: Array = []
+	for node in get_tree().get_nodes_in_group(InteractHighlight.GROUP):
+		var item := node as CarryItem
+		if item and item.kind == Backpack.Kind.MEAT and not item.freeze and not item.has_meta(&"fetched") and item.is_inside_tree():
+			candidates.append([item, item.global_position])
+	for node in get_tree().get_nodes_in_group(RatSwarm.CORPSE_GROUP):
+		var body := node as Node3D
+		if body == null or body == _corpse or body.has_meta(&"climber") or body.has_meta(&"dragged"):
+			continue
+		var ragdoll := body.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+		candidates.append([body, ragdoll.body_position() if ragdoll else body.global_position])
+	for pair: Array in candidates:
+		var at: Vector3 = pair[1]
+		var distance := at.distance_to(global_position)
+		if distance < best_distance and not _visible_from_any([at + Vector3.UP * 0.5]):
+			best_distance = distance
+			best = pair[0]
+	return best
+
+
+## Eating: to the food, then down over it, chewing, a while; then only bones.
+func _eat_tick(delta: float) -> void:
+	if not is_instance_valid(_food):
+		state = State.STALK
+		return
+	var ragdoll := _food.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+	var at := ragdoll.body_position() if ragdoll else _food.global_position
+	var to := at - global_position
+	if to.length() > 2.5 * SIZE * 0.5:
+		_desired = to.normalized() * CRAWL
+		return
+	_desired = Vector3.ZERO
+	_velocity = Vector3.ZERO
+	_heading = _flat(to)
+	_eating_for += delta
+	_chew_left -= delta
+	if _chew_left <= 0.0:
+		_chew_left = CHEW_EVERY * randf_range(0.7, 1.3)
+		_say(&"chewing", true, 1.0, at + Vector3.UP * 0.4, -2.0)
+	if _eating_for >= EAT_TIME:
+		Network.send_stalker_sign(0, &"bones", at)
+		if _food.has_method(&"_remove"):
+			_food.call(&"_remove")
+		else:
+			_food.queue_free()
+		_food = null
+		state = State.STALK
 
 
 ## A player carrying meat: raw (`rotten` false), or rotten -- or null.
