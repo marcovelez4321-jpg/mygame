@@ -1867,3 +1867,12 @@ them:
   - **Antlers:** small broken ones out of the skull on a BoneAttachment3D, bone-coloured. The right has one tine; the left is snapped half-grown and ragged.
 
 - 2026-10-21: Wendigo Stalker, chunk 3: breathing (the user's: when it's close). Within 15 m of your camera and out of your sight, its slow wet breathing fades in from where it is (louder closer), and fades out in sight or further off. Each game handles this for its own camera. New StalkerVoices slots: breathing, knock and chewing. The fallbacks are a generated breath loop, three generated knocks, and the bone_crunch clips.
+
+- 2026-10-21: Wendigo Stalker, chunk 4, the stunts reworked (the user's picks):
+  - **Upright:** the body can stand at full height on every game, carried in net_state. The spine stands straight, the long arms hang nearly to its knees, the feet step under it and the head goes over at 90 degrees. It unfolds over about 0.6 s.
+  - **Behind you:** standing, holds 16 s. Noticed, it looks at you a beat (1 s), then scrambles off.
+  - **Watching:** unchanged, holds 30 s.
+  - **Ceiling, doorway and corpse drag:** one of two styles at random. Either it stops dead halfway for 1.2 s and looks at you, then goes on at 45% speed; or it crosses slow and wrong, in jerky snatches at 30%, its head turned away (head_averted, also carried in net_state).
+  - **Help scream:** where it came from there's nobody, only signs (StalkerSigns.help_signs, on every game, gone after 5 min): a blood trail off into the dark, four long scratches gouged in the ground, and torn clothes, one bloodied.
+  - **Leap:** landed across the gap, it stands and stares 2.5 s, then it's gone.
+  - **New: Angel, the weeping-angel stunt.** It stands dead still about 40 m off, 5 m closer each time you look away and back (where you can't see it move). Within 8 m it's gone. 90 s at most.

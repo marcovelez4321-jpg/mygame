@@ -27,7 +27,7 @@ extends AnimatableBody3D
 
 enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
-enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE }
+enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL }
 
 const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Character_Monster_03.fbx")
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
@@ -350,6 +350,44 @@ const FROSTBITE := Color(0.3, 0.29, 0.38)
 const SKIN_ROUGHNESS := 0.42
 const ANTLER_COLOR := Color(0.78, 0.74, 0.64)
 
+## UPRIGHT (the user's, 2026-10-21): the wendigo standing at its full height
+## -- right behind you, the leap's stare across the gap, the angel stunt --
+## every game standing its body up (net_state carries it, and whether its
+## head's turned away from you: the slow, jerky movers never look at you).
+var upright := false
+var head_averted := false
+var _upright_blend := 0.0
+## How high its spine's middle stands over its feet (measured at the start).
+var _stand_mid := 2.0
+const UPRIGHT_BIT := 1 << 11
+const AVERT_BIT := 1 << 12
+const RISE_SPEED := 1.6 # (blend a second: it unfolds up over ~0.6 s)
+## The stunts that wait for you (the user's: twice as long).
+const BEHIND_HOLD := 16.0
+const WATCH_HOLD := 30.0
+## The leap: landed across the gap, it stands and stares this long, then goes.
+const LEAP_STARE := 2.5
+## The movers (ceiling, doorway, corpse drag), one of two at random each time
+## (the user's): STOP AND LOOK -- halfway across it stops dead MOVER_STOP_TIME
+## and looks at you, then goes on at MOVER_SLOW; or SLOW AND WRONG -- across
+## in jerky snatches at MOVER_CRAWL, never looking at you.
+const MOVER_STOP_TIME := 1.2
+const MOVER_SLOW := 0.45
+const MOVER_CRAWL := 0.3
+var _mover_style := 0
+var _mover_time := 0.0
+var _mover_stopped := false
+var _mover_stop_left := 0.0
+var _mover_length := 1.0
+## The angel (the user's: a weeping angel): standing dead still ANGEL_FROM
+## off; each time you look away and back it's ANGEL_STEP closer; within
+## ANGEL_CLOSEST it's gone. ANGEL_HOLD at most.
+const ANGEL_FROM := 40.0
+const ANGEL_STEP := 5.0
+const ANGEL_CLOSEST := 8.0
+const ANGEL_HOLD := 90.0
+var _angel_seen := false
+
 ## Its breathing (the user's, 2026-10-21): within BREATH_RANGE of you and out
 ## of your sight, slow and wet from where it is, louder the closer -- each
 ## game for its own camera.
@@ -427,11 +465,13 @@ func net_restore(_data: Dictionary) -> void:
 
 ## The fear meter, sent with each update (for the HUD's meter everywhere).
 func net_state() -> int:
-	return int(round(fear * 1000.0))
+	return int(round(fear * 1000.0)) | (UPRIGHT_BIT if upright else 0) | (AVERT_BIT if head_averted else 0)
 
 
 func net_apply(value: int) -> void:
-	fear = value / 1000.0
+	fear = (value & 2047) / 1000.0
+	upright = value & UPRIGHT_BIT != 0
+	head_averted = value & AVERT_BIT != 0
 
 
 # ---- Hitboxes on its bones -------------------------------------------------------------
@@ -528,6 +568,9 @@ func _think(delta: float) -> void:
 	_fear_tick(delta)
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	_silence_tick(delta)
+	if state != State.STUNT and (upright or head_averted):
+		upright = false # (a stunt cut short: back down on all fours)
+		head_averted = false
 	if state == State.APPROACH and is_instance_valid(_victim) and _cut_off_tick(delta, _victim):
 		return
 	if state == State.APPROACH or state == State.LUNGE or state == State.DRAG:
@@ -1601,6 +1644,8 @@ func _stage(kind: int) -> bool:
 			return true
 		Stunt.HELP:
 			# A human voice screaming for help, far off; then it follows, unseen.
+			# Where it came from: torn clothes, a blood trail off into the dark,
+			# its long scratches in the ground (the user's) -- nobody.
 			for attempt in 8:
 				var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 				var hit := _ground_at(p.global_position + way * randf_range(70.0, 140.0))
@@ -1609,6 +1654,7 @@ func _stage(kind: int) -> bool:
 				_help_spot = hit.position
 				_help_time = 0.0
 				_say(&"help_scream", true, 1.0, _help_spot + Vector3.UP * 1.5)
+				Network.send_stalker_sign(0, &"help_signs", _help_spot, way)
 				_moment()
 				return true
 			return false
@@ -1617,7 +1663,10 @@ func _stage(kind: int) -> bool:
 			var hit := _ground_at(p.global_position - look * 3.5)
 			if hit.is_empty() or not _place(hit.position, hit.normal, (p.global_position - (hit.position as Vector3)), true):
 				return false
-			_stunt_left_set(8.0)
+			# Standing, too tall, dead still, its head over at 90 degrees (the user's);
+			# noticed: it looks at you a beat, then scrambles off.
+			upright = true
+			_stunt_left_set(BEHIND_HOLD)
 			_stunt_rattle_left = 3.0
 			return true
 		Stunt.CEILING:
@@ -1636,7 +1685,8 @@ func _stage(kind: int) -> bool:
 			if hit.is_empty() or not _place(hit.position, hit.normal, dir, false):
 				return false
 			_stunt_to = dir.rotated(Vector3.UP, signf(turn) * 0.8)
-			_stunt_left_set(2.4)
+			_mover_start(2.4)
+			_stunt_left_set(7.0)
 			_moment()
 			return true
 		Stunt.DOORWAY, Stunt.DRAG:
@@ -1652,7 +1702,8 @@ func _stage(kind: int) -> bool:
 			if not _place(from, Vector3.UP, to - from, true):
 				return false
 			_stunt_to = to
-			_stunt_left_set(9.0)
+			_mover_start(from.distance_to(to))
+			_stunt_left_set(30.0)
 			if kind == Stunt.DRAG:
 				_corpse = CORPSE.instantiate() as Enemy
 				_corpse.can_mutate = false
@@ -1669,9 +1720,24 @@ func _stage(kind: int) -> bool:
 			var hit := _ground_at(eye + dir * randf_range(20.0, 35.0))
 			if hit.is_empty() or not _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), false):
 				return false
-			_stunt_left_set(15.0)
+			_stunt_left_set(WATCH_HOLD)
 			_stunt_rattle_left = 1.0
 			return true
+		Stunt.ANGEL:
+			# Standing dead still ANGEL_FROM off, somewhere they'll see it when
+			# they turn: closer every time they look away.
+			for attempt in 12:
+				var way := look.rotated(Vector3.UP, randf_range(0.9, PI) * (1.0 if randf() < 0.5 else -1.0))
+				var hit := _ground_at(p.global_position + way * ANGEL_FROM * randf_range(0.85, 1.1) + Vector3.UP * 3.0)
+				if hit.is_empty() or absf(((hit.position as Vector3) - p.global_position).y) > 8.0:
+					continue
+				if not _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+					continue
+				upright = true
+				_angel_seen = false
+				_stunt_left_set(ANGEL_HOLD)
+				return true
+			return false
 		Stunt.LEAP:
 			# Across the gap between two towers far off, a silhouette.
 			for attempt in 10:
@@ -1693,7 +1759,7 @@ func _stage(kind: int) -> bool:
 				_heading = _velocity.normalized()
 				_airborne = true
 				state = State.STUNT
-				_stunt_left_set(flight + 2.0)
+				_stunt_left_set(flight + LEAP_STARE)
 				_moment()
 				return true
 			return false
@@ -1724,15 +1790,16 @@ func _stunt_tick(delta: float) -> void:
 			if _stunt_phase == 1 and _state_left <= 0.0:
 				_end_stunt()
 		Stunt.CEILING:
-			_desired = _flat_perpendicular(_normal, _stunt_to) * SCRAMBLE
+			_desired = _flat_perpendicular(_normal, _stunt_to) * SCRAMBLE * _mover_pace(delta, _mover_time / 2.4)
 		Stunt.DOORWAY, Stunt.DRAG:
-			if _stunt_phase == 0 and _stunt == Stunt.DRAG and _state_left > 8.6:
+			if _stunt_phase == 0 and _stunt == Stunt.DRAG and _state_left > 29.6:
 				return # (the body falls limp first)
 			var to := _stunt_to - global_position
 			if to.length() < 1.5:
 				_end_stunt()
 				return
-			_desired = to.normalized() * (DRAG_SPEED if _stunt == Stunt.DRAG else SCRAMBLE)
+			var pace := _mover_pace(delta, 1.0 - to.length() / maxf(_mover_length, 0.1))
+			_desired = to.normalized() * (DRAG_SPEED if _stunt == Stunt.DRAG else SCRAMBLE) * pace
 			if _stunt == Stunt.DRAG:
 				_drag_corpse(delta)
 		Stunt.WATCH:
@@ -1750,8 +1817,97 @@ func _stunt_tick(delta: float) -> void:
 				_end_stunt()
 			if _stunt_phase == 1 and _state_left <= 0.0:
 				_end_stunt()
+		Stunt.LEAP:
+			if not _airborne:
+				# Landed across the gap: up on its hind legs, staring back at you.
+				upright = true
+				_velocity = Vector3.ZERO
+				_heading = _flat(p.global_position - global_position)
+		Stunt.ANGEL:
+			_angel_tick(p)
+			if state != State.STUNT:
+				return
 	if _state_left <= 0.0 and _stunt_phase == 0:
 		_end_stunt()
+
+
+## The angel: dead still while they look at it; each time they've looked
+## away (after seeing it), ANGEL_STEP closer, where they can't see it move;
+## the next step would bring it within ANGEL_CLOSEST: gone.
+func _angel_tick(p: PlayerMovement) -> void:
+	_velocity = Vector3.ZERO
+	_heading = _flat(p.global_position - global_position)
+	var points := _standing_points(global_position)
+	for box: Array in _hitboxes:
+		points.append((box[0] as CollisionShape3D).global_position)
+	if _visible_to(p, points):
+		_angel_seen = true
+		return
+	if not _angel_seen:
+		return
+	_angel_seen = false
+	var toward := _flat(p.global_position - global_position)
+	var flat_gap := Vector2(p.global_position.x - global_position.x, p.global_position.z - global_position.z).length()
+	if flat_gap - ANGEL_STEP <= ANGEL_CLOSEST:
+		_end_stunt() # (gone)
+		return
+	var hit := _ground_at(global_position + toward * ANGEL_STEP + Vector3.UP * 3.0)
+	if hit.is_empty() or _visible_to(p, _standing_points(hit.position)):
+		return
+	_place(hit.position, hit.normal, toward, false)
+
+
+## Points up a standing body at `at` (its feet) -- what a player would see of it.
+func _standing_points(at: Vector3) -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	for h: float in [0.5, 1.5, 2.5, 3.4]:
+		points.append(at + Vector3.UP * h * SIZE * 0.5)
+	return points
+
+
+## Whether player `p` could see any of `points` right now.
+func _visible_to(p: PlayerMovement, points: Array[Vector3]) -> bool:
+	var cone := cos(deg_to_rad(VIEW_CONE))
+	var space := get_world_3d().direct_space_state
+	var eye := p.head.global_position
+	var look := -p.head.global_basis.z
+	for point in points:
+		var to := point - eye
+		var distance := to.length()
+		if distance > SEEN_RANGE or look.dot(to / maxf(distance, 0.001)) < cone:
+			continue
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, point, 1, [p.get_rid(), get_rid()]))
+		if hit.is_empty() or (hit.position as Vector3).distance_to(point) < 0.5 * SIZE:
+			return true
+	return false
+
+
+## A mover's start (ceiling, doorway, corpse drag): one of the two ways at
+## random (the user's); `length` its way across (m), or its time (ceiling).
+func _mover_start(length: float) -> void:
+	_mover_style = randi() % 2
+	_mover_time = 0.0
+	_mover_stopped = false
+	_mover_stop_left = 0.0
+	_mover_length = length
+	head_averted = _mover_style == 1
+
+
+## How fast a mover goes now (share of its speed), `progress` 0..1 across.
+func _mover_pace(delta: float, progress: float) -> float:
+	_mover_time += delta
+	if _mover_style == 0:
+		if not _mover_stopped and progress >= 0.5:
+			_mover_stopped = true
+			_mover_stop_left = MOVER_STOP_TIME
+		if _mover_stop_left > 0.0:
+			_mover_stop_left -= delta
+			_velocity = Vector3.ZERO
+			return 0.0 # (stopped dead, looking at you)
+		return MOVER_SLOW if _mover_stopped else 1.0
+	# Slow and wrong: in snatches, a catch between each.
+	var pulse := maxf(sin(_mover_time * 6.0), 0.0)
+	return MOVER_CRAWL * pulse * pulse * 2.4
 
 
 ## Seen mid-stunt: it counts once (fear), and for the ones that wait to be
@@ -1771,20 +1927,22 @@ func _stunt_look(seen: bool) -> void:
 		_add_fear(FEAR_SEEN, "saw it (%s)" % Stunt.keys()[_stunt].to_lower())
 		if _stunt == Stunt.BEHIND or _stunt == Stunt.WATCH:
 			_stunt_phase = 1
-			_state_left = SPOTTED_FREEZE
+			_state_left = SPOTTED_FREEZE # (a beat looking back at you, then off)
 
 
 ## The stunt's over: out of sight again, and back to stalking.
 func _end_stunt() -> void:
 	_airborne = false
 	_silence_off_in = SILENCE_AFTER # (the world's sounds come back)
+	upright = false
+	head_averted = false
 	if is_instance_valid(_corpse):
 		var ragdoll := _corpse.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
 		if ragdoll:
 			ragdoll.carry({})
 	_corpse = null
-	if _stunt == Stunt.LEAP:
-		_turn_up() # (far off on another tower: just gone)
+	if _stunt == Stunt.LEAP or _stunt == Stunt.ANGEL:
+		_turn_up() # (gone: far off on another tower, or from where it stood)
 		return
 	_start_hide(false)
 
@@ -1974,6 +2132,14 @@ func _build_body() -> void:
 		bounds = box if first else bounds.merge(box)
 		first = false
 	var fit := STANDING_HEIGHT / maxf(bounds.size.y, 0.01)
+	# Stretched (the wendigo), then measured standing: how high its spine's
+	# middle stands over its feet (upright, _update_spine).
+	_stretch_body()
+	_model.basis = Basis.from_scale(Vector3.ONE * fit)
+	_model.position = Vector3.ZERO
+	var stand_middle := (_bone_posed_in_visual(_bones.Hips) + _bone_posed_in_visual(_bones.Neck)) * 0.5
+	var sole := minf(_bone_posed_in_visual(_bones.LeftFoot).y, _bone_posed_in_visual(_bones.RightFoot).y) - 0.06 * SIZE
+	_stand_mid = stand_middle.y - sole
 	_model.basis = Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, PI * 0.5) * Basis.from_scale(Vector3.ONE * fit)
 	_model.position = Vector3.ZERO
 	# Its spine (hips to neck) level at BODY_HEIGHT, centred.
@@ -1996,8 +2162,7 @@ func _build_body() -> void:
 		var home := Vector3(root.x + out * (0.35 if arm else 0.25) * SIZE, 0.0, root.z + (-0.3 if arm else 0.25) * SIZE)
 		_limbs.append({upper = upper, lower = lower, end = end, group = spec[3], arm = arm, out = out, home = home,
 				planted = _visual.global_transform * home, foot = _visual.global_transform * home,
-				stepping = false, t = 0.0, from = Vector3.ZERO, to = Vector3.ZERO})
-	_stretch_body()
+				stepping = false, t = 0.0, from = Vector3.ZERO, to = Vector3.ZERO, length = _limb_length(upper, lower, end)})
 	_frostbite_skin()
 	_build_antlers()
 	_build_eyes()
@@ -2176,6 +2341,22 @@ func _find_bone(key: String) -> int:
 	return -1
 
 
+## A bone where it's posed now, in the Visual's space.
+func _bone_posed_in_visual(bone: int) -> Vector3:
+	if bone < 0:
+		return Vector3.ZERO
+	var world := _skeleton.global_transform * _skeleton.get_bone_global_pose(bone).origin
+	return _visual.global_transform.affine_inverse() * world
+
+
+## An arm's or leg's reach as posed (stretched), in metres.
+func _limb_length(upper: int, lower: int, end: int) -> float:
+	var a := _skeleton.get_bone_global_pose(upper).origin
+	var b := _skeleton.get_bone_global_pose(lower).origin
+	var c := _skeleton.get_bone_global_pose(end).origin
+	return (a.distance_to(b) + b.distance_to(c)) * _skeleton.global_transform.basis.get_scale().x
+
+
 ## A bone's rest position in the Visual's space.
 func _bone_in_visual(bone: int) -> Vector3:
 	if bone < 0:
@@ -2221,6 +2402,7 @@ func _process(delta: float) -> void:
 	if camera and camera.global_position.distance_to(global_position) > 90.0:
 		_update_eyes() # (seen from any way off)
 		return # too far to make out its limbs
+	_upright_blend = move_toward(_upright_blend, 1.0 if upright else 0.0, delta * RISE_SPEED)
 	_update_limbs(delta)
 	_update_spine(delta)
 	_reset_pose()
@@ -2364,8 +2546,19 @@ func _update_limbs(delta: float) -> void:
 	for limb in _limbs:
 		if limb.stepping:
 			busy[limb.group] = true
+	var standing := _upright_blend > 0.5
 	for limb in _limbs:
-		var want: Vector3 = xf * limb.home + lead
+		if standing and limb.arm:
+			# Standing: its long arms hanging at its sides, nearly to its knees.
+			var shoulder := _skeleton.global_transform * _skeleton.get_bone_global_pose(limb.upper).origin
+			limb.stepping = false
+			limb.foot = shoulder + Vector3.DOWN * float(limb.length) * 0.97 + xf.basis.x.normalized() * float(limb.out) * 0.1 * SIZE
+			limb.planted = limb.foot
+			continue
+		var home: Vector3 = limb.home
+		if standing:
+			home = Vector3(home.x * 0.55, 0.0, 0.0) # (feet under it)
+		var want: Vector3 = xf * home + lead
 		if limb.stepping:
 			limb.t += delta / STEP_TIME
 			if limb.t >= 1.0:
@@ -2424,8 +2617,14 @@ func _update_spine(delta: float) -> void:
 	_body_y = lerpf(_body_y, (front + back) * 0.5, follow)
 	_body_pitch = lerpf(_body_pitch, atan2(front - back, SPAN * 0.7), follow)
 	_body_roll = lerpf(_body_roll, atan2(right - left, 0.8), follow)
-	_pivot.position = Vector3(0.0, _body_y + sin(_time * 1.7) * 0.015, 0.0)
-	_pivot.basis = Basis.from_euler(Vector3(_body_pitch, 0.0, -_body_roll))
+	var crawl_basis := Basis.from_euler(Vector3(_body_pitch, 0.0, -_body_roll))
+	var crawl_at := Vector3(0.0, _body_y + sin(_time * 1.7) * 0.015, 0.0)
+	# Upright: stood up on its hind legs, the spine straight up, swaying a little.
+	var stand_basis := Basis(Vector3.RIGHT, PI * 0.5).rotated(Vector3.FORWARD, sin(_time * 0.6) * 0.03)
+	var stand_at := Vector3(0.0, _stand_mid, -BODY_HEIGHT)
+	var b := smoothstep(0.0, 1.0, _upright_blend)
+	_pivot.basis = Basis(crawl_basis.get_rotation_quaternion().slerp(stand_basis.get_rotation_quaternion(), b))
+	_pivot.position = crawl_at.lerp(stand_at, b)
 
 
 func _reset_pose() -> void:
@@ -2455,6 +2654,8 @@ func _two_bone(limb: Dictionary) -> void:
 	var side_sk := (to_skeleton.basis * _visual.global_basis.x).normalized() * float(limb.out)
 	var fwd_sk := (to_skeleton.basis * -_visual.global_basis.z).normalized()
 	var pole := up_sk * 1.0 + side_sk * 0.8 + fwd_sk * (-0.3 if limb.arm else 0.3)
+	if _upright_blend > 0.5:
+		pole = fwd_sk * (-1.0 if limb.arm else 1.0) + side_sk * 0.3 # (standing: knees forward, elbows back)
 	pole = (pole - dir * pole.dot(dir))
 	if pole.length_squared() < 0.0001:
 		pole = up_sk
@@ -2541,12 +2742,17 @@ func _aim_head(delta: float, camera: Camera3D) -> void:
 	if _tilt_left <= 0.0:
 		_tilt_left = randf_range(2.0, 5.0)
 		_tilt_target = randf_range(0.4, 1.1) * (1.0 if randf() < 0.5 else -1.0)
+	if upright:
+		_tilt_target = signf(_tilt_target if _tilt_target != 0.0 else 1.0) * PI * 0.5 # (standing: the head over at 90 degrees)
 	_tilt = move_toward(_tilt, _tilt_target, delta * 12.0) # a snap, not a turn
 	_skeleton.set_bone_pose_rotation(head, _skeleton.get_bone_rest(head).basis.get_rotation_quaternion())
 	var to_skeleton := _skeleton.global_transform.affine_inverse()
 	var pose := _skeleton.get_bone_global_pose(head)
 	var face := pose.basis.z.normalized()
-	var wants := ((to_skeleton * camera.global_position) - pose.origin).normalized()
+	var look_at := camera.global_position
+	if head_averted:
+		look_at = _visual.global_transform * Vector3(0.0, BODY_HEIGHT, -6.0) # (never at you: where it's going)
+	var wants := ((to_skeleton * look_at) - pose.origin).normalized()
 	var angle := face.angle_to(wants)
 	if angle > 0.001:
 		var axis := face.cross(wants).normalized()
