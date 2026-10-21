@@ -2078,7 +2078,15 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 			return "Comeback: %s%s" % [_comeback, " (go near your last camp)" if _comeback == &"camp" else ""]
 		&"forget":
 			StalkerMemory.forget()
-			return "It's forgotten you (its saved memory wiped)"
+			_got_you = 0
+			_spins = 0
+			_stares = 0
+			_route_cells.clear()
+			_seen_doing.clear()
+			_shot_spots.clear()
+			_logoff = Vector3.INF
+			_last_camp = Vector3.INF
+			return "It's forgotten you (its memory wiped, saved and in its head)"
 		&"home":
 			if not _lair_at.is_finite():
 				return "No lair (no Stack here)"
