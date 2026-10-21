@@ -27,7 +27,7 @@ extends AnimatableBody3D
 
 enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT, EAT }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
-enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW, PACER, PATH, CROSS, GRAPPLE }
+enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW, PACER, PATH, CROSS, GRAPPLE, SNATCH, FIGHT_WATCH, FALLEN, AMONG }
 
 const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Character_Monster_03.fbx")
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
@@ -423,15 +423,47 @@ const PACER_TIME := 10.0
 const PACER_WATCHED := 2.0
 const PACER_TOP := 32.0
 const PATH_AHEAD := Vector2(2.0, 4.0)
-const PATH_FLEE := 20.0
+const PATH_FLEE := 24.0 # (past GRAB_RANGE: it runs, it doesn't lunge)
 const PATH_HOLD := 12.0
 const CROSS_FLIGHT := 1.3
 const GRAPPLE_FLEE := 6.0
 const GRAPPLE_HOLD := 6.0
 var _pacer_side := 1.0
 var _watched_for := 0.0
-## Each player's last shot (msec): fighting (the fight stunts, next).
+## Each player's last shot (msec): fighting (the fight stunts).
 var _last_shot := {}
+## FIGHTING (the user's, 2026-10-21: no silence for these; on the normal
+## clock): a shot within FIGHT_SHOT and a live enemy within FIGHT_RANGE --
+## these come first then.
+##   SNATCH -- one of the things they're fighting (anything) yanked off into
+##   the dark: it rushes in from out of sight, its arm reaches, grips it by
+##   the head, and drags it away (SNATCH_DRAG), a human screaming.
+##   FIGHT_WATCH -- upright at the edge of the fight, watching; the fight's
+##   over (FIGHT_OVER) or they look straight at it: it scrambles off.
+##   FALLEN -- as the fight ends (no one alive within FALLEN_CLEAR, shots
+##   within FALLEN_AFTER), crouched over one of the bodies at the edge,
+##   eating; seen, it looks up at them FALLEN_STARE, then drags it off by
+##   the head.
+##   AMONG -- one of the shapes charging them is it, upright: a fake charge
+##   (AMONG_CHARGE, never closer than AMONG_STOP), then it veers off and
+##   scrambles out of sight.
+const FIGHT_SHOT := 8.0
+const FIGHT_RANGE := 45.0
+const SNATCH_DRAG := 6.0
+const SNATCH_REACH := 3.0
+const FIGHT_OVER := 5.0
+const FIGHT_WATCH_HOLD := 60.0
+const FALLEN_CLEAR := 25.0
+const FALLEN_AFTER := 25.0
+const FALLEN_STARE := 1.2
+const FALLEN_HOLD := 45.0
+const AMONG_CHARGE := 1.8
+const AMONG_STOP := 24.0
+## After a stunt, it gets away: no grab for this long (it's leaving).
+const AFTER_STUNT_GRACE := 4.0
+var _victim_thing: Node3D
+var _fight_quiet := 0.0
+var _no_grab_left := 0.0
 
 ## HOLDING (the user's, 2026-10-21: hand-accurate, immersive): its right arm
 ## really reaches (IK) for what it takes, and what it's got it holds in that
@@ -670,7 +702,8 @@ func _think(delta: float) -> void:
 	# Within GRAB_RANGE (looking at it or not): it lunges for them (not while
 	# it's cooling down after a drag).
 	var near := _nearest_player()
-	if near and _cooldown_left <= 0.0 and state != State.STUNT and near.drag == null and near.global_position.distance_to(global_position) < GRAB_RANGE:
+	_no_grab_left = maxf(_no_grab_left - delta, 0.0)
+	if near and _cooldown_left <= 0.0 and _no_grab_left <= 0.0 and state != State.STUNT and near.drag == null and near.global_position.distance_to(global_position) < GRAB_RANGE:
 		_lunge_at(near)
 		return
 	# Rushed at: off flat out to cover.
@@ -1600,6 +1633,13 @@ func _start_stunt() -> bool:
 		kinds = fast
 	if _stunt_target.grapple.anchor_point().is_finite():
 		kinds.push_front(Stunt.GRAPPLE)
+	if _fighting(_stunt_target):
+		var fight: Array = [Stunt.SNATCH, Stunt.FIGHT_WATCH, Stunt.AMONG]
+		fight.shuffle()
+		fight.append_array(kinds)
+		kinds = fight
+	if _fight_ending(_stunt_target):
+		kinds.push_front(Stunt.FALLEN)
 	# At Grandma's: the knock and the window join in (first, shuffled with
 	# the rest -- they only fit there).
 	var house := get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
@@ -1692,6 +1732,9 @@ func _prepare_stunt() -> void:
 	if players.is_empty():
 		return
 	_pending_target = players[randi() % players.size()] as PlayerMovement
+	if _fighting(_pending_target) or _fight_ending(_pending_target):
+		_pending_left = 0.0 # (in a fight: no silence -- the user's)
+		return
 	_pending_left = SILENCE_LEAD
 	_silence(_pending_target.get_multiplayer_authority())
 
@@ -1797,6 +1840,48 @@ func _eat_tick(delta: float) -> void:
 			_food.queue_free()
 		_food = null
 		state = State.STALK
+
+
+## In a fight: shot within FIGHT_SHOT, a live enemy within FIGHT_RANGE.
+func _fighting(p: PlayerMovement) -> bool:
+	if p == null or Time.get_ticks_msec() - int(_last_shot.get(p, -1000000)) > int(FIGHT_SHOT * 1000.0):
+		return false
+	return not _live_enemies_near(p.global_position, FIGHT_RANGE).is_empty()
+
+
+## A fight just over: shots within FALLEN_AFTER, no one alive within
+## FALLEN_CLEAR, a body within FIGHT_RANGE.
+func _fight_ending(p: PlayerMovement) -> bool:
+	if p == null or Time.get_ticks_msec() - int(_last_shot.get(p, -1000000)) > int(FALLEN_AFTER * 1000.0):
+		return false
+	return _live_enemies_near(p.global_position, FALLEN_CLEAR).is_empty() and _corpse_for(p) != null
+
+
+## The live enemies within `reach` of `at` (no bosses: too big to take).
+func _live_enemies_near(at: Vector3, reach: float) -> Array[Node3D]:
+	var found: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group(&"enemies"):
+		var body := node as Node3D
+		if body == null or body == self or body.global_position.distance_to(at) > reach:
+			continue
+		var health := body.get_node_or_null(^"Health") as Health
+		if health == null or health.is_dead or health.max_health > 500.0:
+			continue
+		found.append(body)
+	return found
+
+
+## A body at the fight's edge they can't see now (for FALLEN), or null.
+func _corpse_for(p: PlayerMovement) -> Node3D:
+	for node in get_tree().get_nodes_in_group(&"corpses"):
+		var body := node as Node3D
+		if body == null or body == _corpse or body.has_meta(&"climber") or body.has_meta(&"dragged"):
+			continue
+		var ragdoll := body.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+		var at := ragdoll.body_position() if ragdoll else body.global_position
+		if at.distance_to(p.global_position) < FIGHT_RANGE and not _visible_to(p, [at + Vector3.UP * 0.5]):
+			return body
+	return null
 
 
 ## Moving fast (FAST_SPEED and up, flat).
@@ -1956,6 +2041,64 @@ func _stage(kind: int) -> bool:
 			_stunt_left_set(WATCH_HOLD)
 			_stunt_rattle_left = 1.0
 			return true
+		Stunt.SNATCH:
+			# One of the things they're fighting -- one off at the edge, not right
+			# in front of them -- and somewhere near it they can't see.
+			var victims := _live_enemies_near(p.global_position, FIGHT_RANGE)
+			victims.sort_custom(func(a: Node3D, b: Node3D) -> bool:
+				return look.dot(_flat(a.global_position - eye)) < look.dot(_flat(b.global_position - eye)))
+			for victim in victims:
+				for attempt in 6:
+					var away := _flat(victim.global_position - p.global_position).rotated(Vector3.UP, randf_range(-1.2, 1.2))
+					var hit := _ground_at(victim.global_position + away * randf_range(6.0, 12.0) + Vector3.UP * 4.0)
+					if hit.is_empty() or not _place(hit.position, hit.normal, victim.global_position - (hit.position as Vector3), true):
+						continue
+					_victim_thing = victim
+					_stunt_left_set(SNATCH_DRAG + 6.0)
+					return true
+			return false
+		Stunt.FIGHT_WATCH:
+			for attempt in 10:
+				var way := look.rotated(Vector3.UP, randf_range(1.0, 1.5) * (1.0 if randf() < 0.5 else -1.0))
+				var hit := _ground_at(p.global_position + way * randf_range(25.0, 35.0) + Vector3.UP * 5.0)
+				if hit.is_empty() or not _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+					continue
+				upright = true
+				_fight_quiet = 0.0
+				_stunt_left_set(FIGHT_WATCH_HOLD)
+				return true
+			return false
+		Stunt.FALLEN:
+			var body := _corpse_for(p)
+			if body == null:
+				return false
+			var ragdoll := body.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+			var at := ragdoll.body_position() if ragdoll else body.global_position
+			var far_side := _flat(at - p.global_position)
+			var hit := _ground_at(at + far_side * 1.6 + Vector3.UP * 3.0)
+			if hit.is_empty() or not _place(hit.position, hit.normal, at - (hit.position as Vector3), true):
+				return false
+			_victim_thing = body
+			head_averted = true # (head down over it, eating)
+			_stunt_rattle_left = 0.0
+			_stunt_left_set(FALLEN_HOLD)
+			return true
+		Stunt.AMONG:
+			var chargers := _live_enemies_near(p.global_position, 40.0)
+			for charger in chargers:
+				var gap := charger.global_position.distance_to(p.global_position)
+				if gap < AMONG_STOP + 6.0:
+					continue
+				# From just past the edge of their view beside it: it joins the charge.
+				var behind := _flat(charger.global_position - p.global_position)
+				var from := _out_of_view_beside(charger.global_position, behind.cross(Vector3.UP) * (1.0 if randf() < 0.5 else -1.0))
+				if not from.is_finite():
+					continue
+				_place(from, Vector3.UP, p.global_position - from, false)
+				upright = true
+				_stunt_left_set(AMONG_CHARGE)
+				return true
+			return false
 		Stunt.PACER:
 			var going := _flat(p.velocity)
 			_pacer_side = 1.0 if randf() < 0.5 else -1.0
@@ -2150,6 +2293,30 @@ func _stunt_tick(delta: float) -> void:
 			_knock_tick(p)
 			if state != State.STUNT:
 				return
+		Stunt.SNATCH:
+			_snatch_tick(p, delta)
+			if state != State.STUNT:
+				return
+		Stunt.FIGHT_WATCH:
+			_velocity = Vector3.ZERO
+			_heading = _flat(p.global_position - global_position)
+			_fight_quiet = 0.0 if _fighting(p) else _fight_quiet + delta
+			var to := (global_position + Vector3.UP * SIZE - p.head.global_position).normalized()
+			var stared := (-p.head.global_basis.z).dot(to) > cos(deg_to_rad(STARED_AT)) and _visible_to(p, _standing_points(global_position))
+			if stared or _fight_quiet >= FIGHT_OVER:
+				_end_stunt()
+				return
+		Stunt.FALLEN:
+			_fallen_tick(p, delta)
+			if state != State.STUNT:
+				return
+		Stunt.AMONG:
+			# Charging them with the rest -- never into its own grab range.
+			var gap := p.global_position.distance_to(global_position)
+			_desired = _flat(p.global_position - global_position) * SPRINT if gap > AMONG_STOP else Vector3.ZERO
+			if gap <= AMONG_STOP or _state_left <= 0.0:
+				_end_stunt() # (veers off, scrambling out of sight)
+				return
 		Stunt.PACER:
 			if _stunt_phase == 0:
 				# Alongside them PACER_OFF out, keeping pace (however fast).
@@ -2221,6 +2388,76 @@ func _angel_tick(p: PlayerMovement) -> void:
 	if hit.is_empty() or _visible_to(p, _standing_points(hit.position)):
 		return
 	_place(hit.position, hit.normal, toward, false)
+
+
+## The snatch: rushing in at it; its arm reaching (SNATCH_REACH off); the
+## grab -- dead, taken by the head (a human screams) -- and dragged off into
+## the dark, flat out, away from them.
+func _snatch_tick(p: PlayerMovement, delta: float) -> void:
+	if not is_instance_valid(_victim_thing):
+		_end_stunt()
+		return
+	match _stunt_phase:
+		0:
+			var at := _head_of(_victim_thing)
+			var to := at - global_position
+			_desired = to.normalized() * LUNGE
+			if to.length() < SNATCH_REACH * SIZE * 0.5 + 1.0:
+				_stunt_phase = 1
+				_state_left = REACH_TIME
+				reach_for(_victim_thing)
+			elif _state_left <= SNATCH_DRAG:
+				_end_stunt() # (never got to it)
+		1:
+			_desired = Vector3.ZERO
+			_velocity = Vector3.ZERO
+			if _state_left <= 0.0:
+				# Got it.
+				_victim_thing.set_meta(&"culled", true) # (taken: nothing dropped)
+				var health := _victim_thing.get_node_or_null(^"Health") as Health
+				var human := _victim_thing is Enemy
+				if health and not health.is_dead:
+					health.take_damage(health.current_health + 1.0)
+				hold.call_deferred(_victim_thing)
+				if human:
+					_say(&"help_scream", true, 1.0, _head_of(_victim_thing))
+				_moment(true)
+				_stunt_phase = 2
+				_state_left = SNATCH_DRAG
+		2:
+			_desired = (_flat(global_position - p.global_position) + _flat(_heading) * 0.3).normalized() * DRAG_SPEED * 2.2
+			if _state_left <= 0.0 or (_state_left < SNATCH_DRAG - 2.0 and not _seen()):
+				_end_stunt()
+
+
+## Eating the fallen: head down over it, chewing; seen, it looks up at them a
+## beat, then drags it off by the head, away into the dark.
+func _fallen_tick(p: PlayerMovement, delta: float) -> void:
+	if not is_instance_valid(_victim_thing):
+		_end_stunt()
+		return
+	match _stunt_phase:
+		0:
+			_velocity = Vector3.ZERO
+			_stunt_rattle_left -= delta
+			if _stunt_rattle_left <= 0.0:
+				_stunt_rattle_left = CHEW_EVERY * randf_range(0.7, 1.3)
+				_say(&"chewing", true, 1.0, _head_of(_victim_thing), -2.0)
+			if _visible_to(p, _body_points(global_position, global_basis)):
+				head_averted = false # (looks up at them)
+				_stunt_phase = 1
+				_state_left = FALLEN_STARE
+				_moment(true)
+		1:
+			_velocity = Vector3.ZERO
+			if _state_left <= 0.0:
+				hold(_victim_thing)
+				_stunt_phase = 2
+				_state_left = SNATCH_DRAG
+		2:
+			_desired = _flat(global_position - p.global_position) * DRAG_SPEED * 1.6
+			if _state_left <= 0.0 or (_state_left < SNATCH_DRAG - 2.0 and not _seen()):
+				_end_stunt()
 
 
 ## The knock: waiting for the door; opened, out at the fog's edge, upright,
@@ -2328,11 +2565,17 @@ func _stunt_look(seen: bool) -> void:
 func _end_stunt() -> void:
 	_airborne = false
 	_silence_off_in = SILENCE_AFTER # (the world's sounds come back)
+	_no_grab_left = AFTER_STUNT_GRACE
 	upright = false
 	head_averted = false
 	if holding or reaching:
 		let_go()
 	_corpse = null
+	# A small thing taken whole (no ragdoll): eaten, gone.
+	if _stunt == Stunt.SNATCH and is_instance_valid(_victim_thing) and _victim_thing.get_node_or_null(^"EnemyRagdoll") == null \
+			and _victim_thing.has_meta(&"culled"):
+		_victim_thing.queue_free()
+	_victim_thing = null
 	if _stunt == Stunt.WINDOW:
 		Network.send_stalker_sign(0, &"window_off", _window_at)
 		_window_at = Vector3.INF
@@ -2345,7 +2588,10 @@ func _end_stunt() -> void:
 	if _stunt == Stunt.PACER and not _seen():
 		_turn_up() # (lost in the murk)
 		return
-	if _stunt in [Stunt.PATH, Stunt.CROSS, Stunt.GRAPPLE, Stunt.PACER]:
+	if _stunt in [Stunt.SNATCH, Stunt.FALLEN] and not _seen():
+		_turn_up() # (off into the dark with it)
+		return
+	if _stunt in [Stunt.PATH, Stunt.CROSS, Stunt.GRAPPLE, Stunt.PACER, Stunt.FIGHT_WATCH, Stunt.AMONG, Stunt.SNATCH, Stunt.FALLEN]:
 		_start_hide(true) # (seen: it scrambles off, flat out -- never just gone)
 		return
 	_start_hide(false)

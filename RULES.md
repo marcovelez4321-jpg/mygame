@@ -1905,3 +1905,10 @@ them:
   - **CROSS:** one long bound across your way ahead, 1.3 s in the air (apex ~4.6 m), from past the edge of your view. It lands and scrambles off.
   - **GRAPPLE:** while you're on the grapple (PlayerGrapple.anchor_point; also if you grapple during the silence before a stunt), it races from somewhere near the anchor you can't see (6-14 m off) to the anchor and crouches facing you. Within 6 m of you, or the grapple let go, it scrambles off.
   - **Fights:** each player's last shot is now tracked, for the fight stunts.
+
+- 2026-10-21: Wendigo Stalker, fight stunts (the user's picks: no silence for them, on the normal clock, the snatch takes anything). Fighting means a shot within 8 s and a live enemy within 45 m (no bosses: over 500 health); these go first then.
+  - **SNATCH:** it rushes from out of sight at one of the things you're fighting (preferring one off to the side), its right arm reaches (REACH), and at the grab it kills it (no drops) and holds it by the head. A human screams (help_scream). It drags it off flat out for 6 s, gone once unseen. A thing with no ragdoll was carried whole, and is eaten when it's done.
+  - **FIGHT_WATCH:** upright at the edge of the fight, 25-35 m off and just past the edge of your view. The fight over 5 s, or you looking straight at it: it scrambles off.
+  - **FALLEN** (as a fight ends: shots within 25 s, nobody alive within 25 m, a body you can't see within 45 m): it's crouched over the body, head down, eating (chewing). Seen, it looks up at you 1.2 s, then drags it off by the head.
+  - **AMONG:** from just past the edge of your view beside one of the chargers, it joins the charge upright. A fake charge: it never comes within 24 m (outside its grab range), 1.8 s at most, then it veers off scrambling.
+  - **Grace after stunts:** no grab for 4 s after any stunt (it's leaving), and 'In your path' now flees at 24 m. Without this, it would have lunged right after scrambling off.
