@@ -3,7 +3,8 @@ extends StaticBody3D
 
 ## A camp's bedroll (Camp): F to sleep (the user's: heals SLEEP_HEAL, uses
 ## SLEEP_HUNGER of the hunger meter; the screen fades out and back). While you
-## sleep the Stalker comes on down your trail (Stalker.slept, the user's).
+## sleep the Stalker comes on down your trail (Stalker.slept, the user's), and
+## now and then it comes to your camp (you wake to its signs).
 
 const SLEEP_HEAL := 50.0
 const SLEEP_HUNGER := 0.25
@@ -35,7 +36,7 @@ func use_by(player: Node) -> void:
 		body.virus.hunger = maxf(body.virus.hunger - SLEEP_HUNGER, 0.0)
 		var stalker := body.get_tree().get_first_node_in_group(&"stalker")
 		if stalker:
-			stalker.call(&"slept", body)
+			stalker.call(&"slept", body, self)
 	if body.is_multiplayer_authority():
 		_fade(body)
 

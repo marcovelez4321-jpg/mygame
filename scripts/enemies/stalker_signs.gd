@@ -47,6 +47,8 @@ static func play(tree: SceneTree, kind: StringName, at: Vector3, dir: Vector3) -
 			window_shadow(tree, at, dir)
 		&"window_off":
 			window_shadow_off()
+		&"camp_visit":
+			camp_visit(tree, at, dir)
 
 
 ## The world's sounds fading out (`on`) or back.
@@ -266,3 +268,138 @@ static func _silhouette() -> ImageTexture:
 	fill.call(mid + 5, 12, mid + 8, 14)
 	_window_texture = ImageTexture.create_from_image(image)
 	return _window_texture
+
+
+## Its camp visit (the user's: tracks, fire out, the totem): round the
+## bedroll at `at` (its length along `along`).
+const TRACKS := 14
+const TRACK_RING := 2.4
+const TRACKS_LAST := 600.0
+static var _hand_texture: ImageTexture
+static var _foot_texture: ImageTexture
+
+
+static func camp_visit(tree: SceneTree, at: Vector3, along: Vector3) -> void:
+	var world := tree.current_scene as Node3D
+	if world == null:
+		return
+	var camp: Camp = null
+	for node in tree.get_nodes_in_group(Camp.GROUP):
+		var each := node as Camp
+		if each and each.global_position.distance_to(at) < 8.0 and (camp == null or each.global_position.distance_to(at) < camp.global_position.distance_to(at)):
+			camp = each
+	if camp:
+		camp.put_out()
+	var holder: Node3D = camp if camp else world
+	var space := world.get_world_3d().direct_space_state
+	# Its tracks: round and round the bed, hands and feet, long-fingered.
+	var turn := randf() * TAU
+	for i in TRACKS:
+		var a := turn + TAU * i / TRACKS + randf_range(-0.12, 0.12)
+		var spot := at + Vector3(cos(a), 0.0, sin(a)) * (TRACK_RING + randf_range(-0.3, 0.3))
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 2.0, spot + Vector3.DOWN * 3.0, 1))
+		if hit.is_empty():
+			continue
+		var mark := Decal.new()
+		var hand := i % 2 == 0
+		mark.texture_albedo = _print(hand)
+		mark.size = Vector3(0.45, 1.0, 0.95) if hand else Vector3(0.35, 1.0, 0.85)
+		mark.modulate = Color(0.08, 0.07, 0.07, 0.9)
+		holder.add_child(mark)
+		mark.global_position = (hit.position as Vector3) + Vector3.UP * 0.2
+		# Pointed round the ring (it went round you).
+		var going := Vector3(-sin(a), 0.0, cos(a))
+		mark.global_basis = Basis(Vector3.UP, atan2(going.x, going.z))
+		tree.create_timer(TRACKS_LAST).timeout.connect(func() -> void:
+			if is_instance_valid(mark):
+				mark.queue_free())
+	# The totem, stuck in the ground by your head.
+	var head := at + along.normalized() * (Camp.BED_LENGTH * 0.5 + 0.5)
+	var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(head + Vector3.UP * 2.0, head + Vector3.DOWN * 3.0, 1))
+	var totem := _totem()
+	holder.add_child(totem)
+	totem.global_position = (ground.position as Vector3) if not ground.is_empty() else head
+	totem.global_basis = Basis(Vector3.UP, randf() * TAU)
+
+
+## A little totem: three sticks lashed in a tripod, a small antler crowning it,
+## a bone hung off it.
+static func _totem() -> MeshInstance3D:
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var wood := Color(0.24, 0.18, 0.13)
+	var bone := Color(0.8, 0.76, 0.66)
+	for i in 3:
+		var a := TAU * i / 3.0
+		var foot := Vector3(cos(a), 0.0, sin(a)) * 0.28
+		_stick(tool, foot + Vector3.DOWN * 0.15, Vector3.UP * 1.15 - foot * 0.15, 0.025, wood)
+	# The antler on top: a beam and two tines.
+	var crown := Vector3.UP * 1.12
+	_stick(tool, crown, crown + Vector3(0.18, 0.28, 0.0), 0.02, bone)
+	_stick(tool, crown + Vector3(0.09, 0.14, 0.0), crown + Vector3(0.05, 0.3, 0.08), 0.012, bone)
+	_stick(tool, crown, crown + Vector3(-0.14, 0.22, 0.04), 0.018, bone)
+	# A bone hung off it.
+	_stick(tool, Vector3(0.0, 0.75, 0.12), Vector3(0.02, 0.45, 0.14), 0.02, bone)
+	tool.generate_normals()
+	var totem := MeshInstance3D.new()
+	totem.mesh = tool.commit()
+	var look := StandardMaterial3D.new()
+	look.vertex_color_use_as_albedo = true
+	look.roughness = 0.95
+	look.cull_mode = BaseMaterial3D.CULL_DISABLED
+	totem.material_override = look
+	return totem
+
+
+static func _stick(tool: SurfaceTool, from: Vector3, to: Vector3, radius: float, color: Color) -> void:
+	var along := (to - from).normalized()
+	var side := along.cross(Vector3.FORWARD if absf(along.z) < 0.9 else Vector3.RIGHT).normalized()
+	var up := side.cross(along)
+	var sides := 5
+	for s in sides:
+		var a0 := TAU * s / sides
+		var a1 := TAU * (s + 1) / sides
+		var o0 := (side * cos(a0) + up * sin(a0)) * radius
+		var o1 := (side * cos(a1) + up * sin(a1)) * radius
+		for corner: Vector3 in [from + o0, to + o0 * 0.6, to + o1 * 0.6, from + o0, to + o1 * 0.6, from + o1]:
+			tool.set_color(color)
+			tool.add_vertex(corner)
+
+
+## A print: a long hand (a palm and five long thin fingers) or a long narrow
+## foot with toes -- white where it's pressed in, for a decal.
+static func _print(hand: bool) -> ImageTexture:
+	if hand and _hand_texture:
+		return _hand_texture
+	if not hand and _foot_texture:
+		return _foot_texture
+	var w := 40
+	var h := 84
+	var image := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var blot := func(cx: float, cy: float, rx: float, ry: float) -> void:
+		for y in range(int(cy - ry - 1), int(cy + ry + 2)):
+			for x in range(int(cx - rx - 1), int(cx + rx + 2)):
+				if x < 0 or y < 0 or x >= w or y >= h:
+					continue
+				var d := pow((x - cx) / rx, 2.0) + pow((y - cy) / ry, 2.0)
+				if d <= 1.0:
+					image.set_pixel(x, y, Color(1, 1, 1, clampf((1.0 - d) * 2.0, 0.0, 1.0)))
+	if hand:
+		blot.call(20.0, 62.0, 10.0, 13.0) # the palm
+		for f in 4: # four long fingers
+			var fx := 11.0 + f * 6.0
+			for k in 7:
+				blot.call(fx + (f - 1.5) * k * 0.4, 46.0 - k * 6.0, 2.0, 3.6)
+		for k in 4: # the thumb, off to the side
+			blot.call(32.0 + k * 1.5, 58.0 - k * 4.0, 2.0, 3.0)
+	else:
+		blot.call(20.0, 52.0, 8.0, 26.0) # a long narrow foot
+		for t in 4:
+			blot.call(12.0 + t * 5.5, 20.0 - absf(t - 1.5) * 2.0, 2.2, 4.0)
+	var texture := ImageTexture.create_from_image(image)
+	if hand:
+		_hand_texture = texture
+	else:
+		_foot_texture = texture
+	return texture

@@ -7,7 +7,7 @@ extends CanvasLayer
 ## the Stalker); a client's says so. The HUD makes one.
 
 ## Events past its stunts (Stalker.test_event).
-const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits close)"]]
+const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits close)"], ["camp", "Camp visit"]]
 
 var _panel: PanelContainer
 var _result: Label

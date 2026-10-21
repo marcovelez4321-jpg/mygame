@@ -241,6 +241,10 @@ const FLANK_RING := 20.0
 ## Slept (a bedroll, the user's): it gains this share of the trail between it
 ## and you at once.
 const SLEEP_PROGRESS := 0.4
+## ... and one sleep in CAMP_VISIT_CHANCE it came to your camp while you slept
+## (the user's, 2026-10-21: 1 in 4): its tracks round your bedroll, your fire
+## out, an antler totem by your head (StalkerSigns.camp_visit).
+const CAMP_VISIT_CHANCE := 0.25
 ## Its voices (the user's sounds: StalkerVoices, a slot for everything it does
 ## or decides) -- sparse: none within VOICE_GAP of the last (bar the urgent
 ## ones: hurt, lunge, grab, driven off, thrown off), the ambient ones only by
@@ -1069,7 +1073,18 @@ func _to_trail_end(points: PackedVector3Array) -> void:
 ## SLEEP_PROGRESS of the way down your trail from where it was to you, onto
 ## a crumb no one can see it on (never past your newest). Not mid-strike,
 ## mid-stunt, fleeing, gone or in someone's view (it never vanishes in sight).
-func slept(p: PlayerMovement) -> void:
+func slept(p: PlayerMovement, bed: Node3D = null) -> void:
+	if bed and randf() < CAMP_VISIT_CHANCE:
+		camp_visit(bed)
+	_slept_on_trail(p)
+
+
+## It came while they slept: its signs round `bed` (every game).
+func camp_visit(bed: Node3D) -> void:
+	Network.send_stalker_sign(0, &"camp_visit", bed.global_position, bed.global_basis.z)
+
+
+func _slept_on_trail(p: PlayerMovement) -> void:
 	if state in [State.DRAG, State.LUNGE, State.FLEE, State.AWAY, State.STUNT] or _seen():
 		return
 	var points: PackedVector3Array = (_trails.get(p, {}) as Dictionary).get("points", PackedVector3Array())
@@ -1528,6 +1543,16 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 			_silence(peer)
 			_silence_off_in = 10.0
 			return "Wrong silence (10 s)"
+		&"camp":
+			var bed: Node3D = null
+			for camp in get_tree().get_nodes_in_group(Camp.GROUP):
+				for child in camp.get_children():
+					if child is Bedroll and (bed == null or (child as Node3D).global_position.distance_to(player.global_position) < bed.global_position.distance_to(player.global_position)):
+						bed = child
+			if bed == null:
+				return "No camp: build one first"
+			camp_visit(bed)
+			return "Camp visit at the nearest camp (go and look)"
 		&"breathing":
 			var behind := player.global_position + player.head.global_basis.z * 9.0
 			var hit := _ground_at(behind)

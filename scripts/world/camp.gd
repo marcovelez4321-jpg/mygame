@@ -57,6 +57,14 @@ static func nearest(tree: SceneTree, at: Vector3) -> Camp:
 	return best
 
 
+## Its fire put out (the Stalker came while you slept): cold ash -- no
+## flames, no light, no cooking. Each game's own (StalkerSigns).
+func put_out() -> void:
+	for child in get_children():
+		if child is FireSource or child is GPUParticles3D or child is OmniLight3D:
+			child.queue_free()
+
+
 func wake_point() -> Vector3:
 	return global_transform * WAKE_AT
 
