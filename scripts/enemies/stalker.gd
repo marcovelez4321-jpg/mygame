@@ -152,6 +152,43 @@ const SIGN_GAP := Vector2(240.0, 1200.0)
 const BIG_GAP := 600.0
 const RELAX_TIME := 60.0
 const TENSION_TIME := 600.0
+## ITS BRAIN (the user's, 2026-10-21): drives and moods choosing which stunt
+## fits -- the director says when, the situation what can happen, the brain
+## what it wants. It never tires (the user's: no sleep).
+##   HUNGER -- rises over HUNGER_TIME; eating (meat, a body, a snatch) fills
+##   it by MEAL. HUNGRY (over HUNGRY): food stunts first (the snatch, eating
+##   the fallen), stalks closer, tension builds faster.
+##   CURIOSITY -- spikes when they do something it hasn't seen them do (a
+##   camp, the grapple, into the Stack, sleeping), move fast, stay still a
+##   while (QUIET_AFTER), or fight; fades over CURIOUS_FADE. CURIOUS (over
+##   CURIOUS): what caught its eye decides -- speed: the pacer, crossing,
+##   your path; quiet: watching, behind you, the angel; a fight: watching
+##   it, the fake charge; something new: watching, your path, the angel.
+##   HURT (the user's: wounded, then furious) -- shot for HURT_MOOD or more:
+##   WOUNDED for WOUNDED_TIME (keeps far off, limps, no big moments), then
+##   FURIOUS for FURIOUS_TIME (closer, bolder stunts first, tension faster).
+enum Mood { CALM, HUNGRY, CURIOUS, WOUNDED, FURIOUS }
+const HUNGER_TIME := 1200.0
+const HUNGRY := 0.6
+const MEAL := 0.7
+const CURIOUS := 0.5
+const CURIOUS_FADE := 400.0
+const QUIET_AFTER := 10.0
+const NEW_THING := 0.5
+const HURT_MOOD := 25.0
+const WOUNDED_TIME := 90.0
+const FURIOUS_TIME := 180.0
+const WOUNDED_BIT := 1 << 15
+var hunger := 0.3
+var curiosity := 0.0
+var _curious_about := &"new"
+var _wounded_left := 0.0
+var _furious_left := 0.0
+var wounded := false
+## What each player's been seen doing (for "something new").
+var _seen_doing := {}
+var _still_for := {}
+
 ## The stunts that are only a sound (and their signs): small, not big.
 const SOUND_STUNTS := [Stunt.RATTLE, Stunt.LURE, Stunt.HELP]
 var phase := Phase.BUILD
@@ -605,7 +642,7 @@ func net_restore(_data: Dictionary) -> void:
 ## The fear meter, sent with each update (for the HUD's meter everywhere).
 func net_state() -> int:
 	return int(round(fear * 1000.0)) | (UPRIGHT_BIT if upright else 0) | (AVERT_BIT if head_averted else 0) \
-			| (HOLD_BIT if holding else 0) | (REACH_BIT if reaching else 0)
+			| (HOLD_BIT if holding else 0) | (REACH_BIT if reaching else 0) | (WOUNDED_BIT if wounded else 0)
 
 
 func net_apply(value: int) -> void:
@@ -613,6 +650,7 @@ func net_apply(value: int) -> void:
 	upright = value & UPRIGHT_BIT != 0
 	head_averted = value & AVERT_BIT != 0
 	holding = value & HOLD_BIT != 0
+	wounded = value & WOUNDED_BIT != 0
 	reaching = value & REACH_BIT != 0
 	if not holding and _held:
 		_release_held()
@@ -715,6 +753,7 @@ func _think(delta: float) -> void:
 	_fear_tick(delta)
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
 	_silence_tick(delta)
+	_brain_tick(delta)
 	_director_tick(delta)
 	if state != State.STUNT and (upright or head_averted):
 		upright = false # (a stunt cut short: back down on all fours)
@@ -838,7 +877,7 @@ func _think(delta: float) -> void:
 			var away := global_position - nearest.global_position
 			away.y = 0.0
 			away = away.normalized() if away.length_squared() > 0.01 else Vector3.BACK
-			var spot := nearest.global_position + away * STALK_DISTANCE * (MEAT_CLOSER if _carries_raw(nearest) else 1.0)
+			var spot := nearest.global_position + away * STALK_DISTANCE * (MEAT_CLOSER if _carries_raw(nearest) else 1.0) * _mood_distance()
 			if HallEcho.inside(nearest.global_position):
 				# Indoors: on their side of the walls (in their room, on their floor).
 				var eye := nearest.head.global_position
@@ -1224,6 +1263,7 @@ func _to_trail_end(points: PackedVector3Array) -> void:
 ## a crumb no one can see it on (never past your newest). Not mid-strike,
 ## mid-stunt, fleeing, gone or in someone's view (it never vanishes in sight).
 func slept(p: PlayerMovement, bed: Node3D = null) -> void:
+	_noticed(p, &"sleep")
 	if bed and randf() < CAMP_VISIT_CHANCE:
 		camp_visit(bed)
 	_slept_on_trail(p)
@@ -1534,6 +1574,9 @@ func _on_damaged(amount: float, attacker: int) -> void:
 	if state == State.FLEE or state == State.AWAY:
 		return
 	_hurt += amount
+	if amount >= HURT_MOOD or _hurt >= HURT_MOOD:
+		_wounded_left = WOUNDED_TIME
+		_furious_left = 0.0
 	if _hurt < DRIVE_OFF and Time.get_ticks_msec() - _hurt_voice_msec > int(HURT_VOICE_GAP * 1000.0):
 		_hurt_voice_msec = Time.get_ticks_msec()
 		_say(&"hurt", true)
@@ -1671,6 +1714,11 @@ func _start_stunt() -> bool:
 	if house and house.has_inside(_stunt_target.global_position):
 		kinds.insert(randi() % (kinds.size() + 1), Stunt.KNOCK)
 		kinds.insert(randi() % (kinds.size() + 1), Stunt.WINDOW)
+	var wanted := _mood_stunts()
+	for i in range(wanted.size() - 1, -1, -1):
+		if kinds.has(wanted[i]):
+			kinds.erase(wanted[i])
+			kinds.push_front(wanted[i])
 	if _forced_kind >= 0:
 		kinds = [_forced_kind]
 	for kind: int in kinds:
@@ -1774,7 +1822,7 @@ func _director_tick(delta: float) -> void:
 			phase = Phase.BUILD
 			_roll_sign()
 		return
-	var pace := 1.0 + fear
+	var pace := (1.0 + fear) * _mood_pace()
 	if _meat_carrier(false):
 		pace *= 2.0 # (it smells it)
 	for node in get_tree().get_nodes_in_group("player"):
@@ -1805,9 +1853,120 @@ func _director_tick(delta: float) -> void:
 			_sign_left = 10.0
 
 
-## A big moment may come now: not relaxing, BIG_GAP since the last, tension full.
+## A big moment may come now: not relaxing, BIG_GAP since the last, tension
+## full -- and not wounded.
 func _big_allowed() -> bool:
-	return phase != Phase.RELAX and _since_big >= BIG_GAP and tension >= 1.0
+	return phase != Phase.RELAX and _since_big >= BIG_GAP and tension >= 1.0 and mood() != Mood.WOUNDED
+
+
+## Its drives, each tick (the host's): hunger rising, curiosity at what the
+## players do (and fading), the hurt moods running out.
+func _brain_tick(delta: float) -> void:
+	hunger = minf(hunger + delta / HUNGER_TIME, 1.0)
+	curiosity = maxf(curiosity - delta / CURIOUS_FADE, 0.0)
+	if _wounded_left > 0.0:
+		_wounded_left -= delta
+		if _wounded_left <= 0.0:
+			_furious_left = FURIOUS_TIME # (healed: now it's angry)
+	else:
+		_furious_left = maxf(_furious_left - delta, 0.0)
+	wounded = _wounded_left > 0.0
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p == null or p.is_dead():
+			continue
+		# Something it hasn't seen them do.
+		if p.grapple.is_out():
+			_noticed(p, &"grapple")
+		if HallEcho.inside(p.global_position):
+			_noticed(p, &"inside")
+		for camp in get_tree().get_nodes_in_group(Camp.GROUP):
+			if (camp as Node3D).global_position.distance_to(p.global_position) < 6.0:
+				_noticed(p, &"camp")
+		# Fast, still, fighting: it wants to see.
+		var speed := Vector2(p.velocity.x, p.velocity.z).length()
+		_still_for[p] = float(_still_for.get(p, 0.0)) + delta if speed < 0.5 else 0.0
+		if _fast(p):
+			_curious(delta * 0.03, &"speed")
+		elif float(_still_for[p]) > QUIET_AFTER:
+			_curious(delta * 0.04, &"quiet")
+		if _fighting(p):
+			_curious(delta * 0.04, &"fight")
+
+
+func _noticed(p: PlayerMovement, what: StringName) -> void:
+	var key := "%d:%s" % [p.get_instance_id(), what]
+	if _seen_doing.has(key):
+		return
+	_seen_doing[key] = true
+	_curious(NEW_THING, &"new")
+
+
+func _curious(amount: float, about: StringName) -> void:
+	curiosity = minf(curiosity + amount, 1.0)
+	_curious_about = about
+
+
+## What it feels most now.
+func mood() -> Mood:
+	if _wounded_left > 0.0:
+		return Mood.WOUNDED
+	if _furious_left > 0.0:
+		return Mood.FURIOUS
+	if hunger >= HUNGRY and hunger >= curiosity:
+		return Mood.HUNGRY
+	if curiosity >= CURIOUS:
+		return Mood.CURIOUS
+	return Mood.CALM
+
+
+## How fast tension builds, by mood.
+func _mood_pace() -> float:
+	match mood():
+		Mood.HUNGRY:
+			return 1.3
+		Mood.CURIOUS:
+			return 1.2
+		Mood.FURIOUS:
+			return 1.5
+	return 1.0
+
+
+## How far back it stalks, by mood (times STALK_DISTANCE).
+func _mood_distance() -> float:
+	match mood():
+		Mood.HUNGRY:
+			return 0.75
+		Mood.WOUNDED:
+			return 1.8
+		Mood.FURIOUS:
+			return 0.6
+	return 1.0
+
+
+## The stunts its mood wants (first, where they fit).
+func _mood_stunts() -> Array:
+	match mood():
+		Mood.HUNGRY:
+			return [Stunt.SNATCH, Stunt.FALLEN]
+		Mood.FURIOUS:
+			return [Stunt.AMONG, Stunt.BEHIND, Stunt.SNATCH, Stunt.PATH, Stunt.CROSS]
+		Mood.CURIOUS:
+			match _curious_about:
+				&"speed":
+					return [Stunt.PACER, Stunt.CROSS, Stunt.PATH]
+				&"quiet":
+					return [Stunt.WATCH, Stunt.BEHIND, Stunt.ANGEL]
+				&"fight":
+					return [Stunt.FIGHT_WATCH, Stunt.AMONG]
+				_:
+					return [Stunt.WATCH, Stunt.PATH, Stunt.ANGEL]
+	return []
+
+
+## It ate (meat, a body, a snatch): hunger filled.
+func _fed() -> void:
+	hunger = maxf(hunger - MEAL, 0.0)
 
 
 ## A big moment came (a stunt you see, a strike): tension spent, the quiet.
@@ -1871,9 +2030,10 @@ func _small_sign(only: StringName = &"") -> bool:
 
 ## Its brain, for the F9 menu: the director, its fear, what it's doing.
 func debug_text() -> String:
-	return "Phase %s   tension %d%%\nBig moment allowed in %ds (gap %ds)   next sign in %ds\nFear %d%%   state %s   last: %s" % [
+	return "Phase %s   tension %d%%\nBig moment allowed in %ds (gap %ds)   next sign in %ds\nMood %s   hunger %d%%   curiosity %d%% (%s)   wounded %ds   furious %ds\nFear %d%%   state %s   last: %s" % [
 			Phase.keys()[phase], roundi(tension * 100.0), maxi(int(BIG_GAP - _since_big), 0), int(BIG_GAP),
-			int(_sign_left), roundi(fear * 100.0), State.keys()[state], _last_pick]
+			int(_sign_left), Mood.keys()[mood()], roundi(hunger * 100.0), roundi(curiosity * 100.0), _curious_about,
+			int(_wounded_left), int(_furious_left), roundi(fear * 100.0), State.keys()[state], _last_pick]
 
 
 ## A stunt's due: its player picked, and the world goes quiet round them
@@ -1985,6 +2145,7 @@ func _eat_tick(delta: float) -> void:
 		_chew_left = CHEW_EVERY * randf_range(0.7, 1.3)
 		_say(&"chewing", true, 1.0, at + Vector3.UP * 0.4, -2.0)
 	if _eating_for >= EAT_TIME:
+		_fed()
 		Network.send_stalker_sign(0, &"bones", at)
 		if _food.has_method(&"_remove"):
 			_food.call(&"_remove")
@@ -2571,6 +2732,7 @@ func _snatch_tick(p: PlayerMovement, delta: float) -> void:
 				if health and not health.is_dead:
 					health.take_damage(health.current_health + 1.0)
 				hold.call_deferred(_victim_thing)
+				_fed()
 				if human:
 					_say(&"help_scream", true, 1.0, _head_of(_victim_thing))
 				_moment(true)
@@ -3522,7 +3684,7 @@ func _update_limbs(delta: float) -> void:
 			home = Vector3(home.x * 0.55, 0.0, 0.0) # (feet under it)
 		var want: Vector3 = xf * home + lead
 		if limb.stepping:
-			limb.t += delta / STEP_TIME
+			limb.t += delta / (STEP_TIME * (1.9 if wounded and not limb.arm and float(limb.out) > 0.0 else 1.0))
 			if limb.t >= 1.0:
 				limb.stepping = false
 				limb.planted = limb.to

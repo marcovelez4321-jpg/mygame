@@ -1920,3 +1920,13 @@ them:
   - **PEAK:** tension full and 10 min (BIG_GAP) since the last big moment, so a big stunt is picked by the situation. A strike counts as big: the full-fear approach waits for it, and any lunge spends it.
   - **RELAX:** 1 min of nothing after a big moment.
   - **F9:** shows the director (phase, tension, time till a big moment's allowed, next sign, fear, state, last pick), with buttons for a small sign, tracks, a kill, and 'Big moment now'.
+
+- 2026-10-21: The Stalker's brain, drives and moods (the user's picks). The director says when, the situation what can happen, the brain what it wants: its mood's stunts go first where they fit. It never tires (the user's: no sleep).
+  - **Hunger:** rises over 20 min. Eating, or a snatch, fills it by 0.7. HUNGRY (60%+): the snatch and eating the fallen first, stalks at 0.75x, tension x1.3.
+  - **Curiosity:** spikes +0.5 the first time it sees each player grapple, go inside the Stack, near a camp, or sleep. It builds while they move fast, stand still 10 s+, or fight, and fades over 400 s. CURIOUS (50%+, tension x1.2) depends on what caught its eye:
+    - speed: the pacer, crossing, your path;
+    - quiet: watching, behind you, the angel;
+    - a fight: watching it, the fake charge;
+    - something new: watching, your path, the angel.
+  - **Hurt (25+ damage):** WOUNDED for 90 s (stalks at 1.8x, no big moments, its hind leg limps: slow, dragging steps on every game via net_state), then FURIOUS for 3 min (stalks at 0.6x; the fake charge, behind you, the snatch, your path and crossing first; tension x1.5).
+  - **F9:** the readout shows mood, hunger, curiosity (and what about), and the wounded and furious timers.
