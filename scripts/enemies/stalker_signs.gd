@@ -43,6 +43,10 @@ static func play(tree: SceneTree, kind: StringName, at: Vector3, dir: Vector3) -
 			silence(tree, false)
 		&"help_signs":
 			help_signs(tree, at, dir)
+		&"window":
+			window_shadow(tree, at, dir)
+		&"window_off":
+			window_shadow_off()
 
 
 ## The world's sounds fading out (`on`) or back.
@@ -156,3 +160,109 @@ static func _scratches() -> ImageTexture:
 				image.set_pixel(px, y, Color(1, 1, 1, maxf(image.get_pixel(px, y).a, a)))
 	_scratch_texture = ImageTexture.create_from_image(image)
 	return _scratch_texture
+
+
+## The window (the user's: its shadow on the glass): the pane goes pale, lit
+## from outside, and its antlered shadow stands against it -- dead still,
+## its long arms hanging. It fades if you walk at it (WINDOW_NEAR), or when
+## the stunt's done.
+const WINDOW_NEAR := 4.0
+const WINDOW_FADE_IN := 1.5
+static var _window: MeshInstance3D
+static var _window_texture: ImageTexture
+
+
+static func window_shadow(tree: SceneTree, at: Vector3, out: Vector3) -> void:
+	window_shadow_off()
+	var world := tree.current_scene
+	if world == null:
+		return
+	var card := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.7, 2.7) # (inside the frames of all three)
+	card.mesh = quad
+	var look := StandardMaterial3D.new()
+	look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	look.albedo_texture = _silhouette()
+	look.albedo_color = Color(1, 1, 1, 0)
+	look.disable_fog = true
+	card.material_override = look
+	card.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	world.add_child(card)
+	# Just inside the pane, facing in.
+	card.global_position = at - out * 0.06
+	card.global_basis = Basis.looking_at(out, Vector3.UP) # (a quad faces +Z: looking at out turns it inward)
+	_window = card
+	var tween := card.create_tween()
+	tween.tween_property(look, "albedo_color:a", 1.0, WINDOW_FADE_IN)
+	# Walked at: gone (checked every few frames, on this game's own player).
+	var check := func() -> void:
+		if not is_instance_valid(card):
+			return
+		var camera := card.get_viewport().get_camera_3d()
+		if camera == null:
+			return
+		var gap := camera.global_position.distance_to(at)
+		if not card.has_meta(&"start_gap"): # (kept on the card: a lambda's locals are copies)
+			card.set_meta(&"start_gap", gap)
+		if gap < WINDOW_NEAR or gap < float(card.get_meta(&"start_gap")) - 2.0:
+			window_shadow_off()
+	var timer := Timer.new()
+	timer.wait_time = 0.2
+	timer.autostart = true
+	timer.timeout.connect(check)
+	card.add_child(timer)
+
+
+static func window_shadow_off() -> void:
+	if _window == null or not is_instance_valid(_window):
+		_window = null
+		return
+	var card := _window
+	_window = null
+	var look := card.material_override as StandardMaterial3D
+	var tween := card.create_tween()
+	tween.tween_property(look, "albedo_color:a", 0.0, 0.35)
+	tween.tween_callback(card.queue_free)
+
+
+## A pane lit pale and cold from outside, the shadow of something standing
+## against it: too tall, thin, its arms hanging past its hips, small antlers.
+static func _silhouette() -> ImageTexture:
+	if _window_texture:
+		return _window_texture
+	var w := 64
+	var h := 96
+	var image := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var glow := Color(0.72, 0.78, 0.84)
+	for y in h:
+		for x in w:
+			var u := (x - w * 0.5) / (w * 0.5)
+			var v := (y - h * 0.45) / (h * 0.6)
+			var a := clampf(1.0 - (u * u * 0.6 + v * v * 0.5), 0.0, 1.0) * 0.85
+			image.set_pixel(x, y, Color(glow, a))
+	var dark := Color(0.04, 0.04, 0.05, 1.0)
+	var fill := func(x0: int, y0: int, x1: int, y1: int) -> void:
+		for y in range(maxi(y0, 0), mini(y1, h)):
+			for x in range(maxi(x0, 0), mini(x1, w)):
+				image.set_pixel(x, y, dark)
+	var mid := w / 2
+	fill.call(mid - 5, 30, mid + 5, 62) # the body, thin
+	fill.call(mid - 5, 62, mid - 2, 96) # legs
+	fill.call(mid + 2, 62, mid + 5, 96)
+	fill.call(mid - 9, 32, mid - 6, 74) # long arms, hanging past its hips
+	fill.call(mid + 6, 32, mid + 9, 74)
+	fill.call(mid - 11, 72, mid - 7, 79) # its hands
+	fill.call(mid + 7, 72, mid + 11, 79)
+	for y in range(18, 31): # the head, tipped over
+		for x in range(mid - 4, mid + 5):
+			var dx := (x - mid - (30 - y) * 0.25) / 4.0
+			var dy := (y - 24.0) / 6.5
+			if dx * dx + dy * dy <= 1.0:
+				image.set_pixel(x, y, dark)
+	fill.call(mid - 5, 12, mid - 3, 20) # antlers: one stub, one with a tine
+	fill.call(mid + 3, 9, mid + 5, 19)
+	fill.call(mid + 5, 12, mid + 8, 14)
+	_window_texture = ImageTexture.create_from_image(image)
+	return _window_texture

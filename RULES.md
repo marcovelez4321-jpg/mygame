@@ -1876,3 +1876,7 @@ them:
   - **Help scream:** where it came from there's nobody, only signs (StalkerSigns.help_signs, on every game, gone after 5 min): a blood trail off into the dark, four long scratches gouged in the ground, and torn clothes, one bloodied.
   - **Leap:** landed across the gap, it stands and stares 2.5 s, then it's gone.
   - **New: Angel, the weeping-angel stunt.** It stands dead still about 40 m off, 5 m closer each time you look away and back (where you can't see it move). Within 8 m it's gone. 90 s at most.
+
+- 2026-10-21: Wendigo Stalker, chunk 5, Grandma's house stunts (the user's picks). They join the rotation only while their player is inside the house (GrandmasHouse.has_inside).
+  - **Knock:** three slow knocks at the front door (the 'knock' slot; a generated stand-in till the user's clip). Opened within 40 s, it's out at the fog's edge 45 m off, upright, head turned away, walking away at 1.4 m/s. It's gone after 12 s, or once they step out after it.
+  - **Window:** one of the living room's windows they face (GrandmasHouse.WINDOWS: front-left, left side, the stairwell's) goes pale, lit from outside, with its antlered shadow standing against the pane: too tall, thin, arms hanging past its hips. Every game sees it (StalkerSigns.window_shadow). It fades if you walk at it (within 4 m, or 2 m closer than you were) or after 15 s. Looking at it counts as seeing it.

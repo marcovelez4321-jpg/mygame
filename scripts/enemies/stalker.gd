@@ -27,7 +27,7 @@ extends AnimatableBody3D
 
 enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
-enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL }
+enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW }
 
 const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Character_Monster_03.fbx")
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
@@ -387,6 +387,19 @@ const ANGEL_STEP := 5.0
 const ANGEL_CLOSEST := 8.0
 const ANGEL_HOLD := 90.0
 var _angel_seen := false
+## At Grandma's (the user's: in the rotation while its player's in the house):
+## KNOCK -- three slow knocks at the front door; opened within KNOCK_WAIT,
+## it's out at the fog's edge (KNOCK_OFF), upright, walking away
+## (WALK_AWAY), gone after KNOCK_SHOWN or once they step out. WINDOW -- its
+## antlered shadow against a window's pane, lit from outside (StalkerSigns),
+## WINDOW_HOLD at most.
+const KNOCK_WAIT := 40.0
+const KNOCK_OFF := 45.0
+const KNOCK_SHOWN := 12.0
+const WALK_AWAY := 1.4
+const WINDOW_HOLD := 15.0
+var _house: GrandmasHouse
+var _window_at := Vector3.INF
 
 ## Its breathing (the user's, 2026-10-21): within BREATH_RANGE of you and out
 ## of your sight, slow and wet from where it is, louder the closer -- each
@@ -1471,6 +1484,12 @@ func _start_stunt() -> bool:
 	kinds.shuffle()
 	if _climbing_outside(_stunt_target) and randf() < 0.5:
 		kinds.push_front(Stunt.LEAP)
+	# At Grandma's: the knock and the window join in (first, shuffled with
+	# the rest -- they only fit there).
+	var house := get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
+	if house and house.has_inside(_stunt_target.global_position):
+		kinds.insert(randi() % (kinds.size() + 1), Stunt.KNOCK)
+		kinds.insert(randi() % (kinds.size() + 1), Stunt.WINDOW)
 	if _forced_kind >= 0:
 		kinds = [_forced_kind]
 	for kind: int in kinds:
@@ -1723,6 +1742,35 @@ func _stage(kind: int) -> bool:
 			_stunt_left_set(WATCH_HOLD)
 			_stunt_rattle_left = 1.0
 			return true
+		Stunt.KNOCK:
+			_house = get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
+			if _house == null or not _house.has_inside(p.global_position) or _house.front_door() == null:
+				return false
+			var door := _house.front_door()
+			var out := -_house.global_basis.z
+			_say(&"knock", true, 1.0, door.global_position + out * 0.5 + Vector3.UP * 0.5)
+			_stunt_left_set(KNOCK_WAIT)
+			_moment(true)
+			return true
+		Stunt.WINDOW:
+			_house = get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
+			if _house == null or not _house.has_inside(p.global_position):
+				return false
+			# A window they're facing, in reach, nothing between.
+			var best: Array = []
+			var best_dot := 0.2
+			for window: Array in _house.windows():
+				var to: Vector3 = (window[0] as Vector3) - eye
+				var facing := look.dot(_flat(to))
+				if to.length() < 30.0 and facing > best_dot:
+					best_dot = facing
+					best = window
+			if best.is_empty():
+				return false
+			_window_at = best[0]
+			Network.send_stalker_sign(0, &"window", best[0], best[1])
+			_stunt_left_set(WINDOW_HOLD)
+			return true
 		Stunt.ANGEL:
 			# Standing dead still ANGEL_FROM off, somewhere they'll see it when
 			# they turn: closer every time they look away.
@@ -1827,6 +1875,18 @@ func _stunt_tick(delta: float) -> void:
 			_angel_tick(p)
 			if state != State.STUNT:
 				return
+		Stunt.KNOCK:
+			_knock_tick(p)
+			if state != State.STUNT:
+				return
+		Stunt.WINDOW:
+			# Seen (looked at, from inside): it counts, once.
+			if not _stunt_seen and _window_at.is_finite():
+				var to := (_window_at - p.head.global_position).normalized()
+				if (-p.head.global_basis.z).dot(to) > cos(deg_to_rad(25.0)):
+					_stunt_seen = true
+					_moment(true)
+					_add_fear(FEAR_SEEN, "saw it (window)")
 	if _state_left <= 0.0 and _stunt_phase == 0:
 		_end_stunt()
 
@@ -1855,6 +1915,34 @@ func _angel_tick(p: PlayerMovement) -> void:
 	if hit.is_empty() or _visible_to(p, _standing_points(hit.position)):
 		return
 	_place(hit.position, hit.normal, toward, false)
+
+
+## The knock: waiting for the door; opened, out at the fog's edge, upright,
+## walking away from the house; they step out, or it's been KNOCK_SHOWN: gone.
+func _knock_tick(p: PlayerMovement) -> void:
+	if _house == null or not is_instance_valid(_house):
+		_end_stunt()
+		return
+	var out := -_house.global_basis.z
+	if _stunt_phase == 0:
+		var door := _house.front_door()
+		if door and not door.is_closed():
+			var hit := _ground_at(door.global_position + out * KNOCK_OFF + out.cross(Vector3.UP) * randf_range(-8.0, 8.0) + Vector3.UP * 4.0)
+			if hit.is_empty():
+				_end_stunt()
+				return
+			_place(hit.position, hit.normal, out, false)
+			upright = true
+			head_averted = true # (walking away: not looking back)
+			_stunt_phase = 1
+			_state_left = KNOCK_SHOWN
+			_moment(true)
+		return
+	_desired = out * WALK_AWAY
+	if not _house.has_inside(p.global_position) and p.global_position.distance_to(_house.global_position) > 12.0 * GrandmasHouse.SIZE:
+		_end_stunt() # (they came out after it: gone)
+	elif _state_left <= 0.0:
+		_end_stunt()
 
 
 ## Points up a standing body at `at` (its feet) -- what a player would see of it.
@@ -1941,8 +2029,11 @@ func _end_stunt() -> void:
 		if ragdoll:
 			ragdoll.carry({})
 	_corpse = null
-	if _stunt == Stunt.LEAP or _stunt == Stunt.ANGEL:
-		_turn_up() # (gone: far off on another tower, or from where it stood)
+	if _stunt == Stunt.WINDOW:
+		Network.send_stalker_sign(0, &"window_off", _window_at)
+		_window_at = Vector3.INF
+	if _stunt == Stunt.LEAP or _stunt == Stunt.ANGEL or _stunt == Stunt.KNOCK:
+		_turn_up() # (gone: far off on another tower, from where it stood, off into the fog)
 		return
 	_start_hide(false)
 

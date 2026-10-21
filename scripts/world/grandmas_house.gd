@@ -24,6 +24,15 @@ const SIZE := 2.0
 ## The house in its own space, porch and roof included: "someone's in".
 @export var bounds := AABB(Vector3(-5.3, -0.5, -6.6) * SIZE, Vector3(10.6, 11.0, 11.2) * SIZE)
 
+## Its windows the living room can see (the Stalker's window stunt): centre
+## (in the house's own space at real size, middle of the wall), which way is
+## out, the pane's width and height -- tools/house_bake.gd's.
+const WINDOWS := [
+	[Vector3(-3.1, 2.1, -3.875), Vector3.FORWARD, Vector2(1.06, 1.46)],
+	[Vector3(-4.875, 2.1, -1.4), Vector3.LEFT, Vector2(1.06, 1.46)],
+	[Vector3(-2.5, 5.3, 3.875), Vector3.BACK, Vector2(0.86, 1.46)],
+]
+
 var _front_door: MapDoor
 ## Shown only with the door open or someone in.
 var _hidden_parts: Array[Node3D] = []
@@ -67,6 +76,23 @@ func _process(delta: float) -> void:
 	var want := _wanted()
 	if want != _shown:
 		_show(want)
+
+
+## Whether `point` (global) is in the house.
+func has_inside(point: Vector3) -> bool:
+	return bounds.has_point(to_local(point))
+
+
+func front_door() -> MapDoor:
+	return _front_door
+
+
+## Its windows the living room sees, in the world: [centre, out, pane size].
+func windows() -> Array:
+	var found := []
+	for window: Array in WINDOWS:
+		found.append([to_global((window[0] as Vector3) * SIZE), (global_basis * (window[1] as Vector3)).normalized(), (window[2] as Vector2) * SIZE])
+	return found
 
 
 ## The front door open (or swinging), or a player in the house.
