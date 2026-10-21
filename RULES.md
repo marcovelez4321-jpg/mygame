@@ -1898,3 +1898,10 @@ them:
   - **Corpse drag:** now by the head, in its hand (was a foot).
   - **Open world:** the skitter-past and corpse-drag stunts now work out on open land. With no cover beside the path, they come from past the edge of everyone's view (_out_of_view_beside), and when the player's moving fast they aim 1.5 s ahead of them.
   - **Grapple:** PlayerGrapple.anchor_point() added, for the grapple stunt.
+
+- 2026-10-21: Wendigo Stalker, fast stunts (the user's picks; moving fast = 18 m/s and up, flat). They go first in the pick then. Gone in sight never means vanishing: it scrambles off out of sight. That now also covers the leap, the angel and the knock when they end in view.
+  - **PACER:** alongside you 40 m out, keeping pace (up to 32 m/s). Watched 2 s, or after 10 s, it peels off into the murk (gone once unseen).
+  - **PATH:** standing upright where you're heading, 2-4 s on (lateral tries of 0, 8 and 15 m), placed only where you can't see it yet. Within 20 m it scrambles off, fast. 12 s at most.
+  - **CROSS:** one long bound across your way ahead, 1.3 s in the air (apex ~4.6 m), from past the edge of your view. It lands and scrambles off.
+  - **GRAPPLE:** while you're on the grapple (PlayerGrapple.anchor_point; also if you grapple during the silence before a stunt), it races from somewhere near the anchor you can't see (6-14 m off) to the anchor and crouches facing you. Within 6 m of you, or the grapple let go, it scrambles off.
+  - **Fights:** each player's last shot is now tracked, for the fight stunts.

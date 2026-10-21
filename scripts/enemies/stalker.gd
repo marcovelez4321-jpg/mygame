@@ -27,7 +27,7 @@ extends AnimatableBody3D
 
 enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT, EAT }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
-enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW }
+enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW, PACER, PATH, CROSS, GRAPPLE }
 
 const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Character_Monster_03.fbx")
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
@@ -404,6 +404,34 @@ const WALK_AWAY := 1.4
 const WINDOW_HOLD := 15.0
 var _house: GrandmasHouse
 var _window_at := Vector3.INF
+
+## OUT IN THE OPEN, MOVING FAST (the user's, 2026-10-21: FAST_SPEED and up --
+## bhopping, building speed): these come first then. Gone in sight never
+## means vanishing: it scrambles off out of sight (the user's).
+##   PACER -- alongside you PACER_OFF out, keeping pace however fast; watched
+##   PACER_WATCHED (or after PACER_TIME) it peels off into the murk.
+##   PATH -- standing upright where you're heading (PATH_AHEAD s on), hidden
+##   till you see it; within PATH_FLEE it scrambles off, fast.
+##   CROSS -- one long bound across your way ahead (CROSS_FLIGHT s, a
+##   silhouette), from out of your view; it lands and scrambles off.
+##   GRAPPLE -- you're flying on the grapple: from out of sight it races to
+##   where you're headed and crouches there; as you get within GRAPPLE_FLEE,
+##   it scrambles off.
+const FAST_SPEED := 18.0
+const PACER_OFF := 40.0
+const PACER_TIME := 10.0
+const PACER_WATCHED := 2.0
+const PACER_TOP := 32.0
+const PATH_AHEAD := Vector2(2.0, 4.0)
+const PATH_FLEE := 20.0
+const PATH_HOLD := 12.0
+const CROSS_FLIGHT := 1.3
+const GRAPPLE_FLEE := 6.0
+const GRAPPLE_HOLD := 6.0
+var _pacer_side := 1.0
+var _watched_for := 0.0
+## Each player's last shot (msec): fighting (the fight stunts, next).
+var _last_shot := {}
 
 ## HOLDING (the user's, 2026-10-21: hand-accurate, immersive): its right arm
 ## really reaches (IK) for what it takes, and what it's got it holds in that
@@ -946,6 +974,7 @@ func _fear_tick(delta: float) -> void:
 			if player and not _fire_hooked.has(player):
 				_fire_hooked[player] = true
 				player.weapons.shot_fired.connect(_on_player_fired)
+				player.weapons.shot_fired.connect(func() -> void: _last_shot[player] = Time.get_ticks_msec())
 	var in_window := Time.get_ticks_msec() - _moment_msec <= int(REACT_WINDOW * 1000.0)
 	for node in get_tree().get_nodes_in_group("player"):
 		var player := node as PlayerMovement
@@ -1564,6 +1593,13 @@ func _start_stunt() -> bool:
 	kinds.shuffle()
 	if _climbing_outside(_stunt_target) and randf() < 0.5:
 		kinds.push_front(Stunt.LEAP)
+	if _fast(_stunt_target):
+		var fast: Array = [Stunt.PACER, Stunt.PATH, Stunt.CROSS]
+		fast.shuffle()
+		fast.append_array(kinds)
+		kinds = fast
+	if _stunt_target.grapple.anchor_point().is_finite():
+		kinds.push_front(Stunt.GRAPPLE)
 	# At Grandma's: the knock and the window join in (first, shuffled with
 	# the rest -- they only fit there).
 	var house := get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
@@ -1665,6 +1701,8 @@ func _prepare_stunt() -> void:
 func _silence_tick(delta: float) -> void:
 	if _pending_left >= 0.0:
 		_pending_left -= delta
+		if (_forced_kind < 0 or _forced_kind == Stunt.GRAPPLE) and is_instance_valid(_pending_target) and _pending_target.grapple.anchor_point().is_finite():
+			_pending_left = -0.001 # (on the grapple now: it goes for where they're headed)
 		if _pending_left < 0.0:
 			var forced := _forced_kind >= 0
 			var target := _pending_target
@@ -1759,6 +1797,11 @@ func _eat_tick(delta: float) -> void:
 			_food.queue_free()
 		_food = null
 		state = State.STALK
+
+
+## Moving fast (FAST_SPEED and up, flat).
+func _fast(p: PlayerMovement) -> bool:
+	return p != null and Vector2(p.velocity.x, p.velocity.z).length() >= FAST_SPEED
 
 
 ## A player carrying meat: raw (`rotten` false), or rotten -- or null.
@@ -1913,6 +1956,64 @@ func _stage(kind: int) -> bool:
 			_stunt_left_set(WATCH_HOLD)
 			_stunt_rattle_left = 1.0
 			return true
+		Stunt.PACER:
+			var going := _flat(p.velocity)
+			_pacer_side = 1.0 if randf() < 0.5 else -1.0
+			var beside := going.cross(Vector3.UP) * _pacer_side
+			var hit := _ground_at(p.global_position + beside * PACER_OFF + going * 6.0 + Vector3.UP * 6.0)
+			if hit.is_empty() or not _place(hit.position, hit.normal, going, true):
+				return false
+			_watched_for = 0.0
+			_stunt_left_set(PACER_TIME)
+			return true
+		Stunt.PATH:
+			var going := _flat(p.velocity)
+			var speed := Vector2(p.velocity.x, p.velocity.z).length()
+			for seconds: float in [PATH_AHEAD.y, PATH_AHEAD.x, (PATH_AHEAD.x + PATH_AHEAD.y) * 0.5]:
+				for off: float in [0.0, 8.0, -8.0, 15.0, -15.0]:
+					var spot := p.global_position + going * speed * seconds + going.cross(Vector3.UP) * off
+					var hit := _ground_at(spot + Vector3.UP * 6.0)
+					if hit.is_empty() or absf((hit.position as Vector3).y - p.global_position.y) > 25.0:
+						continue
+					if _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+						upright = true
+						_stunt_left_set(PATH_HOLD)
+						return true
+			return false
+		Stunt.CROSS:
+			var going := _flat(p.velocity)
+			var speed := Vector2(p.velocity.x, p.velocity.z).length()
+			var middle := _ground_at(p.global_position + going * maxf(speed * 2.0, 30.0) + Vector3.UP * 6.0)
+			if middle.is_empty():
+				return false
+			var across := going.cross(Vector3.UP) * (1.0 if randf() < 0.5 else -1.0)
+			var from := _out_of_view_beside(middle.position, -across)
+			if not from.is_finite():
+				return false
+			var to_hit := _ground_at((middle.position as Vector3) + across * from.distance_to(middle.position) + Vector3.UP * 6.0)
+			if to_hit.is_empty():
+				return false
+			_place(from, Vector3.UP, across, false)
+			_velocity = ((to_hit.position as Vector3) - from) / CROSS_FLIGHT + Vector3.UP * 0.5 * GRAVITY * CROSS_FLIGHT
+			_heading = _flat(_velocity)
+			_airborne = true
+			_stunt_left_set(CROSS_FLIGHT + 0.4)
+			_moment()
+			return true
+		Stunt.GRAPPLE:
+			var anchor := p.grapple.anchor_point()
+			if not anchor.is_finite():
+				return false
+			# From somewhere near it they can't see, it races there.
+			for attempt in 10:
+				var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+				var hit := _ground_at(anchor + way * randf_range(6.0, 14.0) + Vector3.UP * 4.0)
+				if hit.is_empty() or not _place(hit.position, hit.normal, anchor - (hit.position as Vector3), true):
+					continue
+				_stunt_to = anchor
+				_stunt_left_set(GRAPPLE_HOLD)
+				return true
+			return false
 		Stunt.KNOCK:
 			_house = get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
 			if _house == null or not _house.has_inside(p.global_position) or _house.front_door() == null:
@@ -2048,6 +2149,41 @@ func _stunt_tick(delta: float) -> void:
 		Stunt.KNOCK:
 			_knock_tick(p)
 			if state != State.STUNT:
+				return
+		Stunt.PACER:
+			if _stunt_phase == 0:
+				# Alongside them PACER_OFF out, keeping pace (however fast).
+				var going := _flat(p.velocity)
+				var spot := p.global_position + going.cross(Vector3.UP) * _pacer_side * PACER_OFF
+				var keep := Vector3(p.velocity.x, 0.0, p.velocity.z) + (spot - global_position) * 0.8
+				_desired = keep.limit_length(PACER_TOP)
+				_watched_for = _watched_for + delta if _visible_to(p, _body_points(global_position, global_basis)) else 0.0
+				if _watched_for >= PACER_WATCHED or _state_left <= 0.0:
+					_stunt_phase = 1 # (peels off)
+					_state_left = 4.0
+			else:
+				_desired = _flat(global_position - p.global_position) * SPRINT
+				if not _seen() or _state_left <= 0.0:
+					_end_stunt()
+					return
+		Stunt.PATH:
+			_velocity = Vector3.ZERO
+			_heading = _flat(p.global_position - global_position)
+			if p.global_position.distance_to(global_position) < PATH_FLEE:
+				_end_stunt() # (scrambles off, fast)
+				return
+		Stunt.CROSS:
+			if not _airborne:
+				_end_stunt() # (landed: off out of sight)
+				return
+		Stunt.GRAPPLE:
+			var to := _stunt_to - global_position
+			_desired = to.normalized() * SPRINT * 1.3 if to.length() > 1.5 else Vector3.ZERO
+			if to.length() <= 1.5:
+				_velocity = Vector3.ZERO
+				_heading = _flat(p.global_position - global_position)
+			if p.global_position.distance_to(global_position) < GRAPPLE_FLEE or not p.grapple.is_pulling():
+				_end_stunt()
 				return
 		Stunt.WINDOW:
 			# Seen (looked at, from inside): it counts, once.
@@ -2201,7 +2337,16 @@ func _end_stunt() -> void:
 		Network.send_stalker_sign(0, &"window_off", _window_at)
 		_window_at = Vector3.INF
 	if _stunt == Stunt.LEAP or _stunt == Stunt.ANGEL or _stunt == Stunt.KNOCK:
-		_turn_up() # (gone: far off on another tower, from where it stood, off into the fog)
+		if _seen():
+			_start_hide(true) # (in sight: it scrambles off -- never just gone, the user's)
+		else:
+			_turn_up() # (gone: far off on another tower, from where it stood, off into the fog)
+		return
+	if _stunt == Stunt.PACER and not _seen():
+		_turn_up() # (lost in the murk)
+		return
+	if _stunt in [Stunt.PATH, Stunt.CROSS, Stunt.GRAPPLE, Stunt.PACER]:
+		_start_hide(true) # (seen: it scrambles off, flat out -- never just gone)
 		return
 	_start_hide(false)
 
