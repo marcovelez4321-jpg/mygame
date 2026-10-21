@@ -270,8 +270,8 @@ static func _silhouette() -> ImageTexture:
 	return _window_texture
 
 
-## Its camp visit (the user's: tracks, fire out, the totem): round the
-## bedroll at `at` (its length along `along`).
+## Its camp visit (the user's: tracks and the fire out -- no totem): round
+## the bedroll at `at`.
 const TRACKS := 14
 const TRACK_RING := 2.4
 const TRACKS_LAST := 600.0
@@ -313,57 +313,6 @@ static func camp_visit(tree: SceneTree, at: Vector3, along: Vector3) -> void:
 		tree.create_timer(TRACKS_LAST).timeout.connect(func() -> void:
 			if is_instance_valid(mark):
 				mark.queue_free())
-	# The totem, stuck in the ground by your head.
-	var head := at + along.normalized() * (Camp.BED_LENGTH * 0.5 + 0.5)
-	var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(head + Vector3.UP * 2.0, head + Vector3.DOWN * 3.0, 1))
-	var totem := _totem()
-	holder.add_child(totem)
-	totem.global_position = (ground.position as Vector3) if not ground.is_empty() else head
-	totem.global_basis = Basis(Vector3.UP, randf() * TAU)
-
-
-## A little totem: three sticks lashed in a tripod, a small antler crowning it,
-## a bone hung off it.
-static func _totem() -> MeshInstance3D:
-	var tool := SurfaceTool.new()
-	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var wood := Color(0.24, 0.18, 0.13)
-	var bone := Color(0.8, 0.76, 0.66)
-	for i in 3:
-		var a := TAU * i / 3.0
-		var foot := Vector3(cos(a), 0.0, sin(a)) * 0.28
-		_stick(tool, foot + Vector3.DOWN * 0.15, Vector3.UP * 1.15 - foot * 0.15, 0.025, wood)
-	# The antler on top: a beam and two tines.
-	var crown := Vector3.UP * 1.12
-	_stick(tool, crown, crown + Vector3(0.18, 0.28, 0.0), 0.02, bone)
-	_stick(tool, crown + Vector3(0.09, 0.14, 0.0), crown + Vector3(0.05, 0.3, 0.08), 0.012, bone)
-	_stick(tool, crown, crown + Vector3(-0.14, 0.22, 0.04), 0.018, bone)
-	# A bone hung off it.
-	_stick(tool, Vector3(0.0, 0.75, 0.12), Vector3(0.02, 0.45, 0.14), 0.02, bone)
-	tool.generate_normals()
-	var totem := MeshInstance3D.new()
-	totem.mesh = tool.commit()
-	var look := StandardMaterial3D.new()
-	look.vertex_color_use_as_albedo = true
-	look.roughness = 0.95
-	look.cull_mode = BaseMaterial3D.CULL_DISABLED
-	totem.material_override = look
-	return totem
-
-
-static func _stick(tool: SurfaceTool, from: Vector3, to: Vector3, radius: float, color: Color) -> void:
-	var along := (to - from).normalized()
-	var side := along.cross(Vector3.FORWARD if absf(along.z) < 0.9 else Vector3.RIGHT).normalized()
-	var up := side.cross(along)
-	var sides := 5
-	for s in sides:
-		var a0 := TAU * s / sides
-		var a1 := TAU * (s + 1) / sides
-		var o0 := (side * cos(a0) + up * sin(a0)) * radius
-		var o1 := (side * cos(a1) + up * sin(a1)) * radius
-		for corner: Vector3 in [from + o0, to + o0 * 0.6, to + o1 * 0.6, from + o0, to + o1 * 0.6, from + o1]:
-			tool.set_color(color)
-			tool.add_vertex(corner)
 
 
 ## A print: a long hand (a palm and five long thin fingers) or a long narrow

@@ -242,8 +242,8 @@ const FLANK_RING := 20.0
 ## and you at once.
 const SLEEP_PROGRESS := 0.4
 ## ... and one sleep in CAMP_VISIT_CHANCE it came to your camp while you slept
-## (the user's, 2026-10-21: 1 in 4): its tracks round your bedroll, your fire
-## out, an antler totem by your head (StalkerSigns.camp_visit).
+## (the user's, 2026-10-21: 1 in 4): its tracks round your bedroll and your
+## fire out (StalkerSigns.camp_visit).
 const CAMP_VISIT_CHANCE := 0.25
 ## Its voices (the user's sounds: StalkerVoices, a slot for everything it does
 ## or decides) -- sparse: none within VOICE_GAP of the last (bar the urgent
