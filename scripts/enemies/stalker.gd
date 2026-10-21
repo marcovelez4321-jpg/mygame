@@ -186,7 +186,7 @@ var _wounded_left := 0.0
 var _furious_left := 0.0
 var wounded := false
 ## What each player's been seen doing (for "something new").
-var _seen_doing := {}
+
 var _still_for := {}
 
 ## ITS MEMORY (the user's, 2026-10-21: all four):
@@ -218,8 +218,7 @@ var _route_cells := {}
 var _last_cell := {}
 var _away_from_camp := {}
 var _sound_msec := -100000
-var _spins := 0
-var _stares := 0
+
 var _grudge := {}
 var _bait_look := Vector3.ZERO
 ## IT REMEMBERS YOU BETWEEN SESSIONS (the user's, 2026-10-21; StalkerMemory,
@@ -237,11 +236,21 @@ const SAVE_EVERY := 60.0
 const AWAY_LONG := 24.0
 const AWAY_SHORT := 4.0
 const COMEBACK_CAMP := 60.0
-var _got_you := 0
-var _logoff := Vector3.INF
-var _last_camp := Vector3.INF
-var _comeback := &""
-var _comeback_left := 0.0
+## EACH OF YOU (the user's, 2026-10-21): every player has their own record
+## (StalkerMemory, from their own PC: Network.profiles) -- the times it got
+## them, their habits, their grudge, their camps, what it's seen them do --
+## and their own welcome back (_comebacks). NEWCOMERS (under NEWCOMER with
+## it, the user's: 20 min) it only studies: watching, following, never a
+## strike. DID YOU SEE THAT (the user's: about half, PRIVATE_SHARE): in
+## co-op, a big stunt for one player only -- someone alone first, the stunts
+## only they'd catch first, and if anyone else lays eyes on it, it slips away.
+const NEWCOMER := 1200.0
+const PRIVATE_SHARE := 0.5
+const STUDY_STUNTS := [Stunt.WATCH, Stunt.PACER, Stunt.PATH, Stunt.FIGHT_WATCH, Stunt.ANGEL]
+const PRIVATE_STUNTS := [Stunt.BEHIND, Stunt.CEILING, Stunt.WATCH, Stunt.ANGEL, Stunt.PACER]
+var _comebacks := {}
+var _welcomed := {}
+var _private := false
 var _save_left := SAVE_EVERY
 var _memory_loaded := false
 
@@ -715,19 +724,14 @@ func _ready() -> void:
 		_memory_load.call_deferred()
 
 
-## What it remembers of you from before (StalkerMemory), and how long you've
-## been gone.
+## What it remembers of the world from before (StalkerMemory, the host's:
+## its hunger and tension, the routes, where it was shot) and how long it's
+## been; each player's own record comes with them (Network.profiles).
 func _memory_load() -> void:
 	StalkerMemory.note_session()
-	_got_you = int(StalkerMemory.get_value("got_you", 0))
-	_spins = int(StalkerMemory.get_value("spins", 0))
-	_stares = int(StalkerMemory.get_value("stares", 0))
 	hunger = float(StalkerMemory.get_value("hunger", hunger))
 	tension = float(StalkerMemory.get_value("tension", tension))
 	_route_cells = StalkerMemory.get_value("routes", {})
-	_seen_doing = StalkerMemory.get_value("seen_doing", {})
-	_logoff = StalkerMemory.get_value("logoff", Vector3.INF)
-	_last_camp = StalkerMemory.get_value("last_camp", Vector3.INF)
 	_shot_spots.clear()
 	for spot: Vector3 in StalkerMemory.get_value("shot_spots", []):
 		_shot_spots.append([spot, Time.get_ticks_msec()])
@@ -739,37 +743,55 @@ func _memory_load() -> void:
 		_since_big = BIG_GAP * 0.7 # (a big moment within a few minutes)
 	elif away >= 0.0 and away < AWAY_SHORT:
 		tension = maxf(tension, 0.8) # (it never left)
-	if StalkerMemory.sessions() >= 2:
-		var ways: Array[StringName] = [&"knock", &"breath"]
-		if _logoff.is_finite():
-			ways.append(&"tracks")
-		if _last_camp.is_finite():
-			ways.append(&"camp")
-		_comeback = ways[randi() % ways.size()]
-		_comeback_left = {&"tracks": 5.0, &"camp": 1200.0, &"knock": 25.0, &"breath": 3.5}[_comeback]
 	_memory_loaded = true
+	Network.profile_arrived.connect(_met)
+	for peer: int in Network.profiles.keys():
+		_met(peer)
 
 
-## What it's learnt, kept (StalkerMemory).
+## A player's record's here (they've joined, or the level's started): its
+## grudge against them back, and their own welcome rolled (from their second
+## session with it).
+func _met(peer: int) -> void:
+	var profile: Dictionary = Network.profiles.get(peer, {})
+	_grudge[peer] = float(profile.get("grudge", 0.0))
+	if _welcomed.has(peer) or int(profile.get("sessions", 0)) < 2:
+		return
+	_welcomed[peer] = true
+	var ways: Array[StringName] = [&"knock", &"breath"]
+	if profile.get("logoff") is Vector3:
+		ways.append(&"tracks")
+	if profile.get("last_camp") is Vector3:
+		ways.append(&"camp")
+	var kind: StringName = ways[randi() % ways.size()]
+	_comebacks[peer] = {kind = kind, left = {&"tracks": 5.0, &"camp": 1200.0, &"knock": 25.0, &"breath": 3.5}[kind]}
+
+
+## What it's learnt, kept: the world's here (the host's file), each player's
+## record back to them, to keep on their own PC.
 func _memory_save() -> void:
 	if not _memory_loaded:
 		return
-	var me := PlayerMovement.local_player(get_tree())
 	StalkerMemory.set_value("last_end", Time.get_unix_time_from_system())
-	if me and not me.is_dead():
-		StalkerMemory.set_value("logoff", me.global_position)
-	StalkerMemory.set_value("last_camp", _last_camp)
-	StalkerMemory.set_value("got_you", _got_you)
-	StalkerMemory.set_value("spins", _spins)
-	StalkerMemory.set_value("stares", _stares)
 	StalkerMemory.set_value("hunger", hunger)
 	StalkerMemory.set_value("tension", tension)
 	StalkerMemory.set_value("routes", _route_cells)
-	StalkerMemory.set_value("seen_doing", _seen_doing)
 	var spots: Array = []
 	for spot: Array in _shot_spots:
 		spots.append(spot[0])
 	StalkerMemory.set_value("shot_spots", spots)
+	# Everyone it's ever met here, by name, with the times it got them (its lair's wall).
+	var roster: Dictionary = StalkerMemory.get_value("roster", {})
+	for peer: int in Network.profiles.keys():
+		var profile: Dictionary = Network.profiles[peer]
+		var body := _player_of(peer)
+		if body and not body.is_dead():
+			profile["logoff"] = body.global_position
+		profile["grudge"] = float(_grudge.get(peer, 0.0))
+		if not str(profile.get("id", "")).is_empty():
+			roster[profile.id] = {name = str(profile.get("name", "")), got = int(profile.get("got", 0))}
+		Network.send_profile_back(peer, profile)
+	StalkerMemory.set_value("roster", roster)
 	StalkerMemory.save()
 
 
@@ -778,71 +800,108 @@ func _notification(what: int) -> void:
 		_memory_save()
 
 
-## The comeback, once a session: its time come (and its place, for the camp).
+## The player whose game is `peer`, or null.
+func _player_of(peer: int) -> PlayerMovement:
+	for node in get_tree().get_nodes_in_group("player"):
+		var p := node as PlayerMovement
+		if p and p.get_multiplayer_authority() == peer:
+			return p
+	return null
+
+
+## What it's learnt of player `p` (their record; a blank one if theirs
+## hasn't come yet).
+func _profile(p: PlayerMovement) -> Dictionary:
+	var peer := p.get_multiplayer_authority() if p else 1
+	if not Network.profiles.has(peer):
+		Network.profiles[peer] = StalkerMemory.DEFAULTS.duplicate(true)
+	return Network.profiles[peer]
+
+
+## New to it (under NEWCOMER with it, all told): it only studies them.
+func _newcomer(p: PlayerMovement) -> bool:
+	return p != null and float(_profile(p).get("known", 0.0)) < NEWCOMER
+
+
+## Each player's own welcome back, once a session: its time come (and its
+## place, for the camp) -- theirs alone where it can be.
 func _comeback_tick(delta: float) -> void:
-	if _comeback == &"":
-		return
-	_comeback_left -= delta
-	var players := get_tree().get_nodes_in_group("player").filter(func(node: Node) -> bool:
-		return node is PlayerMovement and not (node as PlayerMovement).is_dead())
-	if players.is_empty():
-		return
-	var p := players[0] as PlayerMovement
-	match _comeback:
-		&"tracks":
-			if _comeback_left <= 0.0:
-				# Two lines of its tracks, closing on where you logged off.
-				for side: float in [-1.0, 1.0]:
-					var way := Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU)
-					Network.send_stalker_sign(0, &"tracks", _logoff + way * 9.0 * side, way)
-				_comeback = &""
-		&"camp":
-			for node in players:
-				var near := node as PlayerMovement
-				if near.global_position.distance_to(_last_camp) < COMEBACK_CAMP and (state == State.STALK or state == State.WAIT or state == State.HUNT):
-					var hit := _ground_at(_last_camp + Vector3(2.0, 3.0, 0.0))
-					if not hit.is_empty() and _place(hit.position, hit.normal, near.global_position - (hit.position as Vector3), true):
-						_stunt_target = near
+	for peer: int in _comebacks.keys():
+		var p := _player_of(peer)
+		if p == null or p.is_dead():
+			continue
+		var comeback: Dictionary = _comebacks[peer]
+		comeback.left = float(comeback.left) - delta
+		var profile := _profile(p)
+		var done := false
+		match comeback.kind:
+			&"tracks":
+				if comeback.left <= 0.0:
+					# Two lines of its tracks, closing on where they logged off -- theirs to find.
+					var logoff: Vector3 = profile.logoff
+					for side: float in [-1.0, 1.0]:
+						var way := Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU)
+						Network.send_stalker_sign(peer, &"tracks", logoff + way * 9.0 * side, way)
+					done = true
+			&"camp":
+				var camp_at: Vector3 = profile.last_camp
+				if p.global_position.distance_to(camp_at) < COMEBACK_CAMP and (state == State.STALK or state == State.WAIT or state == State.HUNT):
+					var hit := _ground_at(camp_at + Vector3(2.0, 3.0, 0.0))
+					if not hit.is_empty() and _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+						_stunt_target = p
 						_stunt = Stunt.PATH
 						_stunt_phase = 0
 						_stunt_seen = false
 						upright = true
-						_stunt_left_set(90.0) # (waiting at your camp; within reach it scrambles off)
-						_comeback = &""
-						return
-			if _comeback_left <= 0.0:
-				_comeback = &""
-		&"knock":
-			if _comeback_left > 0.0:
-				return
-			var house := get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
-			if house and house.has_inside(p.global_position):
-				if state == State.AWAY:
-					_turn_up()
-				state = State.STALK
-				_forced_kind = Stunt.KNOCK
-				_pending_target = p
-				_pending_left = SILENCE_LEAD
-				_silence(p.get_multiplayer_authority())
-				_comeback = &""
-			else:
-				_comeback = &"breath" # (not in the house: its breathing instead)
-		&"breath":
-			if _comeback_left > 0.0:
-				return
-			var hit := _ground_at(p.global_position + p.head.global_basis.z * randf_range(6.0, 8.0) + Vector3.UP * 3.0)
-			if not hit.is_empty() and _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
-				state = State.WAIT
-				_state_left = 8.0
-			_comeback = &""
+						_stunt_left_set(90.0) # (waiting at their camp; within reach it scrambles off)
+						done = true
+				if comeback.left <= 0.0:
+					done = true
+			&"knock":
+				if comeback.left <= 0.0:
+					var house := get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
+					if house and house.has_inside(p.global_position) and _pending_left < 0.0:
+						if state == State.AWAY:
+							_turn_up()
+						state = State.STALK
+						_forced_kind = Stunt.KNOCK
+						_pending_target = p
+						_pending_left = SILENCE_LEAD
+						_silence(peer)
+						done = true
+					else:
+						comeback.kind = &"breath" # (not in the house: its breathing instead)
+			&"breath":
+				if comeback.left <= 0.0:
+					var hit := _ground_at(p.global_position + p.head.global_basis.z * randf_range(6.0, 8.0) + Vector3.UP * 3.0)
+					if not hit.is_empty() and _place(hit.position, hit.normal, p.global_position - (hit.position as Vector3), true):
+						state = State.WAIT
+						_state_left = 8.0
+					done = true
+		if done:
+			_comebacks.erase(peer)
+			_presence()
+		return # (one at a time)
 
 
-## Your name scratched in its lair, with the tally (StalkerLair: the first
-## time someone comes near it this session).
+## Every name it knows scratched in its lair, each with the tally of the
+## times it got them (StalkerLair: the first time someone comes near it this
+## session). Nameless players (no Steam) leave no name.
 func scratch_name_at_lair() -> void:
-	var who := StalkerMemory.player_name()
-	if _lair_at.is_finite() and not who.is_empty():
-		Network.send_stalker_sign(0, &"scratch", _lair_at + Vector3(0.0, 0.0, -3.0), Vector3(1.0, _got_you, 0.0), who)
+	if not _lair_at.is_finite():
+		return
+	var roster: Dictionary = StalkerMemory.get_value("roster", {}).duplicate()
+	for peer: int in Network.profiles.keys():
+		var profile: Dictionary = Network.profiles[peer]
+		if not str(profile.get("id", "")).is_empty():
+			roster[profile.id] = {name = str(profile.get("name", "")), got = int(profile.get("got", 0))}
+	var row := 0
+	for id: String in roster.keys():
+		var entry: Dictionary = roster[id]
+		if str(entry.name).is_empty():
+			continue
+		Network.send_stalker_sign(0, &"scratch", _lair_at + Vector3(0.0, 0.0, -3.0 - row * 3.2), Vector3(1.0, int(entry.got), 0.0), entry.name)
+		row += 1
 
 
 ## Its lair: found from the Stack's shape (every game the same), built here.
@@ -996,7 +1055,7 @@ func _think(delta: float) -> void:
 	# it's cooling down after a drag).
 	var near := _nearest_player()
 	_no_grab_left = maxf(_no_grab_left - delta, 0.0)
-	if near and _cooldown_left <= 0.0 and _no_grab_left <= 0.0 and state != State.STUNT and state != State.HOME and near.drag == null and near.global_position.distance_to(global_position) < GRAB_RANGE:
+	if near and _cooldown_left <= 0.0 and _no_grab_left <= 0.0 and state != State.STUNT and state != State.HOME and near.drag == null and not _newcomer(near) and near.global_position.distance_to(global_position) < GRAB_RANGE:
 		_lunge_at(near)
 		return
 	# Rushed at: off flat out to cover.
@@ -1099,8 +1158,17 @@ func _think(delta: float) -> void:
 		State.STALK:
 			# The fear's full and they're not looking at it: round behind them.
 			var prey := _grudge_target() if _grudge_target() else nearest
+			if _newcomer(prey):
+				prey = null
+				for node in get_tree().get_nodes_in_group("player"):
+					var veteran := node as PlayerMovement
+					if veteran and not veteran.is_dead() and not _newcomer(veteran):
+						prey = veteran
+						break
+			if prey == null:
+				prey = nearest # (only newcomers here: no strike -- see below)
 			if fear >= 1.0 and _cooldown_left <= 0.0 and prey.drag == null and not _seen() and _big_allowed() \
-					and (hunger >= 1.0 or not _fire_near(prey.global_position, FIRE_AVOID)):
+					and (hunger >= 1.0 or not _fire_near(prey.global_position, FIRE_AVOID)) and not _newcomer(prey):
 				_victim = prey
 				state = State.APPROACH
 				_say(&"flanking", false, VOICE_CHANCE)
@@ -1215,7 +1283,7 @@ func _lunge_at(p: PlayerMovement) -> void:
 
 
 func _grab(p: PlayerMovement) -> void:
-	_got_you += 1 # (the tally in its lair)
+	_profile(p).got = int(_profile(p).got) + 1 # (their tally in its lair)
 	state = State.DRAG
 	_state_left = DRAG_TIME
 	_freed_by_others = 0.0
@@ -1317,7 +1385,7 @@ func _fear_tick(delta: float) -> void:
 		if turned > SPIN_RATE and _reacting("spin"):
 			_add_fear(FEAR_SPIN, "whipped round")
 			if Time.get_ticks_msec() - _sound_msec < int(REACT_WINDOW * 1000.0):
-				_spins += 1 # (spun round at its sound: a habit it learns)
+				_profile(player).spins = int(_profile(player).spins) + 1 # (spun round at its sound: a habit it learns)
 		var flat := Vector3(player.velocity.x, 0.0, player.velocity.z)
 		var away := player.global_position - global_position
 		away.y = 0.0
@@ -1501,16 +1569,16 @@ func _to_trail_end(points: PackedVector3Array) -> void:
 func slept(p: PlayerMovement, bed: Node3D = null) -> void:
 	_noticed(p, &"sleep")
 	if bed:
-		_last_camp = bed.global_position
+		_profile(p).last_camp = bed.global_position
 	if bed and randf() < CAMP_VISIT_CHANCE:
-		camp_visit(bed)
+		camp_visit(bed, p)
 	_slept_on_trail(p)
 
 
 ## It came while they slept: its signs round `bed` (every game).
-func camp_visit(bed: Node3D) -> void:
+func camp_visit(bed: Node3D, sleeper: PlayerMovement = null) -> void:
 	Network.send_stalker_sign(0, &"camp_visit", bed.global_position, bed.global_basis.z)
-	var who := StalkerMemory.player_name()
+	var who := str(_profile(sleeper).name) if sleeper else ""
 	if not who.is_empty():
 		# Your name, scratched by your bed.
 		Network.send_stalker_sign(0, &"scratch", bed.global_position + bed.global_basis.x * 1.8, bed.global_basis.z, who)
@@ -2011,19 +2079,28 @@ func _start_stunt() -> bool:
 	if house and house.has_inside(_stunt_target.global_position):
 		kinds.insert(randi() % (kinds.size() + 1), Stunt.KNOCK)
 		kinds.insert(randi() % (kinds.size() + 1), Stunt.WINDOW)
-	if _stares >= STARE_HABIT:
+	var stares := int(_profile(_stunt_target).stares)
+	if stares >= STARE_HABIT:
 		# Stared down too often: nothing in front of them now -- behind, the sides.
 		for front: int in [Stunt.WATCH, Stunt.PATH, Stunt.ANGEL, Stunt.FIGHT_WATCH]:
 			if kinds.has(front):
 				kinds.erase(front)
 				kinds.append(front)
-	if _trodden(_stunt_target.global_position) and not kinds.has(Stunt.PATH) and _stares < STARE_HABIT:
+	if _trodden(_stunt_target.global_position) and not kinds.has(Stunt.PATH) and stares < STARE_HABIT:
 		kinds.push_front(Stunt.PATH) # (their usual way: it waits along it)
+	if _private:
+		for i in range(PRIVATE_STUNTS.size() - 1, -1, -1):
+			if kinds.has(PRIVATE_STUNTS[i]):
+				kinds.erase(PRIVATE_STUNTS[i])
+				kinds.push_front(PRIVATE_STUNTS[i])
 	var wanted := _mood_stunts()
 	for i in range(wanted.size() - 1, -1, -1):
 		if kinds.has(wanted[i]):
 			kinds.erase(wanted[i])
 			kinds.push_front(wanted[i])
+	if _newcomer(_stunt_target):
+		# New to it: it only studies them -- watching, following.
+		kinds = kinds.filter(func(kind: int) -> bool: return STUDY_STUNTS.has(kind))
 	if _forced_kind >= 0:
 		kinds = [_forced_kind]
 	for kind: int in kinds:
@@ -2068,24 +2145,21 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 		&"tracks", &"kill":
 			return "Sign: %s" % event if _small_sign(event) else "Didn't fit here"
 		&"comeback":
-			var ways: Array[StringName] = [&"knock", &"breath"]
-			if _logoff.is_finite():
-				ways.append(&"tracks")
-			if _last_camp.is_finite():
-				ways.append(&"camp")
-			_comeback = ways[randi() % ways.size()]
-			_comeback_left = 2.0 if _comeback != &"camp" else 1200.0
-			return "Comeback: %s%s" % [_comeback, " (go near your last camp)" if _comeback == &"camp" else ""]
+			_welcomed.erase(peer)
+			_profile(player).sessions = maxi(int(_profile(player).sessions), 2)
+			_met(peer)
+			if not _comebacks.has(peer):
+				return "No comeback rolled"
+			var kind: StringName = _comebacks[peer].kind
+			if kind != &"camp":
+				_comebacks[peer].left = 2.0
+			return "Comeback: %s%s" % [kind, " (go near your last camp)" if kind == &"camp" else ""]
 		&"forget":
 			StalkerMemory.forget()
-			_got_you = 0
-			_spins = 0
-			_stares = 0
 			_route_cells.clear()
-			_seen_doing.clear()
 			_shot_spots.clear()
-			_logoff = Vector3.INF
-			_last_camp = Vector3.INF
+			Network.profiles[player.get_multiplayer_authority()] = StalkerMemory.my_profile()
+			_grudge.clear()
 			return "It's forgotten you (its memory wiped, saved and in its head)"
 		&"home":
 			if not _lair_at.is_finite():
@@ -2119,7 +2193,7 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 						bed = child
 			if bed == null:
 				return "No camp: build one first"
-			camp_visit(bed)
+			camp_visit(bed, player)
 			return "Camp visit at the nearest camp (go and look)"
 		&"breathing":
 			var behind := player.global_position + player.head.global_basis.z * 9.0
@@ -2195,6 +2269,10 @@ func _brain_tick(delta: float) -> void:
 	_memory_tick(delta)
 	_fire_tick(delta)
 	_comeback_tick(delta)
+	for node in get_tree().get_nodes_in_group("player"):
+		var known := node as PlayerMovement
+		if known:
+			_profile(known).known = float(_profile(known).known) + delta
 	_save_left -= delta
 	if _save_left <= 0.0:
 		_save_left = SAVE_EVERY
@@ -2343,10 +2421,10 @@ func _avoid_push(at: Vector3) -> Vector3:
 
 
 func _noticed(p: PlayerMovement, what: StringName) -> void:
-	var key := String(what) # (kept between sessions: what it's seen you do)
-	if _seen_doing.has(key):
+	var seen: Dictionary = _profile(p).seen # (kept between sessions: what it's seen them do)
+	if seen.has(String(what)):
 		return
-	_seen_doing[key] = true
+	seen[String(what)] = true
 	_curious(NEW_THING, &"new")
 
 
@@ -2480,10 +2558,14 @@ func _small_sign(only: StringName = &"") -> bool:
 ## Its brain, for the F9 menu: the director, its fear, what it's doing.
 func debug_text() -> String:
 	var grudge := _grudge_target()
-	return "Phase %s   tension %d%%\nBig moment allowed in %ds (gap %ds)   next sign in %ds\nMood %s   hunger %d%%   curiosity %d%% (%s)   wounded %ds   furious %ds\nMemory: %d shot spots, %d squares walked, spins %d/%d, stares %d/%d, grudge: %s\nFear %d%%   state %s   last: %s" % [
+	var me := _profile(PlayerMovement.local_player(get_tree()))
+	return ("You: %s, known %d min%s, got you %d times, %d sessions\n" % [str(me.name) if not str(me.name).is_empty() else "(nameless)",
+			int(float(me.known) / 60.0), " (newcomer: it's studying you)" if float(me.known) < NEWCOMER else "", int(me.got), int(me.sessions)]) + \
+			"Phase %s   tension %d%%\nBig moment allowed in %ds (gap %ds)   next sign in %ds\nMood %s   hunger %d%%   curiosity %d%% (%s)   wounded %ds   furious %ds\nMemory: %d shot spots, %d squares walked, spins %d/%d, stares %d/%d, grudge: %s\nFear %d%%   state %s   last: %s" % [
 			Phase.keys()[phase], roundi(tension * 100.0), maxi(int(BIG_GAP - _since_big), 0), int(BIG_GAP),
 			int(_sign_left), Mood.keys()[mood()], roundi(hunger * 100.0), roundi(curiosity * 100.0), _curious_about,
-			int(_wounded_left), int(_furious_left), _shot_spots.size(), _route_cells.size(), _spins, SPIN_HABIT, _stares, STARE_HABIT,
+			int(_wounded_left), int(_furious_left), _shot_spots.size(), _route_cells.size(),
+			int(_profile(PlayerMovement.local_player(get_tree())).spins), SPIN_HABIT, int(_profile(PlayerMovement.local_player(get_tree())).stares), STARE_HABIT,
 			("peer %d" % grudge.get_multiplayer_authority()) if grudge else "none",
 			roundi(fear * 100.0), State.keys()[state], _last_pick]
 
@@ -2499,6 +2581,19 @@ func _prepare_stunt() -> void:
 	var grudge := _grudge_target()
 	if grudge and randf() < GRUDGE_PICK:
 		_pending_target = grudge # (the one who hurt it most)
+	# Did you see that? In co-op, about half the time: for one player only --
+	# someone off alone, if anyone is.
+	_private = Network.is_online() and players.size() > 1 and randf() < PRIVATE_SHARE
+	if _private:
+		for node in players:
+			var lone := node as PlayerMovement
+			var alone := true
+			for other in players:
+				if other != lone and (other as Node3D).global_position.distance_to(lone.global_position) < ALONE_RANGE:
+					alone = false
+			if alone:
+				_pending_target = lone
+				break
 	if _fighting(_pending_target) or _fight_ending(_pending_target):
 		_pending_left = 0.0 # (in a fight: no silence -- the user's)
 		return
@@ -2736,7 +2831,7 @@ func _stage(kind: int) -> bool:
 				return true
 			return false
 		Stunt.BEHIND:
-			if _spins >= SPIN_HABIT:
+			if int(_profile(p).spins) >= SPIN_HABIT:
 				# They whip round at its sounds (it's learnt): a croak behind them,
 				# and when they turn, it's where they were looking.
 				_bait_look = look
@@ -3097,7 +3192,7 @@ func _stunt_tick(delta: float) -> void:
 			var stared := (-p.head.global_basis.z).dot(to) > cos(deg_to_rad(STARED_AT)) and _visible_to(p, _standing_points(global_position))
 			if stared or _fight_quiet >= FIGHT_OVER:
 				if stared:
-					_stares += 1
+					_profile(p).stares = int(_profile(p).stares) + 1
 				_end_stunt()
 				return
 		Stunt.FALLEN:
@@ -3346,13 +3441,20 @@ func _stunt_look(seen: bool) -> void:
 	if _stunt == Stunt.WATCH:
 		var to := (global_position + Vector3.UP * BODY_HEIGHT - p.head.global_position).normalized()
 		stared = (-p.head.global_basis.z).dot(to) > cos(deg_to_rad(STARED_AT))
+	# Theirs alone: someone else laying eyes on it, it slips away.
+	if _private and seen:
+		for node in get_tree().get_nodes_in_group("player"):
+			var other := node as PlayerMovement
+			if other and other != p and not other.is_dead() and _visible_to(other, _body_points(global_position, global_basis)):
+				_end_stunt()
+				return
 	var noticed := stared if _stunt == Stunt.WATCH else seen
 	if noticed and not _stunt_seen:
 		_stunt_seen = true
 		_moment(true)
 		_add_fear(FEAR_SEEN, "saw it (%s)" % Stunt.keys()[_stunt].to_lower())
 		if _stunt == Stunt.WATCH:
-			_stares += 1 # (stared it down)
+			_profile(p).stares = int(_profile(p).stares) + 1 # (stared it down)
 		if (_stunt == Stunt.BEHIND and _stunt_phase == 0) or _stunt == Stunt.WATCH:
 			_stunt_phase = 1
 			_state_left = SPOTTED_FREEZE # (a beat looking back at you, then off)

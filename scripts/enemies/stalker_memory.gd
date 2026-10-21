@@ -56,9 +56,50 @@ static func hours_away() -> float:
 	return _hours_away
 
 
-## Everything it remembers, wiped (the F9 menu's, for testing).
+## Everything it remembers, wiped (the F9 menu's, for testing) -- this PC's
+## record of you too (a new you).
 static func forget() -> void:
 	_file = ConfigFile.new()
+	save()
+
+
+## A player's record (the user's, 2026-10-21: it knows each of you): who
+## (an id made once on their PC; their Steam name, or none) and what it's
+## learnt of them -- the times it got them, their habits, the grudge, how long
+## they've known it, where they logged off and last camped, what it's seen
+## them do, how many sessions.
+const DEFAULTS := {id = "", name = "", got = 0, spins = 0, stares = 0, grudge = 0.0, known = 0.0,
+		logoff = null, last_camp = null, seen = {}, sessions = 0}
+const ME := "me"
+
+
+## This PC's own record of you -- kept here, on your PC, so it goes with you
+## to any game you join (Network.send_my_profile).
+static func my_profile() -> Dictionary:
+	var me: Dictionary = file().get_value(ME, "profile", {})
+	for key: String in DEFAULTS:
+		if not me.has(key):
+			me[key] = DEFAULTS[key].duplicate(true) if DEFAULTS[key] is Dictionary else DEFAULTS[key]
+	if str(me.id).is_empty():
+		me.id = "%08x%08x" % [randi(), randi()]
+		# What it learnt of you before it knew each of you apart: yours now.
+		me.got = int(get_value("got_you", 0))
+		me.spins = int(get_value("spins", 0))
+		me.stares = int(get_value("stares", 0))
+		me.seen = get_value("seen_doing", {})
+		var logoff: Variant = get_value("logoff", null)
+		me.logoff = logoff if logoff is Vector3 and (logoff as Vector3).is_finite() else null
+		var camp: Variant = get_value("last_camp", null)
+		me.last_camp = camp if camp is Vector3 and (camp as Vector3).is_finite() else null
+		save_my_profile(me)
+	me.name = player_name()
+	me.sessions = sessions()
+	return me
+
+
+## Your record, back from the game you played in (kept here).
+static func save_my_profile(profile: Dictionary) -> void:
+	file().set_value(ME, "profile", profile)
 	save()
 
 

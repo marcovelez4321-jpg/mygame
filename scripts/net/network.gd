@@ -33,6 +33,8 @@ signal lan_games_changed(games: Array)
 signal fear_note(text: String)
 ## Grandma's quests changed (quests).
 signal quests_changed
+## A player's record (StalkerMemory) reached the host (Stalker._met).
+signal profile_arrived(peer: int)
 
 const PORT := 7777
 const MAX_CLIENTS := 3
@@ -62,6 +64,9 @@ var _characters := {}
 ## mirrored to every game (late joiners get them as they load in); kept
 ## through deaths and reloads (this node lives through them).
 var quests := {}
+## The host's: each player's record for the Stalker (StalkerMemory profiles),
+## by peer -- theirs, sent from their own PC as they come in.
+var profiles := {}
 ## LAN: the host's announcer, the listener, and what it's heard
 ## (address -> {address, name, players, heard: msec}).
 var _announcer: PacketPeerUDP
@@ -389,6 +394,41 @@ func send_stalker_sign(peer: int, kind: StringName, at: Vector3 = Vector3.ZERO, 
 @rpc("authority", "call_remote", "reliable")
 func _net_stalker_sign(kind: StringName, at: Vector3, dir: Vector3, text: String) -> void:
 	StalkerSigns.play(get_tree(), kind, at, dir, text)
+
+
+## Every game, as its level starts: its own player's record (StalkerMemory) to
+## the host -- the Stalker knows you wherever you play.
+func send_my_profile() -> void:
+	StalkerMemory.note_session()
+	var me := StalkerMemory.my_profile()
+	if not is_online() or multiplayer.is_server():
+		_got_profile(multiplayer.get_unique_id() if is_online() else 1, me)
+	else:
+		_net_profile_to_host.rpc_id(1, me)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _net_profile_to_host(profile: Dictionary) -> void:
+	if multiplayer.is_server():
+		_got_profile(multiplayer.get_remote_sender_id(), profile)
+
+
+func _got_profile(peer: int, profile: Dictionary) -> void:
+	profiles[peer] = profile
+	profile_arrived.emit(peer)
+
+
+## Host: a player's record, updated, back to them to keep on their own PC.
+func send_profile_back(peer: int, profile: Dictionary) -> void:
+	if not is_online() or peer == multiplayer.get_unique_id():
+		StalkerMemory.save_my_profile(profile)
+	elif multiplayer.get_peers().has(peer): # (still here)
+		_net_profile_back.rpc_id(peer, profile)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_profile_back(profile: Dictionary) -> void:
+	StalkerMemory.save_my_profile(profile)
 
 
 ## Host: a quest's state and Grandma's hint (GrandmaQuests), here and on

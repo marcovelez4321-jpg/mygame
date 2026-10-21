@@ -78,6 +78,7 @@ func _run() -> void:
 ## out there in the fog for a moment as it does.
 func _lift(camera: Camera3D) -> void:
 	StalkerMemory.note_session()
+	Network.send_my_profile() # (it knows you wherever you play)
 	var phantom: Node3D = null
 	if StalkerMemory.sessions() >= 2 and not _phantom_shown and is_instance_valid(camera):
 		_phantom_shown = true
