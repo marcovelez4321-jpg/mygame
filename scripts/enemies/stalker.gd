@@ -335,6 +335,21 @@ const EYE_CORE := 0.12 # m (the eye itself, up close)
 ## ~6 px (the user's: at 0.045 it was ~20 px an eye, over its whole body far off).
 const EYE_GLARE := 0.012
 
+## The wendigo (the user's, 2026-10-21): the human body stretched wrong --
+## arms ARM_STRETCH, fingers FINGER_STRETCH, legs LEG_STRETCH (its joints
+## moved apart: the skin stretches, the limbs don't fatten), the waist
+## WAIST_THIN; frostbitten grey-blue skin (SKIN_TINT), the hands and feet
+## darkest (FROSTBITE), a little glossy; small broken antlers out of its
+## skull (ANTLER_COLOR).
+const ARM_STRETCH := 1.4
+const FINGER_STRETCH := 1.5
+const LEG_STRETCH := 1.15
+const WAIST_THIN := 0.8
+const SKIN_TINT := Color(0.66, 0.74, 0.82)
+const FROSTBITE := Color(0.3, 0.29, 0.38)
+const SKIN_ROUGHNESS := 0.42
+const ANTLER_COLOR := Color(0.78, 0.74, 0.64)
+
 ## Where the eyes sit on the head bone (a person's, scaled to its size).
 const EYE_FORWARD := 0.09
 const EYE_UP := 0.08
@@ -1974,7 +1989,175 @@ func _build_body() -> void:
 		_limbs.append({upper = upper, lower = lower, end = end, group = spec[3], arm = arm, out = out, home = home,
 				planted = _visual.global_transform * home, foot = _visual.global_transform * home,
 				stepping = false, t = 0.0, from = Vector3.ZERO, to = Vector3.ZERO})
+	_stretch_body()
+	_frostbite_skin()
+	_build_antlers()
 	_build_eyes()
+
+
+## Its joints moved apart (each bone's offset from its parent, longer): the
+## arms, hands' fingers and legs stretched; the waist squeezed thin (the
+## chest set back to its own width).
+func _stretch_body() -> void:
+	for pair: Array in [["LeftForeArm", ARM_STRETCH], ["LeftHand", ARM_STRETCH], ["RightForeArm", ARM_STRETCH],
+			["RightHand", ARM_STRETCH], ["LeftLeg", LEG_STRETCH], ["LeftFoot", LEG_STRETCH],
+			["RightLeg", LEG_STRETCH], ["RightFoot", LEG_STRETCH]]:
+		_lengthen(_bones.get(pair[0], -1), pair[1])
+	for i in _skeleton.get_bone_count():
+		var bone_name := _skeleton.get_bone_name(i)
+		if "Hand" in bone_name and ("Thumb" in bone_name or "Index" in bone_name or "Middle" in bone_name \
+				or "Ring" in bone_name or "Pinky" in bone_name):
+			_lengthen(i, FINGER_STRETCH)
+	var spine := _find_bone("Spine")
+	var chest := _find_bone("Spine2")
+	if spine >= 0 and chest >= 0:
+		_skeleton.set_bone_pose_scale(spine, Vector3(WAIST_THIN, 1.0, WAIST_THIN))
+		_skeleton.set_bone_pose_scale(chest, Vector3(1.0 / WAIST_THIN, 1.0, 1.0 / WAIST_THIN))
+
+
+func _lengthen(bone: int, by: float) -> void:
+	if bone >= 0:
+		_skeleton.set_bone_pose_position(bone, _skeleton.get_bone_rest(bone).origin * by)
+
+
+## Its skin: grey-blue and dead, a little glossy; frostbite darkening the
+## hands and feet (and a little up the forearms and shins) -- each vertex
+## shaded by how much those bones carry it.
+func _frostbite_skin() -> void:
+	var darkness := {}
+	for key: String in ["LeftHand", "RightHand", "LeftFoot", "RightFoot"]:
+		var bone: int = _bones.get(key, -1)
+		if bone < 0:
+			continue
+		darkness[bone] = 1.0
+		for i in _skeleton.get_bone_count():
+			var parent := _skeleton.get_bone_parent(i)
+			while parent >= 0:
+				if parent == bone:
+					darkness[i] = 1.0
+					break
+				parent = _skeleton.get_bone_parent(parent)
+	for key: String in ["LeftForeArm", "RightForeArm", "LeftLeg", "RightLeg"]:
+		if _bones.get(key, -1) >= 0:
+			darkness[_bones[key]] = 0.35
+	for node in _model.find_children("*", "MeshInstance3D", true, false):
+		var shown := node as MeshInstance3D
+		var mesh := shown.mesh as ArrayMesh
+		if mesh == null:
+			continue
+		var skin := shown.skin
+		var made := ArrayMesh.new()
+		# (Its shape keys first: an ArrayMesh takes them only before surfaces.)
+		made.blend_shape_mode = mesh.blend_shape_mode
+		for i in mesh.get_blend_shape_count():
+			made.add_blend_shape(mesh.get_blend_shape_name(i))
+		for surface in mesh.get_surface_count():
+			var arrays := mesh.surface_get_arrays(surface)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var colors := PackedColorArray()
+			colors.resize(vertices.size())
+			var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES] if arrays[Mesh.ARRAY_BONES] != null else PackedInt32Array()
+			var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS] if arrays[Mesh.ARRAY_WEIGHTS] != null else PackedFloat32Array()
+			var per := bones.size() / maxi(vertices.size(), 1)
+			if weights.size() != bones.size():
+				per = 0 # (no weights to go by: left as it is)
+			for v in vertices.size():
+				var dark := 0.0
+				for k in per:
+					var bind := bones[v * per + k]
+					var bone := bind
+					if skin and bind < skin.get_bind_count():
+						bone = skin.get_bind_bone(bind)
+						if bone < 0:
+							bone = _skeleton.find_bone(skin.get_bind_name(bind))
+					dark += float(darkness.get(bone, 0.0)) * weights[v * per + k]
+				colors[v] = Color.WHITE.lerp(FROSTBITE, clampf(dark, 0.0, 1.0))
+			arrays[Mesh.ARRAY_COLOR] = colors
+			var shapes: Array = mesh.surface_get_blend_shape_arrays(surface) if mesh.get_blend_shape_count() > 0 else []
+			made.add_surface_from_arrays(mesh.surface_get_primitive_type(surface), arrays, shapes, {},
+					mesh.surface_get_format(surface) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
+			var original := shown.get_active_material(surface) as BaseMaterial3D
+			var look := (original.duplicate() as StandardMaterial3D) if original is StandardMaterial3D else StandardMaterial3D.new()
+			look.albedo_color = SKIN_TINT
+			look.vertex_color_use_as_albedo = true
+			look.roughness = SKIN_ROUGHNESS
+			look.metallic_specular = 0.7
+			made.surface_set_material(surface, look)
+		shown.mesh = made
+		for surface in made.get_surface_count():
+			shown.set_surface_override_material(surface, null)
+
+
+## Small broken antlers out of the top of its skull (the user's): short
+## stubby beams, one with a tine, the other snapped off half-grown -- bone,
+## on its head (they follow every snap and tilt of it).
+func _build_antlers() -> void:
+	var head: int = _bones.get("Head", -1)
+	if head < 0:
+		return
+	var attach := BoneAttachment3D.new()
+	attach.bone_name = _skeleton.get_bone_name(head)
+	_skeleton.add_child(attach)
+	var antlers := MeshInstance3D.new()
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var k := STANDING_HEIGHT / 1.8 # (a person's head, scaled up to its)
+	for side: float in [-1.0, 1.0]:
+		var base := Vector3(side * 0.055, 0.15, 0.015) * k
+		var out := Vector3(side * 0.6, 1.0, -0.35).normalized()
+		var broken := side < 0.0 # (its left one snapped half-grown)
+		var length := (0.09 if broken else 0.17) * k
+		var beam := PackedVector3Array()
+		var radii := PackedFloat32Array()
+		for i in 6:
+			var u := i / 5.0
+			var bend := Vector3(side * 0.25, -0.15, -0.3) * u * u
+			beam.append(base + (out + bend).normalized() * length * u)
+			radii.append(lerpf(0.024, 0.016 if broken else 0.007, u) * k)
+		_antler_tube(tool, beam, radii, not broken)
+		if not broken:
+			# One short tine forward off it.
+			var from := beam[2]
+			var tine := PackedVector3Array([from, from + Vector3(side * 0.1, 0.5, 0.6).normalized() * 0.05 * k])
+			_antler_tube(tool, tine, PackedFloat32Array([0.011 * k, 0.004 * k]), true)
+	tool.generate_normals()
+	antlers.mesh = tool.commit()
+	var bone_look := StandardMaterial3D.new()
+	bone_look.albedo_color = ANTLER_COLOR
+	bone_look.roughness = 0.85
+	bone_look.cull_mode = BaseMaterial3D.CULL_DISABLED
+	antlers.material_override = bone_look
+	attach.add_child(antlers)
+	# (Its size in metres: undo the model's own scale above the bone.)
+	antlers.scale = Vector3.ONE / maxf(_skeleton.global_transform.basis.get_scale().x, 0.0001)
+
+
+## A tube along `points` (`radii`), 5 sides; `point_end`: closed in a point
+## (a snapped one stays open-ended, ragged).
+static func _antler_tube(tool: SurfaceTool, points: PackedVector3Array, radii: PackedFloat32Array, point_end: bool) -> void:
+	var sides := 5
+	var rings: Array[PackedVector3Array] = []
+	for i in points.size():
+		var forward := (points[mini(i + 1, points.size() - 1)] - points[maxi(i - 1, 0)]).normalized()
+		var side := forward.cross(Vector3.FORWARD if absf(forward.z) < 0.9 else Vector3.RIGHT).normalized()
+		var up := side.cross(forward)
+		var ring := PackedVector3Array()
+		for s in sides:
+			var a := TAU * s / sides + (0.4 if i == points.size() - 1 and not point_end else 0.0)
+			var jag := 1.0 + (0.35 * sin(a * 3.0) if i == points.size() - 1 and not point_end else 0.0)
+			ring.append(points[i] + (side * cos(a) + up * sin(a)) * radii[i] * jag)
+		rings.append(ring)
+	for i in points.size() - 1:
+		for s in sides:
+			var n := (s + 1) % sides
+			for corner: Vector3 in [rings[i][s], rings[i + 1][s], rings[i + 1][n], rings[i][s], rings[i + 1][n], rings[i][n]]:
+				tool.add_vertex(corner)
+	if point_end:
+		var last := rings[rings.size() - 1]
+		var tip := points[points.size() - 1] + (points[points.size() - 1] - points[points.size() - 2]).normalized() * radii[radii.size() - 1] * 2.0
+		for s in sides:
+			for corner: Vector3 in [last[s], tip, last[(s + 1) % sides]]:
+				tool.add_vertex(corner)
 
 
 func _find_bone(key: String) -> int:

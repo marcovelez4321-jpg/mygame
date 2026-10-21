@@ -1860,3 +1860,8 @@ them:
   - **Its own bus:** the Stalker's voices and skitter play on the new Stalker bus, so the silence never mutes it.
   - **No tingle:** 'A tingle goes down your spine.' is gone.
   - **F9 test menu:** StalkerTestMenu, in every build, host only. One click per stunt, plus wrong silence and breathing; Stalker.test_event forces it on you through the same silence lead.
+
+- 2026-10-21: Wendigo Stalker, chunk 2, its look (the user's picks: small broken antlers, clearly stretched, frostbitten grey):
+  - **Stretched:** its joints are moved apart, so the skin stretches without the limbs fattening. Arms 1.4x, fingers 1.5x, legs 1.15x, and the waist 20% thinner (Spine squeezed, Spine2 set back).
+  - **Skin:** grey-blue (SKIN_TINT), a little glossy (roughness 0.42). Each vertex is shaded by its hand and foot bone weights, so the hands and feet are darkest (FROSTBITE) and the forearms and shins a little.
+  - **Antlers:** small broken ones out of the skull on a BoneAttachment3D, bone-coloured. The right has one tine; the left is snapped half-grown and ragged.
