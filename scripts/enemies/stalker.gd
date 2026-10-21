@@ -134,7 +134,15 @@ const STANDING_HEIGHT := 1.9 * SIZE
 ## clear glimpse of it outside a stunt counts as seeing it too (see
 ## GLIMPSE_*). Each rise shows why under the meter. It drains over FEAR_DRAIN_TIME,
 ## and once it's full it stays full: the strike (stage 3) can come.
-const STUNT_EVERY := Vector2(30.0, 60.0)
+## (The user's, 2026-10-21: fewer, longer -- 3 to 5 minutes apart; twice as
+## often while anyone carries raw meat: it smells it.)
+const STUNT_EVERY := Vector2(180.0, 300.0)
+## The wrong silence (StalkerSigns): the world goes quiet round the stunt's
+## player this long before it's staged; back SILENCE_AFTER after it's done
+## (a sound-only one: SOUND_STUNT_HOLD after it).
+const SILENCE_LEAD := 4.0
+const SILENCE_AFTER := 1.5
+const SOUND_STUNT_HOLD := 6.0
 const REACT_WINDOW := 3.0
 ## (Doubled, the user's: 15/10/10/5/50 % before.)
 ## (Halved, the user's 2026-10-17: it filled too fast -- was 0.30, 0.20, 0.20, 0.10, 1.0.)
@@ -163,8 +171,8 @@ const GLIMPSE_TIME := 0.3
 ## Looked straight at (degrees off centre): a watching one's cue to go.
 const STARED_AT := 12.0
 const SPIN_RATE := 4.7 # rad/s: whipping round
-## Each stunt (the user's): these words on its player's screen.
-const TINGLE := "A tingle goes down your spine."
+## (No more words on the screen with a stunt -- the user's, 2026-10-21: the
+## silence and the sounds say it.)
 const FLEE_SPEED := 7.0
 const DRAG_SPEED := 5.0
 const CORPSE := preload("res://scenes/enemy/enemy.tscn")
@@ -259,6 +267,14 @@ var _stunt_seen := false
 var _stunt_away_for := 0.0
 var _stunt_rattle_left := 0.0
 var _stunt_left_every := 40.0
+## A stunt about to be staged once the silence has fallen (its player, and
+## how long yet), and whose game is silent (0: no one's), till when.
+var _pending_target: PlayerMovement
+var _pending_left := -1.0
+var _silenced_peer := 0
+var _silence_off_in := -1.0
+## The test menu's pick (StalkerTestMenu): this stunt, whatever's due (-1: none).
+var _forced_kind := -1
 var _corpse: Enemy
 var _moment_msec := -100000
 var _reacted := {}
@@ -488,6 +504,7 @@ func _physics_process(delta: float) -> void:
 func _think(delta: float) -> void:
 	_fear_tick(delta)
 	_cooldown_left = maxf(_cooldown_left - delta, 0.0)
+	_silence_tick(delta)
 	if state == State.APPROACH and is_instance_valid(_victim) and _cut_off_tick(delta, _victim):
 		return
 	if state == State.APPROACH or state == State.LUNGE or state == State.DRAG:
@@ -581,12 +598,11 @@ func _think(delta: float) -> void:
 				state = State.APPROACH
 				_say(&"flanking", false, VOICE_CHANCE)
 				return
-			_stunt_left_every -= delta
-			if _stunt_left_every <= 0.0 and _cooldown_left <= 0.0:
+			# Twice as fast while anyone carries raw meat (the user's: it smells it).
+			_stunt_left_every -= delta * (2.0 if _meat_carrier(false) else 1.0)
+			if _stunt_left_every <= 0.0 and _cooldown_left <= 0.0 and _pending_left < 0.0:
 				_stunt_left_every = randf_range(STUNT_EVERY.x, STUNT_EVERY.y)
-				if _start_stunt():
-					return
-				_stunt_left_every = 2.0 # none fit here: tries again shortly, not a whole wait later
+				_prepare_stunt()
 			# Round to a spot STALK_DISTANCE from them, on the side it's on.
 			var away := global_position - nearest.global_position
 			away.y = 0.0
@@ -1383,14 +1399,18 @@ func _start_stunt() -> bool:
 		return n is PlayerMovement and not (n as PlayerMovement).is_dead())
 	if players.is_empty():
 		return false
-	_stunt_target = players[randi() % players.size()] as PlayerMovement
+	_stunt_target = _pending_target if is_instance_valid(_pending_target) and not _pending_target.is_dead() else players[randi() % players.size()] as PlayerMovement
+	_pending_target = null
 	var kinds: Array = [Stunt.BEHIND, Stunt.CEILING, Stunt.DOORWAY, Stunt.WATCH, Stunt.RATTLE, Stunt.DRAG, Stunt.HELP, Stunt.LURE]
 	kinds.shuffle()
 	if _climbing_outside(_stunt_target) and randf() < 0.5:
 		kinds.push_front(Stunt.LEAP)
+	if _forced_kind >= 0:
+		kinds = [_forced_kind]
 	for kind: int in kinds:
 		if _stage(kind):
-			Network.send_message(_stunt_target.get_multiplayer_authority(), TINGLE)
+			if state != State.STUNT:
+				_silence_off_in = SOUND_STUNT_HOLD # (a sound only: the quiet lifts after it)
 			match kind:
 				Stunt.CEILING:
 					_say(&"ceiling_scuttle")
@@ -1402,6 +1422,110 @@ func _start_stunt() -> bool:
 					_say(&"leap")
 			return true
 	return false
+
+
+## The test menu (F9, StalkerTestMenu; the user's): `event` on `player` now,
+## whatever its clocks say -- a stunt by name (Stunt), "silence", "breathing"
+## (it waits hidden close behind them). What happened, for the menu. The host's.
+func test_event(event: StringName, player: PlayerMovement) -> String:
+	if player == null or player.is_dead():
+		return "No player"
+	if state in [State.APPROACH, State.LUNGE, State.DRAG]:
+		return "It's in the middle of a strike"
+	if state == State.AWAY or global_position.y < AWAY_DEPTH * 0.5:
+		_turn_up()
+	if state == State.STUNT:
+		_end_stunt()
+	_pending_left = -1.0
+	var peer := player.get_multiplayer_authority()
+	match event:
+		&"silence":
+			_silence(peer)
+			_silence_off_in = 10.0
+			return "Wrong silence (10 s)"
+		&"breathing":
+			var behind := player.global_position + player.head.global_basis.z * 9.0
+			var hit := _ground_at(behind)
+			if hit.is_empty():
+				return "No ground behind you"
+			_place(hit.position, hit.normal, player.global_position - (hit.position as Vector3), false)
+			state = State.WAIT
+			_state_left = 20.0
+			return "Waiting 9 m behind you (listen)"
+	var kind := Stunt.keys().find(String(event).to_upper())
+	if kind < 0:
+		return "Unknown: %s" % event
+	state = State.STALK
+	_cooldown_left = 0.0
+	_forced_kind = kind
+	_pending_target = player
+	_pending_left = SILENCE_LEAD
+	_silence(peer)
+	return "%s in %d s" % [Stunt.keys()[kind].capitalize(), int(SILENCE_LEAD)]
+
+
+## A stunt's due: its player picked, and the world goes quiet round them
+## first (SILENCE_LEAD); _silence_tick stages it then.
+func _prepare_stunt() -> void:
+	var players := get_tree().get_nodes_in_group("player").filter(func(n: Node) -> bool:
+		return n is PlayerMovement and not (n as PlayerMovement).is_dead())
+	if players.is_empty():
+		return
+	_pending_target = players[randi() % players.size()] as PlayerMovement
+	_pending_left = SILENCE_LEAD
+	_silence(_pending_target.get_multiplayer_authority())
+
+
+## The silence's clock: the pending stunt staged once it's fallen (none fit:
+## it lifts, and another's tried soon), and lifted once a stunt's done.
+func _silence_tick(delta: float) -> void:
+	if _pending_left >= 0.0:
+		_pending_left -= delta
+		if _pending_left < 0.0:
+			var forced := _forced_kind >= 0
+			var target := _pending_target
+			if (forced or (state == State.STALK and _cooldown_left <= 0.0)) and _start_stunt():
+				pass
+			else:
+				if forced and is_instance_valid(target):
+					Network.send_message(target.get_multiplayer_authority(), "(test) %s didn't fit here" % Stunt.keys()[_forced_kind].capitalize())
+				_pending_target = null
+				_unsilence()
+				_stunt_left_every = 5.0 # (none fit here: tried again shortly)
+			_forced_kind = -1
+	if _silence_off_in >= 0.0:
+		_silence_off_in -= delta
+		if _silence_off_in < 0.0:
+			_unsilence()
+
+
+func _silence(peer: int) -> void:
+	if _silenced_peer != 0 and _silenced_peer != peer:
+		_unsilence()
+	_silenced_peer = peer
+	_silence_off_in = -1.0
+	Network.send_stalker_sign(peer, &"silence_on")
+
+
+func _unsilence() -> void:
+	if _silenced_peer != 0:
+		Network.send_stalker_sign(_silenced_peer, &"silence_off")
+	_silenced_peer = 0
+	_silence_off_in = -1.0
+
+
+## A player carrying meat: raw (`rotten` false), or rotten -- or null.
+func _meat_carrier(rotten: bool) -> PlayerMovement:
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player == null or player.is_dead() or player.backpack == null:
+			continue
+		for chunk: Dictionary in player.backpack.meat:
+			if int(chunk.get("kind", Backpack.Kind.MEAT)) != Backpack.Kind.MEAT:
+				continue
+			if CarryItem.is_rotten_data(chunk) == rotten:
+				return player
+	return null
 
 
 ## On a megastructure's outside, high up: where the leap's seen from.
@@ -1630,6 +1754,7 @@ func _stunt_look(seen: bool) -> void:
 ## The stunt's over: out of sight again, and back to stalking.
 func _end_stunt() -> void:
 	_airborne = false
+	_silence_off_in = SILENCE_AFTER # (the world's sounds come back)
 	if is_instance_valid(_corpse):
 		var ragdoll := _corpse.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
 		if ragdoll:
@@ -1992,7 +2117,7 @@ func _update_skitter(camera: Camera3D) -> void:
 		_skitter.unit_size = SpiderSound.UNIT_SIZE * 1.4
 		_skitter.max_distance = SpiderSound.HEAR_DISTANCE * HUNT_HEAR
 		_skitter.pitch_scale = 0.45 # (the user's: lower, heavier)
-		_skitter.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+		_skitter.bus = StalkerSigns.bus()
 		_visual.add_child(_skitter)
 		_skitter.play(randf())
 	var level := clampf(_smooth_velocity.length() / CRAWL, 0.0, 1.0)

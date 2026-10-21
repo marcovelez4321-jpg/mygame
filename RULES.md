@@ -1853,3 +1853,10 @@ them:
   - **Pickup look:** keys and the cigarettes float 1 m over the floor, spinning and bobbing like San Andreas pickups (CarryItem.SPIN_KINDS). They're frozen till taken (walk into or grapple), and only the model turns, so nothing moves on the network.
 
 - 2026-10-19: Grandma's front door was invisible. Headless bakes run a stand-in renderer that now and then drops a mesh, and the last rebake lost the front, study, kitchen and cellar doors. The bake now rebuilds until no piece's mesh is empty. The front door is press-to-open (the user's): MapDoor 'use' 1, also offered in TrenchBroom on func_door and func_door_rotating. F opens it ('[F] Open'), walking up doesn't, and it shuts by itself 0.8 s or more after opening, once no player is within 1.5 m of it (walked all the way through).
+
+- 2026-10-21: Wendigo Stalker, chunk 1 (the user's picks):
+  - **Pacing:** stunts come 3-5 min apart (STUNT_EVERY 180-300), twice as often while anyone carries raw meat.
+  - **Wrong silence:** a stunt picks its player first, and that player's world sounds (the Ambience and Enemies buses) fade out over 4 s before it's staged. They come back 1.5 s after it's done, or 6 s after a sound-only one. StalkerSigns.silence relays through Network.send_stalker_sign, with a 90 s failsafe.
+  - **Its own bus:** the Stalker's voices and skitter play on the new Stalker bus, so the silence never mutes it.
+  - **No tingle:** 'A tingle goes down your spine.' is gone.
+  - **F9 test menu:** StalkerTestMenu, in every build, host only. One click per stunt, plus wrong silence and breathing; Stalker.test_event forces it on you through the same silence lead.

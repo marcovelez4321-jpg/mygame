@@ -71,7 +71,7 @@ static func _open_air(clip: AudioStream, at: Vector3, world: Node, pitch: float,
 	var fog_line := air.fog_depth_end if air and air.fog_enabled and air.fog_depth_end > 0.0 else FOG_FALLBACK
 	var call := AudioStreamPlayer3D.new()
 	call.stream = clip
-	call.bus = HallEcho.sped_bus(&"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master", VOICE_SPEED)
+	call.bus = HallEcho.sped_bus(StalkerSigns.bus(), VOICE_SPEED) # (its own bus: the silence never mutes it)
 	call.unit_size = 14.0
 	call.max_distance = fog_line * 1.3
 	call.volume_db = volume_db
@@ -124,7 +124,7 @@ static func _at(stream: AudioStream, at: Vector3, world: Node, volume_db: float,
 	player.max_distance = 60.0
 	player.volume_db = volume_db
 	player.pitch_scale = pitch
-	player.bus = &"Enemies" if AudioServer.get_bus_index(&"Enemies") != -1 else &"Master"
+	player.bus = StalkerSigns.bus()
 	world.add_child(player)
 	player.global_position = at
 	player.finished.connect(player.queue_free)

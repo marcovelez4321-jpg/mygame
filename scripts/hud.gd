@@ -121,6 +121,11 @@ func _find_player() -> void:
 		var warmup := ShaderWarmup.new()
 		warmup.name = "ShaderWarmup"
 		add_child(warmup)
+	# F9: the Stalker's events, to test them (the user's, 2026-10-21).
+	if player.is_multiplayer_authority() and not has_node(^"StalkerTestMenu"):
+		var tests := StalkerTestMenu.new()
+		tests.name = "StalkerTestMenu"
+		add_child(tests)
 	if player.get_node_or_null("TripFlash") == null:
 		var trip := TripFlash.new()
 		trip.name = "TripFlash"
