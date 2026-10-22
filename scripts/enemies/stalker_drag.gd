@@ -2,8 +2,10 @@ class_name StalkerDrag
 extends Node3D
 
 ## Taken by the Stalker (the user's, 2026-10-17; stage 3), on every machine:
-## the player goes limp -- a ragdoll of their own character, on their back --
-## and the Stalker drags it off by one foot. Their camera rides the
+## the player goes limp -- a ragdoll of their own character -- and the Stalker
+## drags it off by the head, in its palm at its side (the user's, 2026-10-22:
+## on all fours, on its other three; never further than LEASH from its
+## hand). Their camera rides the
 ## ragdoll's head (just in front of the face), out of their control: every
 ## bump and swing of the drag is felt. Their own body is hidden meanwhile;
 ## the player is carried where the ragdoll's hips are.
@@ -15,8 +17,15 @@ extends Node3D
 
 const ESCAPE_CLICKS := 20.0
 const ESCAPE_SLIP := 0.15
-## How hard the foot is hauled toward the Stalker's hold.
+## How hard the head is hauled toward the Stalker's palm.
 const PULL := 10.0
+## Never further than this from its palm (the user's: 1 m) -- snagged, it's
+## yanked back.
+const LEASH := 1.0
+## Each tick, this share of the way to the speed that keeps it in the palm,
+## split down the neck to the chest.
+const HOLD_GAIN := 0.12
+const CHAIN_SHARES := [0.45, 0.3, 0.25]
 const RAGDOLL_LAYER := 1 << 3
 const VIEW_AHEAD := 0.14
 ## Smooth both ways (the user's: never immersion-breaking): the ragdoll
@@ -39,6 +48,9 @@ var _foot: PhysicalBone3D
 var _shin: PhysicalBone3D
 var _hips: PhysicalBone3D
 var _head: PhysicalBone3D
+var _chain: Array[PhysicalBone3D] = []
+var _mass := 0.0
+var _last_hand := Vector3.INF
 var _body_model: Node3D
 var _saved_layers := Vector2i.ZERO
 var _saved_head := Transform3D.IDENTITY
@@ -123,15 +135,19 @@ func _ready() -> void:
 	_simulator.physical_bones_start_simulation()
 	for bone in _bones:
 		bone.can_sleep = false
+		_mass += bone.mass
 	if _foot == null:
 		_foot = _shin
-	# Toppled backward as the foot's yanked out from under them.
+	# Held by the head, down the neck to the chest.
+	for named: String in ["Head", "Neck", "UpperChest", "Chest"]:
+		for bone in _bones:
+			if String(bone.bone_name) == named and _chain.size() < CHAIN_SHARES.size():
+				_chain.append(bone)
+	# Yanked toward it by the head, the legs going out from under them.
 	for bone in _bones:
 		var named := String(bone.bone_name)
 		if named in ["Chest", "UpperChest", "Head", "Neck", "Spine"]:
-			bone.apply_central_impulse((trail * 2.5 + Vector3.DOWN * 1.0) * bone.mass)
-		elif named in ["LeftFoot", "LeftLowerLeg", "RightFoot", "RightLowerLeg"]:
-			bone.apply_central_impulse((-trail * 3.0 + Vector3.UP * 1.5) * bone.mass)
+			bone.apply_central_impulse((-trail * 2.5 + Vector3.UP * 1.0) * bone.mass)
 	# Their own body hidden, out of the way; the gun and arms gone.
 	if _body_model:
 		_body_model.visible = false
@@ -222,14 +238,24 @@ func _exit_tree() -> void:
 
 func _physics_process(delta: float) -> void:
 	escape = maxf(escape - ESCAPE_SLIP * delta, 0.0)
-	if _releasing or _dead or not is_instance_valid(stalker) or _foot == null:
+	if _releasing or _dead or not is_instance_valid(stalker) or _chain.is_empty():
 		return
-	# Hauled by the foot toward its hold: just behind it, low.
-	var hold := stalker.global_position + stalker.global_basis.z * 0.8 + stalker.global_basis.y * 0.35
-	var pull := (hold - _foot.global_position) * PULL - _foot.linear_velocity
-	_foot.apply_central_impulse(pull * _foot.mass * delta * 6.0)
-	if _shin:
-		_shin.apply_central_impulse(pull * _shin.mass * delta * 3.0)
+	# Its palm (its hand at its side), and how fast it's going.
+	var hand: Vector3 = stalker.call(&"hand_point")
+	var hand_velocity := (hand - _last_hand) / maxf(delta, 0.0001) if _last_hand.is_finite() else Vector3.ZERO
+	_last_hand = hand
+	var head := _chain[0]
+	var off := hand - head.global_position
+	if off.length() > LEASH:
+		# Snagged: the whole body yanked back to its palm.
+		var by := off - off.normalized() * LEASH
+		for bone in _bones:
+			PhysicsServer3D.body_set_state(bone.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, bone.global_transform.translated(by))
+		off = off.normalized() * LEASH
+	var want := (hand_velocity + off * PULL).limit_length(20.0)
+	var push := (want - head.linear_velocity) * _mass * HOLD_GAIN
+	for i in _chain.size():
+		_chain[i].apply_central_impulse(push * (CHAIN_SHARES[i] as float))
 
 
 ## Your view: the ragdoll's head, a touch in front of the face, looking where

@@ -654,6 +654,14 @@ func carry(pushes: Dictionary, weight: float = 1.0) -> void:
 			chain[i].apply_central_impulse(pushes[held] * GRIP_CHAIN_SHARES[i])
 
 
+## Every bone moved by `by`, its pose and speeds kept (a carried body snagged
+## on something: yanked back to the hand).
+func shift(by: Vector3) -> void:
+	for bone in _bones:
+		if bone.is_inside_tree():
+			PhysicsServer3D.body_set_state(bone.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, bone.global_transform.translated(by))
+
+
 ## `bone` and the next physical bones up toward the hips (skipped skeleton
 ## bones without a physical body, like fingers, don't count), as many as
 ## GRIP_CHAIN_SHARES has; a shorter chain gives its leftover share to the top.

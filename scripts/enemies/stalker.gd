@@ -631,6 +631,12 @@ const REACH_BIT := 1 << 14
 const REACH_TIME := 0.3
 const GRIP := Vector3(0.5, 0.3, 0.35)
 const HOLD_PULL := 10.0
+## Held (the user's, 2026-10-22): never further than this from its palm (m)
+## -- snagged on something, it's yanked back to it.
+const HOLD_LEASH := 1.0
+## Each tick, this share of the way to the speed that keeps it in the palm.
+const HOLD_GAIN := 0.12
+var _last_hand := Vector3.INF
 var holding := false
 var reaching := false
 var _held: Node3D
@@ -1296,6 +1302,8 @@ func _grab(p: PlayerMovement) -> void:
 	_drag_way = -_drag_way if _drag_way.dot(_flat(global_position - p.global_position)) < -0.5 else _drag_way
 	if p.hand.is_holding():
 		p.hand.put_away()
+	holding = true # (by the head, in its palm: StalkerDrag)
+	upright = false
 	Network.send_stalker_drag(p.get_multiplayer_authority(), true)
 	_drag_voice_left = randf_range(DRAG_VOICE_EVERY.x, DRAG_VOICE_EVERY.y)
 	_say(&"grab", true)
@@ -1321,6 +1329,8 @@ func drag_broken() -> void:
 func _let_go(dragged: bool, throw: Vector3 = Vector3.ZERO) -> void:
 	if is_instance_valid(_victim):
 		Network.send_stalker_drag(_victim.get_multiplayer_authority(), false, throw)
+	if state == State.DRAG:
+		holding = false
 	_victim = null
 	fear = 0.0
 	if dragged or state == State.DRAG:
@@ -3970,7 +3980,7 @@ func _process(delta: float) -> void:
 	if camera and camera.global_position.distance_to(global_position) > 90.0:
 		_update_eyes() # (seen from any way off)
 		return # too far to make out its limbs
-	_upright_blend = move_toward(_upright_blend, 1.0 if upright else 0.0, delta * RISE_SPEED)
+	_upright_blend = move_toward(_upright_blend, 1.0 if upright and not _carrying() else 0.0, delta * RISE_SPEED)
 	_update_limbs(delta)
 	_update_spine(delta)
 	_reset_pose()
@@ -4181,7 +4191,16 @@ func _head_of(body: Node3D) -> Vector3:
 	return body.global_position + Vector3.UP * 0.8
 
 
-## Its gripping hand, where it is now.
+## Holding something in its hand (a body, or a player it's dragging off).
+func _carrying() -> bool:
+	return holding or is_instance_valid(_held)
+
+
+## Its gripping hand, where it is now (StalkerDrag: a player held in it).
+func hand_point() -> Vector3:
+	return _hand_point()
+
+
 func _hand_point() -> Vector3:
 	if _grip_limb < 0 or _skeleton == null:
 		return global_position
@@ -4201,8 +4220,11 @@ func _hold_tick(delta: float) -> void:
 			sign_hold(pending.kind, pending.at)
 	if not is_instance_valid(_held):
 		_held = null
+		_last_hand = Vector3.INF
 		return
 	var hand := _hand_point()
+	var hand_velocity := (hand - _last_hand) / maxf(delta, 0.0001) if _last_hand.is_finite() else Vector3.ZERO
+	_last_hand = hand
 	var ragdoll := _held.get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
 	if ragdoll:
 		var head := ragdoll.bone_named("Head")
@@ -4210,8 +4232,12 @@ func _hold_tick(delta: float) -> void:
 			head = ragdoll.bone_named("Neck")
 		if head == null:
 			return # (not a ragdoll yet: next tick)
-		var pull := ((hand - head.global_position) * HOLD_PULL - head.linear_velocity) * ragdoll.total_mass() * delta * 0.6
-		ragdoll.carry({head: pull}, 0.75)
+		var off := hand - head.global_position
+		if off.length() > HOLD_LEASH:
+			ragdoll.shift(off - off.normalized() * HOLD_LEASH) # (snagged: yanked back to its palm)
+			off = off.normalized() * HOLD_LEASH
+		var want := (hand_velocity + off * HOLD_PULL).limit_length(20.0)
+		ragdoll.carry({head: (want - head.linear_velocity) * ragdoll.total_mass() * HOLD_GAIN}, 0.75)
 	else:
 		_held.global_position = hand + Vector3.DOWN * 0.2
 
@@ -4250,12 +4276,12 @@ func _update_limbs(delta: float) -> void:
 	var standing := _upright_blend > 0.5
 	for index in _limbs.size():
 		var limb := _limbs[index]
-		if index == _grip_limb and (is_instance_valid(_held) or is_instance_valid(_reach)):
-			# Its gripping hand: reaching out for it, or holding it by its hip.
+		if index == _grip_limb and (_carrying() or is_instance_valid(_reach)):
+			# Its gripping hand: reaching out for it, or holding it by its hip --
+			# the head in its palm, the arm by its side; it goes on the other three.
 			var target: Vector3
-			if is_instance_valid(_held):
-				target = xf * Vector3(GRIP.x * float(limb.out), GRIP.y, GRIP.z) * SIZE if not standing \
-						else _skeleton.global_transform * _skeleton.get_bone_global_pose(limb.upper).origin + Vector3.DOWN * float(limb.length) * 0.9
+			if _carrying():
+				target = xf * (Vector3(GRIP.x * float(limb.out), GRIP.y, GRIP.z) * SIZE)
 			else:
 				_reach_t += delta
 				target = (limb.planted as Vector3).lerp(_head_of(_reach), smoothstep(0.0, 1.0, _reach_t / REACH_TIME))
@@ -4317,8 +4343,14 @@ func _update_spine(delta: float) -> void:
 	var back := 0.0
 	var left := 0.0
 	var right := 0.0
-	for limb in _limbs:
-		var y := (to_local * (limb.foot as Vector3)).y
+	var carried := _grip_limb if _carrying() else -1
+	var free_arm_y := 0.0
+	for index in _limbs.size():
+		if index != carried and _limbs[index].arm:
+			free_arm_y = (to_local * (_limbs[index].foot as Vector3)).y
+	for index in _limbs.size():
+		var limb := _limbs[index]
+		var y := (to_local * (limb.foot as Vector3)).y if index != carried else free_arm_y
 		if limb.arm:
 			front += y * 0.5
 		else:
