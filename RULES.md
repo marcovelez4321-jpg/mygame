@@ -2019,3 +2019,5 @@ them:
   - **Ctrl:** finer.
   - **F3:** saves to quests/journal_settings.tres.
   - A readout shows the values and keys.
+
+- 2026-10-25 Journal tuning fix: the book's real size is now fixed (screen_share is measured at 0.4 m), so PgUp/PgDn visibly brings it nearer or further. Before, it was re-sized to the same screen share at any distance. The defaults look the same as before.

@@ -1,6 +1,11 @@
-[gd_resource type="Resource" script_class="JournalSettings" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="JournalSettings" format=3]
 
 [ext_resource type="Script" path="res://scripts/quests/journal_settings.gd" id="1_settings"]
 
 [resource]
 script = ExtResource("1_settings")
+distance = 0.3696386413419927
+drop = 0.16999223160173182
+sideways = -0.015615738095237086
+tilt_degrees = -0.32462409090904865
+roll_degrees = 0.814280000000108

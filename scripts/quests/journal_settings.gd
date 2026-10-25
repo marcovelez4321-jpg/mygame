@@ -8,7 +8,8 @@ extends Resource
 
 ## How far in front of your eye it's held (m).
 @export var distance: float = 0.4
-## Its width, as a share of the screen's width.
+## Its size: its share of the screen's width when held 0.4 m off (nearer
+## looks bigger, further smaller).
 @export_range(0.1, 1.5, 0.01) var screen_share: float = 0.5
 ## How far below the screen's middle its middle sits (share of the screen's
 ## height; negative: above).

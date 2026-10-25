@@ -22,6 +22,9 @@ const TUNE_MOVE := 0.25
 const TUNE_NEAR := 0.15
 const TUNE_TURN := 45.0
 const TUNE_SIZE := 0.3
+## Its size (screen_share) is the share of the screen's width it takes held
+## this far off; nearer or further from there, bigger or smaller.
+const SIZE_AT := 0.4
 
 var settings: JournalSettings
 var _tuning := false
@@ -187,9 +190,12 @@ func _tune(delta: float) -> void:
 func _place() -> void:
 	var s := settings
 	var screen := get_viewport().get_visible_rect().size
+	var aspect := screen.x / maxf(screen.y, 1.0)
 	var half_height := s.distance * tan(deg_to_rad(_camera.fov) * 0.5)
-	var half_width := half_height * screen.x / maxf(screen.y, 1.0)
-	var page_width := half_width * 2.0 * s.screen_share * 0.5
+	var half_width := half_height * aspect
+	# Its real size: its share of the screen's width as if held SIZE_AT away
+	# -- so nearer looks bigger, further smaller.
+	var page_width := SIZE_AT * tan(deg_to_rad(_camera.fov) * 0.5) * aspect * 2.0 * s.screen_share * 0.5
 	var page_height := page_width * JournalPage.SIZE.y / JournalPage.SIZE.x
 	var turn := Basis.from_euler(Vector3(deg_to_rad(s.tilt_degrees), deg_to_rad(s.turn_degrees), deg_to_rad(s.roll_degrees)))
 	transform = Transform3D(turn, Vector3(half_width * 2.0 * s.sideways, -half_height * 2.0 * s.drop, -s.distance))
