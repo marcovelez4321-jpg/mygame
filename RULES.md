@@ -2006,3 +2006,5 @@ them:
   - **Traders:** they rest 1 minute at each stop, carry 6 items instead of 12, and the cart has no growth.
 
 - 2026-10-25 The journal is back in the world, at the user's request: the 3D book held up as before (tipped back 14 degrees, pages angled, under the PS1 look). It's now 65% of the screen's width, raised to DROP 0.1 so it fits. The bolder scrawl stays, and so do F-only put-away and pickups putting it away.
+
+- 2026-10-25 The journal is back to the first version (half the screen, lower middle at drop 0.2, tipped back 14 degrees, pages at 6 degrees, 0.4 m away), keeping only the bolder text. Where it's held and how it's angled are now the user's to set in quests/journal_settings.tres (JournalSettings): distance, screen share, drop, sideways, tilt, turn, roll and page angle. The game reads it at start.

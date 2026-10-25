@@ -2,24 +2,19 @@ class_name JournalView
 extends Node3D
 
 ## The journal held up open in front of you (the user's, 2026-10-25): double-
-## click the notebook in the backpack, close the bag, and it's up -- held
-## close (SCREEN_SHARE of the screen's width), lower middle, two pages
-## (JournalPage) side by side in its cover, in the world's own PS1 look.
+## click the notebook in the backpack, close the bag, and it's up -- two
+## pages (JournalPage) side by side in its cover, in the world's own PS1
+## look, held where and as JournalSettings says (quests/journal_settings.tres,
+## the user's to set: half the screen's width, lower middle, tipped back).
 ## Left click turns forward a page spread, right click back (the grapple's
 ## off meanwhile); only F puts it away, and picking anything up does
 ## (PlayerHand). You move as normal while reading. Your own view only: on
 ## your camera, drawn over the world so it never sinks into a wall.
 
-## How far in front of your eye it's held (m), and its share of the screen's
-## width (the user's: half, then brought closer -- 65%).
-const DISTANCE := 0.4
-const SCREEN_SHARE := 0.65
-## Its middle this far below the screen's (share of the screen's height),
-## and tipped back toward you (degrees); each page tipped up from the spine.
-const DROP := 0.1 # (held bigger: raised so its foot stays on screen)
-const TILT := 14.0
-const PAGE_ANGLE := 6.0
+const SETTINGS := "res://quests/journal_settings.tres"
 const COVER := Color(0.16, 0.15, 0.14)
+
+var settings: JournalSettings
 
 var _player: PlayerMovement
 var _camera: Camera3D
@@ -36,6 +31,7 @@ func setup(player: PlayerMovement, camera: Camera3D) -> void:
 	_player = player
 	_camera = camera
 	visible = false
+	settings = load(SETTINGS) as JournalSettings if ResourceLoader.exists(SETTINGS) else JournalSettings.new()
 	for i in 2:
 		var viewport := SubViewport.new()
 		viewport.size = Vector2i(JournalPage.SIZE)
@@ -116,18 +112,22 @@ func _refresh() -> void:
 		_viewports[i].render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
-## Sized to half the screen's width at DISTANCE, lower middle, tipped to you.
+## Sized to its share of the screen's width at its distance, where and as
+## the settings say.
 func _place() -> void:
+	var s := settings
 	var screen := get_viewport().get_visible_rect().size
-	var half_height := DISTANCE * tan(deg_to_rad(_camera.fov) * 0.5)
+	var half_height := s.distance * tan(deg_to_rad(_camera.fov) * 0.5)
 	var half_width := half_height * screen.x / maxf(screen.y, 1.0)
-	var page_width := half_width * 2.0 * SCREEN_SHARE * 0.5
+	var page_width := half_width * 2.0 * s.screen_share * 0.5
 	var page_height := page_width * JournalPage.SIZE.y / JournalPage.SIZE.x
-	transform = Transform3D(Basis(Vector3.RIGHT, deg_to_rad(TILT)), Vector3(0.0, -half_height * 2.0 * DROP, -DISTANCE))
+	var turn := Basis.from_euler(Vector3(deg_to_rad(s.tilt_degrees), deg_to_rad(s.turn_degrees), deg_to_rad(s.roll_degrees)))
+	transform = Transform3D(turn, Vector3(half_width * 2.0 * s.sideways, -half_height * 2.0 * s.drop, -s.distance))
+	var page_angle := deg_to_rad(s.page_angle_degrees)
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
 		(_quads[i].mesh as QuadMesh).size = Vector2(page_width, page_height)
-		_quads[i].transform = Transform3D(Basis(Vector3.UP, -side * deg_to_rad(PAGE_ANGLE)),
-				Vector3(side * page_width * 0.5 * cos(deg_to_rad(PAGE_ANGLE)), 0.0, page_width * 0.5 * sin(deg_to_rad(PAGE_ANGLE))))
+		_quads[i].transform = Transform3D(Basis(Vector3.UP, -side * page_angle),
+				Vector3(side * page_width * 0.5 * cos(page_angle), 0.0, page_width * 0.5 * sin(page_angle)))
 	(_cover.mesh as BoxMesh).size = Vector3(page_width * 2.08, page_height * 1.04, 0.004)
 	_cover.position = Vector3(0.0, 0.0, -0.003)
