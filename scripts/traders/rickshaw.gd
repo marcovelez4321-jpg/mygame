@@ -5,10 +5,9 @@ extends Node3D
 ## himself, oversized -- about 3 m long, 2.5 m tall -- in worn dark red
 ## lacquer, two big spoked wood wheels, a small wooden roof with curved
 ## eaves, his counter where the seat was (a hanging scale, a small oil lamp,
-## a bell), a deep red cloth banner with an eye painted on it, paper lanterns
-## and the growth's glow both, and overgrown with the world's coral (on the
-## wheels and frame, glowing tips), glow moss, and kelp trailing with glowing
-## bulbs. Its goods are always on show (slots): guns and grenades on hooks,
+## a bell), a deep red cloth banner with an eye painted on it, and paper
+## lanterns (the user's, 2026-10-25: no growth on it after all). Its goods
+## are always on show (slots): guns and grenades on hooks,
 ## ammo, food and camp kits on fold-down side shelves, small things hanging
 ## from the eaves. Made from shapes; it faces -Z (the shafts he pulls by),
 ## its origin on the ground under the axle.
@@ -21,11 +20,6 @@ const WOOD := Color(0.3, 0.21, 0.14)
 const PAPER := Color(0.93, 0.86, 0.7)
 const BRASS := Color(0.62, 0.48, 0.2)
 const LANTERN_GLOW := Color(1.0, 0.62, 0.3)
-const CORAL := Color(0.75, 0.62, 0.68)
-const CORAL_TIPS := [Color(1.0, 0.35, 0.75), Color(0.3, 0.9, 1.0)]
-const MOSS := Color(0.22, 0.8, 0.72)
-const KELP := Color(0.12, 0.22, 0.14)
-const BULB := Color(0.55, 1.0, 0.7)
 const BANNER_RED := Color(0.42, 0.03, 0.04)
 ## Where he stands to pull it, between the shafts (local).
 const PULL_POINT := Vector3(0.0, 0.0, -1.3)
@@ -49,7 +43,7 @@ func _init(look_seed: int = 1) -> void:
 
 
 ## Wrecked where he died (the user's: tipped on its side, a wheel off, the
-## banner in the dirt, the lanterns out -- the growth still glows). `ground`:
+## banner in the dirt, the lanterns out). `ground`:
 ## the node it lies under (the wheel and the banner go there).
 func wreck(ground: Node3D) -> void:
 	rotation.z = deg_to_rad(-78.0)
@@ -77,8 +71,6 @@ func roll(distance: float) -> void:
 
 
 func _build() -> void:
-	var dice := RandomNumberGenerator.new()
-	dice.seed = _seed
 	# The wheels and the axle.
 	for side: float in [-1.0, 1.0]:
 		var wheel := Node3D.new()
@@ -100,10 +92,6 @@ func _build() -> void:
 			_box(Vector3(0.035, WHEEL_RADIUS - 0.1, 0.035), Vector3(0.0, cos(angle), sin(angle)) * (WHEEL_RADIUS * 0.5),
 					WORN if i % 5 == 0 else WOOD, Vector3(angle, 0.0, 0.0), 0.0, wheel)
 		_cylinder(0.09, 0.18, Vector3.ZERO, BRASS, Vector3(0.0, 0.0, PI * 0.5), 0.0, wheel)
-		# Coral grown through the spokes (it turns with them).
-		for c in 2:
-			var angle := dice.randf() * TAU
-			_coral(wheel, Vector3(side * 0.02, cos(angle), sin(angle)) * (WHEEL_RADIUS - 0.05), dice, 0.6)
 	_cylinder(0.04, TRACK * 2.0, Vector3(0.0, WHEEL_RADIUS, 0.15), WORN, Vector3(0.0, 0.0, PI * 0.5))
 	# The tub, the footboard, the back and sides.
 	_box(Vector3(1.3, 0.45, 1.0), Vector3(0.0, 0.95, 0.35), LACQUER)
@@ -160,21 +148,6 @@ func _build() -> void:
 	light.shadow_enabled = false
 	light.position = Vector3(0.0, 1.95, -0.45)
 	add_child(light)
-	# The growth: coral on the frame, glow moss, kelp hung with bulbs.
-	for at: Vector3 in [Vector3(-0.62, 0.75, -0.12), Vector3(0.6, 0.78, 0.82), Vector3(-0.5, 2.42, 0.36), Vector3(0.7, 2.25, 0.9),
-			Vector3(0.45, 0.92, -0.6), Vector3(-0.3, 1.2, 0.84)]:
-		_coral(self, at, dice, 1.0)
-	for i in 7:
-		var on_roof := i < 4
-		var at := Vector3(dice.randf_range(-0.7, 0.7), 2.37, dice.randf_range(0.0, 0.7)) if on_roof \
-				else Vector3(dice.randf_range(-0.5, 0.5), 0.58, dice.randf_range(-0.6, -0.2))
-		_box(Vector3(dice.randf_range(0.15, 0.35), 0.03, dice.randf_range(0.12, 0.3)), at, MOSS, Vector3(0.0, dice.randf() * TAU, 0.0), 0.8)
-	for i in 5:
-		var at := Vector3(dice.randf_range(-0.85, 0.85), 2.16, 1.08 if i % 2 == 0 else -0.36)
-		var length := dice.randf_range(0.6, 1.1)
-		_box(Vector3(0.05, length, 0.01), at + Vector3.DOWN * length * 0.5, KELP, Vector3(0.0, dice.randf() * TAU, dice.randf_range(-0.1, 0.1)))
-		for b in dice.randi_range(1, 3):
-			_sphere(0.035, at + Vector3.DOWN * dice.randf_range(0.2, length), BULB, 2.0)
 	_make_slots()
 
 
@@ -196,17 +169,6 @@ func _make_slots() -> void:
 			slots.append({show = &"shelf", xf = Transform3D(Basis(Vector3.UP, side * PI * 0.5), Vector3(side * 0.86, 1.64, z))})
 	for x: float in [-0.6, -0.2, 0.2, 0.6]:
 		slots.append({show = &"eave", xf = Transform3D(Basis.IDENTITY, Vector3(x, 1.85, 1.1))})
-
-
-## A bit of staghorn coral: a few branches, each ending in a glowing tip.
-func _coral(parent: Node3D, at: Vector3, dice: RandomNumberGenerator, size: float) -> void:
-	var tip: Color = CORAL_TIPS[dice.randi() % CORAL_TIPS.size()]
-	for i in dice.randi_range(3, 5):
-		var length := dice.randf_range(0.12, 0.28) * size
-		var lean := Vector3(dice.randf_range(-0.7, 0.7), 1.0, dice.randf_range(-0.7, 0.7)).normalized()
-		var end := at + lean * length
-		_pole(at, end, 0.015 * size, CORAL, parent)
-		_sphere(0.025 * size, end, tip, 2.5, parent)
 
 
 func _scale(at: Vector3) -> void:

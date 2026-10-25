@@ -417,6 +417,7 @@ func _on_walked_into(body: Node3D) -> void:
 	if not player.hand.store(item):
 		return # no room: it stays
 	player.hand.tell_owner_stored(item)
+	player.hand.picked_up()
 	if player.is_multiplayer_authority():
 		MapIO.show_pickup(get_tree(), "+ %s" % _pickup_name())
 	queue_free()

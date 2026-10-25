@@ -47,6 +47,8 @@ func _on_body_entered(body: Node3D) -> void:
 	if weapons == null:
 		return # not a player (or a player scene missing WeaponController)
 	weapons.pickup_weapon(weapon, ammo_amount)
+	if body is PlayerMovement:
+		(body as PlayerMovement).hand.picked_up()
 	queue_free()
 
 

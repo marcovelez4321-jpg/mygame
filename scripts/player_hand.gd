@@ -50,7 +50,6 @@ var incoming: Node3D
 var _player: PlayerMovement
 var _fire_prev := false
 var _drop_prev := false
-var _bag_was_open := false
 var _cook_left := 0.0
 var _age_left := CarryItem.AGE_EVERY
 
@@ -112,6 +111,7 @@ func fetch(body: Node3D) -> void:
 		return
 	if body is DeathPack:
 		(body as DeathPack).claim(_player) # your gear: straight back into the pack
+		picked_up()
 		return
 	if is_holding() and not _stow():
 		_drop()
@@ -150,11 +150,8 @@ func tick(fire: bool, drop: bool, stow: bool, delta: float) -> void:
 		if float(data.smoke_left) <= 0.0 and _decides():
 			_finish_smoking()
 		return
-	# Reading: opening the bag puts the journal away (Tab), as G does.
-	var bag_opened := _player.bag_open and not _bag_was_open
-	_bag_was_open = _player.bag_open
-	if reading() and _decides() and (bag_opened or drop_pressed):
-		_stow()
+	# Reading: only F puts the journal away (the user's) -- G does nothing.
+	if reading() and drop_pressed:
 		return
 	if drop_pressed and not is_holding() and not is_busy():
 		# Nothing in the hand: G drops the gun in your hands (the user's).
@@ -178,7 +175,7 @@ func prompt() -> String:
 		return ""
 	var kind: int = data.kind
 	if kind == Backpack.Kind.JOURNAL:
-		return "left click: next page\nright click: back"
+		return "left click: next page\nright click: back\nF: put it away"
 	if smoking():
 		return ""
 	if kind == CarryItem.POD:
@@ -446,6 +443,13 @@ func put_back() -> void:
 		_drop()
 
 
+## Something picked up (walked into, grabbed): reading, the journal goes
+## away (the user's).
+func picked_up() -> void:
+	if reading():
+		put_back()
+
+
 ## The camp kit built (CampBuilder): gone from the hand.
 func use_up() -> void:
 	_empty()
@@ -461,8 +465,7 @@ func put_away() -> void:
 ## ignored till you step off it).
 func _drop() -> void:
 	if reading():
-		_stow() # (the journal's never dropped: the user's)
-		return
+		return # (the journal's never dropped -- only put away with F: the user's)
 	var at := _player.global_position + Vector3.UP * 0.6 - _player.global_basis.z * 0.5
 	var dropped := CarryItem.spawn(_player, at, data)
 	dropped.ignore = _player

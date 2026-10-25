@@ -34,7 +34,7 @@ enum Mood { CALM, FLEEING, FIGHTING }
 
 const SPEED := 2.0
 const PARK_RANGE := 10.0
-const REST_TIME := 360.0
+const REST_TIME := 60.0 # (the user's: a minute)
 const MEET_RANGE := 150.0
 const MEET_AWAY := 600.0
 const TURN_RATE := 1.5

@@ -1,43 +1,63 @@
 class_name JournalView
-extends Node3D
+extends CanvasLayer
 
-## The journal held up open in front of you (the user's, 2026-10-25): double-
-## click the notebook in the backpack, close the bag, and it's up -- half the
-## screen, lower middle, two pages (JournalPage) side by side in its cover.
-## Left click turns forward a page spread, right click back (the grapple's
-## off meanwhile); Tab or G puts it away (PlayerHand). You move as normal
-## while reading. Your own view only: on your camera, drawn over the world
-## so it never sinks into a wall.
+## The journal held up open in front of you (the user's, 2026-10-25):
+## double-click the notebook in the backpack, close the bag, and it's up --
+## half the screen, lower middle, two pages (JournalPage) side by side in its
+## cover, square to your eyes. Drawn over everything, above the PS1 look's
+## dither (PS1Dither's layer: the user's -- readable, not crushed), the pages
+## rendered at twice their size and shown smoothly. Left click turns forward
+## a page spread, right click back (the grapple's off meanwhile); only F puts
+## it away (PlayerHand), and picking anything up does. You move as normal
+## while reading. Your own view only.
 
-## How far in front of your eye it's held (m), and its share of the screen's
-## width (the user's: half).
-const DISTANCE := 0.4
+## Its share of the screen's width (the user's: half), how far up from the
+## bottom its lower edge sits (share of the screen's height), and the most of
+## the screen's height it may take.
 const SCREEN_SHARE := 0.5
-## Its middle this far below the screen's (share of the screen's height),
-## and tipped back toward you (degrees); each page tipped up from the spine.
-const DROP := 0.2
-const TILT := 14.0
-const PAGE_ANGLE := 6.0
+const BOTTOM_GAP := 0.04
+const MOST_HEIGHT := 0.88
 const COVER := Color(0.16, 0.15, 0.14)
+const COVER_EDGE := 10.0
+const SPINE := 6.0
+## Above the PS1 dither (its CanvasLayer is 5).
+const LAYER := 7
+## The pages rendered at this many times their size (sharp when big).
+const SHARPNESS := 2
 
 var _player: PlayerMovement
-var _camera: Camera3D
+var _root: Control
+var _cover: Panel
 var _viewports: Array[SubViewport] = []
 var _pages: Array[JournalPage] = []
-var _quads: Array[MeshInstance3D] = []
-var _cover: MeshInstance3D
+var _shown: Array[TextureRect] = []
 var _spread := 0
 var _dirty := true
 var _page_count := 0
 
 
-func setup(player: PlayerMovement, camera: Camera3D) -> void:
+func setup(player: PlayerMovement, _camera: Camera3D) -> void:
 	_player = player
-	_camera = camera
+	layer = LAYER
 	visible = false
+	_root = Control.new()
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_root)
+	_cover = Panel.new()
+	_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = COVER
+	style.set_corner_radius_all(6)
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.45)
+	style.shadow_size = 10
+	_cover.add_theme_stylebox_override("panel", style)
+	_root.add_child(_cover)
 	for i in 2:
 		var viewport := SubViewport.new()
-		viewport.size = Vector2i(JournalPage.SIZE)
+		viewport.size = Vector2i(JournalPage.SIZE) * SHARPNESS
+		viewport.size_2d_override = Vector2i(JournalPage.SIZE)
+		viewport.size_2d_override_stretch = true
 		viewport.transparent_bg = false
 		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		add_child(viewport)
@@ -45,30 +65,15 @@ func setup(player: PlayerMovement, camera: Camera3D) -> void:
 		viewport.add_child(page)
 		_viewports.append(viewport)
 		_pages.append(page)
-		var quad := MeshInstance3D.new()
-		quad.mesh = QuadMesh.new()
-		quad.material_override = _over_world(viewport.get_texture(), Color.WHITE, 21)
-		quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(quad)
-		_quads.append(quad)
-	_cover = MeshInstance3D.new()
-	_cover.mesh = BoxMesh.new()
-	_cover.material_override = _over_world(null, COVER, 20)
-	_cover.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_cover)
+		var shown := TextureRect.new()
+		shown.texture = viewport.get_texture()
+		shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		shown.stretch_mode = TextureRect.STRETCH_SCALE
+		shown.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		shown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_cover.add_child(shown)
+		_shown.append(shown)
 	Network.fact_changed.connect(func(_name: StringName, _value: Variant) -> void: _dirty = true)
-
-
-static func _over_world(texture: Texture2D, color: Color, priority: int) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = color
-	material.albedo_texture = texture
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS # (readable)
-	material.no_depth_test = true
-	material.disable_fog = true
-	material.render_priority = priority
-	return material
 
 
 func _process(_delta: float) -> void:
@@ -115,18 +120,16 @@ func _refresh() -> void:
 		_viewports[i].render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
-## Sized to half the screen's width at DISTANCE, lower middle, tipped to you.
+## Half the screen's width, its lower edge just off the bottom, centred.
 func _place() -> void:
-	var screen := get_viewport().get_visible_rect().size
-	var half_height := DISTANCE * tan(deg_to_rad(_camera.fov) * 0.5)
-	var half_width := half_height * screen.x / maxf(screen.y, 1.0)
-	var page_width := half_width * 2.0 * SCREEN_SHARE * 0.5
-	var page_height := page_width * JournalPage.SIZE.y / JournalPage.SIZE.x
-	transform = Transform3D(Basis(Vector3.RIGHT, deg_to_rad(TILT)), Vector3(0.0, -half_height * 2.0 * DROP, -DISTANCE))
+	var screen := _root.get_viewport_rect().size
+	var page := Vector2(screen.x * SCREEN_SHARE * 0.5, 0.0)
+	page.y = page.x * JournalPage.SIZE.y / JournalPage.SIZE.x
+	if page.y > screen.y * MOST_HEIGHT:
+		page *= screen.y * MOST_HEIGHT / page.y
+	var book := Vector2(page.x * 2.0 + SPINE + COVER_EDGE * 2.0, page.y + COVER_EDGE * 2.0)
+	_cover.size = book
+	_cover.position = Vector2((screen.x - book.x) * 0.5, screen.y * (1.0 - BOTTOM_GAP) - book.y)
 	for i in 2:
-		var side := -1.0 if i == 0 else 1.0
-		(_quads[i].mesh as QuadMesh).size = Vector2(page_width, page_height)
-		_quads[i].transform = Transform3D(Basis(Vector3.UP, -side * deg_to_rad(PAGE_ANGLE)),
-				Vector3(side * page_width * 0.5 * cos(deg_to_rad(PAGE_ANGLE)), 0.0, page_width * 0.5 * sin(deg_to_rad(PAGE_ANGLE))))
-	(_cover.mesh as BoxMesh).size = Vector3(page_width * 2.08, page_height * 1.04, 0.004)
-	_cover.position = Vector3(0.0, 0.0, -0.003)
+		_shown[i].size = page
+		_shown[i].position = Vector2(COVER_EDGE + i * (page.x + SPINE), COVER_EDGE)

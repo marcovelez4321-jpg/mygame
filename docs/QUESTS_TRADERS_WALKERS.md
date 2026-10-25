@@ -183,7 +183,7 @@ traps of the place, and new enemies.
     grenade for 3;
   - pills 3, bandage 2, cooked meat 2, camp kit 6;
   - the offering 10 (rare).
-- **Stock:** any item can turn up; 12 random items, rarer the pricier;
+- **Stock:** any item can turn up; 6 random items (the user's: half the 12 it was), rarer the pricier;
   re-rolled at every new meeting.
 - **Three wandering traders** walk between landmarks, resting at each.
 - **Parked traders:** one per landmark, plus three up the Stack at 400 m,
@@ -202,14 +202,13 @@ traps of the place, and new enemies.
 
 ### The rickshaw shop (wanderers pull it; parked ones too)
 - Japanese jinrikisha shape, **oversized: 3 m long, 2.5 m tall**.
-- **Overgrown** with coral (staghorn and brain coral on the wheels and frame,
-  glowing tips), glow moss, and kelp trailing with glowing bulbs.
+- **No growth on it** (the user's: taken off again).
 - Two big spoked wood wheels; worn **dark red lacquer**; a small **wooden
   roof** with curved eaves.
 - The seat is **his shop counter**, with a hanging scale, a small oil lamp
   and a bell.
 - A hanging **deep red cloth banner** with a painted **eye**.
-- Light: **paper lanterns and the growth's glow** both.
+- Light: **paper lanterns**.
 - **Display, always shown (even on the move):** guns and grenades on hooks
   along the sides; ammo, food, meds and camp kits on fold-down side shelves;
   small items hanging from the roof's eaves.
@@ -280,10 +279,13 @@ traps of the place, and new enemies.
   with it and never lose it: it's never dropped or left on death, and it
   takes no room or weight.
 - **Reading it:** double-click it in the bag, then close the bag. It comes up
-  open (`JournalView`), half the screen wide, lower middle.
+  open (`JournalView`), half the screen wide, lower middle, square to your
+  view, drawn above the PS1 dither (canvas layer 7), the pages rendered at 2x
+  in a thickened scrawl.
   - Left click turns forward a spread, right click turns back (the grapple
     is off meanwhile).
-  - Tab or G puts it away. You can move as normal while reading.
+  - Only F puts it away; picking anything up (walked into, grappled, a death
+    pack) does too. G does nothing. You can move as normal while reading.
 - **The pages** (`JournalPage`): grey plain paper, grubby fingerprints,
   pencil grey ink, the Reenie Beanie scrawl, and code-drawn pencil sketches.
 - **The entries** (`QuestJournal.ENTRIES`):
@@ -386,7 +388,7 @@ Everything is in `scripts/traders/`.
 
 ### Goods and buying
 - **Goods** (`TraderGoods`): the user's prices.
-  - **Stock:** 12 a cart, odds as 1 / price, a gun at most once. A seed makes
+  - **Stock:** 6 a cart, odds as 1 / price, a gun at most once. A seed makes
     the stock, so every game shows the same cart.
   - **Display:** 6 hooks, 6 fold-down shelf spots, 4 eave strings. Each good
     has a paper tag on a string with your own price in pencil (the journal's
@@ -409,7 +411,7 @@ Everything is in `scripts/traders/`.
 - **Wanderers:** 3, at 2 m/s, between Grandma's yard edge (60 m from the
   house toward the Stack) and the plateau edge.
   - Each has 2 wild stops each way, 80-200 m off the line.
-  - They rest 6 min at every stop and park when anyone's within 10 m.
+  - They rest 1 min at every stop (the user's) and park when anyone's within 10 m.
 - **New meeting:** everyone 150 m away for 10 min, then someone comes back:
   his stock is re-rolled.
 - **Safe ground:** 25 m round a calm trader. Tweakers and roaches don't fight

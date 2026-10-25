@@ -12,7 +12,7 @@ extends RefCounted
 ## Prices for you: twice as much once you've hurt a trader (Traders.ROBBED,
 ## the user's: never fading), less with a trader's own discount.
 
-const STOCK := 12
+const STOCK := 6 # (the user's: half the 12 it was)
 const GOODS := [
 	{name = "Pistol", data = {kind = Backpack.Kind.GUN, weapon = "res://weapons/starter_gun.tres"}, price = 8, show = &"hook"},
 	{name = "Revolver", data = {kind = Backpack.Kind.GUN, weapon = "res://weapons/revolver.tres"}, price = 8, show = &"hook"},

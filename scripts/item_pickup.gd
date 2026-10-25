@@ -36,6 +36,8 @@ func _on_body_entered(body: Node3D) -> void:
 	if taken <= 0:
 		return # full up: it stays for later
 	amount -= taken
+	if body is PlayerMovement:
+		(body as PlayerMovement).hand.picked_up()
 	SoundPlayer.play_3d(pickup_sound, global_position, get_tree().current_scene)
 	var what := "Pills" if item == WeaponController.Item.PILLS else ("Bandage" if taken == 1 else "Bandages")
 	MapIO.show_pickup(get_tree(), "+%d %s" % [taken, what])

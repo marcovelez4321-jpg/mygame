@@ -2,7 +2,7 @@ class_name TraderWreck
 extends Node3D
 
 ## A dead trader's cart where he fell (the user's: tipped on its side, a wheel
-## off, the banner in the dirt, the lanterns out; the growth still glows) --
+## off, the banner in the dirt, the lanterns out) --
 ## left there for good, a landmark (TraderKeeper, from the facts). Every game
 ## sees it (NetEntities, made with .new()).
 

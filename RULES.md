@@ -1999,3 +1999,8 @@ them:
   - **Killed:** a tipped-over wreck is left for good (TraderWreck, facts), his goods spill out, and a replacement comes after 80 min of play (TraderKeeper).
   - **Selling the last pack** to a trader: 50 scrap; Grandma knows, as with smoking it.
   - **Enemy.hunt():** sends an enemy after a target.
+
+- 2026-10-25 The journal and the traders changed:
+  - **The journal** is now a flat page above the PS1 dither (canvas layer 7). It's square to your view, rendered at 2x in a thickened font.
+  - **Putting it away:** only F does it, or picking anything up (walk-in pickups, grapple, death pack). G and Tab no longer do.
+  - **Traders:** they rest 1 minute at each stop, carry 6 items instead of 12, and the cart has no growth.

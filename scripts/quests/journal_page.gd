@@ -8,7 +8,9 @@ extends Control
 
 const SIZE := Vector2(480, 640)
 const FONT_PATH := "res://art/journal/ReenieBeanie.ttf"
-const FONT_SIZE := 34
+const FONT_SIZE := 38
+## The scrawl thickened (the user's: bolder, easier to read).
+const EMBOLDEN := 0.8
 const PAPER := Color(0.72, 0.72, 0.7)
 const PENCIL := Color(0.24, 0.24, 0.26)
 const MARGIN := 36.0
@@ -36,16 +38,21 @@ func _init() -> void:
 	add_child(_label)
 
 
-## The handwriting: the imported font, or read straight from the file before
-## the editor's imported it.
+## The handwriting: the imported font (or read straight from the file before
+## the editor's imported it), thickened by EMBOLDEN.
 static func font() -> Font:
 	if _font == null:
+		var base: Font
 		if ResourceLoader.exists(FONT_PATH):
-			_font = load(FONT_PATH) as Font
+			base = load(FONT_PATH) as Font
 		else:
 			var file := FontFile.new()
 			file.load_dynamic_font(FONT_PATH)
-			_font = file
+			base = file
+		var bold := FontVariation.new()
+		bold.base_font = base
+		bold.variation_embolden = EMBOLDEN
+		_font = bold
 	return _font
 
 

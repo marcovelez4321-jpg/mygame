@@ -35,4 +35,6 @@ func _on_body_entered(body: Node3D) -> void:
 	if weapons == null:
 		return
 	weapons.add_ammo(ammo_type, amount)
+	if body is PlayerMovement:
+		(body as PlayerMovement).hand.picked_up()
 	queue_free()

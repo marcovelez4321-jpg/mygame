@@ -49,6 +49,7 @@ func _on_body_entered(body: Node3D) -> void:
 	if player == null or player.has_key(key_name()):
 		return
 	player.give_key(key_name())
+	player.hand.picked_up()
 	SoundPlayer.play_3d(PICKUP_SOUND, global_position, get_tree().current_scene)
 	MapIO.show_pickup(get_tree(), "Picked up the %s key" % key_name())
 	queue_free()
