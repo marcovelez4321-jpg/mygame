@@ -2004,3 +2004,5 @@ them:
   - **The journal** is now a flat page above the PS1 dither (canvas layer 7). It's square to your view, rendered at 2x in a thickened font.
   - **Putting it away:** only F does it, or picking anything up (walk-in pickups, grapple, death pack). G and Tab no longer do.
   - **Traders:** they rest 1 minute at each stop, carry 6 items instead of 12, and the cart has no growth.
+
+- 2026-10-25 The journal is back in the world, at the user's request: the 3D book held up as before (tipped back 14 degrees, pages angled, under the PS1 look). It's now 65% of the screen's width, raised to DROP 0.1 so it fits. The bolder scrawl stays, and so do F-only put-away and pickups putting it away.
