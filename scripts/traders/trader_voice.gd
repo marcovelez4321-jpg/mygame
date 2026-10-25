@@ -14,7 +14,7 @@ const PITCH := Vector2(0.6, 0.8)
 const GRAIN := 0.75
 ## Only from the clip's middle (its ends are breath and silence).
 const FROM_SHARE := Vector2(0.12, 0.85)
-const BABBLES := {&"greet": 7, &"price": 4, &"sale": 6, &"no": 3}
+const BABBLES := {&"greet": 7, &"price": 4, &"sale": 6, &"no": 3, &"help": 12}
 const CROSS_PITCH := 1.12
 
 var _left := 0
@@ -37,7 +37,8 @@ func babble(kind: StringName) -> void:
 	if stream == null or _length <= 0.0:
 		return
 	_left = int(BABBLES.get(kind, 4))
-	_cross = kind == &"no"
+	_cross = kind == &"no" or kind == &"help"
+	volume_db = 8.0 if kind == &"help" else 0.0 # (calling for help: loud)
 	_next = 0.0
 
 

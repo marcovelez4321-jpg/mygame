@@ -22,6 +22,9 @@ const LYING := ""
 const IN_LAIR := "lair"
 const RECOVERED := "recovered"
 const SMOKED := "smoked"
+const SOLD := "sold"
+## What a trader gives for it (the user's).
+const PRICE := 50
 
 
 static func stage() -> String:
@@ -32,6 +35,20 @@ static func stage() -> String:
 ## Smoked (Grandma knows: GrandmaQuests.pays()).
 static func smoked() -> bool:
 	return str(WorldFacts.get_fact(WorldFacts.quest(QUEST, "outcome"), "")) == SMOKED
+
+
+## Smoked or sold: either way Grandma knows (the user's: selling them, like
+## smoking them -- her cold greeting, her next quest pays nothing).
+static func grandma_knows() -> bool:
+	return str(WorldFacts.get_fact(WorldFacts.quest(QUEST, "outcome"), "")) in [SMOKED, SOLD]
+
+
+## The host: `by` sold them to a trader (Trader) -- the quest's done that way.
+static func sell(by: PlayerMovement) -> void:
+	Network.send_fact(WorldFacts.quest(QUEST, "outcome"), SOLD)
+	Network.send_fact(&"grandma.next_unpaid", true)
+	_record("by", by)
+	Network.send_quest(QUEST, GrandmaQuests.State.DONE, GrandmaQuests.hint(QUEST))
 
 
 ## The host: it got them home (a step: `from` is who it took them from).

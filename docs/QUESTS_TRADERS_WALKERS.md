@@ -363,3 +363,80 @@ Selling the pack to a trader for 50 scrap (traders come next).
 
 ### Testing
 F9 → "Pack" puts the bait 18 m ahead of you, its steps reset. Walk up to it.
+
+## Built: Traders and scrap (2026-10-25)
+
+Everything is in `scripts/traders/`.
+
+### The cart and the man
+- **The cart:** `Rickshaw`, built from shapes to the user's design. Its parts
+  are drawn to 160 m.
+- **The man:** `Trader` (an AnimatableBody3D).
+  - His model is set in `traders/trader_settings.tres`, swapped in the
+    Inspector (default Male Character_01). Its height and stoop are there
+    too.
+  - The stoop is `TraderStoop`, a skeleton modifier bending the spine 35
+    degrees with the head lifted back up.
+  - His mossy straw kasa hat is code-built on his head bone.
+- **His babble** (`TraderVoice`):
+  - **Made from:** the user's `hellonormal1.ogg`, chopped into 8 slivers a
+    second at 0.6-0.8x pitch.
+  - **Babble lengths (syllables):** greeting 7, price 4, sale 6, "no" 3 (a
+    touch higher), and "help" 12 (loud).
+
+### Goods and buying
+- **Goods** (`TraderGoods`): the user's prices.
+  - **Stock:** 12 a cart, odds as 1 / price, a gun at most once. A seed makes
+    the stock, so every game shows the same cart.
+  - **Display:** 6 hooks, 6 fold-down shelf spots, 4 eave strings. Each good
+    has a paper tag on a string with your own price in pencil (the journal's
+    font).
+- **Buying:** look at a good: "[F] Buy: Shotgun, 25 scrap". Pressing F pays
+  from the scrap in your hand and bag together, and the good goes into your
+  right hand. Can't pay: a cross babble.
+- **Selling the last pack:** hold it and look at him: "[F] Sell the last
+  pack: 50 scrap". Grandma knows, as with smoking it: her cold greeting, and
+  her next quest pays nothing.
+
+### Where they are (TraderDirector / TraderKeeper)
+- **Parked:**
+  - under the Flesh Tree, 12 m past its trunk on the road-out side;
+  - at the Stack's plateau edge (the first spot 4 m below its foot, toward
+    Grandma's);
+  - 400 m, 2 km and 4 km up the Stack, on a new spot each session: open
+    ledges (400 rays down, outdoors only), rooms grown onto the towers, or 10%
+    of the time a lit window room.
+- **Wanderers:** 3, at 2 m/s, between Grandma's yard edge (60 m from the
+  house toward the Stack) and the plateau edge.
+  - Each has 2 wild stops each way, 80-200 m off the line.
+  - They rest 6 min at every stop and park when anyone's within 10 m.
+- **New meeting:** everyone 150 m away for 10 min, then someone comes back:
+  his stock is re-rolled.
+- **Safe ground:** 25 m round a calm trader. Tweakers and roaches don't fight
+  in it or target anyone in it (Factions), and encounters never spawn in it.
+  Spiders, rats and the Harvestman pick targets their own way: not covered
+  yet.
+
+### Robbing him (any player's damage to him counts)
+- **Marked on you for good:** every trader charges you double, and half of
+  all traders (rolled) refuse you ("He won't sell to you").
+- **His call for help:**
+  - a loud babble;
+  - 8 mixed tweakers (melee, gunners, rushers) come from out of your view,
+    60-90 m off, hunting you;
+  - helpers vanish once nobody's within 150 m of them.
+- **He runs:** he drops the shafts and runs 6 s at 4 m/s (his run
+  animation).
+- **He turns on you:** his fighting self is a gunner in his model and hat,
+  with the PKM model and the PKM's damage (10 a shot, bursts of 10), 500 hp
+  carried over.
+- **Calming down:** if everyone's 200 m away for 2 min, he's back at his cart
+  and calm again, with the marks still on you.
+- **Killed:**
+  - his cart is left tipped on its side (`TraderWreck`), saved and there
+    every session;
+  - his unsold goods spill out to take;
+  - he leaves his body (or his fighting self's);
+  - a replacement comes after 80 minutes of play (counted while playing,
+    saved every 30 s), starting the wanderer's route over or at the parked
+    spot.

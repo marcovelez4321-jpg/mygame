@@ -654,6 +654,18 @@ func alert(target: Node3D) -> void:
 	_state = State.CHASE
 
 
+## Sent straight after `target`, wherever it is (a trader's call for help:
+## Trader) -- alert() for one that isn't patrolling with a gang.
+func hunt(target: Node3D) -> void:
+	if not is_instance_valid(target) or _state == State.DEAD:
+		return
+	_target = target
+	_last_seen_position = target.global_position
+	_time_since_seen = 0.0
+	_has_seen_target = true
+	_state = State.CHASE
+
+
 ## Hurt: whatever did it (Factions.provoke, recorded right after the damage --
 ## hence deferred) becomes the whole gang's problem -- they turn on it even
 ## mid-fight with something else (revenge priority), and the idle ones come.

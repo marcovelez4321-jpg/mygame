@@ -34,6 +34,9 @@ const PULL_POINT := Vector3(0.0, 0.0, -1.3)
 var slots: Array[Dictionary] = []
 var _wheels: Array[Node3D] = []
 var _seed := 0
+var _banner_mesh: MeshInstance3D
+var _lanterns: Array[MeshInstance3D] = []
+var _light: OmniLight3D
 
 static var _materials := {}
 static var _banner_texture: ImageTexture
@@ -43,6 +46,28 @@ func _init(look_seed: int = 1) -> void:
 	_seed = look_seed
 	name = "Rickshaw"
 	_build()
+
+
+## Wrecked where he died (the user's: tipped on its side, a wheel off, the
+## banner in the dirt, the lanterns out -- the growth still glows). `ground`:
+## the node it lies under (the wheel and the banner go there).
+func wreck(ground: Node3D) -> void:
+	rotation.z = deg_to_rad(-78.0)
+	position.y = 0.72
+	if _wheels.size() > 0:
+		var wheel := _wheels[0]
+		_wheels.remove_at(0)
+		remove_child(wheel)
+		ground.add_child(wheel)
+		wheel.transform = Transform3D(Basis(Vector3.FORWARD, PI * 0.5).rotated(Vector3.UP, 0.6), Vector3(-1.3, 0.06, 1.5))
+	if _banner_mesh:
+		remove_child(_banner_mesh)
+		ground.add_child(_banner_mesh)
+		_banner_mesh.transform = Transform3D(Basis(Vector3.RIGHT, -PI * 0.5).rotated(Vector3.UP, 0.3), Vector3(0.6, 0.02, -2.0))
+	for lantern in _lanterns:
+		lantern.material_override = _material(PAPER.darkened(0.35))
+	if _light:
+		_light.visible = false
 
 
 ## Rolled `distance` m forward: the wheels turn with it.
@@ -93,7 +118,7 @@ func _build() -> void:
 	_box(Vector3(1.3, 0.06, 0.45), Vector3(0.0, 1.22, 0.15), WOOD)
 	_scale(Vector3(0.38, 1.25, 0.15))
 	_cylinder(0.05, 0.05, Vector3(-0.42, 1.28, 0.2), BRASS)
-	_cylinder(0.035, 0.1, Vector3(-0.42, 1.36, 0.2), LANTERN_GLOW, Vector3.ZERO, 3.0)
+	_lanterns.append(_cylinder(0.035, 0.1, Vector3(-0.42, 1.36, 0.2), LANTERN_GLOW, Vector3.ZERO, 3.0))
 	_cylinder(0.05, 0.08, Vector3(0.02, 1.3, 0.25), BRASS)
 	_sphere(0.05, Vector3(0.02, 1.34, 0.25), BRASS)
 	# The roof: front posts, a gable with its ridge across, curved eaves.
@@ -122,11 +147,13 @@ func _build() -> void:
 	banner.position = Vector3(0.0, 1.88, -0.37)
 	banner.rotation = Vector3(0.0, PI, 0.0)
 	add_child(banner)
+	_banner_mesh = banner
 	# Paper lanterns at the front corners, and their warm light.
 	for side: float in [-1.0, 1.0]:
 		_box(Vector3(0.01, 0.15, 0.01), Vector3(side * 0.86, 2.08, -0.38), WORN)
-		_cylinder(0.12, 0.3, Vector3(side * 0.86, 1.86, -0.38), PAPER.lerp(LANTERN_GLOW, 0.4), Vector3.ZERO, 2.2)
+		_lanterns.append(_cylinder(0.12, 0.3, Vector3(side * 0.86, 1.86, -0.38), PAPER.lerp(LANTERN_GLOW, 0.4), Vector3.ZERO, 2.2))
 	var light := OmniLight3D.new()
+	_light = light
 	light.light_color = LANTERN_GLOW
 	light.light_energy = 1.2
 	light.omni_range = 7.0

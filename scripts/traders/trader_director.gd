@@ -31,7 +31,7 @@ const LEDGE_RAYS := 400
 static func ensure(tree: SceneTree) -> void:
 	if Network.is_online() and not tree.get_multiplayer().is_server():
 		return
-	if not tree.get_nodes_in_group(&"traders").is_empty():
+	if not tree.get_nodes_in_group(&"trader_keeper").is_empty():
 		return
 	var scene := tree.current_scene
 	if scene == null:
@@ -48,16 +48,17 @@ static func ensure(tree: SceneTree) -> void:
 	var flesh_tree := scene.get_node_or_null(^"FleshTree") as Node3D
 	var tree_at := flesh_tree.global_position if flesh_tree else house.global_position
 	var trunk := float(flesh_tree.get(&"trunk_width")) * 0.5 if flesh_tree and flesh_tree.get(&"trunk_width") != null else 12.5
+	var plans := {}
 	var under := _on_ground(terrain, tree_at + toward * (trunk + UNDER_TREE))
-	_spawn(scene, "grandma", under, toward.rotated(Vector3.UP, PI * 0.5), true, dice)
+	plans["grandma"] = {at = under, facing = toward.rotated(Vector3.UP, PI * 0.5), parked = true}
 	# The Stack's plateau edge.
 	var edge := _plateau_edge(terrain, stack.global_position, -toward)
-	_spawn(scene, "stack_base", edge, toward, true, dice)
+	plans["stack_base"] = {at = edge, facing = toward, parked = true}
 	# Up the Stack.
 	for height: float in STACK_HEIGHTS:
 		var spot := _stack_spot(stack, height, dice)
 		if spot.is_finite():
-			_spawn(scene, "stack_%d" % int(height), spot, Vector3.FORWARD.rotated(Vector3.UP, dice.randf() * TAU), true, dice)
+			plans["stack_%d" % int(height)] = {at = spot, facing = Vector3.FORWARD.rotated(Vector3.UP, dice.randf() * TAU), parked = true}
 	# The wanderers.
 	var yard := _on_ground(terrain, house.global_position + toward * YARD_EDGE)
 	var foot := edge + toward.rotated(Vector3.UP, PI * 0.5) * 15.0 # (beside the one parked there)
@@ -75,17 +76,29 @@ static func ensure(tree: SceneTree) -> void:
 				route.append(foot)
 		var leg := dice.randi() % route.size()
 		var start := route[(leg - 1 + route.size()) % route.size()].lerp(route[leg], dice.randf())
-		var trader := _spawn(scene, "wanderer_%d" % w, _on_ground(terrain, start), _flat(route[leg] - start), false, dice)
-		trader.route = route
-		trader.set(&"_leg", leg)
+		plans["wanderer_%d" % w] = {at = _on_ground(terrain, start), facing = _flat(route[leg] - start), parked = false, route = route, leg = leg}
+	# The keeper: spawns them (a wreck where one died; none yet till the
+	# replacement's due), and the replacements as they come.
+	var keeper := TraderKeeper.new()
+	keeper.plans = plans
+	scene.add_child(keeper)
 
 
-static func _spawn(scene: Node, id: String, at: Vector3, facing: Vector3, is_parked: bool, dice: RandomNumberGenerator) -> Trader:
+## A trader from its plan (a replacement: `fresh`, starting its route over).
+static func spawn(scene: Node, id: String, plan: Dictionary, fresh: bool = false) -> Trader:
 	var trader := Trader.new()
 	trader.name = "Trader_%s" % id
 	trader.trader_id = id
-	trader.parked = is_parked
-	trader.look_seed = dice.randi_range(1, 1 << 20)
+	trader.parked = bool(plan.parked)
+	trader.look_seed = randi_range(1, 1 << 20)
+	var at: Vector3 = plan.at
+	var facing: Vector3 = plan.facing
+	if plan.has("route"):
+		trader.route = plan.route
+		trader.set(&"_leg", 1 if fresh else int(plan.leg))
+		if fresh:
+			at = (plan.route as PackedVector3Array)[0]
+			facing = _flat((plan.route as PackedVector3Array)[1] - at)
 	scene.add_child(trader)
 	trader.global_transform = Transform3D(Basis.looking_at(_flat(facing), Vector3.UP), at)
 	return trader

@@ -1992,3 +1992,10 @@ them:
   - **Safe zone:** 25 m; tweakers, roaches and encounter spawns respect it.
   - **Synced** through NetEntities.
   - **Part 2 next:** robbing, defence, consequences, wreck, replacement.
+
+- 2026-10-25 Traders, part 2:
+  - **Robbing a trader** (any damage from a player) marks you for good: double prices, and half the traders refuse you.
+  - **His defence:** he calls for help (8 mixed tweakers from out of view, 60-90 m off), runs for 6 s, then a 500 hp PKM gunner in his model and hat ambushes you. He calms after 2 min with everyone 200 m away.
+  - **Killed:** a tipped-over wreck is left for good (TraderWreck, facts), his goods spill out, and a replacement comes after 80 min of play (TraderKeeper).
+  - **Selling the last pack** to a trader: 50 scrap; Grandma knows, as with smoking it.
+  - **Enemy.hunt():** sends an enemy after a target.

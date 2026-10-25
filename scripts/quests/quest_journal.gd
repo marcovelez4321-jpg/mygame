@@ -26,6 +26,8 @@ const ENTRIES := {
 					"{name} gave them to her. She has them now. I felt something change in me."],
 			&"smoked": ["Smoked them. Grandma won't look at me.",
 					"{name} smoked them. Grandma won't look at us."],
+			&"sold": ["Sold them for scrap. Fifty. Grandma doesn't know.",
+					"{name} sold them for scrap."],
 		},
 		sketch = &"cigarettes",
 	},
