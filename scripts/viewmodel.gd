@@ -753,6 +753,11 @@ func _find_sight_center(weapon: WeaponData) -> Variant:
 	return to_model * sight.get_aabb().get_center()
 
 
+## What sways and bobs with your hands (the journal's held on it: JournalView).
+func sway_pivot() -> Node3D:
+	return _sway_pivot
+
+
 ## Hides the gun and arms (a scope image is covering the view) or shows them.
 func set_gun_hidden(hidden: bool) -> void:
 	if _sway_pivot:

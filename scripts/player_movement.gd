@@ -483,10 +483,13 @@ func _ready() -> void:
 		wings.name = "Wings"
 		camera.add_child(wings)
 		wings.setup(self, true)
-		# The journal, held up to read (your own view only).
+		# The journal, held up to read (your own view only) -- in your hands:
+		# it sways, bobs and comes up with them (the user's).
 		var journal := JournalView.new()
 		journal.name = "JournalView"
-		camera.add_child(journal)
+		var viewmodel := camera.get_node_or_null(^"Viewmodel") as Viewmodel
+		var hands: Node3D = viewmodel.sway_pivot() if viewmodel and viewmodel.sway_pivot() else camera
+		hands.add_child(journal)
 		journal.setup(self, camera)
 	else:
 		camera.current = false

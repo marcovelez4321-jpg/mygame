@@ -2021,3 +2021,5 @@ them:
   - A readout shows the values and keys.
 
 - 2026-10-25 Journal tuning fix: the book's real size is now fixed (screen_share is measured at 0.4 m), so PgUp/PgDn visibly brings it nearer or further. Before, it was re-sized to the same screen share at any distance. The defaults look the same as before.
+
+- 2026-10-25 The journal is held in your hands: JournalView rides the viewmodel's sway pivot (Viewmodel.sway_pivot()), so it sways, bobs and comes up with the hands like a held thing.

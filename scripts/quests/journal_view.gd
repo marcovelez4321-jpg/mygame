@@ -12,8 +12,9 @@ extends Node3D
 ## Ctrl finer, F3 saves it to the settings file, J again: done.
 ## Left click turns forward a page spread, right click back (the grapple's
 ## off meanwhile); only F puts it away, and picking anything up does
-## (PlayerHand). You move as normal while reading. Your own view only: on
-## your camera, drawn over the world so it never sinks into a wall.
+## (PlayerHand). You move as normal while reading. Your own view only: held
+## in your hands (the viewmodel's sway: it sways, bobs and comes up with
+## them), drawn over the world so it never sinks into a wall.
 
 const SETTINGS := "res://quests/journal_settings.tres"
 const COVER := Color(0.16, 0.15, 0.14)
