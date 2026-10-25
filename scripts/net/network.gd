@@ -31,8 +31,10 @@ signal status_changed(text: String)
 signal lan_games_changed(games: Array)
 ## The Stalker's fear went up, and why (the note under the meter).
 signal fear_note(text: String)
-## Grandma's quests changed (quests).
+## A quest's facts changed (WorldFacts: quest.*).
 signal quests_changed
+## A world fact changed (WorldFacts): its name and its new value (null: gone).
+signal fact_changed(name: StringName, value: Variant)
 ## A player's record (StalkerMemory) reached the host (Stalker._met).
 signal profile_arrived(peer: int)
 
@@ -60,10 +62,10 @@ var _ping_left := 0.0
 const PING_EVERY := 1.0
 ## Host: peer id -> the character it picked (its body's look on every machine).
 var _characters := {}
-## Grandma's quests (GrandmaQuests): id -> {state, hint}. The host's,
-## mirrored to every game (late joiners get them as they load in); kept
-## through deaths and reloads (this node lives through them).
-var quests := {}
+## What's happened in the world (WorldFacts): name -> value. The host's, kept
+## in its save folder and mirrored to every game (late joiners get them all
+## as they load in); a client holds the host's while it's in its game.
+var facts := {}
 ## The host's: each player's record for the Stalker (StalkerMemory profiles),
 ## by peer -- theirs, sent from their own PC as they come in.
 var profiles := {}
@@ -93,6 +95,7 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_gone)
+	facts = WorldFacts.load_saved()
 
 
 ## Connected to someone (hosting with a peer, or joined). Offline: false.
@@ -225,6 +228,7 @@ func leave() -> void:
 	steam.leave_lobby()
 	_set_status("Offline")
 	if was_client:
+		facts = WorldFacts.load_saved() # (your own world again)
 		get_tree().reload_current_scene()
 	else:
 		for body in _remote_bodies():
@@ -431,21 +435,65 @@ func _net_profile_back(profile: Dictionary) -> void:
 	StalkerMemory.save_my_profile(profile)
 
 
-## Host: a quest's state and Grandma's hint (GrandmaQuests), here and on
-## every game.
+## Host: a quest's state and its giver's hint (GrandmaQuests): two facts.
 func send_quest(id: StringName, state: int, hint: String) -> void:
-	_set_quest(id, state, hint)
+	send_fact(WorldFacts.quest(id), state)
+	send_fact(WorldFacts.quest(id, "hint"), hint)
+
+
+## Host (or offline): a world fact is `value` now -- here, saved, and on
+## every game. A client's ask is ignored (the facts are the host's).
+func send_fact(name: StringName, value: Variant) -> void:
+	if is_online() and not multiplayer.is_server():
+		return
+	if facts.has(name) and typeof(facts[name]) == typeof(value) and facts[name] == value:
+		return
+	_set_fact(name, value)
+	WorldFacts.save(facts)
 	if is_online():
-		_net_quest.rpc(id, state, hint)
+		_net_fact.rpc(name, value)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _net_quest(id: StringName, state: int, hint: String) -> void:
-	_set_quest(id, state, hint)
+func _net_fact(name: StringName, value: Variant) -> void:
+	_set_fact(name, value)
 
 
-func _set_quest(id: StringName, state: int, hint: String) -> void:
-	quests[id] = {state = state, hint = hint}
+## A newcomer: every fact there is.
+@rpc("authority", "call_remote", "reliable")
+func _net_all_facts(all: Dictionary) -> void:
+	for name: StringName in all:
+		_set_fact(name, all[name])
+
+
+func _set_fact(name: StringName, value: Variant) -> void:
+	facts[name] = value
+	fact_changed.emit(name, value)
+	if String(name).begins_with("quest."):
+		quests_changed.emit()
+
+
+## Host (or offline; the F9 menu, for testing): every fact forgotten, here,
+## in the save folder and on every game -- the world as it first was.
+func forget_facts() -> void:
+	if is_online() and not multiplayer.is_server():
+		return
+	_clear_facts()
+	WorldFacts.save(facts)
+	if is_online():
+		_net_clear_facts.rpc()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_clear_facts() -> void:
+	_clear_facts()
+
+
+func _clear_facts() -> void:
+	var names := facts.keys()
+	facts.clear()
+	for name: StringName in names:
+		fact_changed.emit(name, null)
 	quests_changed.emit()
 
 
@@ -623,8 +671,7 @@ func _ready_to_play(character: String) -> void:
 		var body := body_of(other)
 		if other != 1 and other != id and body:
 			_spawn_body.rpc_id(id, other, body.global_position, str(_characters[other]))
-	for quest: StringName in quests:
-		_net_quest.rpc_id(id, quest, int(quests[quest].state), str(quests[quest].hint))
+	_net_all_facts.rpc_id(id, facts)
 	var at := (host_body.global_position if host_body else Vector3.ZERO) + _beside()
 	_spawn_body(id, at, character)
 	_spawn_body.rpc(id, at, character)
@@ -648,6 +695,7 @@ func _on_server_gone() -> void:
 	_close()
 	steam.leave_lobby()
 	_set_status("The host left")
+	facts = WorldFacts.load_saved() # (your own world again)
 	get_tree().reload_current_scene()
 
 
@@ -655,6 +703,7 @@ func _on_server_gone() -> void:
 @rpc("authority", "call_remote", "reliable")
 func _go_to_scene(path: String) -> void:
 	_set_status("Connected -- loading the host's world")
+	facts.clear() # (the host's come as it's ready: _net_all_facts)
 	get_tree().change_scene_to_file(path)
 	# The new scene goes in at the end of this frame; give its nodes a frame
 	# to be ready before the host starts sending bodies into it.

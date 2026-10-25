@@ -46,6 +46,7 @@ var incoming: Node3D
 var _player: PlayerMovement
 var _fire_prev := false
 var _drop_prev := false
+var _bag_was_open := false
 var _cook_left := 0.0
 var _age_left := CarryItem.AGE_EVERY
 
@@ -57,6 +58,11 @@ func _ready() -> void:
 		if is_holding():
 			_drop()
 	)
+
+
+## The journal's in your hand: you're reading it (JournalView).
+func reading() -> bool:
+	return is_holding() and int(data.get("kind", -1)) == Backpack.Kind.JOURNAL
 
 
 func is_holding() -> bool:
@@ -110,6 +116,12 @@ func tick(fire: bool, drop: bool, stow: bool, delta: float) -> void:
 	_fire_prev = fire
 	_drop_prev = drop
 	_fly_in(delta)
+	# Reading: opening the bag puts the journal away (Tab), as G does.
+	var bag_opened := _player.bag_open and not _bag_was_open
+	_bag_was_open = _player.bag_open
+	if reading() and _decides() and (bag_opened or drop_pressed):
+		_stow()
+		return
 	if drop_pressed and not is_holding() and not is_busy():
 		# Nothing in the hand: G drops the gun in your hands (the user's).
 		_player.weapons.drop_gun(_decides())
@@ -131,6 +143,8 @@ func prompt() -> String:
 	if not is_holding():
 		return ""
 	var kind: int = data.kind
+	if kind == Backpack.Kind.JOURNAL:
+		return "left click: next page\nright click: back"
 	if kind == CarryItem.POD:
 		var mutation: Array = Virus.MUTATIONS.get(data.mutation, ["?", ""])
 		return "%s\n%s\nleft click to mutate" % [mutation[0], mutation[1]]
@@ -174,6 +188,8 @@ func take_from_backpack(code: int) -> void:
 			var rounds := weapons.take_ammo(_ammo_type(kind))
 			if rounds > 0:
 				taken = {kind = kind, amount = rounds}
+		Backpack.Kind.JOURNAL:
+			taken = {kind = kind, amount = 1}
 		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY, Backpack.Kind.CIGARETTES:
 			if kind == Backpack.Kind.CAMP_KIT and backpack.camp_kits == 0:
 				backpack.craft_camp_kit() # crafted from scrap and silk (the user's)
@@ -346,7 +362,7 @@ func store(item: Dictionary) -> bool:
 		Backpack.Kind.GRENADES:
 			if not _stow_grenade(amount):
 				return false
-		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY, Backpack.Kind.CIGARETTES:
+		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY, Backpack.Kind.CIGARETTES, Backpack.Kind.JOURNAL:
 			if backpack.add(kind as Backpack.Kind, amount) < amount:
 				return false
 		_:
@@ -384,6 +400,9 @@ func put_away() -> void:
 ## G: at your feet, a CarryItem (not picked straight back up: you're
 ## ignored till you step off it).
 func _drop() -> void:
+	if reading():
+		_stow() # (the journal's never dropped: the user's)
+		return
 	var at := _player.global_position + Vector3.UP * 0.6 - _player.global_basis.z * 0.5
 	var dropped := CarryItem.spawn(_player, at, data)
 	dropped.ignore = _player

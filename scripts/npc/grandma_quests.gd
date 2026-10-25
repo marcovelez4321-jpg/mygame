@@ -7,10 +7,10 @@ extends RefCounted
 ##   inside the Stack (StackSecrets puts it: any hall floor or window room,
 ##   any tower, any height). Grandma hints at which tower and how high. Bring
 ##   it to her: CIGARETTES_POINTS virus points for everyone.
-## Shared in co-op (the user's): one quest for everyone, the host's
-## (Network.quests, mirrored to every game, late joiners too); whoever hands
-## the pack in, everyone gets the points. Kept through deaths and reloads
-## (Network lives through them).
+## Shared in co-op (the user's): one quest for everyone, the host's -- world
+## facts (WorldFacts: quest.<id>, its hint, who ended it), mirrored to every
+## game and kept in the host's save folder (the user's, 2026-10-25: they
+## survive quitting); whoever hands the pack in, everyone gets the points.
 
 enum State { NOT_STARTED, ACTIVE, DONE }
 
@@ -20,11 +20,11 @@ const CIGARETTES_POINTS := 14
 
 
 static func state(id: StringName) -> int:
-	return int((Network.quests.get(id, {}) as Dictionary).get("state", State.NOT_STARTED))
+	return int(WorldFacts.get_fact(WorldFacts.quest(id), State.NOT_STARTED))
 
 
 static func hint(id: StringName) -> String:
-	return str((Network.quests.get(id, {}) as Dictionary).get("hint", ""))
+	return str(WorldFacts.get_fact(WorldFacts.quest(id, "hint"), ""))
 
 
 ## The host: what a player (`peer`) did at Grandma's -- "accept" a quest or
@@ -47,7 +47,11 @@ static func act(tree: SceneTree, peer: int, id: StringName, action: StringName) 
 				var player := node as PlayerMovement
 				if player and player.virus:
 					player.virus.gain_points(CIGARETTES_POINTS)
-			Network.send_quest(id, State.DONE, "")
+			# Who did it (the journal's own notes: "I", or their name).
+			var profile: Dictionary = Network.profiles.get(peer, {})
+			Network.send_fact(WorldFacts.quest(id, "by"), str(profile.get("id", "")))
+			Network.send_fact(WorldFacts.quest(id, "by_name"), str(profile.get("name", "")))
+			Network.send_quest(id, State.DONE, hint(id)) # (the hint kept: the journal's crossed-out note)
 
 
 ## Where in the Stack something is, the way Grandma would say it: which

@@ -1962,3 +1962,10 @@ them:
 - 2026-10-22 Stalker carrying: fixed the holding hand's target (SIZE multiplied the world position: the hand aimed far off and high, hauling the front up -- it looked upright and flew). Anything held (a body in a stunt, or a player in the drag) is carried by the head in its palm at its side (GRIP, head at 0.6 m) while it goes on all fours on its other three limbs; it never stands while carrying (upright only in the stunts that call for it). The spine takes its height from the three limbs it walks on. Held bodies are kept to the hand's speed (HOLD_GAIN) and never trail more than 1 m (HOLD_LEASH / StalkerDrag.LEASH: snagged, the whole ragdoll is yanked back, EnemyRagdoll.shift). The player drag now holds the head (down the neck to the chest), not one foot.
 
 - 2026-10-25 Design (no code yet): quests web, scrap traders (overgrown rickshaw shops), angels (Seraphim/Ophanim as wardens), six high interiors, two new enemies (the Consumed, Bell-wraiths) and two walkers (the Pilgrim, the Crawling Ossuary) -- every detail the user's, in docs/QUESTS_TRADERS_WALKERS.md. Build order: quest facts + world changes first.
+
+- 2026-10-25 Quest backbone built:
+  - **World facts:** WorldFacts / Network.facts, the host's, saved in user://world_facts.cfg, mirrored and sent to late joiners. Grandma's quests are facts now and survive quitting.
+  - **WorldChange node:** children are there only while a fact matches, removed from the tree otherwise; changes happen at once.
+  - **The journal:** Backpack.Kind.JOURNAL, the PSX notebook; you start with it and never lose it, and it takes no room or weight. Double-click it, close the bag, and it's held up open at half the screen. Left/right click turn pages; Tab or G puts it away. Grey plain paper, fingerprints, pencil, the Reenie Beanie font (downloaded with the user's OK; credited in CREDITS.md), code-drawn sketches. Own notes in co-op.
+  - **Testing:** an F9 "Forget the world" button.
+  - See docs/QUESTS_TRADERS_WALKERS.md.

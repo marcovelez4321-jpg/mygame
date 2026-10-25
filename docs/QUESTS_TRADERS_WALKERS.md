@@ -243,3 +243,52 @@ traps of the place, and new enemies.
   - the host syncs one number (how far along its route it is);
   - shell, interior and decor by distance;
   - legs step onto the real terrain.
+
+## Built: the backbone (2026-10-25)
+
+### World facts
+- **What it is:** `WorldFacts` (`scripts/quests/world_facts.gd`), held in
+  `Network.facts`.
+- **Who owns it:** the host. Facts are saved to `user://world_facts.cfg`,
+  mirrored to every game, and sent whole to late joiners. A client holds the
+  host's facts while it's in that game, and gets its own back when it leaves.
+- **Writing:** `Network.send_fact(name, value)`, host or offline only.
+  Saving is automatic.
+- **Reading:** `WorldFacts.get_fact(name, default)`.
+- **Listening:** `Network.fact_changed(name, value)`.
+- **Naming:** `quest.<id>` holds the state (0 not started, 1 open, 2 done).
+  Each quest also has `.hint`, `.outcome`, `.by` and `.by_name`.
+- **Grandma's cigarettes quest now lives in facts.** It survives quitting.
+- **Testing:** F9 → "Forget the world (quest facts)" wipes every fact.
+
+### World changes
+- **The node:** `WorldChange` (`scripts/quests/world_change.gd`). Put scenery
+  under it and set `fact`, `value` and `present_when_matching`.
+  - `value` is text: `"true"`, `"2"`, `"smoked"`. Leave it empty to mean
+    "the fact is set at all".
+  - `present_when_matching` on: the children are there while the fact
+    matches. Off: they're gone while it matches.
+- **Swapping:** for something that turns into something else, use two
+  WorldChanges on the same fact with opposite `present_when_matching`.
+- **Cost:** children that aren't there are taken out of the tree, so nothing
+  is drawn and there's no collision.
+- **Timing:** changes happen at once, on every game.
+- **Limit:** scenery only, no enemies or other networked things.
+
+### The journal
+- **The item:** `Backpack.Kind.JOURNAL`, shown as the PSX notebook. You start
+  with it and never lose it: it's never dropped or left on death, and it
+  takes no room or weight.
+- **Reading it:** double-click it in the bag, then close the bag. It comes up
+  open (`JournalView`), half the screen wide, lower middle.
+  - Left click turns forward a spread, right click turns back (the grapple
+    is off meanwhile).
+  - Tab or G puts it away. You can move as normal while reading.
+- **The pages** (`JournalPage`): grey plain paper, grubby fingerprints,
+  pencil grey ink, the Reenie Beanie scrawl, and code-drawn pencil sketches.
+- **The entries** (`QuestJournal.ENTRIES`):
+  - one page per quest, in the user's words;
+  - a done quest has its open note crossed out, with how it ended
+    underneath;
+  - own notes in co-op: "I" when it was you, a teammate's name when it was
+    them ("Someone" with no Steam).

@@ -51,6 +51,8 @@ const PROPS := {
 	Backpack.Kind.CAMP_KIT: [FOREST_SCENE, "Foam Sleeping Pad"],
 	Backpack.Kind.KEY: MEGA + "Items & Weapons/key_mp_1.glb",
 	Backpack.Kind.CIGARETTES: MEGA + "Items & Weapons/cigs_packet_1.glb",
+	# The journal (the user's: the pack's notebook).
+	Backpack.Kind.JOURNAL: MEGA + "Small Props/notebook_1.glb",
 }
 
 var hold: BackpackHold
@@ -345,7 +347,7 @@ const REAL_SIZE := {
 	# Meat: a 2 kg chunk's size (CarryItem.world_size()).
 	Backpack.Kind.MEAT: 0.2, Backpack.Kind.ROTTEN_MEAT: 0.2, Backpack.Kind.COOKED_MEAT: 0.2,
 	Backpack.Kind.GLUED_MEAT: 0.3, Backpack.Kind.GLUED_COOKED: 0.3, Backpack.Kind.KEY: 0.08,
-	Backpack.Kind.CIGARETTES: 0.09,
+	Backpack.Kind.CIGARETTES: 0.09, Backpack.Kind.JOURNAL: 0.15,
 }
 
 var _bodies: Array[Dictionary] = [] # {key, kind, body: RigidBody3D, node: the prop, area: its click zone}

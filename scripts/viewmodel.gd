@@ -398,7 +398,7 @@ func _hand_look(data: Dictionary) -> WeaponData:
 ## The thing as a little scene of its own, sized for the hand.
 func _hand_scene(data: Dictionary) -> PackedScene:
 	var root := Node3D.new()
-	var source := CarryItem.model_for(data, _weapons.grenade_weapon())
+	var source := CarryItem.model_for(data, _weapons.grenade_weapon()) if int(data.get("kind", -1)) != Backpack.Kind.JOURNAL else null
 	# Flattened into plain mesh copies (the user's bug: ammo, grenades and pills
 	# -- whole imported scenes -- were lost packing them; the RPG round, a
 	# plain mesh, showed).

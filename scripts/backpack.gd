@@ -23,7 +23,7 @@ signal changed
 
 ## What a stack is.
 enum Kind { NONE = -1, GUN, BULLETS, SHELLS, ROCKETS, GRENADES, PILLS, BANDAGE, SCRAP, SILK, CAMP_KIT,
-		MEAT, ROTTEN_MEAT, COOKED_MEAT, GLUED_MEAT, GLUED_COOKED, KEY, CIGARETTES }
+		MEAT, ROTTEN_MEAT, COOKED_MEAT, GLUED_MEAT, GLUED_COOKED, KEY, CIGARETTES, JOURNAL }
 
 const MAX_STACKS := 12
 ## Camp kits: only one on you at a time (the user's).
@@ -151,6 +151,10 @@ func stacks() -> Array[Dictionary]:
 	for glued_kind: Kind in [Kind.GLUED_MEAT, Kind.GLUED_COOKED]:
 		if not meats.has(glued_kind) and can_glue(glued_kind):
 			found.append({kind = glued_kind, count = 0, weapon = null, craftable = true})
+	# The journal (the user's, 2026-10-25): yours from the start and never
+	# lost -- in here unless it's in your hand (QuestJournal, JournalView).
+	if not (_player.hand and _player.hand.reading()):
+		found.append({kind = Kind.JOURNAL, count = 1, weapon = null})
 	return found
 
 
@@ -246,10 +250,13 @@ func has_room_for(kind: Kind) -> bool:
 	if kind == Kind.CAMP_KIT and camp_kits >= MAX_CAMP_KITS:
 		return false
 	var all := stacks()
+	var used := 0
 	for stack in all:
 		if stack.kind == kind and kind != Kind.GUN:
 			return true
-	return all.size() < MAX_STACKS
+		if stack.kind != Kind.JOURNAL:
+			used += 1 # (the journal takes no room)
+	return used < MAX_STACKS
 
 
 ## Adds materials or camp kits; returns how many it took.
@@ -268,6 +275,8 @@ func add(kind: Kind, amount: int) -> int:
 			keys += amount
 		Kind.CIGARETTES:
 			cigarettes += amount
+		Kind.JOURNAL:
+			return amount # (always yours: back from your hand)
 		_:
 			return 0
 	changed.emit()
@@ -365,6 +374,8 @@ func take(kind: Kind, amount: int) -> bool:
 			if cigarettes < amount:
 				return false
 			cigarettes -= amount
+		Kind.JOURNAL:
+			return true # (into your hand: it's never used up)
 		_:
 			return false
 	changed.emit()

@@ -2171,6 +2171,9 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 			Network.profiles[player.get_multiplayer_authority()] = StalkerMemory.my_profile()
 			_grudge.clear()
 			return "It's forgotten you (its memory wiped, saved and in its head)"
+		&"forget_world":
+			Network.forget_facts()
+			return "The world's forgotten (every quest fact wiped, saved)"
 		&"home":
 			if not _lair_at.is_finite():
 				return "No lair (no Stack here)"

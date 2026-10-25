@@ -483,6 +483,11 @@ func _ready() -> void:
 		wings.name = "Wings"
 		camera.add_child(wings)
 		wings.setup(self, true)
+		# The journal, held up to read (your own view only).
+		var journal := JournalView.new()
+		journal.name = "JournalView"
+		camera.add_child(journal)
+		journal.setup(self, camera)
 	else:
 		camera.current = false
 	weapons.shot_resolved.connect(_on_shot_resolved_net)
@@ -751,6 +756,9 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_E))
 	# Placing a camp: right click puts the kit away (CampBuilder), no grapple.
 	if camp_builder.is_placing():
+		input.grapple = false
+	# Reading the journal: right click turns back a page (JournalView).
+	if hand.reading():
 		input.grapple = false
 	input.toggle_dual = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_V)
