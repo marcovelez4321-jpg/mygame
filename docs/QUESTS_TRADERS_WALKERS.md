@@ -234,9 +234,30 @@ traps of the place, and new enemies.
   crypts, bone spires). **1.5 km long, 500 m tall.** 6 m/s.
 - **Boarding** (all four): rest stops, grappling on mid-walk, climbing a leg
   as it plants, or jumping on from a high place.
-- **(To ask when built:)** their routes, rest stops, the insides, what lives
-  on them, footfall danger.
-- **How (technical):**
+- **The Crawling Ossuary first** (the user's, 2026-10-25):
+  - **Body:** code-built: a spine of giant vertebrae under rib arches, 1.5 km
+    long. The spine is 120 m up, and 8 legs (four a side) arch out to a
+    900 m-wide stance, stepping in alternating sets like a spider. 6 m/s.
+  - **The building:** a TrenchBroom map. I generate a starting one and the
+    user edits it. It has:
+    - a nave (300 m long, 60 m tall) with two skull-and-femur spires to
+      500 m;
+    - skull-lined crypts below;
+    - catacombs through the spine;
+    - an ossuary chapel in its head. The end of the climb is a ritual
+      ingredient there: **a reliquary skull**.
+  - **Route:** it wanders at random across the open world (about 8 x 8 km).
+  - **Rests:** every 10 min, for 3 min. It settles belly-down (the spine
+    down to about 15 m), so you can climb its ribs from the ground.
+  - **Footfalls:**
+    - a crush where a foot lands (15 m);
+    - a quake that knocks you down within 80 m;
+    - craters that last 10 min;
+    - booms heard from far off.
+  - **Sound:** bones creaking, footfall booms, a bell in the nave that tolls
+    only as it rests and rises, and a faint choir.
+  - **Life:** 10 Consumed round its spires and 12 bell-wraiths in the nave's
+    rafters and the belfries (both still to be built).- **How (technical):**
   - a slow-moving body with few merged collision shapes that carries what
     stands on it;
   - the host syncs one number (how far along its route it is);
@@ -442,3 +463,73 @@ Everything is in `scripts/traders/`.
   - a replacement comes after 80 minutes of play (counted while playing,
     saved every 30 s), starting the wanderer's route over or at the parked
     spot.
+
+## Built: the Crawling Ossuary, phase 1 -- the walking body (2026-10-25)
+
+Everything is in `scripts/walkers/`.
+
+### The body (OssuaryBones)
+- **What it's made of:**
+  - 28 vertebrae, thinning toward the tail;
+  - 25 rib arches rising over the spine to 80 m above it, their feet 14 m
+    below it, so they touch the ground when it rests belly-down;
+  - the deck for the building at 84 m;
+  - a skull at the head;
+  - 8 legs of two 330 m bones each.
+- **Cost:** bone and flesh are merged into one mesh per part. Collision is
+  simple capsules, boxes and a sphere.
+
+### How it walks (Ossuary)
+Everything comes from one number, its time, plus its route's seed.
+- **Its cycle:** walk 600 s at 6 m/s, settle 20 s, rest 180 s, rise 20 s.
+- **Resting:** the spine goes from 120 m down to 15 m.
+- **The spider gait:** 150 m strides. Left legs 1 and 3 step with right legs
+  2 and 4, then the other set. Each foot lands out at the 900 m stance under
+  where its hip will be mid-stride, on the terrain. It swings for half the
+  stride, lifted 40 m, and is planted the other half. The knees are two-bone
+  IK (up and out).
+- **Its route:** it wanders at random, waypoints 1.2-2.5 km apart within
+  3.2 km of the world's middle.
+  - It steers in 20 m steps, turning at most 0.05 rad a step.
+  - It keeps 1.5 km from the Stack and 1 km from Grandma's house. (My
+    choice: so its legs never walk through them.)
+- **Its tilt:** pitched at most 8 degrees with the land, and level side to
+  side.
+- **Riding it:** the body and every leg bone are moving platforms
+  (AnimatableBody3D).
+
+### Footfalls
+- **Boom:** heard to 1 km.
+- **Crater:** a decal 36 m across that fades over its last 30 s and is gone
+  at 10 min.
+- **Dust:** a burst where the foot lands.
+- **Shake:** your camera shakes within 80 m.
+- **The host's:**
+  - players under a foot (within 15 m, not far above it) die;
+  - players within 80 m and on the ground are shoved 10 m/s out and 6 m/s
+    up (my numbers);
+  - creatures under a foot die.
+
+### Sound (WalkerSound)
+- **Slots:** drop files named `footfall_NN`, `creak_NN`, `bell_NN` or
+  `choir_NN` into `audio/sfx/walkers/`. Until then, code-made placeholders.
+- **Creaks:** at a random knee every 3-7 s, unless it's resting. Heard to
+  350 m.
+- **Bell:** as it settles and as it rises, heard to 1.5 km.
+- **Choir:** looped in the skull, heard to 220 m.
+
+### Co-op
+- The host sends its seed, time and start spot every 0.5 s.
+- Clients build the walker on the first one they hear and ease their time
+  toward the host's, snapping back if more than 5 s off.
+
+### Testing
+- F9 -> "Ossuary: walk past me" starts a route 1.2 km in front of you,
+  walking your way.
+- F9 -> "Ossuary: rest now" makes it settle.
+
+### Next
+- Phase 2: the building, a generated TrenchBroom map on its deck and in its
+  skull.
+- Phase 3: the Consumed and the bell-wraiths.
+- Phase 4: the reliquary skull.

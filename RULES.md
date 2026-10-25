@@ -2023,3 +2023,12 @@ them:
 - 2026-10-25 Journal tuning fix: the book's real size is now fixed (screen_share is measured at 0.4 m), so PgUp/PgDn visibly brings it nearer or further. Before, it was re-sized to the same screen share at any distance. The defaults look the same as before.
 
 - 2026-10-25 The journal is held in your hands: JournalView rides the viewmodel's sway pivot (Viewmodel.sway_pivot()), so it sways, bobs and comes up with the hands like a held thing.
+
+- 2026-10-25 The Crawling Ossuary, phase 1 (scripts/walkers/):
+  - **The body:** code-built bones (spine, rib vault, deck, skull) and 8 IK legs in a spider gait (150 m strides) on the terrain. It's the user's design throughout.
+  - **Its cycle:** wanders at 6 m/s, every 10 min settling belly-down (spine 120 m to 15 m in 20 s), resting 3 min, rising.
+  - **Footfalls:** crush 15 m, knockdown within 80 m, craters for 10 min, booms to 1 km.
+  - **Sounds:** creaks, a bell on settling and rising, a choir in the skull (code-made placeholders, slots in audio/sfx/walkers).
+  - **Riding it:** moving platforms.
+  - **Co-op:** everything derives from the host's time and seed.
+  - **Testing:** F9 "walk past me" and "rest now".

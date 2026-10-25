@@ -120,6 +120,8 @@ func _ready() -> void:
 		get_tree().create_timer(first_delay).timeout.connect(func() -> void: Stalker.ensure(get_tree()))
 		# The traders (the user's): at the landmarks, up the Stack, on the roads.
 		get_tree().create_timer(1.0).timeout.connect(func() -> void: TraderDirector.ensure(get_tree()))
+		# The Crawling Ossuary (the user's): wandering the world.
+		get_tree().create_timer(1.5).timeout.connect(func() -> void: Ossuary.ensure(get_tree()))
 
 
 func _on_chunk_loaded(_chunk: Vector2i, root: Node3D) -> void:

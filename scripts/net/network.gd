@@ -473,6 +473,23 @@ func _set_fact(name: StringName, value: Variant) -> void:
 		quests_changed.emit()
 
 
+## Host: the Crawling Ossuary's route and time (Ossuary) -- every game walks
+## its own copy from them (a late joiner's made on the first it hears).
+func send_walker_time(seed: int, time: float, from: Vector3 = Vector3.INF, heading: Vector3 = Vector3.ZERO) -> void:
+	if is_online():
+		_net_walker_time.rpc(seed, time, from, heading)
+
+
+@rpc("authority", "call_remote", "unreliable")
+func _net_walker_time(seed: int, time: float, from: Vector3, heading: Vector3) -> void:
+	var walker := get_tree().get_first_node_in_group(&"ossuary") as Ossuary
+	if walker == null:
+		Ossuary.ensure(get_tree())
+		walker = get_tree().get_first_node_in_group(&"ossuary") as Ossuary
+	if walker:
+		walker.synced(seed, time, from, heading)
+
+
 ## Host: a trader's babble (Trader: a sale, can't pay) -- on every game.
 func send_trader_say(id: String, kind: StringName) -> void:
 	_trader_say(id, kind)

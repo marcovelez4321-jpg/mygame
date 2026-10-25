@@ -10,7 +10,7 @@ extends CanvasLayer
 const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits close)"], ["camp", "Camp visit"], ["eat", "Eat (nearest meat or body)"],
 		["sign", "Small sign (random)"], ["tracks", "Sign: tracks across"], ["kill", "Sign: a kill ahead"], ["peak", "Big moment now"], ["home", "Home in its lair"],
 		["comeback", "Comeback (session start)"], ["forget", "Forget me (wipe its memory)"],
-		["forget_world", "Forget the world (quest facts)"]]
+		["forget_world", "Forget the world (quest facts)"], ["ossuary_here", "Ossuary: walk past me"], ["ossuary_rest", "Ossuary: rest now"]]
 
 var _panel: PanelContainer
 var _result: Label
@@ -80,6 +80,12 @@ func _trigger(event: StringName) -> void:
 		_result.text = "Host only: the host runs the Stalker."
 		return
 	var tree := get_tree()
+	if String(event).begins_with("ossuary_"):
+		Ossuary.ensure(tree)
+		var walker := tree.get_first_node_in_group(&"ossuary") as Ossuary
+		var me := PlayerMovement.local_player(tree)
+		_result.text = walker.test(StringName(String(event).trim_prefix("ossuary_")), me) if walker and me else "No Ossuary here (no terrain?)"
+		return
 	Stalker.ensure(tree)
 	var stalker := tree.get_first_node_in_group(&"stalker")
 	var player := PlayerMovement.local_player(tree)
