@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://bxvq0o38tbjox"
+path="res://.godot/imported/the_ossuary.map-4d67b98a2d61df378e8f521e4691ec2a.tres"
+
+[deps]
+
+source_file="res://maps/megastructures/the_ossuary.map"
+dest_files=["res://.godot/imported/the_ossuary.map-4d67b98a2d61df378e8f521e4691ec2a.tres"]
+
+[params]
+

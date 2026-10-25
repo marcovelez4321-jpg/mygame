@@ -234,30 +234,42 @@ traps of the place, and new enemies.
   crypts, bone spires). **1.5 km long, 500 m tall.** 6 m/s.
 - **Boarding** (all four): rest stops, grappling on mid-walk, climbing a leg
   as it plants, or jumping on from a high place.
-- **The Crawling Ossuary first** (the user's, 2026-10-25):
-  - **Body:** code-built: a spine of giant vertebrae under rib arches, 1.5 km
-    long. The spine is 120 m up, and 8 legs (four a side) arch out to a
-    900 m-wide stance, stepping in alternating sets like a spider. 6 m/s.
-  - **The building:** a TrenchBroom map. I generate a starting one and the
-    user edits it. It has:
-    - a nave (300 m long, 60 m tall) with two skull-and-femur spires to
-      500 m;
-    - skull-lined crypts below;
-    - catacombs through the spine;
-    - an ossuary chapel in its head. The end of the climb is a ritual
-      ingredient there: **a reliquary skull**.
+- **The Crawling Ossuary first** (the user's, 2026-10-25; redesigned the same
+  day: not a creature, a massive ossuary building on legs):
+  - **The building:** a TrenchBroom map (`tools/make_the_ossuary.gd` makes a
+    starting one; the user edits it). It's 400 x 200 m at its base and about
+    1 km tall, held 150 m up.
+    - The nave is on its underside: 300 m long and 60 m tall, with arcades,
+      aisles, and an open archway at the front, so you walk straight in when
+      it's set down.
+    - Twin spires rise to about 1 km. They're hollow shafts with ledges up
+      their insides (grapple and wall-jump), and ledges and corner ribs up
+      their outsides, narrowing in tiers.
+    - The chapel is atop the left spire, with **the reliquary skull** on its
+      altar: the end of the climb. The belfry is atop the right.
+    - At the back are skull-lined crypts off a gallery, with the catacombs
+      above them, a maze of narrow tunnels.
+    - Textures start in the Horror set (Horror_Stone_01 outside,
+      Horror_Wall_01 inside, Horror_Floor_01 floors, Plaster_01 trims); swap
+      them in TrenchBroom.
+  - **Legs:** four very thick (40 m), sharp, spidery legs of bone at its
+    corners. Each has three bones: a high knee, a tibia, and a sharp shin
+    down to the point. They step in diagonal pairs, 150 m strides, at
+    6 m/s.
   - **Route:** it wanders at random across the open world (about 8 x 8 km).
-  - **Rests:** every 10 min, for 3 min. It settles belly-down (the spine
-    down to about 15 m), so you can climb its ribs from the ground.
+  - **Rests:** every 10 min, for 3 min. It sets down onto the ground over
+    20 s, its legs folding up round it, then rises again.
   - **Footfalls:**
     - a crush where a foot lands (15 m);
     - a quake that knocks you down within 80 m;
     - craters that last 10 min;
-    - booms heard from far off.
-  - **Sound:** bones creaking, footfall booms, a bell in the nave that tolls
-    only as it rests and rises, and a faint choir.
+    - booms heard to 1 km.
+  - **Sound:** its legs creaking, footfall booms, the bell in its belfry
+    (only as it rests and rises), and a faint choir in its chapel.
+    Placeholders are made in code.
   - **Life:** 10 Consumed round its spires and 12 bell-wraiths in the nave's
-    rafters and the belfries (both still to be built).- **How (technical):**
+    rafters and the belfry (both still to be built).
+- **How (technical):**
   - a slow-moving body with few merged collision shapes that carries what
     stands on it;
   - the host syncs one number (how far along its route it is);
@@ -468,23 +480,26 @@ Everything is in `scripts/traders/`.
 
 Everything is in `scripts/walkers/`.
 
-### The body (OssuaryBones)
-- **What it's made of:**
-  - 28 vertebrae, thinning toward the tail;
-  - 25 rib arches rising over the spine to 80 m above it, their feet 14 m
-    below it, so they touch the ground when it rests belly-down;
-  - the deck for the building at 84 m;
-  - a skull at the head;
-  - 8 legs of two 330 m bones each.
-- **Cost:** bone and flesh are merged into one mesh per part. Collision is
-  simple capsules, boxes and a sphere.
-
+### The building and its legs (redesigned)
+- **The building:** baked from `maps/megastructures/the_ossuary.map` into
+  `scenes/megastructures/the_ossuary.tscn`.
+  - It's 1176 brushes at 8 units a metre.
+  - The bake needs func_godot's `hyperplane_size` at 2048, or the parts above
+    512 m are lost.
+  - Its collision is moved onto the walker's moving body, so it carries you.
+  - **Rebuilding after you edit it:** use the scene's "Map" node, Build (with
+    hyperplane_size 2048), or re-run the tool, which overwrites your map.
+- **The legs** (OssuaryBones): three bones each.
+  - The femur is 430 m long, the tibia 380 m, and the sharp shin 150 m;
+    their radii are 20, 17 and 15 m.
+  - The hips are at the building's corners (100, 12, 195); the feet go out
+    to (470, 420).
 ### How it walks (Ossuary)
 Everything comes from one number, its time, plus its route's seed.
 - **Its cycle:** walk 600 s at 6 m/s, settle 20 s, rest 180 s, rise 20 s.
-- **Resting:** the spine goes from 120 m down to 15 m.
-- **The spider gait:** 150 m strides. Left legs 1 and 3 step with right legs
-  2 and 4, then the other set. Each foot lands out at the 900 m stance under
+- **Resting:** the underside goes from 150 m down to the ground.
+- **The gait:** 150 m strides in diagonal pairs (front-left with back-right,
+  then the others). Each foot lands out at its corner's stance under
   where its hip will be mid-stride, on the terrain. It swings for half the
   stride, lifted 40 m, and is planted the other half. The knees are two-bone
   IK (up and out).
@@ -495,7 +510,7 @@ Everything comes from one number, its time, plus its route's seed.
     choice: so its legs never walk through them.)
 - **Its tilt:** pitched at most 8 degrees with the land, and level side to
   side.
-- **Riding it:** the body and every leg bone are moving platforms
+- **Riding it:** the building and every leg bone are moving platforms
   (AnimatableBody3D).
 
 ### Footfalls
@@ -516,7 +531,7 @@ Everything comes from one number, its time, plus its route's seed.
 - **Creaks:** at a random knee every 3-7 s, unless it's resting. Heard to
   350 m.
 - **Bell:** as it settles and as it rises, heard to 1.5 km.
-- **Choir:** looped in the skull, heard to 220 m.
+- **Choir:** looped in the chapel, heard to 220 m.
 
 ### Co-op
 - The host sends its seed, time and start spot every 0.5 s.
@@ -529,7 +544,6 @@ Everything comes from one number, its time, plus its route's seed.
 - F9 -> "Ossuary: rest now" makes it settle.
 
 ### Next
-- Phase 2: the building, a generated TrenchBroom map on its deck and in its
-  skull.
+- Phase 2 (done with the redesign): the building, a generated TrenchBroom map.
 - Phase 3: the Consumed and the bell-wraiths.
 - Phase 4: the reliquary skull.

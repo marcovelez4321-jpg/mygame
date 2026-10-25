@@ -2032,3 +2032,10 @@ them:
   - **Riding it:** moving platforms.
   - **Co-op:** everything derives from the host's time and seed.
   - **Testing:** F9 "walk past me" and "rest now".
+
+- 2026-10-25 The Crawling Ossuary redesigned (the user's): no creature, just a massive ossuary building on four very thick (40 m), sharp, three-jointed bone legs at its corners, stepping in diagonal pairs.
+  - **The building:** a generated TrenchBroom map (tools/make_the_ossuary.gd: maps/megastructures/the_ossuary.map to scenes/megastructures/the_ossuary.tscn, 1176 brushes, hyperplane_size 2048).
+  - **Size:** 400 x 200 m, about 1 km tall, held 150 m up.
+  - **Inside:** the nave on the underside with an open archway at the front; twin hollow spires with ledges inside and ledges and ribs outside; the chapel atop the left spire, the belfry atop the right; crypts and catacombs at the back. Textures start in the Horror set.
+  - **Resting:** it sets down onto the ground.
+  - The old spine/ribs/skull body is gone.

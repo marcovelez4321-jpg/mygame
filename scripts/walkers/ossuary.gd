@@ -2,28 +2,33 @@ class_name Ossuary
 extends Node3D
 
 ## THE CRAWLING OSSUARY (the user's, 2026-10-25; docs/QUESTS_TRADERS_WALKERS.md):
-## a walking megastructure of bone and flesh -- a spine of giant vertebrae under
-## rib arches (OssuaryBones), 1.5 km long, the spine SPINE_HEIGHT up, eight
-## legs (four a side) arching out to a STANCE-wide stance and stepping in two
-## alternating sets like a spider's, STRIDE a step, at SPEED. On its back
-## (to come) the bone cathedral-crypt, a TrenchBroom map.
+## a massive ossuary on four very thick, sharp, spidery legs of bone -- not a
+## creature, the building itself walking. The building's a TrenchBroom map
+## (tools/make_the_ossuary.gd: scenes/megastructures/the_ossuary.tscn): a
+## cathedral-crypt 400 x 200 m at its base and about 1 km tall -- its nave on
+## its underside, the open archway at its front, twin spires (the chapel atop
+## the left, the belfry atop the right), the crypts and catacombs at its back.
+## The legs (OssuaryBones): three bones each (a high knee, a long shin, a sharp
+## point), at its four corners, stepping in diagonal pairs, STRIDE a step, at
+## SPEED; they hold its underside BODY_HEIGHT up.
 ##   It wanders at random over the open world (keeping clear of the Stack and
-##   Grandma's: AVOID), resting every WALK_TIME for REST_TIME -- settling
-##   belly-down (the spine to BELLY_HEIGHT, SETTLE_TIME), so its ribs come
-##   down to the ground and you can climb them -- then rising again.
+##   Grandma's: AVOID), resting every WALK_TIME for REST_TIME -- setting down
+##   onto the ground (SETTLE_TIME), its legs folding up round it, so its
+##   archway's on the ground and you walk in -- then rising again.
 ##   A foot coming down: crushed under it (CRUSH), knocked off your feet near
 ##   it (QUAKE), a crater left (CRATER_TIME), a boom heard BOOM_RANGE off.
-##   Its bones creak as it walks; a bell tolls as it settles and as it rises; a
-##   faint choir in its head (WalkerSound).
-## Ride it: its body and legs are moving platforms (AnimatableBody3D).
+##   Its legs creak as it walks; its bell tolls as it settles and as it
+##   rises; a faint choir in its chapel (WalkerSound).
+## Ride it: the building and its legs are moving platforms (AnimatableBody3D;
+## the map's collision is taken onto the building's body).
 ## Rule 1 (co-op): where it is and how it stands are all worked out from one
 ## number -- its time, `time` (and its route's seed) -- the same on every game:
 ## the host's runs it and sends its time now and then (Network); every game
 ## builds and walks its own copy from it.
 
-const SPINE_HEIGHT := 120.0
-const BELLY_HEIGHT := 15.0
-const STANCE := 900.0
+const BUILDING := "res://scenes/megastructures/the_ossuary.tscn"
+const BUILDING_LENGTH := 400.0
+const BODY_HEIGHT := 150.0
 const SPEED := 6.0
 const STRIDE := 150.0
 ## A foot's lift at the top of its step (m).
@@ -31,14 +36,21 @@ const LIFT := 40.0
 const WALK_TIME := 600.0
 const REST_TIME := 180.0
 const SETTLE_TIME := 20.0
-## The legs along it (z), each pair's hip HIP_OUT out from the spine; the
-## long bones' lengths and girth.
-const LEG_Z := [-510.0, -170.0, 170.0, 510.0]
-const HIP_OUT := 45.0
-const FEMUR := 330.0
-const TIBIA := 330.0
-const FEMUR_RADIUS := 9.0
-const TIBIA_RADIUS := 7.0
+## The legs: hips at its corners, feet out at FOOT_OUT; three bones each (the
+## user's: 40 m thick, sharp).
+const HIP := Vector3(100.0, 12.0, 195.0)
+const FOOT_OUT := Vector3(470.0, 0.0, 420.0)
+const FEMUR := 430.0
+const TIBIA := 380.0
+const SHIN := 150.0
+const FEMUR_RADIUS := 20.0
+const TIBIA_RADIUS := 17.0
+const SHIN_RADIUS := 15.0
+## In the building (its own space; tools/ossuary_bake.gd): the chapel atop
+## the left spire, its altar; the belfry atop the right.
+const CHAPEL_AT := Vector3(-70.0, 900.0, -175.0)
+const ALTAR_AT := Vector3(-70.0, 881.6, -171.5)
+const BELL_AT := Vector3(70.0, 915.0, -175.0)
 const CRUSH := 15.0
 const QUAKE := 80.0
 const QUAKE_SHOVE := Vector2(10.0, 6.0) # out, up (m/s)
@@ -57,7 +69,7 @@ const LEG_MAX := 2500.0
 const PATH_STEP := 20.0
 const TURN_PER_STEP := 0.05
 const AVOID := {"TheStack": 1500.0, "GrandmasHouse": 1000.0}
-const MAX_PITCH := 0.14
+const MAX_PITCH := 0.05
 const SYNC_EVERY := 0.5
 
 var route_seed := 0
@@ -74,7 +86,6 @@ var _path := PackedVector3Array()
 var _waypoints := PackedVector3Array()
 var _path_dice := RandomNumberGenerator.new()
 var _heading := Vector3.FORWARD
-var _target_index := 0
 var _avoid: Array[Array] = []
 var _sync_left := 0.0
 var _host_time := -1.0
@@ -110,40 +121,56 @@ func _ready() -> void:
 		if node:
 			_avoid.append([node.global_position, float(AVOID[node_name])])
 	_body = AnimatableBody3D.new()
-	_body.name = "Body"
+	_body.name = "Building"
 	_body.sync_to_physics = true
 	_body.top_level = true
 	add_child(_body)
-	var look := MeshInstance3D.new()
-	look.mesh = OssuaryBones.body_mesh()
-	_body.add_child(look)
-	for piece: Dictionary in OssuaryBones.body_shapes():
-		var shape := CollisionShape3D.new()
-		shape.shape = piece.shape
-		shape.transform = piece.xf
-		_body.add_child(shape)
-	var femur := OssuaryBones.leg_mesh(FEMUR, FEMUR_RADIUS, 0.8)
-	var tibia := OssuaryBones.leg_mesh(TIBIA, TIBIA_RADIUS, 0.3)
-	for i in 8:
-		var side := -1.0 if i % 2 == 0 else 1.0
-		var pair := i / 2
-		# The two sets: left 1, right 2, left 3, right 4 -- and the others.
-		var set_b := (pair % 2 == 0) == (side > 0.0)
-		_legs.append({side = side, z = float(LEG_Z[pair]), offset = STRIDE * 0.5 if set_b else 0.0,
-				femur = _leg_part(femur, FEMUR, FEMUR_RADIUS), tibia = _leg_part(tibia, TIBIA, TIBIA_RADIUS), planted = -999999, cache = {}})
+	_take_building()
+	var femur := OssuaryBones.leg_mesh(FEMUR, FEMUR_RADIUS, 0.85)
+	var tibia := OssuaryBones.leg_mesh(TIBIA, TIBIA_RADIUS, 0.85)
+	var shin := OssuaryBones.leg_mesh(SHIN, SHIN_RADIUS, 0.6, true)
+	for side: float in [-1.0, 1.0]:
+		for end: float in [-1.0, 1.0]:
+			# Diagonal pairs (the user's): front-left with back-right, then the others.
+			var set_b := (side < 0.0) != (end < 0.0)
+			_legs.append({side = side, end = end, offset = STRIDE * 0.5 if set_b else 0.0, planted = -999999, cache = {},
+					femur = _leg_part(femur, FEMUR, FEMUR_RADIUS), tibia = _leg_part(tibia, TIBIA, TIBIA_RADIUS),
+					shin = _leg_part(shin, SHIN + SHIN_RADIUS * 2.0, SHIN_RADIUS)})
 	_choir = AudioStreamPlayer3D.new()
 	_choir.stream = WalkerSound.pick("choir")
 	_choir.max_distance = CHOIR_RANGE
 	_choir.unit_size = 25.0
 	_choir.volume_db = -8.0
 	_body.add_child(_choir)
-	_choir.position = OssuaryBones.SKULL_AT
+	_choir.position = CHAPEL_AT
 	visible = false
 	# Out of the way (deep under the world) till it knows where it is.
 	_body.global_position = Vector3.DOWN * 5000.0
 	for leg in _legs:
-		(leg.femur as Node3D).global_position = Vector3.DOWN * 5000.0
-		(leg.tibia as Node3D).global_position = Vector3.DOWN * 5000.0
+		for part: String in ["femur", "tibia", "shin"]:
+			(leg[part] as Node3D).global_position = Vector3.DOWN * 5000.0
+
+
+## The building, from its baked map, on the moving body -- its collision
+## taken off the map's static bodies onto it, so it carries you.
+func _take_building() -> void:
+	if not ResourceLoader.exists(BUILDING):
+		push_warning("Ossuary: no building yet -- run tools/make_the_ossuary.gd")
+		return
+	var building := (load(BUILDING) as PackedScene).instantiate() as Node3D
+	_body.add_child(building)
+	for node in building.find_children("*", "StaticBody3D", true, false):
+		var holder := node as StaticBody3D
+		for child in holder.get_children():
+			var shape := child as CollisionShape3D
+			if shape == null:
+				continue
+			var at := _body.global_transform.affine_inverse() * shape.global_transform
+			holder.remove_child(shape)
+			_body.add_child(shape)
+			shape.transform = at
+		holder.collision_layer = 0
+		holder.collision_mask = 0
 
 
 func _leg_part(mesh: Mesh, length: float, radius: float) -> AnimatableBody3D:
@@ -163,8 +190,8 @@ func _leg_part(mesh: Mesh, length: float, radius: float) -> AnimatableBody3D:
 	return part
 
 
-## Its route (a seed) and where along its walk it is (s): the host's, and
-## every game's from the host's word (synced()).
+## Its route (a seed) and where along its walk it is: the host's, and every
+## game's from the host's word (synced()).
 func start(seed: int, at_time: float, from: Vector3 = Vector3.INF, heading: Vector3 = Vector3.ZERO) -> void:
 	route_seed = seed
 	time = at_time
@@ -177,7 +204,6 @@ func start(seed: int, at_time: float, from: Vector3 = Vector3.INF, heading: Vect
 	_path.append(first)
 	_heading = heading.normalized() if heading.length_squared() > 0.01 else Vector3.FORWARD.rotated(Vector3.UP, _path_dice.randf() * TAU)
 	_waypoints.append(first + _heading * LEG_MAX if from.is_finite() else _next_waypoint(first))
-	_target_index = 0
 	_walking_known = true
 	for leg in _legs:
 		leg.planted = -999999
@@ -191,6 +217,20 @@ func synced(seed: int, host_time: float, from: Vector3 = Vector3.INF, heading: V
 		start(seed, host_time, from, heading)
 	_host_time = host_time
 	_host_seen_msec = Time.get_ticks_msec()
+
+
+## The F9 menu (testing; the host's): "here" -- a new route starting 1.2 km
+## off, walking straight past `player`; "rest" -- settling now.
+func test(kind: StringName, player: PlayerMovement) -> String:
+	match kind:
+		&"here":
+			var toward := Vector3(player.global_basis.z.x, 0.0, player.global_basis.z.z).normalized()
+			start(randi(), 0.0, player.global_position - toward * 1200.0, toward)
+			return "The Ossuary: 1.2 km in front of you, walking your way"
+		&"rest":
+			time = floorf(time / _cycle()) * _cycle() + WALK_TIME - 0.5
+			return "The Ossuary: settling now"
+	return ""
 
 
 func _physics_process(delta: float) -> void:
@@ -214,22 +254,8 @@ func _physics_process(delta: float) -> void:
 	for leg in _legs:
 		_pose_leg(leg, walked, body_xf, host)
 	_phase_sounds()
-	_creak(delta, lower)
+	_creak(delta)
 	_fade_craters()
-
-
-## The F9 menu (testing; the host's): "here" -- a new route starting 1.2 km
-## off, walking straight past `player`; "rest" -- settling now.
-func test(kind: StringName, player: PlayerMovement) -> String:
-	match kind:
-		&"here":
-			var toward := Vector3(player.global_basis.z.x, 0.0, player.global_basis.z.z).normalized()
-			start(randi(), 0.0, player.global_position - toward * 1200.0, toward)
-			return "The Ossuary: 1.2 km in front of you, walking your way"
-		&"rest":
-			time = floorf(time / _cycle()) * _cycle() + WALK_TIME - 0.5
-			return "The Ossuary: settling now"
-	return ""
 
 
 # ---- Its time: walking, settling, resting, rising ----------------------------------------
@@ -245,7 +271,7 @@ func _walked(t: float) -> float:
 	return (n * WALK_TIME + minf(u, WALK_TIME)) * SPEED
 
 
-## 0 standing, 1 belly-down.
+## 0 standing, 1 set down.
 func _lowered(t: float) -> float:
 	var u := fmod(t, _cycle())
 	if u < WALK_TIME:
@@ -326,7 +352,7 @@ func _clear_way(a: Vector3, b: Vector3) -> bool:
 	return true
 
 
-# ---- Its body and legs ------------------------------------------------------------------
+# ---- The building and its legs ------------------------------------------------------------
 
 func _ground(at: Vector3) -> float:
 	if _terrain:
@@ -338,23 +364,23 @@ func _ground(at: Vector3) -> float:
 	return 0.0
 
 
-## The spine's place `s` along, `lower` down: over the ground under it,
-## pitched (a little) with the land from tail to head.
+## The building `s` along, `lower` set down: its underside over the ground
+## under it (BODY_HEIGHT up standing, on the ground set down), barely tipped.
 func _body_transform(s: float, lower: float) -> Transform3D:
 	var route := _route_at(s)
 	var centre: Vector3 = route[0]
 	var heading: Vector3 = route[1]
-	var front := _ground(centre + heading * OssuaryBones.LENGTH * 0.4)
-	var back := _ground(centre - heading * OssuaryBones.LENGTH * 0.4)
+	var front := _ground(centre + heading * BUILDING_LENGTH * 0.5)
+	var back := _ground(centre - heading * BUILDING_LENGTH * 0.5)
 	var middle := _ground(centre)
 	var base := (front + back + middle) / 3.0
-	var pitch := clampf(atan2(front - back, OssuaryBones.LENGTH * 0.8), -MAX_PITCH, MAX_PITCH)
+	var pitch := clampf(atan2(front - back, BUILDING_LENGTH), -MAX_PITCH, MAX_PITCH)
 	var basis := Basis.looking_at(heading, Vector3.UP)
 	basis = basis * Basis(Vector3.RIGHT, pitch)
-	return Transform3D(basis, Vector3(centre.x, base + lerpf(SPINE_HEIGHT, BELLY_HEIGHT, lower), centre.z))
+	return Transform3D(basis, Vector3(centre.x, base + lerpf(BODY_HEIGHT, 0.0, lower), centre.z))
 
 
-## Where leg `leg`'s foot comes down on its `k`th step: out at its stance,
+## Where leg `leg`'s foot comes down on its `k`th step: out at its corner,
 ## under where its hip will be mid-stride, on the ground.
 func _foot_down(leg: Dictionary, k: int) -> Vector3:
 	var cache: Dictionary = leg.cache
@@ -362,7 +388,7 @@ func _foot_down(leg: Dictionary, k: int) -> Vector3:
 		return cache[k]
 	var s := float(leg.offset) + float(k) * STRIDE + STRIDE * 0.75
 	var xf := _body_transform(s, 0.0)
-	var at := xf * Vector3(float(leg.side) * STANCE * 0.5, 0.0, float(leg.z))
+	var at := xf * Vector3(float(leg.side) * FOOT_OUT.x, 0.0, float(leg.end) * FOOT_OUT.z)
 	at.y = _ground(at)
 	cache[k] = at
 	if cache.size() > 4:
@@ -371,8 +397,9 @@ func _foot_down(leg: Dictionary, k: int) -> Vector3:
 
 
 ## The foot `s` along: swinging (the first half of its step) from where it
-## last came down to the next, lifted; planted the rest. A foot coming down:
-## its footfall.
+## last came down to the next, lifted; planted the rest (a foot coming down:
+## its footfall). Its bones: the sharp shin standing up off the point, the
+## femur and tibia from the hip to the shin's top, the knee high and out.
 func _pose_leg(leg: Dictionary, s: float, body_xf: Transform3D, host: bool) -> void:
 	var rel := s - float(leg.offset)
 	var k := int(floorf(rel / STRIDE))
@@ -387,18 +414,19 @@ func _pose_leg(leg: Dictionary, s: float, body_xf: Transform3D, host: bool) -> v
 			if int(leg.planted) > -999999:
 				_footfall(foot, host)
 			leg.planted = k
-	var hip := body_xf * Vector3(float(leg.side) * HIP_OUT, -6.0, float(leg.z))
-	# The knee: up and out, where the two bones meet.
-	var reach := clampf(hip.distance_to(foot), 1.0, (FEMUR + TIBIA) * 0.999)
-	var dir := (foot - hip).normalized()
-	var out := body_xf.basis.x.normalized() * float(leg.side)
-	var pole := (Vector3.UP * 1.3 + out) - dir * (Vector3.UP * 1.3 + out).dot(dir)
+	var hip := body_xf * Vector3(float(leg.side) * HIP.x, HIP.y, float(leg.end) * HIP.z)
+	var out := Vector3(foot.x - hip.x, 0.0, foot.z - hip.z).normalized()
+	var ankle := foot + (Vector3.UP * 0.95 + out * 0.31).normalized() * SHIN
+	var reach := clampf(hip.distance_to(ankle), 1.0, (FEMUR + TIBIA) * 0.999)
+	var dir := (ankle - hip).normalized()
+	var pole := (Vector3.UP * 1.4 + out) - dir * (Vector3.UP * 1.4 + out).dot(dir)
 	pole = pole.normalized() if pole.length_squared() > 0.0001 else Vector3.UP
 	var cos_a := clampf((FEMUR * FEMUR + reach * reach - TIBIA * TIBIA) / (2.0 * FEMUR * reach), -1.0, 1.0)
 	var knee := hip + dir * FEMUR * cos_a + pole * FEMUR * sqrt(1.0 - cos_a * cos_a)
-	foot = hip + dir * reach
-	(leg.femur as AnimatableBody3D).global_transform = OssuaryBones._between(hip, knee)
-	(leg.tibia as AnimatableBody3D).global_transform = OssuaryBones._between(knee, foot)
+	ankle = hip + dir * reach
+	(leg.femur as AnimatableBody3D).global_transform = OssuaryBones.between(knee, hip)
+	(leg.tibia as AnimatableBody3D).global_transform = OssuaryBones.between(ankle, knee)
+	(leg.shin as AnimatableBody3D).global_transform = OssuaryBones.between(foot, ankle)
 	leg.knee = knee
 
 
@@ -493,19 +521,20 @@ static func _crater_look() -> ImageTexture:
 	return _crater_texture
 
 
-## The bell: as it settles, and as it rises.
+## The bell in its belfry: as it settles, and as it rises; the choir in its
+## chapel, always.
 func _phase_sounds() -> void:
 	var phase := _phase(time)
 	if phase != _phase_was:
 		if _phase_was >= 0 and (phase == 1 or phase == 3):
-			WalkerSound.play("bell", _body.global_transform * Vector3(0.0, OssuaryBones.DECK_Y + 40.0, 0.0), get_tree().current_scene, BELL_RANGE, 4.0, 60.0)
+			WalkerSound.play("bell", _body.global_transform * BELL_AT, get_tree().current_scene, BELL_RANGE, 4.0, 60.0)
 		_phase_was = phase
 	if _choir and not _choir.playing and is_inside_tree():
 		_choir.play()
 
 
-## Its bones creak as it walks: now and then, at one of its knees.
-func _creak(delta: float, lower: float) -> void:
+## Its legs creak as it walks: now and then, at one of its knees.
+func _creak(delta: float) -> void:
 	_creak_left -= delta
 	if _creak_left > 0.0:
 		return
