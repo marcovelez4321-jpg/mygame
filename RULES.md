@@ -1978,3 +1978,17 @@ them:
   - **The journal:** step lines in the user's words.
   - **Testing:** F9 "Pack".
   - **Selling it to a trader:** waits for traders.
+
+- 2026-10-25 Traders, part 1 (scripts/traders/):
+  - **The cart:** an overgrown rickshaw built from shapes to the user's design.
+  - **Him:** an old man with a heavy stoop (TraderStoop) and a mossy kasa hat; his model is set in traders/trader_settings.tres (Inspector).
+  - **His babble:** Animal Crossing style, chopped from the user's hellonormal1, low (0.6-0.8x), 8 syllables/s. He babbles on greeting, price, sale and "no".
+  - **Goods:** 12 random items from TraderGoods at the user's prices, rarer the pricier, shown on hooks, shelves and eaves with pencil paper tags.
+  - **Buying:** "[F] Buy: Shotgun, 25 scrap"; paid from the hand's and bag's scrap, the item into your hand. One shared cart in co-op.
+  - **Placement** (TraderDirector):
+    - parked under the Flesh Tree, at the Stack's plateau edge, and at 400 m / 2 km / 4 km up the Stack (a new spot each session: open ledges, grown-on rooms, 10% a window room);
+    - 3 wanderers at 2 m/s between Grandma's yard edge and the plateau edge, with 2 wild stops each way, resting 6 min at each, parking within 10 m.
+  - **Restock:** a new meeting (everyone 150 m away for 10 min) re-rolls the stock.
+  - **Safe zone:** 25 m; tweakers, roaches and encounter spawns respect it.
+  - **Synced** through NetEntities.
+  - **Part 2 next:** robbing, defence, consequences, wreck, replacement.

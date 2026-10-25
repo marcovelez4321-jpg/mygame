@@ -473,6 +473,24 @@ func _set_fact(name: StringName, value: Variant) -> void:
 		quests_changed.emit()
 
 
+## Host: a trader's babble (Trader: a sale, can't pay) -- on every game.
+func send_trader_say(id: String, kind: StringName) -> void:
+	_trader_say(id, kind)
+	if is_online():
+		_net_trader_say.rpc(id, kind)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_trader_say(id: String, kind: StringName) -> void:
+	_trader_say(id, kind)
+
+
+func _trader_say(id: String, kind: StringName) -> void:
+	for node in get_tree().get_nodes_in_group(&"traders"):
+		if str(node.get(&"trader_id")) == id:
+			node.call(&"babble", kind)
+
+
 ## Host (or offline; the F9 menu, for testing): every fact forgotten, here,
 ## in the save folder and on every game -- the world as it first was.
 func forget_facts() -> void:

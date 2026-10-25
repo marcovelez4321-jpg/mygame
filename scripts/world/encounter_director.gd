@@ -118,6 +118,8 @@ func _ready() -> void:
 	# The Stalker (the user's): one of a kind, hunting from the first minute.
 	if multiplayer.is_server():
 		get_tree().create_timer(first_delay).timeout.connect(func() -> void: Stalker.ensure(get_tree()))
+		# The traders (the user's): at the landmarks, up the Stack, on the roads.
+		get_tree().create_timer(1.0).timeout.connect(func() -> void: TraderDirector.ensure(get_tree()))
 
 
 func _on_chunk_loaded(_chunk: Vector2i, root: Node3D) -> void:
@@ -373,6 +375,8 @@ func _hidden_spot(player: Node3D, min_share: float, max_share: float) -> Vector3
 			continue
 		if Vector2(on.x - clear_centre.x, on.z - clear_centre.z).length_squared() < _clear_radius_sq:
 			continue
+		if Traders.safe(on):
+			continue # (never by a trader)
 		var crowded := false
 		for group in _groups:
 			if is_instance_valid(group) and group.home.distance_squared_to(on) < _group_spacing_sq:

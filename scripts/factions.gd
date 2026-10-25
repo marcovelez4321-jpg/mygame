@@ -68,6 +68,9 @@ const PREY := {
 static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range: float = INF, viewer: Node = null, current = null, threat_range: float = INF) -> Node3D:
 	if not is_instance_valid(current):
 		current = null
+	# Near a trader nothing fights (the user's: creatures keep off him).
+	if Traders.safe(from):
+		return null
 	var best: Node3D = null
 	var best_priority := -1
 	var best_distance := INF
@@ -83,6 +86,8 @@ static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range
 			var distance := from.distance_to(target.global_position)
 			if distance > max_range:
 				continue
+			if Traders.safe(target.global_position):
+				continue # (by a trader: left be)
 			if distance > threat_range and not is_threat(side, other, viewer, target, distance, threat_range, target == current):
 				continue
 			if target == current:

@@ -425,6 +425,27 @@ func _stow_grenade(amount: int) -> bool:
 	return true
 
 
+## The host: `item` into the hand (bought from a trader: Trader) -- whatever
+## was there goes in the bag first.
+func give(item: Dictionary) -> void:
+	if not _decides():
+		return
+	put_back()
+	_hold(item)
+
+
+## The host: what's in the hand back in the bag -- the owner's own copy too
+## -- or, with no room, dropped at their feet.
+func put_back() -> void:
+	if not is_holding() or not _decides():
+		return
+	var held := data.duplicate(true)
+	if _stow():
+		tell_owner_stored(held)
+	else:
+		_drop()
+
+
 ## The camp kit built (CampBuilder): gone from the hand.
 func use_up() -> void:
 	_empty()

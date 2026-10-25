@@ -1,0 +1,165 @@
+class_name TraderDirector
+extends RefCounted
+
+## Where the traders are (the user's, 2026-10-25; the host's, as the level
+## starts -- every game sees them through NetEntities):
+##   PARKED: one at each landmark -- under the Flesh Tree (among its roots, on
+##   the side the road out leaves from), and at the Stack's plateau edge (where
+##   the land drops from it, toward Grandma's) -- and three up the Stack at
+##   STACK_HEIGHTS, each session on a new spot near that height: a skybridge or
+##   a block-top terrace (open ground found by rays down), or a room grown onto
+##   a tower, WINDOW_CHANCE of the time a lit window room.
+##   WANDERERS: WANDERERS of them, between Grandma's yard edge and the Stack's
+##   plateau edge, by WILD_STOPS rests out in the wilds each way (each its own),
+##   resting at every one. New landmarks join the routes as they're made.
+
+const WANDERERS := 3
+const WILD_STOPS := 2
+const WILD_SIDEWAYS := Vector2(80.0, 200.0)
+const STACK_HEIGHTS := [400.0, 2000.0, 4000.0]
+const WINDOW_CHANCE := 0.1
+## Under the Flesh Tree: this far out past its trunk.
+const UNDER_TREE := 12.0
+## Grandma's yard edge, from her house toward the Stack.
+const YARD_EDGE := 60.0
+## The plateau's edge: where the land's this far below the Stack's foot.
+const PLATEAU_DROP := 4.0
+## Rays down for open ground up the Stack, per height.
+const LEDGE_RAYS := 400
+
+
+static func ensure(tree: SceneTree) -> void:
+	if Network.is_online() and not tree.get_multiplayer().is_server():
+		return
+	if not tree.get_nodes_in_group(&"traders").is_empty():
+		return
+	var scene := tree.current_scene
+	if scene == null:
+		return
+	var house := scene.get_node_or_null(^"GrandmasHouse") as Node3D
+	var stack := scene.get_node_or_null(^"TheStack") as Megastructure
+	if house == null or stack == null:
+		return
+	var terrain := scene.get_node_or_null(^"Terrain3D")
+	var dice := RandomNumberGenerator.new()
+	dice.randomize()
+	var toward := _flat(stack.global_position - house.global_position)
+	# Under the Flesh Tree.
+	var flesh_tree := scene.get_node_or_null(^"FleshTree") as Node3D
+	var tree_at := flesh_tree.global_position if flesh_tree else house.global_position
+	var trunk := float(flesh_tree.get(&"trunk_width")) * 0.5 if flesh_tree and flesh_tree.get(&"trunk_width") != null else 12.5
+	var under := _on_ground(terrain, tree_at + toward * (trunk + UNDER_TREE))
+	_spawn(scene, "grandma", under, toward.rotated(Vector3.UP, PI * 0.5), true, dice)
+	# The Stack's plateau edge.
+	var edge := _plateau_edge(terrain, stack.global_position, -toward)
+	_spawn(scene, "stack_base", edge, toward, true, dice)
+	# Up the Stack.
+	for height: float in STACK_HEIGHTS:
+		var spot := _stack_spot(stack, height, dice)
+		if spot.is_finite():
+			_spawn(scene, "stack_%d" % int(height), spot, Vector3.FORWARD.rotated(Vector3.UP, dice.randf() * TAU), true, dice)
+	# The wanderers.
+	var yard := _on_ground(terrain, house.global_position + toward * YARD_EDGE)
+	var foot := edge + toward.rotated(Vector3.UP, PI * 0.5) * 15.0 # (beside the one parked there)
+	for w in WANDERERS:
+		var route := PackedVector3Array()
+		route.append(yard)
+		for there_and_back in 2:
+			var from := yard if there_and_back == 0 else foot
+			var to := foot if there_and_back == 0 else yard
+			for s in WILD_STOPS:
+				var along := from.lerp(to, float(s + 1) / float(WILD_STOPS + 1))
+				var side := toward.rotated(Vector3.UP, PI * 0.5) * dice.randf_range(WILD_SIDEWAYS.x, WILD_SIDEWAYS.y) * (1.0 if dice.randf() < 0.5 else -1.0)
+				route.append(_on_ground(terrain, along + side))
+			if there_and_back == 0:
+				route.append(foot)
+		var leg := dice.randi() % route.size()
+		var start := route[(leg - 1 + route.size()) % route.size()].lerp(route[leg], dice.randf())
+		var trader := _spawn(scene, "wanderer_%d" % w, _on_ground(terrain, start), _flat(route[leg] - start), false, dice)
+		trader.route = route
+		trader.set(&"_leg", leg)
+
+
+static func _spawn(scene: Node, id: String, at: Vector3, facing: Vector3, is_parked: bool, dice: RandomNumberGenerator) -> Trader:
+	var trader := Trader.new()
+	trader.name = "Trader_%s" % id
+	trader.trader_id = id
+	trader.parked = is_parked
+	trader.look_seed = dice.randi_range(1, 1 << 20)
+	scene.add_child(trader)
+	trader.global_transform = Transform3D(Basis.looking_at(_flat(facing), Vector3.UP), at)
+	return trader
+
+
+## From the Stack's foot out `out` until the land's dropped PLATEAU_DROP.
+static func _plateau_edge(terrain: Node, foot: Vector3, out: Vector3) -> Vector3:
+	var top := _height(terrain, foot)
+	var at := foot
+	for step in range(20, 1500, 5):
+		at = foot + out * float(step)
+		if _height(terrain, at) < top - PLATEAU_DROP:
+			return _on_ground(terrain, foot + out * float(step - 10))
+	return _on_ground(terrain, foot + out * 200.0)
+
+
+## A spot up the Stack near `height` (above its foot): a room grown onto a
+## tower, open ground (a skybridge, a terrace), or -- WINDOW_CHANCE -- a lit
+## window room. INF if there's none.
+static func _stack_spot(stack: Megastructure, height: float, dice: RandomNumberGenerator) -> Vector3:
+	var picks: Array[Vector3] = []
+	if dice.randf() < WINDOW_CHANCE:
+		for room in stack.room_boxes:
+			if absf(room.get_center().y - height) < 150.0:
+				picks.append(stack.to_global(Megastructure._on_room_floor(dice, room)))
+	if picks.is_empty():
+		for room in stack.secret_rooms:
+			if absf(room.position.y - height) < 150.0:
+				picks.append(stack.to_global(Megastructure._on_room_floor(dice, room)))
+		picks.append_array(_open_ledges(stack, height, dice))
+	if picks.is_empty():
+		return Vector3.INF
+	return picks[dice.randi() % picks.size()]
+
+
+## Open ground near `height`: rays down onto the Stack's flat tops (out in
+## the open: not inside its halls or rooms).
+static func _open_ledges(stack: Megastructure, height: float, dice: RandomNumberGenerator) -> Array[Vector3]:
+	var found: Array[Vector3] = []
+	var space := stack.get_world_3d().direct_space_state
+	var area := stack.inside if stack.inside.size != Vector3.ZERO else AABB(Vector3(-300, 0, -300), Vector3(600, 5000, 600))
+	for i in LEDGE_RAYS:
+		var local := Vector3(dice.randf_range(area.position.x, area.end.x), height + 60.0, dice.randf_range(area.position.z, area.end.z))
+		var from := stack.to_global(local)
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 200.0, 1))
+		if hit.is_empty() or (hit.normal as Vector3).y < 0.9:
+			continue
+		var landed := stack.to_local(hit.position)
+		if absf(landed.y - height) > 120.0:
+			continue
+		var indoors := false
+		for zone in stack.inside_zones:
+			if zone.grow(1.0).has_point(landed):
+				indoors = true
+				break
+		if not indoors:
+			found.append(hit.position)
+	return found
+
+
+static func _height(terrain: Node, at: Vector3) -> float:
+	if terrain:
+		var data: Object = terrain.get(&"data")
+		if data and data.has_method(&"get_height"):
+			var h: float = data.call(&"get_height", at)
+			if not is_nan(h):
+				return h
+	return at.y
+
+
+static func _on_ground(terrain: Node, at: Vector3) -> Vector3:
+	return Vector3(at.x, _height(terrain, at), at.z)
+
+
+static func _flat(v: Vector3) -> Vector3:
+	var flat := Vector3(v.x, 0.0, v.z)
+	return flat.normalized() if flat.length_squared() > 0.0001 else Vector3.FORWARD
