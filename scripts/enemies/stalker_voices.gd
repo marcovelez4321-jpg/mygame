@@ -72,6 +72,8 @@ extends Resource
 @export var corpse_drag: SoundEvent
 ## Leaping between towers, far off.
 @export var leap: SoundEvent
+## It has the last pack (LastPack): the shriek as it scrambles off with it.
+@export var pack_shriek: SoundEvent
 
 @export_group("The wendigo")
 ## Its breathing when it's close and unseen (looped).

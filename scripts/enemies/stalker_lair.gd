@@ -20,8 +20,13 @@ const LOOT_REACH := 150.0
 const SEED := 4321
 const AMMO_BOXES := 2
 const KEY_CHANCE := 0.5
+## Its biggest bone pile (the first, bigger), where the last pack lies once
+## it's taken it home (LastPack; the user's): here, in the lair's own space.
+const TROPHY := Vector3(0.0, 0.0, 4.0)
+const TROPHY_SCALE := 1.4
 
 var _loot_left := true
+var _pack: CarryItem
 
 
 ## Where it is (global): the top of a half-sunk block in the drowned hall
@@ -59,6 +64,9 @@ func _ready() -> void:
 		var pile := StalkerSigns.bone_pile(dice)
 		add_child(pile)
 		pile.global_position = at
+		if i == 0:
+			pile.position = TROPHY # (its biggest: the trophy pile)
+			pile.scale = Vector3.ONE * TROPHY_SCALE
 		BloodFX.spawn_splatter(world, at + Vector3.UP * 0.3, Vector3.UP, dice.randf_range(1.0, 2.0), Color(0.18, 0.02, 0.02))
 	# Torn climbers' clothes.
 	for i in 9:
@@ -89,19 +97,31 @@ func _ready() -> void:
 
 
 ## The host: its loot, made the first time a player comes near (nothing far
-## off costs anything).
+## off costs anything) -- and the last pack on its bones while it has it.
 func _process(_delta: float) -> void:
-	if not _loot_left or (Network.is_online() and not multiplayer.is_server()):
+	if Network.is_online() and not multiplayer.is_server():
 		set_process(false)
 		return
+	var near := false
 	for node in get_tree().get_nodes_in_group("player"):
 		if (node as Node3D).global_position.distance_to(global_position) < LOOT_REACH:
-			_loot_left = false
-			_loot()
-			var stalker := get_tree().get_first_node_in_group(&"stalker")
-			if stalker:
-				stalker.call(&"scratch_name_at_lair") # (your name, and the tally)
-			return
+			near = true
+			break
+	if not near:
+		return
+	if _loot_left:
+		_loot_left = false
+		_loot()
+		var stalker := get_tree().get_first_node_in_group(&"stalker")
+		if stalker:
+			stalker.call(&"scratch_name_at_lair") # (your name, and the tally)
+	if LastPack.stage() == LastPack.IN_LAIR and not is_instance_valid(_pack) and LastPack.carrier(get_tree()) == null:
+		_pack = CarryItem.spawn(get_tree().current_scene, trophy_spot(), {kind = Backpack.Kind.CIGARETTES, amount = 1})
+
+
+## Over its biggest bone pile (global).
+func trophy_spot() -> Vector3:
+	return to_global(TROPHY) + Vector3.UP * 1.2
 
 
 func _loot() -> void:
@@ -117,4 +137,3 @@ func _loot() -> void:
 	drop.call({kind = Backpack.Kind.SILK, amount = dice.randi_range(1, 2)})
 	if dice.randf() < KEY_CHANCE:
 		drop.call({kind = Backpack.Kind.KEY, amount = 1})
-	set_process(false)

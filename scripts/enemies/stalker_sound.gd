@@ -124,7 +124,7 @@ static func voice(slot: StringName, at: Vector3, world: Node, volume_db: float =
 	match slot:
 		&"croak_behind", &"lunge", &"behind_you", &"watching":
 			play(Kind.RATTLE, at, world)
-		&"driven_off", &"grab":
+		&"driven_off", &"grab", &"pack_shriek":
 			play(Kind.SHRIEK, at, world)
 		&"help_scream":
 			play(Kind.HELP, at, world)

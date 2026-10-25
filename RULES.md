@@ -1969,3 +1969,12 @@ them:
   - **The journal:** Backpack.Kind.JOURNAL, the PSX notebook; you start with it and never lose it, and it takes no room or weight. Double-click it, close the bag, and it's held up open at half the screen. Left/right click turn pages; Tab or G puts it away. Grey plain paper, fingerprints, pencil, the Reenie Beanie font (downloaded with the user's OK; credited in CREDITS.md), code-drawn sketches. Own notes in co-op.
   - **Testing:** an F9 "Forget the world" button.
   - See docs/QUESTS_TRADERS_WALKERS.md.
+
+- 2026-10-25 The Last Pack quest built (LastPack, steps as facts):
+  - **The bait:** the pack lies in the Stack in a shaft of light; it can't be grabbed.
+  - **The snatch:** within 12 m the Stalker is suddenly 4 m behind you, scrambles past at 25 m/s, snatches it, shrieks, and takes it home once unseen for 1 s.
+  - **The lair:** the pack sits on its biggest bone pile. It's home and only watching whenever you come; take the pack and it chases you for 60 s, one usual grab, newcomers not spared.
+  - **Smoking:** 6 s standing still, one puff, then 14 points (three pods ripen, a free mutation). Grandma's greeting becomes "You smell like my cigarettes." and her next quest pays nothing (grandma.next_unpaid).
+  - **The journal:** step lines in the user's words.
+  - **Testing:** F9 "Pack".
+  - **Selling it to a trader:** waits for traders.

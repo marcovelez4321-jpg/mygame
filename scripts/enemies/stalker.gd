@@ -27,7 +27,7 @@ extends AnimatableBody3D
 
 enum State { STALK, SPOTTED, HIDE, WAIT, FALL, FLEE, AWAY, STUNT, APPROACH, LUNGE, DRAG, HUNT, EAT, HOME }
 ## Its stunts (the user's, stage 2) -- each staged to scare, then it's gone.
-enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW, PACER, PATH, CROSS, GRAPPLE, SNATCH, FIGHT_WATCH, FALLEN, AMONG }
+enum Stunt { BEHIND, CEILING, DOORWAY, WATCH, RATTLE, DRAG, LEAP, HELP, LURE, ANGEL, KNOCK, WINDOW, PACER, PATH, CROSS, GRAPPLE, SNATCH, FIGHT_WATCH, FALLEN, AMONG, PACK }
 
 const MODEL := preload("res://art/characters/Characters_psx/Models/Killers/Character_Monster_03.fbx")
 ## Speeds (the user's): crawling, scrambling away to hide when it's looked
@@ -266,6 +266,24 @@ const LAIR_CHANCE := 0.35
 const LAIR_DEFEND := 30.0
 const LAIR_WARN := 1.5
 const HOME_VISIT := 180.0
+
+## THE LAST PACK (the user's, 2026-10-25: LastPack). Come within PACK_RANGE
+## of the pack lying in its shaft of light and, whatever it's doing, it's
+## right behind you (PACK_BEHIND back) and scrambles past you (PACK_PASS to
+## your side) at its lunge's speed -- skittering -- snatches it, shrieks, and
+## is off out of sight with it (PACK_GONE unseen), home. While the pack's
+## there, it's home whenever you come, only watching; take them and it
+## chases you CHASE_TIME at its sprint -- one strike, the usual grab (you keep
+## the pack), newcomer or not (the user's).
+const PACK_RANGE := 12.0
+const PACK_BEHIND := 4.0
+const PACK_PASS := 1.5
+const PACK_GONE := 1.0
+const CHASE_TIME := 60.0
+var _pack_from: PlayerMovement
+var _pack_unseen := 0.0
+var _chase_left := 0.0
+var _chase_target: PlayerMovement
 var _lair_at := Vector3.INF
 var _near_lair := {}
 var _home_warn := -1.0
@@ -1023,6 +1041,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_state_left -= delta
 	_record_trails()
+	_pack_tick()
 	match state:
 		State.AWAY:
 			if _state_left <= 0.0:
@@ -1049,6 +1068,10 @@ func _think(delta: float) -> void:
 	_silence_tick(delta)
 	_brain_tick(delta)
 	_director_tick(delta)
+	# Chasing whoever took the last pack out of its home (CHASE_TIME).
+	if _chase_left > 0.0 and state != State.LUNGE and state != State.DRAG:
+		_chase_tick(delta)
+		return
 	if state != State.STUNT and state != State.HOME and (upright or head_averted):
 		upright = false # (a stunt cut short: back down on all fours)
 		head_averted = false
@@ -1277,6 +1300,158 @@ func _strike_tick(delta: float) -> void:
 				p.health.hurt_unscaled(DRAG_DAMAGE)
 				_say(&"dropped", true)
 				_let_go(true)
+
+
+## The last pack (LastPack), each tick, whatever it's doing: lying out and
+## someone's come within PACK_RANGE of it -- the snatch; in its home and
+## someone's near -- it's home; taken from there -- the chase.
+func _pack_tick() -> void:
+	if state in [State.DRAG, State.LUNGE] or (state == State.STUNT and _stunt == Stunt.PACK):
+		return
+	var stage := LastPack.stage()
+	if stage == LastPack.LYING:
+		for node in get_tree().get_nodes_in_group(&"stalker_bait"):
+			var item := node as CarryItem
+			if item == null or item.is_queued_for_deletion():
+				continue
+			for player in get_tree().get_nodes_in_group("player"):
+				var p := player as PlayerMovement
+				if p and not p.is_dead() and p.drag == null and p.global_position.distance_to(item.global_position) < PACK_RANGE:
+					if _snatch_pack(item, p):
+						return
+	elif stage == LastPack.IN_LAIR:
+		var carrier := LastPack.carrier(get_tree())
+		if carrier:
+			LastPack.recovered(carrier)
+			_start_chase(carrier)
+			return
+		if _lair_at.is_finite() and _chase_left <= 0.0 and state not in [State.HOME, State.APPROACH, State.STUNT] \
+				and _anyone_within(_lair_at, LAIR_NOTICE):
+			_go_home(HOME_VISIT, false) # (it's home whenever you come)
+
+
+## Right behind `p`, then past them for the pack at its lunge's speed.
+func _snatch_pack(item: CarryItem, p: PlayerMovement) -> bool:
+	var look := _flat(-p.head.global_basis.z)
+	var hit := _ground_at(p.global_position - look * PACK_BEHIND + Vector3.UP * 2.0)
+	if hit.is_empty():
+		hit = _ground_at(p.global_position - look * 1.5 + Vector3.UP * 2.0)
+		if hit.is_empty():
+			return false
+	if state == State.STUNT:
+		_end_stunt()
+	if holding or reaching:
+		let_go()
+	var hunger_was := hunger
+	hunger = 1.0 # (nothing keeps it from this one: not even fire)
+	var placed := _place(hit.position, hit.normal, item.global_position - (hit.position as Vector3), false)
+	hunger = hunger_was
+	if not placed:
+		return false
+	_victim = null
+	_pending_left = -1.0
+	_forced_kind = -1
+	_chase_left = 0.0
+	_stunt = Stunt.PACK
+	_stunt_phase = 0
+	_stunt_target = p
+	_stunt_seen = false
+	_victim_thing = item
+	_pack_from = p
+	var side := look.cross(Vector3.UP).normalized() * (1.0 if randf() < 0.5 else -1.0)
+	_stunt_to = p.global_position + side * PACK_PASS
+	upright = false
+	head_averted = false
+	_stunt_left_set(20.0)
+	_moment(true)
+	_big_moment()
+	return true
+
+
+## Past them (0), to the pack (1), off out of sight with it (2).
+func _pack_snatch_tick(delta: float) -> void:
+	var item := _victim_thing
+	match _stunt_phase:
+		0:
+			var to := _stunt_to - global_position
+			_desired = to.normalized() * LUNGE
+			if to.length() < 2.0 or (is_instance_valid(item) and global_position.distance_to(item.global_position) < global_position.distance_to(_stunt_to)):
+				_stunt_phase = 1
+		1:
+			if not is_instance_valid(item) or _state_left <= 0.0:
+				_end_stunt()
+				return
+			var to := item.global_position - global_position
+			_desired = to.normalized() * LUNGE
+			if to.length() < 2.0:
+				hold(item)
+				_say(&"pack_shriek", true)
+				_stunt_phase = 2
+				_pack_unseen = 0.0
+				_stunt_left_set(20.0)
+		2:
+			_desired = _away_from_players() * LUNGE
+			_pack_unseen = _pack_unseen + delta if not _seen() else 0.0
+			if _pack_unseen >= PACK_GONE or _state_left <= 0.0:
+				_pack_home()
+
+
+## Out of sight with it: the pack's in its home now (on its bone pile:
+## StalkerLair), and so is it.
+func _pack_home() -> void:
+	var item := _victim_thing
+	if holding or reaching:
+		let_go()
+	if is_instance_valid(item):
+		item.queue_free()
+	_victim_thing = null
+	LastPack.taken_home(_pack_from)
+	_pack_from = null
+	_end_stunt()
+	if _lair_at.is_finite():
+		_go_home(HOME_VISIT, false)
+
+
+## Someone took the pack out of its home: after them.
+func _start_chase(p: PlayerMovement) -> void:
+	if state == State.STUNT:
+		_end_stunt()
+	if state == State.AWAY or global_position.y < AWAY_DEPTH * 0.5:
+		if _lair_at.is_finite():
+			_place(_lair_at, Vector3.UP, p.global_position - _lair_at, false) # (up out of its home)
+		else:
+			_turn_up()
+	_chase_left = CHASE_TIME
+	_chase_target = p
+	state = State.STALK
+	upright = false
+	_pending_left = -1.0
+	_say(&"starts_hunting", true)
+	_moment(true)
+
+
+## The chase: flat out after them, and within GRAB_RANGE the lunge (the
+## usual grab); CHASE_TIME up, it gives up and slinks off.
+func _chase_tick(delta: float) -> void:
+	_chase_left -= delta
+	_pending_left = -1.0
+	var p := _chase_target
+	if _chase_left <= 0.0 or not is_instance_valid(p) or p.is_dead():
+		_chase_left = 0.0
+		_chase_target = null
+		_start_hide(false)
+		return
+	if state == State.STUNT:
+		_end_stunt()
+	if state != State.STALK:
+		state = State.STALK
+	upright = false
+	if p.drag == null and global_position.distance_to(p.global_position) < GRAB_RANGE:
+		_chase_left = 0.0
+		_chase_target = null
+		_lunge_at(p)
+		return
+	_desired = (p.global_position - global_position).normalized() * SPRINT
 
 
 ## Lunging for them (and grabbing on reaching them: _strike_tick's LUNGE).
@@ -1967,7 +2142,9 @@ func _home_tick(delta: float) -> void:
 	var near := _nearest_player()
 	if near:
 		_heading = _flat(near.global_position - global_position)
-	if near and near.global_position.distance_to(global_position) < LAIR_DEFEND and near.drag == null:
+	# The last pack on its bones (LastPack): it only watches, till it's taken.
+	var guarding := LastPack.stage() == LastPack.IN_LAIR
+	if near and near.global_position.distance_to(global_position) < LAIR_DEFEND and near.drag == null and not guarding:
 		if _home_warn < 0.0:
 			_home_warn = LAIR_WARN
 			_say(&"spotted", true)
@@ -1977,6 +2154,8 @@ func _home_tick(delta: float) -> void:
 			upright = false
 			_lunge_at(near) # (it defends its home)
 		return
+	if guarding and _anyone_within(global_position, LAIR_LEAVE):
+		return # (home, watching, while anyone's near)
 	if _state_left <= 0.0 or (not _home_healing and not _anyone_within(global_position, LAIR_LEAVE)):
 		upright = false
 		_turn_up()
@@ -2171,6 +2350,17 @@ func test_event(event: StringName, player: PlayerMovement) -> String:
 			Network.profiles[player.get_multiplayer_authority()] = StalkerMemory.my_profile()
 			_grudge.clear()
 			return "It's forgotten you (its memory wiped, saved and in its head)"
+		&"pack":
+			# The last pack, lying out ahead in its light (testing the snatch).
+			for part: String in ["stage", "snatched_by", "snatched_by_name", "recovered_by", "recovered_by_name"]:
+				Network.send_fact(WorldFacts.quest(LastPack.QUEST, part), "")
+			var ahead := _flat(-player.head.global_basis.z)
+			var floor_hit := _ground_at(player.global_position + ahead * (PACK_RANGE + 6.0) + Vector3.UP * 3.0)
+			if floor_hit.is_empty():
+				return "No floor ahead for it"
+			CarryItem.spawn(get_tree().current_scene, (floor_hit.position as Vector3) + Vector3.UP * 0.5,
+					{kind = Backpack.Kind.CIGARETTES, amount = 1, bait = true})
+			return "The last pack, %d m ahead in its light: walk up to it" % int(PACK_RANGE + 6.0)
 		&"forget_world":
 			Network.forget_facts()
 			return "The world's forgotten (every quest fact wiped, saved)"
@@ -3193,6 +3383,10 @@ func _stunt_tick(delta: float) -> void:
 			_knock_tick(p)
 			if state != State.STUNT:
 				return
+		Stunt.PACK:
+			_pack_snatch_tick(delta)
+			if state != State.STUNT:
+				return
 		Stunt.SNATCH:
 			_snatch_tick(p, delta)
 			if state != State.STUNT:
@@ -4165,7 +4359,7 @@ func sign_hold(kind: StringName, at: Vector3) -> void:
 func _body_near(at: Vector3) -> Node3D:
 	var best: Node3D = null
 	var best_distance := 4.0
-	for group: StringName in [&"corpses", &"enemies"]:
+	for group: StringName in [&"corpses", &"enemies", &"stalker_bait"]:
 		for node in get_tree().get_nodes_in_group(group):
 			var body := node as Node3D
 			if body == null:

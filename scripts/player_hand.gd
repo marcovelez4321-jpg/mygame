@@ -35,8 +35,12 @@ const PROMPTS := {
 	Backpack.Kind.GRENADES: "left click to ready",
 	Backpack.Kind.CAMP_KIT: "left click to place the camp",
 	Backpack.Kind.KEY: "a key: F at a locked door (it's used up)",
-	Backpack.Kind.CIGARETTES: "the last pack of cigarettes: for Grandma",
+	Backpack.Kind.CIGARETTES: "the last pack of cigarettes: for Grandma\nleft click to smoke them",
 }
+## Smoking the last pack (the user's, 2026-10-25: LastPack): quick and quiet
+## -- one drag, a puff of smoke -- standing still SMOKE_TIME; then three pods
+## ripen on the Flesh Tree (a mutation's worth of points: a free one).
+const SMOKE_TIME := 6.0
 
 ## What's in it (CarryItem.to_data()); {} = nothing.
 var data: Dictionary = {}
@@ -60,6 +64,27 @@ func _ready() -> void:
 	)
 
 
+## Smoking the last pack: you stand still (PlayerMovement), nothing else.
+func smoking() -> bool:
+	return is_holding() and float(data.get("smoke_left", 0.0)) > 0.0
+
+
+## The drag's smoke, out of your face.
+func _puff() -> void:
+	var smoke := Viewmodel.backblast_smoke(-_player.head.global_basis.z + Vector3.UP * 0.3)
+	_player.get_tree().current_scene.add_child(smoke)
+	smoke.global_position = _player.head.global_position - _player.head.global_basis.z * 0.35
+	smoke.emitting = true
+	smoke.finished.connect(smoke.queue_free)
+
+
+## Done: the pack's gone, the quest's done that way, the pods ripen.
+func _finish_smoking() -> void:
+	_empty()
+	LastPack.smoke(_player)
+	_player.virus.gain_points(Virus.POINTS_TO_MUTATE)
+
+
 ## The journal's in your hand: you're reading it (JournalView).
 func reading() -> bool:
 	return is_holding() and int(data.get("kind", -1)) == Backpack.Kind.JOURNAL
@@ -77,7 +102,7 @@ func is_busy() -> bool:
 ## Whether `body` goes in a hand (an item, not a prop): a CarryItem, a gun,
 ## ammo or pills lying about.
 static func is_item(body: Node) -> bool:
-	return body is CarryItem or body is WeaponPickup or body is AmmoPickup or body is ItemPickup or body is DeathPack
+	return (body is CarryItem and not (body as CarryItem).bait) or body is WeaponPickup or body is AmmoPickup or body is ItemPickup or body is DeathPack
 
 
 ## The grapple bit an item: it flies in. Whatever's in your hand already goes
@@ -116,6 +141,15 @@ func tick(fire: bool, drop: bool, stow: bool, delta: float) -> void:
 	_fire_prev = fire
 	_drop_prev = drop
 	_fly_in(delta)
+	# Smoking (both the host and its owner count it down; the host ends it).
+	if smoking():
+		var was := float(data.smoke_left)
+		data.smoke_left = was - delta
+		if was > SMOKE_TIME * 0.5 and float(data.smoke_left) <= SMOKE_TIME * 0.5:
+			_puff()
+		if float(data.smoke_left) <= 0.0 and _decides():
+			_finish_smoking()
+		return
 	# Reading: opening the bag puts the journal away (Tab), as G does.
 	var bag_opened := _player.bag_open and not _bag_was_open
 	_bag_was_open = _player.bag_open
@@ -145,6 +179,8 @@ func prompt() -> String:
 	var kind: int = data.kind
 	if kind == Backpack.Kind.JOURNAL:
 		return "left click: next page\nright click: back"
+	if smoking():
+		return ""
 	if kind == CarryItem.POD:
 		var mutation: Array = Virus.MUTATIONS.get(data.mutation, ["?", ""])
 		return "%s\n%s\nleft click to mutate" % [mutation[0], mutation[1]]
@@ -332,6 +368,9 @@ func _use() -> void:
 			weapons.equip_grenades()
 		Backpack.Kind.CAMP_KIT:
 			pass # placed by its ghost (CampBuilder takes the clicks)
+		Backpack.Kind.CIGARETTES:
+			data.smoke_left = SMOKE_TIME # (smoking them: tick() counts it down)
+			_hold(data)
 
 
 ## Something into the backpack (or, a gun, your weapons): F stowing what's in

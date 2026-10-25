@@ -62,7 +62,8 @@ func _ready() -> void:
 	# any hall floor or window room, any tower, any height -- till she has it.
 	# Where it is goes to Grandma, for her hint.
 	var quest := GrandmaQuests.CIGARETTES
-	if GrandmaQuests.state(quest) != GrandmaQuests.State.DONE:
+	LastPack.new_session()
+	if GrandmaQuests.state(quest) != GrandmaQuests.State.DONE and LastPack.stage() == LastPack.LYING:
 		var places: Array = Array(_stack.secret_keys)
 		places.append_array(_stack.room_boxes)
 		if not places.is_empty():
@@ -107,7 +108,8 @@ func _fill(site: Dictionary) -> void:
 			_climber(_stack.to_global(site.at))
 		"cigarettes":
 			if not _cigarettes_carried():
-				_item(_stack.to_global(site.at) + Vector3.UP * 0.5, {kind = Backpack.Kind.CIGARETTES, amount = 1})
+				# In its shaft of light, out in the open: the Stalker's bait (LastPack).
+				_item(_stack.to_global(site.at) + Vector3.UP * 0.5, {kind = Backpack.Kind.CIGARETTES, amount = 1, bait = true})
 
 
 ## Someone already has the last pack on them (it's never made twice).

@@ -144,6 +144,7 @@ func _effects(world: Node, facing: Vector3, forward: Vector3) -> void:
 	(smoke as GPUParticles3D).emitting = true
 	var flash := MuzzleFlash.new()
 	_still(_keep(flash, world, at))
+	_keep(CarryItem.light_shaft(6.0), world, at + Vector3.DOWN * 1.5 + _side * 2.0)
 	var flies := _keep(CarryItem.make_flies(), world, at)
 	(flies as GPUParticles3D).emitting = true
 	for model in [CarryItem.meat_model(false, false), CarryItem.meat_model(false, true), CarryItem.meat_model(true, false),

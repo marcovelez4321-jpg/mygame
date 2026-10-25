@@ -54,6 +54,16 @@ static func act(tree: SceneTree, peer: int, id: StringName, action: StringName) 
 			Network.send_quest(id, State.DONE, hint(id)) # (the hint kept: the journal's crossed-out note)
 
 
+## Whether her next quest's reward is paid (the user's: smoke her cigarettes
+## and her next quest pays nothing). A quest that pays calls paid() after.
+static func pays() -> bool:
+	return not bool(WorldFacts.get_fact(&"grandma.next_unpaid", false))
+
+
+static func paid() -> void:
+	Network.send_fact(&"grandma.next_unpaid", false)
+
+
 ## Where in the Stack something is, the way Grandma would say it: which
 ## tower (by height) and how far up it. `stack`: the Megastructure; `at`: in
 ## its own space.

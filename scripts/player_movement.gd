@@ -787,6 +787,11 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	_net_look = Vector2(rotation.y, _pitch)
 	_absorb_recoil_compensation(input.look_delta)
 
+	# Smoking the last pack (PlayerHand): standing still (the user's).
+	if hand.smoking():
+		input.wishdir = Vector2.ZERO
+		input.want_jump = false
+		input.want_dash = false
 	# Taken by the Stalker (StalkerDrag): limp, dragged off by a foot; only
 	# clicks get through (tugs at its grip).
 	if drag != null and is_instance_valid(drag):

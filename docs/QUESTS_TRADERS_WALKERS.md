@@ -292,3 +292,74 @@ traps of the place, and new enemies.
     underneath;
   - own notes in co-op: "I" when it was you, a teammate's name when it was
     them ("Someone" with no Steam).
+
+## Built: The Last Pack (2026-10-25)
+
+### The quest's steps
+`LastPack` (`scripts/quests/last_pack.gd`) keeps them in the fact
+`quest.cigarettes.stage`, so they survive quitting:
+- **"" (lying out):** the pack lies in the Stack (StackSecrets) as a bait
+  CarryItem.
+  - It sits in a shaft of light from above: a spotlight, a faint beam and
+    dust drifting in it.
+  - It can't be walked into, grabbed or grappled.
+  - Each game builds the light itself; it stays lit, and empty, after the
+    snatch.
+- **"lair":** it's on its biggest bone pile in the lair (StalkerLair's
+  trophy pile).
+- **"recovered":** someone took it back out. Quit before handing it in or
+  smoking it and it's home again next session (`LastPack.new_session()`).
+
+### The snatch (`Stalker._pack_tick`, `_snatch_pack`, `_pack_snatch_tick`)
+- **The trigger:** a player comes within 12 m of the bait. It happens
+  whatever the Stalker is doing (even away or mid-stunt), and fire doesn't
+  stop it.
+- **The scramble:** it's placed 4 m behind them, then scrambles past at
+  25 m/s (its lunge), 1.5 m to their side, skittering.
+- **The grab:** it takes the pack in its hand and shrieks (the new
+  `pack_shriek` slot, falling back to the made-up shriek).
+- **Gone:** it runs away from everyone until it's been unseen for 1 s. Then
+  it's home, and the pack is in the lair.
+- **Counts as** a big moment for the director.
+
+### The lair
+- **Before you take it:** while the pack is on its bones, it's home whenever
+  anyone comes within 120 m. It only watches: no warning, no defence lunge,
+  and it doesn't leave while anyone's within 150 m.
+- **Taking it starts the chase:** 60 s at its sprint (22 m/s) straight at
+  the carrier.
+  - Within grab range it lunges: the usual grab, and you keep the pack.
+  - One strike ends the chase. Newcomers aren't spared.
+  - The chase-start sound is the `starts_hunting` slot.
+
+### Smoking it
+- **How:** pack in hand, left click. You stand still for 6 s (quick and
+  quiet), with one puff of smoke halfway through (the reused backblast
+  puff).
+- **Then:** you get a mutation's worth of points (14), so three pods ripen
+  on the Flesh Tree: a free mutation.
+- **What it records:**
+  - `quest.cigarettes.outcome` = "smoked", and the quest is done;
+  - `grandma.next_unpaid` = true. Her next quest checks
+    `GrandmaQuests.pays()` and calls `paid()`.
+- **Grandma's greeting** from then on: "You smell like my cigarettes."
+  (`GrandmaDialogue.smoked_greeting`).
+
+### Not yet
+Selling the pack to a trader for 50 scrap (traders come next).
+
+### The journal's steps (the user's words)
+- **Snatched:**
+  - yours: "It took them. Right out from in front of me. It went down -- the
+    depths, under the Stack, where the water is."
+  - a teammate's: "It took them from {name}. Right out from in front of them.
+    The depths, under the Stack."
+- **Recovered:**
+  - yours: "Got them. I didn't look back."
+  - a teammate's: "{name} got them back."
+- **Smoked:**
+  - yours: "Smoked them. Grandma won't look at me."
+  - a teammate's: "{name} smoked them. Grandma won't look at us."
+
+### Testing
+F9 → "Pack" puts the bait 18 m ahead of you, its steps reset. Walk up to it.

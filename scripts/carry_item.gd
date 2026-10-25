@@ -74,6 +74,9 @@ var cooked_for := 0.0
 var glued := false
 ## A pod: its mutation (Virus).
 var mutation: StringName
+## The last pack lying out in the Stack (LastPack): in a shaft of light, never
+## taken by hand or grapple -- the Stalker's bait (it snatches it).
+var bait := false
 ## Seconds left before it's gone untaken (an enemy's drop), -1: it stays.
 var _expire_left := -1.0
 
@@ -145,7 +148,7 @@ func _above_ground(at: Vector3) -> Vector3:
 ## What it is, as plain data (the hand, the backpack, the network).
 func to_data() -> Dictionary:
 	return {kind = kind, amount = amount, weapon = weapon.resource_path if weapon else "", meat_weight = meat_weight,
-			boss = boss, age = age, cooked_for = cooked_for, mutation = mutation, glued = glued}
+			boss = boss, age = age, cooked_for = cooked_for, mutation = mutation, glued = glued, bait = bait}
 
 
 func from_data(data: Dictionary) -> void:
@@ -159,6 +162,7 @@ func from_data(data: Dictionary) -> void:
 	cooked_for = data.get("cooked_for", 0.0)
 	mutation = data.get("mutation", &"")
 	glued = data.get("glued", false)
+	bait = data.get("bait", false)
 
 
 # ---- Co-op (NetEntities) --------------------------------------------------------------
@@ -185,7 +189,11 @@ func net_apply(state: int) -> void:
 # ---- Life -------------------------------------------------------------------------------
 
 func _ready() -> void:
-	add_to_group(InteractHighlight.GROUP)
+	if bait:
+		add_to_group(&"stalker_bait")
+		_add_light_shaft.call_deferred() # (once it's where it lies)
+	else:
+		add_to_group(InteractHighlight.GROUP)
 	add_to_group(NetEntities.GROUP)
 	mass = clampf(weight(), 0.05, 15.0)
 	continuous_cd = kind == Backpack.Kind.MEAT or kind == Backpack.Kind.COOKED_MEAT
@@ -304,8 +312,87 @@ func _tick_expiry() -> void:
 
 ## Walking into it puts it in your backpack (the host's; pods are grapple
 ## only). A thing just dropped waits till its dropper steps off it.
+## The shaft of light it lies in (the user's: from above, dust drifting in
+## it) -- left there, lit and empty, once it's been taken. Every game's own.
+func _add_light_shaft() -> void:
+	if not is_inside_tree():
+		return
+	var query := PhysicsRayQueryParameters3D.create(global_position, global_position + Vector3.UP * SHAFT_MAX, 1, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var height := global_position.distance_to(hit.position) if not hit.is_empty() else SHAFT_MAX
+	var shaft := light_shaft(height + HOVER)
+	get_parent().add_child(shaft)
+	shaft.global_position = global_position + Vector3.DOWN * HOVER
+
+
+## The shaft of light from above (its own builder: ShaderWarmup shows one):
+## `height` m tall, its foot at the node's origin.
+const SHAFT_MAX := 25.0
+const SHAFT_ANGLE := 12.0
+const SHAFT_COLOR := Color(0.86, 0.9, 1.0)
+static func light_shaft(height: float) -> Node3D:
+	var root := Node3D.new()
+	root.name = "LightShaft"
+	var lamp := SpotLight3D.new()
+	lamp.light_color = SHAFT_COLOR
+	lamp.light_energy = 6.0
+	lamp.spot_range = height + 2.0
+	lamp.spot_angle = SHAFT_ANGLE
+	lamp.shadow_enabled = false
+	lamp.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
+	lamp.position = Vector3.UP * height
+	root.add_child(lamp)
+	var beam := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.height = height
+	cone.top_radius = 0.5
+	cone.bottom_radius = 0.5 + tan(deg_to_rad(SHAFT_ANGLE)) * height
+	cone.cap_top = false
+	cone.cap_bottom = false
+	beam.mesh = cone
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	glow.cull_mode = BaseMaterial3D.CULL_DISABLED
+	glow.albedo_color = Color(SHAFT_COLOR, 0.05)
+	beam.material_override = glow
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beam.position = Vector3.UP * height * 0.5
+	root.add_child(beam)
+	# Dust drifting in it.
+	var dust := GPUParticles3D.new()
+	dust.amount = 60
+	dust.lifetime = 10.0
+	dust.preprocess = 10.0
+	var motes := ParticleProcessMaterial.new()
+	motes.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	motes.emission_box_extents = Vector3(cone.bottom_radius * 0.6, height * 0.5, cone.bottom_radius * 0.6)
+	motes.gravity = Vector3(0.0, -0.03, 0.0)
+	motes.initial_velocity_min = 0.02
+	motes.initial_velocity_max = 0.08
+	motes.spread = 180.0
+	motes.scale_min = 0.6
+	motes.scale_max = 1.2
+	dust.process_material = motes
+	var mote := QuadMesh.new()
+	mote.size = Vector2.ONE * 0.025
+	var speck := StandardMaterial3D.new()
+	speck.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	speck.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	speck.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	speck.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	speck.albedo_color = Color(SHAFT_COLOR, 0.5)
+	mote.material = speck
+	dust.draw_pass_1 = mote
+	dust.visibility_aabb = AABB(Vector3(-cone.bottom_radius, -height * 0.5, -cone.bottom_radius), Vector3(cone.bottom_radius * 2.0, height, cone.bottom_radius * 2.0))
+	dust.position = Vector3.UP * height * 0.5
+	root.add_child(dust)
+	return root
+
+
 func _make_pickup_zone() -> void:
-	if kind == POD or NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
+	if kind == POD or bait or NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
 		return
 	var zone := Area3D.new()
 	zone.collision_layer = 0

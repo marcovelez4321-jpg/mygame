@@ -82,7 +82,8 @@ func _talk() -> void:
 	actions.append(&"hi")
 	options.append(lines.reply_leave)
 	actions.append(&"leave")
-	var pick := await box.ask(lines.speaker_name, _random_line(lines.greetings), options)
+	var greeting := lines.smoked_greeting if LastPack.smoked() else _random_line(lines.greetings)
+	var pick := await box.ask(lines.speaker_name, greeting, options)
 	var action: StringName = actions[pick] if pick >= 0 and pick < actions.size() else &"leave"
 	match action:
 		&"offer":

@@ -19,6 +19,9 @@ extends Resource
 	"You look skinny. Come here.",
 	"Did you call your mother? Don't lie to me.",
 ]
+## Once you've smoked her cigarettes (LastPack; the user's): her greeting,
+## every time.
+@export_multiline var smoked_greeting: String = "You smell like my cigarettes."
 ## Asking about work (shown while she has a quest you haven't taken).
 @export var reply_need_anything: String = "Need anything, Grandma?"
 @export var reply_just_saying_hi: String = "Just saying hi."
