@@ -6,6 +6,10 @@ extends Node3D
 ## pages (JournalPage) side by side in its cover, in the world's own PS1
 ## look, held where and as JournalSettings says (quests/journal_settings.tres,
 ## the user's to set: half the screen's width, lower middle, tipped back).
+## TUNED IN GAME (the user's), like the backpack's hold: while reading, J --
+## arrows move it, PageUp/PageDown nearer/further, +/- size, Alt + arrows
+## tip it back/turn it, Alt + PageUp/PageDown lean it, , . the pages' angle,
+## Ctrl finer, F3 saves it to the settings file, J again: done.
 ## Left click turns forward a page spread, right click back (the grapple's
 ## off meanwhile); only F puts it away, and picking anything up does
 ## (PlayerHand). You move as normal while reading. Your own view only: on
@@ -13,8 +17,16 @@ extends Node3D
 
 const SETTINGS := "res://quests/journal_settings.tres"
 const COVER := Color(0.16, 0.15, 0.14)
+## Tuning speeds: screen shares, metres, degrees and size, a second.
+const TUNE_MOVE := 0.25
+const TUNE_NEAR := 0.15
+const TUNE_TURN := 45.0
+const TUNE_SIZE := 0.3
 
 var settings: JournalSettings
+var _tuning := false
+var _tune_label: Label
+var _tune_note := ""
 
 var _player: PlayerMovement
 var _camera: Camera3D
@@ -32,6 +44,16 @@ func setup(player: PlayerMovement, camera: Camera3D) -> void:
 	_camera = camera
 	visible = false
 	settings = load(SETTINGS) as JournalSettings if ResourceLoader.exists(SETTINGS) else JournalSettings.new()
+	var layer := CanvasLayer.new()
+	layer.layer = 20
+	_tune_label = Label.new()
+	_tune_label.position = Vector2(16.0, 130.0)
+	_tune_label.add_theme_font_size_override("font_size", 18)
+	_tune_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_tune_label.add_theme_constant_override("outline_size", 6)
+	_tune_label.visible = false
+	layer.add_child(_tune_label)
+	add_child(layer)
 	for i in 2:
 		var viewport := SubViewport.new()
 		viewport.size = Vector2i(JournalPage.SIZE)
@@ -75,14 +97,33 @@ func _process(_delta: float) -> void:
 		visible = reading
 		_dirty = true
 	if not reading:
+		_tuning = false
+		_tune_label.visible = false
 		return
+	if _tuning:
+		_tune(_delta)
 	_place()
 	if _dirty:
 		_refresh()
 
 
 func _input(event: InputEvent) -> void:
-	if not visible or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	if not visible:
+		return
+	var key := event as InputEventKey
+	if key and key.pressed and not key.echo:
+		if key.keycode == KEY_J:
+			_tuning = not _tuning
+			_tune_note = ""
+			_tune_label.visible = _tuning
+			get_viewport().set_input_as_handled()
+			return
+		if key.keycode == KEY_F3 and _tuning:
+			var error := ResourceSaver.save(settings, SETTINGS)
+			_tune_note = "SAVED to " + SETTINGS if error == OK else "Couldn't save (error %d)" % error
+			get_viewport().set_input_as_handled()
+			return
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return
 	var click := event as InputEventMouseButton
 	if click == null or not click.pressed:
@@ -110,6 +151,35 @@ func _refresh() -> void:
 		var number := _spread * 2 + i
 		_pages[i].show_entry(entries[number] if number < entries.size() else {}, number)
 		_viewports[i].render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+## Tuning, each frame: the held keys move, turn and size it.
+func _tune(delta: float) -> void:
+	var s := settings
+	var x := float(Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_LEFT))
+	var y := float(Input.is_key_pressed(KEY_UP)) - float(Input.is_key_pressed(KEY_DOWN))
+	var z := float(Input.is_key_pressed(KEY_PAGEDOWN)) - float(Input.is_key_pressed(KEY_PAGEUP))
+	var fine := 0.1 if Input.is_key_pressed(KEY_CTRL) else 1.0
+	var step := delta * fine
+	if Input.is_key_pressed(KEY_ALT): # (not Shift: that's your dash)
+		s.tilt_degrees = clampf(s.tilt_degrees + y * TUNE_TURN * step, -90.0, 90.0)
+		s.turn_degrees = clampf(s.turn_degrees - x * TUNE_TURN * step, -90.0, 90.0)
+		s.roll_degrees = clampf(s.roll_degrees + z * TUNE_TURN * step, -90.0, 90.0)
+	else:
+		s.sideways = clampf(s.sideways + x * TUNE_MOVE * step, -1.0, 1.0)
+		s.drop = clampf(s.drop - y * TUNE_MOVE * step, -1.0, 1.0)
+		s.distance = clampf(s.distance + z * TUNE_NEAR * step, 0.1, 2.0)
+	var grow := float(Input.is_key_pressed(KEY_EQUAL) or Input.is_key_pressed(KEY_KP_ADD)) - float(Input.is_key_pressed(KEY_MINUS) or Input.is_key_pressed(KEY_KP_SUBTRACT))
+	s.screen_share = clampf(s.screen_share + grow * TUNE_SIZE * step, 0.1, 1.5)
+	var open := float(Input.is_key_pressed(KEY_PERIOD)) - float(Input.is_key_pressed(KEY_COMMA))
+	s.page_angle_degrees = clampf(s.page_angle_degrees + open * TUNE_TURN * step, 0.0, 45.0)
+	_tune_label.text = ("TUNING THE JOURNAL (J: done)\n"
+			+ "size %.3f of the screen   %.3f m away   %.3f down   %.3f right\n"
+			+ "tipped back %.1f   turned %.1f   leaned %.1f   pages %.1f\n\n"
+			+ "Arrows = move   PgUp/PgDn = nearer/further   +/- = size\n"
+			+ "Alt + arrows = tip back / turn   Alt + PgUp/PgDn = lean   , . = pages' angle\n"
+			+ "Ctrl = finer   F3 = save\n%s") % [s.screen_share, s.distance, s.drop, s.sideways,
+			s.tilt_degrees, s.turn_degrees, s.roll_degrees, s.page_angle_degrees, _tune_note]
 
 
 ## Sized to its share of the screen's width at its distance, where and as
