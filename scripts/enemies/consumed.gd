@@ -34,7 +34,7 @@ const HEIGHT := 1.8
 const MODEL_DIRS := ["res://art/characters/Characters_psx/Models/Male/", "res://art/characters/Characters_psx/Models/Female/"]
 const ROACH := "res://scenes/enemy/roach_model.tscn"
 const BUZZ := "res://audio/events/enemy/roach_buzz.tres"
-const WING_SCALE := 4.5
+const WING_SCALE := 3.375
 const LIMBS: Array[StringName] = [&"LeftUpperArm", &"LeftLowerArm", &"RightUpperArm", &"RightLowerArm",
 		&"LeftUpperLeg", &"LeftLowerLeg", &"LeftFoot", &"RightUpperLeg", &"RightLowerLeg", &"RightFoot"]
 const CORPSE_TIME := 60.0
@@ -44,8 +44,21 @@ const CORPSE_TIME := 60.0
 const LIMB_SWING_DAMP := 8.0
 const LIMB_GRAVITY := 2.0
 const LIMB_DRAG := 0.5
-## The wings, off its back (its own space: lying face-down, head at -Z).
-const WINGS_AT := Vector3(0.0, 0.2, -0.35)
+## The wings' roots, at its shoulder blades (its own space: lying face-down,
+## head at -Z), WINGS_APART either side; WOUND_FLAPS torn flaps of skin
+## round each.
+const WINGS_AT := Vector3(0.0, 0.13, -0.42)
+const WINGS_APART := 0.1
+const WOUND_FLAPS := 6
+## Optimizing: its limbs' real physics only this near your camera (beyond,
+## ConsumedHang hangs them for nothing); its head aimed only this near; its
+## look gone past SEEN_TO; checked every LOD_EVERY; a target looked for
+## every PICK_EVERY.
+const LIMB_PHYSICS_NEAR := 60.0
+const GAZE_NEAR := 150.0
+const SEEN_TO := 400.0
+const LOD_EVERY := 0.5
+const PICK_EVERY := 0.5
 
 ## Its look (an index into the human set) and, circling, round where.
 var look := 0
@@ -56,7 +69,13 @@ var _model: Node3D
 var _skeleton: Skeleton3D
 var _ragdoll: PhysicalBoneSimulator3D
 var _gaze: ConsumedLook
+var _hang: ConsumedHang
+var _limbs_live := false
+var _lod_left := 0.0
+var _pick_left := 0.0
 var _wings: Array[Node3D] = []
+## The wings and their wounds (going with its chest once it's dead).
+var _back_parts: Array[Node3D] = []
 var _buzz: AudioStreamPlayer3D
 var _target: PlayerMovement
 var _tumble_left := 0.0
@@ -143,9 +162,10 @@ func _build_body() -> void:
 	# Flying flat (the user's: like Spider-Man): lying face-down along its way
 	# (-Z), head first, its middle on its own; its limbs hang from it.
 	_model.transform = Transform3D(Basis(Vector3.RIGHT, -PI * 0.5) * Basis(Vector3.UP, PI) * Basis.from_scale(Vector3.ONE * fit_scale), Vector3.BACK * HEIGHT * 0.5)
-	# Grey and veined by the virus.
+	# Grey and veined by the virus; not drawn past SEEN_TO.
 	for node in _model.find_children("*", "MeshInstance3D", true, false):
 		(node as MeshInstance3D).material_overlay = _veins()
+		(node as MeshInstance3D).visibility_range_end = SEEN_TO
 	var skeletons := _model.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
 		return
@@ -162,7 +182,9 @@ func _build_body() -> void:
 			bone.linear_damp_mode = PhysicalBone3D.DAMP_MODE_REPLACE
 			bone.linear_damp = LIMB_DRAG
 			bone.gravity_scale = LIMB_GRAVITY
-	_ragdoll.physical_bones_start_simulation(LIMBS)
+	# (Its limbs' physics start once it's near your camera: _limbs.)
+	_hang = ConsumedHang.new()
+	_skeleton.add_child(_hang)
 	_gaze = ConsumedLook.new()
 	_skeleton.add_child(_gaze)
 	# The Stalker's eyes, on its head.
@@ -173,41 +195,110 @@ func _build_body() -> void:
 	var eyes := Node3D.new()
 	eyes.scale = Vector3.ONE / fit
 	head.add_child(eyes)
+	_shared_meshes()
 	var core := Stalker._glow_material(Color(0.9, 0.97, 1.0), false)
 	var glare := Stalker._glow_material(Color(Stalker.EYE_COLOR, Stalker.EYE_GLOW), true)
 	for side: float in [-1.0, 1.0]:
 		var eye := MeshInstance3D.new()
-		var quad := QuadMesh.new()
-		quad.size = Vector2.ONE * Stalker.EYE_CORE
-		eye.mesh = quad
+		eye.mesh = _eye_core
 		eye.material_override = core
 		eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		eye.visibility_range_end = SEEN_TO
 		eye.position = Vector3(side * Stalker.EYE_APART, Stalker.EYE_UP, Stalker.EYE_FORWARD)
 		eyes.add_child(eye)
 		var flare := MeshInstance3D.new()
-		var flare_quad := QuadMesh.new()
-		flare_quad.size = Vector2.ONE * Stalker.EYE_GLARE
-		flare.mesh = flare_quad
+		flare.mesh = _eye_glare
 		flare.material_override = glare
 		flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		flare.visibility_range_end = SEEN_TO
 		eye.add_child(flare)
-	# The roach's wings, scaled up, off its back -- laid as on the roach's,
-	# flat along the lying body (on the body itself: its chest never moves).
+	# The roach's wings, scaled up, burst out through split skin at its
+	# shoulder blades (the user's): flat along the lying body, as on the
+	# roach, each root sunk in a raw, bloody wound, torn skin curling back
+	# round it (on the body itself: its chest never moves).
 	if ResourceLoader.exists(ROACH):
 		var roach := (load(ROACH) as PackedScene).instantiate()
+		var dice := RandomNumberGenerator.new()
+		dice.seed = look
 		for pivot_name in ["WingPivotL", "WingPivotR"]:
 			var pivot := roach.get_node_or_null(NodePath(pivot_name)) as Node3D
 			if pivot == null:
 				continue
 			roach.remove_child(pivot)
+			var root := WINGS_AT + Vector3.RIGHT * WINGS_APART * (-1.0 if pivot_name.ends_with("L") else 1.0)
 			var holder := Node3D.new()
 			holder.scale = Vector3.ONE * WING_SCALE
-			holder.position = WINGS_AT
+			holder.position = root
 			add_child(holder)
+			_back_parts.append(holder)
 			holder.add_child(pivot)
-			pivot.position = Vector3(0.04 * (-1.0 if pivot_name.ends_with("L") else 1.0), 0.0, 0.0)
+			pivot.position = Vector3.ZERO
+			for mesh in pivot.find_children("*", "MeshInstance3D", true, false):
+				(mesh as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				(mesh as MeshInstance3D).visibility_range_end = SEEN_TO
 			_wings.append(pivot)
+			_wound(root, dice)
 		roach.free()
+
+
+static var _eye_core: QuadMesh
+static var _eye_glare: QuadMesh
+static var _raw_mesh: SphereMesh
+static var _flap_mesh: BoxMesh
+static var _skin_material: StandardMaterial3D
+
+
+## Its meshes, one of each for all of them.
+static func _shared_meshes() -> void:
+	if _eye_core:
+		return
+	_eye_core = QuadMesh.new()
+	_eye_core.size = Vector2.ONE * Stalker.EYE_CORE
+	_eye_glare = QuadMesh.new()
+	_eye_glare.size = Vector2.ONE * Stalker.EYE_GLARE
+	_raw_mesh = SphereMesh.new()
+	_raw_mesh.radius = 0.09
+	_raw_mesh.height = 0.07
+	_raw_mesh.radial_segments = 8
+	_raw_mesh.rings = 3
+	_flap_mesh = BoxMesh.new()
+	_flap_mesh.size = Vector3(0.06, 0.008, 0.045)
+
+
+## Its torn skin (the wounds' flaps).
+static func _torn_skin() -> StandardMaterial3D:
+	if _skin_material == null:
+		_skin_material = StandardMaterial3D.new()
+		_skin_material.albedo_color = Color(0.5, 0.44, 0.42)
+		_skin_material.roughness = 0.9
+		_skin_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return _skin_material
+
+
+## A wing's root at `at`: the skin split open, raw and bloody (the nests'
+## wet flesh), WOUND_FLAPS torn flaps curling back up from its edge.
+func _wound(at: Vector3, dice: RandomNumberGenerator) -> void:
+	var raw := MeshInstance3D.new()
+	raw.mesh = _raw_mesh
+	raw.material_override = ConsumedNest.flesh()
+	raw.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	raw.visibility_range_end = SEEN_TO
+	raw.transform = Transform3D(Basis.from_scale(Vector3(1.0, 1.0, 1.6)), at + Vector3.DOWN * 0.02)
+	add_child(raw)
+	_back_parts.append(raw)
+	for i in WOUND_FLAPS:
+		var angle := TAU * (float(i) + dice.randf_range(-0.3, 0.3)) / WOUND_FLAPS
+		var out := Vector3(cos(angle) * 0.085, 0.0, sin(angle) * 0.13)
+		var flap := MeshInstance3D.new()
+		flap.mesh = _flap_mesh
+		flap.material_override = _torn_skin()
+		flap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		flap.visibility_range_end = SEEN_TO
+		# Pointing out from the wound, curled up and back off it.
+		var curl := Basis(Vector3.UP, -angle) * Basis(Vector3.BACK, dice.randf_range(0.4, 0.9))
+		flap.transform = Transform3D(curl * Basis.from_scale(Vector3.ONE * dice.randf_range(0.8, 1.3)), at + out + Vector3.UP * 0.005)
+		add_child(flap)
+		_back_parts.append(flap)
 
 
 static var _vein_material: StandardMaterial3D
@@ -237,10 +328,19 @@ func _process(delta: float) -> void:
 	_flap += delta * 30.0
 	for i in _wings.size():
 		_wings[i].rotation.z = sin(_flap) * 0.9 * (1.0 if i == 0 else -1.0)
+	# Near your camera: its limbs' real physics, its head aimed; farther,
+	# neither (each game's own).
+	var camera := get_viewport().get_camera_3d()
+	_lod_left -= delta
+	if _lod_left <= 0.0 and camera:
+		_lod_left = LOD_EVERY
+		var gap := camera.global_position.distance_to(global_position)
+		_limbs(gap < LIMB_PHYSICS_NEAR)
+		if _gaze:
+			_gaze.active = gap < GAZE_NEAR
 	# Its head aimed dead at you (your own game: at you).
-	var me := PlayerMovement.local_player(get_tree())
-	if _gaze and me:
-		_gaze.target = me.head.global_position
+	if _gaze and _gaze.active and camera:
+		_gaze.target = camera.global_position
 	if _buzz:
 		_buzz.pitch_scale = lerpf(0.5, 0.8, clampf(linear_velocity.length() / SPEED, 0.0, 1.0))
 
@@ -254,8 +354,14 @@ func _physics_process(delta: float) -> void:
 		if _tumble_left <= 0.0:
 			gravity_scale = 0.0
 		return
-	if not is_instance_valid(_target) or _target.is_dead() or _target.global_position.distance_to(global_position) > LOSE:
-		_target = _pick_target()
+	if is_instance_valid(_target) and (_target.is_dead() or _target.global_position.distance_to(global_position) > LOSE):
+		_target = null
+	if not is_instance_valid(_target):
+		_target = null
+		_pick_left -= delta
+		if _pick_left <= 0.0:
+			_pick_left = PICK_EVERY
+			_target = _pick_target()
 	if _target == null:
 		_circle(delta)
 		return
@@ -267,6 +373,19 @@ func _physics_process(delta: float) -> void:
 	_upright(to)
 	if to.length() < 1.3:
 		_strike(_target)
+
+
+## Its limbs' real physics on (near) or off (ConsumedHang hangs them).
+func _limbs(live: bool) -> void:
+	if live == _limbs_live or _ragdoll == null:
+		return
+	_limbs_live = live
+	if live:
+		_ragdoll.physical_bones_start_simulation(LIMBS)
+	else:
+		_ragdoll.physical_bones_stop_simulation()
+	if _hang:
+		_hang.active = not live
 
 
 ## The nearest player it'll go for: within NOTICE while circling, else any.
@@ -341,6 +460,8 @@ func _die(host: bool) -> void:
 		_buzz.stop()
 	if _gaze:
 		_gaze.queue_free()
+	if _hang:
+		_hang.queue_free()
 	if _ragdoll:
 		_ragdoll.physical_bones_start_simulation()
 		for node in _ragdoll.get_children():
@@ -357,3 +478,20 @@ func _die(host: bool) -> void:
 	if host and randf() < MEAT_CHANCE:
 		CarryItem.spawn_meat(get_tree().current_scene, global_position, MEAT_WEIGHT, false)
 	get_tree().create_timer(CORPSE_TIME).timeout.connect(queue_free)
+	_wings_to_chest()
+
+
+## Dead: its wings and their wounds go with its falling chest (not the body
+## they were on).
+func _wings_to_chest() -> void:
+	if _skeleton == null or _back_parts.is_empty():
+		return
+	var chest := BoneAttachment3D.new()
+	chest.bone_name = "UpperChest" if _skeleton.find_bone("UpperChest") >= 0 else "Chest"
+	_skeleton.add_child(chest)
+	await get_tree().process_frame
+	if not is_instance_valid(chest):
+		return
+	for part in _back_parts:
+		if is_instance_valid(part):
+			part.reparent(chest, true)

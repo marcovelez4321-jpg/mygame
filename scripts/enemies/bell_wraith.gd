@@ -28,6 +28,8 @@ const NEAR := 30.0
 const HANG := 8.0
 const SWING_ANGLE := deg_to_rad(35.0)
 const SWING_PERIOD := 2.4
+## Optimizing: who's near looked at every NEAR_EVERY.
+const NEAR_EVERY := 0.25
 
 var wraith_id := 0
 
@@ -36,12 +38,18 @@ var _awake_left := 0.0
 var _lashed := false
 var _lash_t := -1.0
 var _lash_to := Vector3.ZERO
-var _arm: Array[MeshInstance3D] = []
+## Its arm's pieces, all one draw (a MultiMesh).
+var _arm: MultiMesh
 var _hand: MeshInstance3D
 var _bell: Node3D
 var _swing := 0.0
 ## How far out its arm hangs (0: coiled up inside, 1: HANG out).
 var _hang := 0.0
+var _near := false
+var _near_left := 0.0
+var _seen := false
+## Coiled up, and posed so: nothing to pose till it moves.
+var _posed_still := false
 var _dead := false
 
 static var _bronze: StandardMaterial3D
@@ -93,18 +101,26 @@ func _ready() -> void:
 	shape.position = Vector3.DOWN * SIZE * 0.4
 	add_child(shape)
 	# Its arm, coiled up inside it (a clapper, hanging).
-	for i in ARM_PIECES:
-		var piece := MeshInstance3D.new()
-		var bone := CylinderMesh.new()
-		bone.top_radius = 0.28
-		bone.bottom_radius = 0.22
-		bone.height = 1.0
-		bone.radial_segments = 6
-		bone.rings = 1
-		piece.mesh = bone
-		piece.material_override = skin()
-		add_child(piece)
-		_arm.append(piece)
+	var bone := CylinderMesh.new()
+	bone.top_radius = 0.28
+	bone.bottom_radius = 0.22
+	bone.height = 1.0
+	bone.radial_segments = 6
+	bone.rings = 1
+	_arm = MultiMesh.new()
+	_arm.transform_format = MultiMesh.TRANSFORM_3D
+	_arm.mesh = bone
+	_arm.instance_count = ARM_PIECES
+	var arm := MultiMeshInstance3D.new()
+	arm.multimesh = _arm
+	arm.material_override = skin()
+	add_child(arm)
+	# Optimizing: its arm's posed only while it's on your screen (or lashing).
+	var seen := VisibleOnScreenNotifier3D.new()
+	seen.aabb = AABB(Vector3(-HANG, -SIZE - HANG - 2.0, -HANG), Vector3(HANG * 2.0, SIZE * 1.5 + HANG + 2.0, HANG * 2.0))
+	seen.screen_entered.connect(func() -> void: _seen = true)
+	seen.screen_exited.connect(func() -> void: _seen = false)
+	add_child(seen)
 	_hand = MeshInstance3D.new()
 	var claw := SphereMesh.new()
 	claw.radius = 0.55
@@ -175,23 +191,33 @@ func kill() -> void:
 
 func _process(delta: float) -> void:
 	# It sways as it wakes, settling still again.
-	_swing = maxf(_swing - delta * 0.15, 0.0)
-	_bell.rotation.z = sin(Time.get_ticks_msec() * 0.003) * 0.25 * _swing
+	if _swing > 0.0:
+		_swing = maxf(_swing - delta * 0.15, 0.0)
+		_bell.rotation.z = sin(Time.get_ticks_msec() * 0.003) * 0.25 * _swing
 	# Anyone near: its arm hangs out, swinging (each game's own look).
-	_hang = move_toward(_hang, 1.0 if _anyone_near() else 0.0, delta * 0.5)
+	_near_left -= delta
+	if _near_left <= 0.0:
+		_near_left = NEAR_EVERY
+		_near = _anyone_near()
+	_hang = move_toward(_hang, 1.0 if _near else 0.0, delta * 0.5)
+	if _lash_t >= 0.0:
+		_lash_t += delta
+		var out := _lash_t / LASH_TIME
+		_pose_arm(clampf(out, 0.0, 1.0) if out < 1.0 else clampf(2.0 - out, 0.0, 1.0), to_local(_lash_to))
+		_posed_still = false
+		if out >= 2.0:
+			_lash_t = -1.0
+		return
+	# Coiled up and posed so, or off your screen: nothing to pose.
+	if (_hang <= 0.0 and _posed_still) or not _seen:
+		return
+	_posed_still = _hang <= 0.0
 	var hang_to := Vector3.ZERO
 	if _hang > 0.0:
 		var t := Time.get_ticks_msec() * 0.001 * TAU / SWING_PERIOD
 		var down := Vector3.DOWN.rotated(Vector3.BACK, sin(t) * SWING_ANGLE).rotated(Vector3.RIGHT, sin(t * 0.7) * SWING_ANGLE * 0.4)
 		hang_to = Vector3.DOWN * SIZE * 0.6 + down * HANG
-	if _lash_t >= 0.0:
-		_lash_t += delta
-		var out := _lash_t / LASH_TIME
-		_pose_arm(clampf(out, 0.0, 1.0) if out < 1.0 else clampf(2.0 - out, 0.0, 1.0), to_local(_lash_to))
-		if out >= 2.0:
-			_lash_t = -1.0
-	else:
-		_pose_arm(_hang, hang_to)
+	_pose_arm(_hang, hang_to)
 
 
 func _anyone_near() -> bool:
@@ -240,16 +266,15 @@ func _pose_arm(out: float, local_to := Vector3.ZERO) -> void:
 	var tip := mouth + Vector3.DOWN * 1.2
 	if out > 0.0:
 		tip = (mouth + Vector3.DOWN * 1.2).lerp(local_to, out)
-	for i in _arm.size():
-		var a := mouth.lerp(tip, float(i) / _arm.size())
-		var b := mouth.lerp(tip, float(i + 1) / _arm.size())
+	# Coiled up, only its first two pieces show.
+	_arm.visible_instance_count = ARM_PIECES if out > 0.0 else 2
+	for i in ARM_PIECES:
+		var a := mouth.lerp(tip, float(i) / ARM_PIECES)
+		var b := mouth.lerp(tip, float(i + 1) / ARM_PIECES)
 		# A whip's curve: sagging in the middle as it goes.
-		var sag := Vector3.DOWN * sin(PI * (float(i) + 0.5) / _arm.size()) * out * (1.0 - out) * 6.0
-		var piece := _arm[i]
-		piece.visible = out > 0.0 or i < 2
+		var sag := Vector3.DOWN * sin(PI * (float(i) + 0.5) / ARM_PIECES) * out * (1.0 - out) * 6.0
 		var dir := (b - a)
 		var length := maxf(dir.length(), 0.01)
 		var turn := Basis(Quaternion(Vector3.UP, dir.normalized())) if absf(dir.normalized().dot(Vector3.UP)) < 0.999 else Basis.IDENTITY
-		piece.basis = turn * Basis.from_scale(Vector3(1.0, length, 1.0))
-		piece.position = (a + b) * 0.5 + sag
+		_arm.set_instance_transform(i, Transform3D(turn * Basis.from_scale(Vector3(1.0, length, 1.0)), (a + b) * 0.5 + sag))
 	_hand.position = tip

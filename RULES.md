@@ -2087,3 +2087,12 @@ them:
   - **The Consumed:** flies flat, face-down and head first (like Spider-Man), its limbs hanging. Wings 25% smaller (scale 4.5).
 
 - 2026-10-26 (the user's): the Consumed's wings lie flat along its lying body as on the roach (on the body itself, not the chest bone). Its hanging limbs are damped so they hang low and swing gently: angular damp 8, drag 0.5, gravity x2. They're all let go again when it dies.
+
+- 2026-10-26 (the user's):
+  - **The Consumed's wings:** another 25% smaller (scale 3.375). They burst out through split skin at the shoulder blades: a raw, bloody wound round each root and 6 torn flaps of skin curling back. When it dies they go with its falling chest.
+  - **Optimizing the new enemies:**
+    - **The Consumed's limbs:** real physics only within 60 m of your camera. Farther, ConsumedHang poses them hanging down with a little sway, with no physics bodies.
+    - **The Consumed's head aim:** only within 150 m.
+    - **The Consumed, otherwise:** not drawn past 400 m. A target is looked for every 0.5 s, not every frame. Its eye and wound meshes are shared, and the wings cast no shadow.
+    - **Nests:** pulse only while on screen.
+    - **Bell-wraiths:** each arm is one MultiMesh draw (it was 14). It's posed only while it moves on screen or lashes, and who's near is checked every 0.25 s.

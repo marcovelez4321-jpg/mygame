@@ -56,6 +56,13 @@ func _ready() -> void:
 	_look.mesh = blob
 	_look.material_override = flesh()
 	add_child(_look)
+	# Optimizing: it pulses only while it's on your screen.
+	var seen := VisibleOnScreenNotifier3D.new()
+	seen.aabb = AABB(Vector3.ONE * -SIZE * 0.7, Vector3.ONE * SIZE * 1.4)
+	seen.screen_entered.connect(set_process.bind(true))
+	seen.screen_exited.connect(set_process.bind(false))
+	add_child(seen)
+	set_process(false)
 	_left = first_after if first_after >= 0.0 else randf() * EVERY
 	if not (Network.is_online() and not multiplayer.is_server()):
 		_health.died.connect(func(_attacker: int, _critical: bool) -> void: Network.send_nest_dead(nest_id))
