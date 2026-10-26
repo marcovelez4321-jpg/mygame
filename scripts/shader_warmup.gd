@@ -168,7 +168,7 @@ func _effects(world: Node, facing: Vector3, forward: Vector3) -> void:
 
 ## The materials made in code that no effect above draws: each on a card.
 func _materials(world: Node) -> void:
-	for material: Material in [InsectWings._material(), Stalker._glow_material(Color.WHITE, false),
+	for material: Material in [InsectWings._material(), ConsumedNest.flesh(), BellWraith.bronze(), BellWraith.skin(), Consumed._veins(), Stalker._glow_material(Color.WHITE, false),
 			Stalker._glow_material(Color.WHITE, true), BackpackView.forest_material(), BackpackView.pack_material(),
 			_shader_material(GrappleIndicator.SHADER, 10)]:
 		var card := MeshInstance3D.new()

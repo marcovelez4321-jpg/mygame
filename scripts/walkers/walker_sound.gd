@@ -2,10 +2,12 @@ class_name WalkerSound
 extends RefCounted
 
 ## The walking megastructures' sounds (the user's, 2026-10-25): bones
-## creaking, footfall booms, a bell, a choir. Each a slot: drop files named
-## <slot>_<number> (footfall_01.wav, creak_02.ogg, bell_01.wav, choir_01.ogg)
-## into audio/sfx/walkers and one's picked at random each time; until then a
-## placeholder made in code (the user's: code-made placeholders).
+## creaking, footfall booms, a bell, a choir -- and the heights' creatures'
+## (2026-10-26: the Consumed's wet groan and its thud, a Bell-wraith's lash).
+## Each a slot: drop files named <slot>_<number> (footfall_01.wav,
+## creak_02.ogg, bell_01.wav, choir_01.ogg, groan_01.ogg, thud_01.wav,
+## lash_01.wav) into audio/sfx/walkers and one's picked at random each time;
+## until then a placeholder made in code (the user's: code-made placeholders).
 
 const FOLDER := "res://audio/sfx/walkers/"
 const RATE := 22050
@@ -82,6 +84,33 @@ static func placeholder(slot: String) -> AudioStream:
 					var wobble := 1.0 + 0.004 * sin(TAU * 5.0 * s + f)
 					voices += sin(TAU * f * wobble * s) + 0.3 * sin(TAU * f * 2.0 * wobble * s)
 				samples[i] = voices * (0.85 + 0.15 * sin(TAU * s / 4.0))
+		"groan":
+			# A wet, strangled groan: a low voice, gurgling, falling.
+			var frames := int(RATE * 1.4)
+			samples.resize(frames)
+			var phase := 0.0
+			for i in frames:
+				var s := float(i) / RATE
+				phase += TAU * (110.0 - 35.0 * s + 6.0 * sin(s * 40.0)) / RATE
+				var voice := sin(phase) + 0.5 * sin(phase * 2.0) + 0.3 * sin(phase * 3.0)
+				var wet := 0.6 + 0.4 * sin(s * 63.0 + sin(s * 17.0) * 3.0)
+				samples[i] = (voice * wet + dice.randf_range(-0.2, 0.2)) * sin(PI * s / 1.4)
+		"thud":
+			# A heavy body slamming into you.
+			var frames := int(RATE * 0.5)
+			samples.resize(frames)
+			for i in frames:
+				var s := float(i) / RATE
+				samples[i] = sin(TAU * 70.0 * s) * exp(-s * 14.0) + dice.randf_range(-1.0, 1.0) * exp(-s * 40.0) * 0.7
+		"lash":
+			# An arm whipping through the air, a crack at its end.
+			var frames := int(RATE * 0.6)
+			samples.resize(frames)
+			for i in frames:
+				var s := float(i) / RATE
+				var whoosh := dice.randf_range(-1.0, 1.0) * sin(PI * minf(s / 0.35, 1.0)) * 0.6
+				var crack := dice.randf_range(-1.0, 1.0) * exp(-maxf(s - 0.33, 0.0) * 60.0) * (1.0 if s > 0.33 else 0.0)
+				samples[i] = whoosh + crack
 		_:
 			samples.resize(int(RATE * 0.1))
 	var wav := StalkerSound._wav(samples)

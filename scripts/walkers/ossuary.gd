@@ -26,6 +26,10 @@ extends Node3D
 ## the host's runs it and sends its time now and then (Network); every game
 ## builds and walks its own copy from it.
 
+## Its bell's tolled (it's settling, or rising): every game (the Bell-wraiths
+## wake: ConsumedDirector).
+signal bell_tolled
+
 const BUILDING := "res://scenes/megastructures/the_ossuary.tscn"
 const BUILDING_LENGTH := 400.0
 const BODY_HEIGHT := 150.0
@@ -213,6 +217,11 @@ func _take_building() -> void:
 				shape.transform = _body.global_transform.affine_inverse() * look.global_transform
 		holder.collision_layer = 0
 		holder.collision_mask = 0
+
+
+## The walking building (what rides it goes on this: ConsumedDirector).
+func building() -> AnimatableBody3D:
+	return _body
 
 
 func _leg_part(mesh: Mesh, length: float, radius: float) -> AnimatableBody3D:
@@ -595,6 +604,7 @@ func _phase_sounds() -> void:
 	if phase != _phase_was:
 		if _phase_was >= 0 and (phase == 1 or phase == 3):
 			WalkerSound.play("bell", _body.global_transform * BELL_AT, get_tree().current_scene, BELL_RANGE, 4.0, 60.0)
+			bell_tolled.emit()
 		_phase_was = phase
 	if _choir and not _choir.playing and is_inside_tree():
 		_choir.play()

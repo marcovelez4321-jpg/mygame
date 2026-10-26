@@ -565,3 +565,68 @@ Everything comes from one number, its time, plus its route's seed.
 - Phase 2 (done with the redesign): the building, a generated TrenchBroom map.
 - Phase 3: the Consumed and the bell-wraiths.
 - Phase 4: the reliquary skull.
+
+## Built: the Consumed and the Bell-wraiths (2026-10-26)
+
+### The Consumed (`scripts/enemies/consumed.gd`)
+- **Body:** a random human from the male and female sets, greyed. The
+  Stalker's eyes are on its head, and the roach's wings, scaled up, flap on
+  its back.
+- **Limbs:** they dangle limp. They're a ragdoll of just the arms and legs,
+  with no collision, so they swing freely.
+- **Head:** its neck and head are turned to look straight at you
+  (ConsumedLook), aimed from the bones' rest pose.
+- **Attack:** it never stops. It rushes at 22 m/s and flings itself into
+  you: 15 damage, a 12 m/s shove, and a thud. Then it bounces off,
+  tumbles 2 s under gravity, and comes again.
+- **Health:** 40 hp.
+- **Death:** a full ragdoll, falling like a sack. A third of the time it
+  leaves a 2 kg meat chunk. Gone after 60 s.
+- **Sound:** the roach buzz, deeper; a wet groan as it picks you; a thud as
+  it hits you.
+- **Around the Ossuary's spires:** it loops round the spire tops until
+  someone's within 120 m.
+
+### Nests (`ConsumedNest`)
+- **What they are:** fleshy, pulsing swellings on tower walls, 150 hp.
+- **What they do:** one Consumed every 60 s while anyone's within 150 m, at
+  most 2 of each nest's own about.
+- **Shot dead:** dead for the session.
+
+### Where they are (`ConsumedDirector`)
+- **The Stack:**
+  - 3-4 nests up every tower taller than 400 m, placed on its walls by rays;
+  - 2-4 free Consumed about anyone above 400 m on it, turning up 60-100 m off
+    out of their sight;
+  - gone once nobody's within 500 m of them.
+- **The Ossuary:**
+  - 3 nests up each spire's outer faces;
+  - 10 Consumed circling the spire tops while anyone's within 600 m, gone
+    past 900 m;
+  - 12 Bell-wraiths: 8 in the nave's rafters, 4 in the belfry.
+
+### The Bell-wraiths (`BellWraith`)
+- **What they are:** 5 m corroded bells on chains, each with its clapper-arm
+  coiled inside.
+- **Waking:** only the Ossuary's bell wakes them, as it settles and as it
+  rises. Awake for 10 s.
+- **The lash:** once per waking, if anyone's within 20 m of its mouth, its
+  arm whips out at them over 0.35 s. Still there when it lands: 20 damage
+  and a 20 m/s shove.
+- **Health:** 80 hp, and only while awake. Asleep, bullets clang off.
+
+### Sound slots
+New slots in `audio/sfx/walkers/`: `groan_NN`, `thud_NN` and `lash_NN`
+(code-made placeholders until then).
+
+### Co-op
+- The Consumed are the host's (NetEntities).
+- The nests and bells are the same on every game; their deaths and lashes go
+  out through Network.
+
+### Testing
+F9 -> "A Consumed, at me", "Wake the Bell-wraiths".
+
+### Not yet
+The new Ossuary crawler (the user's: later); the Stack's high interiors
+(their own nests and wraiths come with them).

@@ -490,6 +490,45 @@ func _net_walker_time(seed: int, time: float, from: Vector3, heading: Vector3) -
 		walker.synced(seed, time, from, heading)
 
 
+## Host: a Consumed nest shot dead (ConsumedNest) -- gone on every game.
+func send_nest_dead(id: int) -> void:
+	_nest_dead(id)
+	if is_online():
+		_net_nest_dead.rpc(id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_nest_dead(id: int) -> void:
+	_nest_dead(id)
+
+
+func _nest_dead(id: int) -> void:
+	for node in get_tree().get_nodes_in_group(&"consumed_nests"):
+		if int(node.get(&"nest_id")) == id:
+			node.call(&"kill")
+
+
+## Host: a Bell-wraith's lash at `at`, or its death (BellWraith) -- every game.
+func send_wraith_event(id: int, kind: StringName, at: Vector3) -> void:
+	_wraith_event(id, kind, at)
+	if is_online():
+		_net_wraith_event.rpc(id, kind, at)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_wraith_event(id: int, kind: StringName, at: Vector3) -> void:
+	_wraith_event(id, kind, at)
+
+
+func _wraith_event(id: int, kind: StringName, at: Vector3) -> void:
+	for node in get_tree().get_nodes_in_group(&"bell_wraiths"):
+		if int(node.get(&"wraith_id")) == id:
+			if kind == &"dead":
+				node.call(&"kill")
+			else:
+				node.call(&"lash", at)
+
+
 ## Host: a trader's babble (Trader: a sale, can't pay) -- on every game.
 func send_trader_say(id: String, kind: StringName) -> void:
 	_trader_say(id, kind)

@@ -2068,3 +2068,12 @@ them:
 - 2026-10-26 The Ossuary's feet lift 140 m (the user's: a little more dramatic).
 
 - 2026-10-26 Wanderers start at a random point along their own route every time they spawn, replacements included (the user's). Their routes stay in separate thirds of the world.
+
+- 2026-10-26 Built the Consumed and the Bell-wraiths (the user's details throughout; see docs/QUESTS_TRADERS_WALKERS.md).
+  - **The Consumed:** dangling ragdoll limbs, its head aimed at you, roach wings, the Stalker's eyes. It never stops: 22 m/s, 15 damage plus a 12 m/s shove, a 2 s tumble, 40 hp, a third of the time meat when it dies. Groan, thud, buzz.
+  - **Nests:** 150 hp, one Consumed every 60 s within 150 m. 3-4 up each Stack tower over 400 m, and 3 up each Ossuary spire.
+  - **Free Consumed:** 2-4 about anyone above 400 m on the Stack.
+  - **The Ossuary:** 10 circle its spires within 600 m.
+  - **Bell-wraiths:** 12 on the Ossuary, woken only by its bell for 10 s, with one 20 m lash each waking (20 damage, a 20 m/s shove). 80 hp, killable only while awake.
+  - **Testing:** F9 buttons.
+  - **The new Ossuary crawler:** later (the user's).

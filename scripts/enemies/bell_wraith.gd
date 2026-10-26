@@ -1,0 +1,226 @@
+class_name BellWraith
+extends StaticBody3D
+
+## A BELL-WRAITH (the user's, 2026-10-25/26): a great corroded bell (SIZE)
+## hanging in the dark, its clapper a long grasping arm coiled up inside it.
+## Only the place's own bells and machines wake it (the Ossuary's bell as it
+## settles and rises): AWAKE for AWAKE_TIME, and once -- if anyone's within
+## REACH -- its arm whips down and out at them: HIT and a SHOVE that throws
+## them (a lash, no hold). Asleep, it's just a bell: bullets clang off; awake,
+## HEALTH and it falls dead.
+## Every game hangs the same ones (the Ossuary's: OssuaryLife); the host's
+## wakes them, lashes and decides when one dies, and tells every game
+## (Network.send_wraith_event).
+
+const SIZE := 5.0
+const REACH := 20.0
+const AWAKE_TIME := 10.0
+const HIT := 20.0
+const SHOVE := 20.0
+const HEALTH := 80.0
+const LASH_TIME := 0.35
+const ARM_PIECES := 14
+const BRONZE := Color(0.32, 0.36, 0.26)
+const ARM := Color(0.42, 0.4, 0.38)
+
+var wraith_id := 0
+
+var _health: Health
+var _awake_left := 0.0
+var _lashed := false
+var _lash_t := -1.0
+var _lash_to := Vector3.ZERO
+var _arm: Array[MeshInstance3D] = []
+var _hand: MeshInstance3D
+var _bell: Node3D
+var _swing := 0.0
+var _dead := false
+
+static var _bronze: StandardMaterial3D
+static var _skin: StandardMaterial3D
+
+
+func _init() -> void:
+	_health = Health.new()
+	_health.name = "Health"
+	_health.max_health = HEALTH
+	add_child(_health)
+
+
+func _ready() -> void:
+	add_to_group(&"bell_wraiths")
+	_bell = Node3D.new()
+	add_child(_bell)
+	var bell := MeshInstance3D.new()
+	var body := CylinderMesh.new()
+	body.top_radius = SIZE * 0.3
+	body.bottom_radius = SIZE * 0.5
+	body.height = SIZE * 0.8
+	body.radial_segments = 16
+	body.rings = 2
+	body.cap_bottom = false
+	bell.mesh = body
+	bell.material_override = bronze()
+	bell.position = Vector3.DOWN * SIZE * 0.4
+	_bell.add_child(bell)
+	var crown := MeshInstance3D.new()
+	var dome := SphereMesh.new()
+	dome.radius = SIZE * 0.3
+	dome.height = SIZE * 0.35
+	crown.mesh = dome
+	crown.material_override = bronze()
+	_bell.add_child(crown)
+	var chain := MeshInstance3D.new()
+	var link := BoxMesh.new()
+	link.size = Vector3(0.3, 6.0, 0.3)
+	chain.mesh = link
+	chain.material_override = bronze()
+	chain.position = Vector3.UP * 3.0
+	add_child(chain)
+	var shape := CollisionShape3D.new()
+	var cylinder := CylinderShape3D.new()
+	cylinder.radius = SIZE * 0.5
+	cylinder.height = SIZE * 0.9
+	shape.shape = cylinder
+	shape.position = Vector3.DOWN * SIZE * 0.4
+	add_child(shape)
+	# Its arm, coiled up inside it (a clapper, hanging).
+	for i in ARM_PIECES:
+		var piece := MeshInstance3D.new()
+		var bone := CylinderMesh.new()
+		bone.top_radius = 0.28
+		bone.bottom_radius = 0.22
+		bone.height = 1.0
+		bone.radial_segments = 6
+		bone.rings = 1
+		piece.mesh = bone
+		piece.material_override = skin()
+		add_child(piece)
+		_arm.append(piece)
+	_hand = MeshInstance3D.new()
+	var claw := SphereMesh.new()
+	claw.radius = 0.55
+	claw.height = 0.9
+	_hand.mesh = claw
+	_hand.material_override = skin()
+	add_child(_hand)
+	_pose_arm(0.0)
+	_health.damaged.connect(_on_damaged)
+	if not (Network.is_online() and not multiplayer.is_server()):
+		_health.died.connect(func(_attacker: int, _critical: bool) -> void: Network.send_wraith_event(wraith_id, &"dead", Vector3.ZERO))
+
+
+static func bronze() -> StandardMaterial3D:
+	if _bronze == null:
+		_bronze = StandardMaterial3D.new()
+		_bronze.albedo_color = BRONZE
+		_bronze.metallic = 0.6
+		_bronze.roughness = 0.75
+	return _bronze
+
+
+static func skin() -> StandardMaterial3D:
+	if _skin == null:
+		_skin = StandardMaterial3D.new()
+		_skin.albedo_color = ARM
+		_skin.roughness = 0.8
+	return _skin
+
+
+## Asleep it's just a bell: bullets clang off (the hurt's undone).
+func _on_damaged(_amount: float, _attacker: int) -> void:
+	if _awake_left <= 0.0 and not _dead:
+		_health.current_health = _health.max_health
+		WalkerSound.play("bell", global_position, get_tree().current_scene, 200.0, -12.0, 10.0)
+
+
+## Its place's bell has tolled (every game): awake AWAKE_TIME.
+func wake() -> void:
+	if _dead:
+		return
+	_awake_left = AWAKE_TIME
+	_lashed = false
+	_swing = 1.0
+
+
+## The lash, toward `at` (every game: the host's word).
+func lash(at: Vector3) -> void:
+	_lash_to = at
+	_lash_t = 0.0
+	WalkerSound.play("lash", global_position, get_tree().current_scene, 120.0, 0.0, 12.0)
+
+
+func kill() -> void:
+	if _dead:
+		return
+	_dead = true
+	WalkerSound.play("bell", global_position, get_tree().current_scene, 400.0, 0.0, 20.0)
+	BloodFX.spawn_burst(get_tree().current_scene, global_position + Vector3.DOWN * SIZE * 0.5, 1.5)
+	queue_free()
+
+
+func _process(delta: float) -> void:
+	# It sways as it wakes, settling still again.
+	_swing = maxf(_swing - delta * 0.15, 0.0)
+	_bell.rotation.z = sin(Time.get_ticks_msec() * 0.003) * 0.25 * _swing
+	if _lash_t >= 0.0:
+		_lash_t += delta
+		var out := _lash_t / LASH_TIME
+		_pose_arm(clampf(out, 0.0, 1.0) if out < 1.0 else clampf(2.0 - out, 0.0, 1.0))
+		if out >= 2.0:
+			_lash_t = -1.0
+			_pose_arm(0.0)
+
+
+func _physics_process(delta: float) -> void:
+	if _dead or (Network.is_online() and not multiplayer.is_server()):
+		return
+	if _awake_left <= 0.0:
+		return
+	_awake_left -= delta
+	if _lashed:
+		return
+	# Once a waking: at whoever's within its reach.
+	var mouth := global_position + Vector3.DOWN * SIZE * 0.8
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player and not player.is_dead() and player.global_position.distance_to(mouth) < REACH:
+			_lashed = true
+			var at := player.global_position + Vector3.UP
+			Network.send_wraith_event(wraith_id, &"lash", at)
+			get_tree().create_timer(LASH_TIME).timeout.connect(_land_lash.bind(player, at))
+			return
+
+
+## The lash's end: still there, they're hit and thrown.
+func _land_lash(player: PlayerMovement, at: Vector3) -> void:
+	if _dead or not is_instance_valid(player) or player.is_dead() or player.global_position.distance_to(at) > 4.0:
+		return
+	var out := player.global_position - global_position
+	out.y = 0.0
+	out = out.normalized() if out.length_squared() > 0.01 else Vector3.FORWARD
+	player.health.take_damage(HIT)
+	player.shove(out * SHOVE + Vector3.UP * SHOVE * 0.3)
+
+
+## The arm from the bell's mouth: coiled up inside (0) to out at the lash's
+## target (1).
+func _pose_arm(out: float) -> void:
+	var mouth := Vector3.DOWN * SIZE * 0.6
+	var tip := mouth + Vector3.DOWN * 1.2
+	if out > 0.0:
+		var local_to := to_local(_lash_to)
+		tip = mouth.lerp(local_to, out)
+	for i in _arm.size():
+		var a := mouth.lerp(tip, float(i) / _arm.size())
+		var b := mouth.lerp(tip, float(i + 1) / _arm.size())
+		# A whip's curve: sagging in the middle as it goes.
+		var sag := Vector3.DOWN * sin(PI * (float(i) + 0.5) / _arm.size()) * out * (1.0 - out) * 6.0
+		var piece := _arm[i]
+		piece.visible = out > 0.0 or i < 2
+		var dir := (b - a)
+		var length := maxf(dir.length(), 0.01)
+		var turn := Basis(Quaternion(Vector3.UP, dir.normalized())) if absf(dir.normalized().dot(Vector3.UP)) < 0.999 else Basis.IDENTITY
+		piece.basis = turn * Basis.from_scale(Vector3(1.0, length, 1.0))
+		piece.position = (a + b) * 0.5 + sag
+	_hand.position = tip

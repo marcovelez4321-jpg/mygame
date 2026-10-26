@@ -10,7 +10,8 @@ extends CanvasLayer
 const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits close)"], ["camp", "Camp visit"], ["eat", "Eat (nearest meat or body)"],
 		["sign", "Small sign (random)"], ["tracks", "Sign: tracks across"], ["kill", "Sign: a kill ahead"], ["peak", "Big moment now"], ["home", "Home in its lair"],
 		["comeback", "Comeback (session start)"], ["forget", "Forget me (wipe its memory)"],
-		["forget_world", "Forget the world (quest facts)"], ["ossuary_here", "Ossuary: walk past me"], ["ossuary_rest", "Ossuary: rest now"]]
+		["forget_world", "Forget the world (quest facts)"], ["ossuary_here", "Ossuary: walk past me"], ["ossuary_rest", "Ossuary: rest now"],
+		["consumed_here", "A Consumed, at me"], ["bells_wake", "Wake the Bell-wraiths"]]
 
 var _panel: PanelContainer
 var _result: Label
@@ -80,6 +81,21 @@ func _trigger(event: StringName) -> void:
 		_result.text = "Host only: the host runs the Stalker."
 		return
 	var tree := get_tree()
+	if event == &"consumed_here":
+		var me := PlayerMovement.local_player(tree)
+		var one := Consumed.new()
+		one.look = randi()
+		one.set_meta(&"free", true)
+		tree.current_scene.add_child(one)
+		one.global_position = me.global_position - me.head.global_basis.z * 30.0 + Vector3.UP * 6.0
+		_result.text = "A Consumed, 30 m in front of you"
+		return
+	if event == &"bells_wake":
+		var count := tree.get_nodes_in_group(&"bell_wraiths").size()
+		for node in tree.get_nodes_in_group(&"bell_wraiths"):
+			(node as BellWraith).wake()
+		_result.text = "%d Bell-wraiths awake (10 s)" % count
+		return
 	if String(event).begins_with("ossuary_"):
 		Ossuary.ensure(tree)
 		var walker := tree.get_first_node_in_group(&"ossuary") as Ossuary
