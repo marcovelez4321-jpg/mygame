@@ -2079,3 +2079,9 @@ them:
   - **The new Ossuary crawler:** later (the user's).
 
 - 2026-10-26 TESTING (the user's): ConsumedDirector.TEST_AT_HOUSE puts a nest on Grandma's house's right-hand wall (its first Consumed 5 s on), a Bell-wraith 30 m off the front 14 m up, and 3 Consumed in the air 30-50 m round the house. Set it false once they've been looked at.
+
+- 2026-10-26 (the user's):
+  - **The robbed trader's fighting self:** the gunner's pistol, firing twice as fast (the gunner's own interval, windup, recovery and burst gap halved; Trader.FIRE_FASTER). No more PKM.
+  - **The Bell-wraith's bell:** brighter bronze, less metallic, double-sided, with a faint glow, so it shows from outside.
+  - **The Bell-wraith's arm:** with anyone within 30 m it hangs 8 m out of the mouth, swinging like a clapper (35 degrees, every 2.4 s).
+  - **The Consumed:** flies flat, face-down and head first (like Spider-Man), its limbs hanging. Wings 25% smaller (scale 4.5).

@@ -3,7 +3,8 @@ extends RigidBody3D
 
 ## THE CONSUMED (the user's, 2026-10-25/26; docs/QUESTS_TRADERS_WALKERS.md): a
 ## human fully consumed by the virus, grown a roach's wings (theirs, scaled
-## up) -- a random body from the human set, its arms and legs dangling limp
+## up) -- a random body from the human set, flying flat face-down (the
+## user's: like Spider-Man), its arms and legs dangling limp
 ## with real physics (its limbs a ragdoll, almost dead), its head up and aimed
 ## dead at you with the Stalker's eyes (ConsumedLook). It never stops: it
 ## rushes at SPEED and flings itself into you with no regard for itself --
@@ -33,7 +34,7 @@ const HEIGHT := 1.8
 const MODEL_DIRS := ["res://art/characters/Characters_psx/Models/Male/", "res://art/characters/Characters_psx/Models/Female/"]
 const ROACH := "res://scenes/enemy/roach_model.tscn"
 const BUZZ := "res://audio/events/enemy/roach_buzz.tres"
-const WING_SCALE := 6.0
+const WING_SCALE := 4.5
 const LIMBS: Array[StringName] = [&"LeftUpperArm", &"LeftLowerArm", &"RightUpperArm", &"RightLowerArm",
 		&"LeftUpperLeg", &"LeftLowerLeg", &"LeftFoot", &"RightUpperLeg", &"RightLowerLeg", &"RightFoot"]
 const CORPSE_TIME := 60.0
@@ -105,7 +106,7 @@ func _ready() -> void:
 	capsule.radius = 0.35
 	capsule.height = 1.4
 	shape.shape = capsule
-	shape.position = Vector3.UP * 0.2
+	shape.rotation.x = PI * 0.5 # (lying along it, as it flies)
 	add_child(shape)
 	_build_body()
 	if not NetEntities.is_puppet(self) and not (Network.is_online() and not multiplayer.is_server()):
@@ -129,10 +130,11 @@ func _build_body() -> void:
 		return
 	_model = scene.instantiate() as Node3D
 	add_child(_model)
-	_model.position = Vector3.DOWN * HEIGHT * 0.5
 	var bounds := BackpackView._bounds(_model)
-	_model.scale = Vector3.ONE * HEIGHT / maxf(bounds.size.y, 0.01)
-	_model.rotation.y = PI
+	var fit_scale := HEIGHT / maxf(bounds.size.y, 0.01)
+	# Flying flat (the user's: like Spider-Man): lying face-down along its way
+	# (-Z), head first, its middle on its own; its limbs hang from it.
+	_model.transform = Transform3D(Basis(Vector3.RIGHT, -PI * 0.5) * Basis(Vector3.UP, PI) * Basis.from_scale(Vector3.ONE * fit_scale), Vector3.BACK * HEIGHT * 0.5)
 	# Grey and veined by the virus.
 	for node in _model.find_children("*", "MeshInstance3D", true, false):
 		(node as MeshInstance3D).material_overlay = _veins()

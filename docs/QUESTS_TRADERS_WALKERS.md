@@ -193,7 +193,7 @@ traps of the place, and new enemies.
   same defence.
 - **Hurting a trader** counts as robbing him. He calls for help (8 armed
   humans; the bell isn't built yet), runs, then ambushes you from cover:
-  **500 hp, PKM.**
+  **500 hp, a pistol firing twice as fast as a gunner's (2026-10-26; was the PKM).**
 - **Consequences** (per player, never fading):
   - every trader charges +100%;
   - half of them refuse you;

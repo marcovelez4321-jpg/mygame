@@ -21,7 +21,8 @@ extends AnimatableBody3D
 ## good (Traders: every trader charges you more, half refuse you); he calls
 ## for help -- HELPERS armed humans, mixed, coming for you from out of sight
 ## HELP_FROM off -- drops the shafts and runs FLEE_TIME, then turns on you:
-## his fighting self an armed gunner (the user's: 500 hp, the PKM). Everyone
+## his fighting self an armed gunner (the user's: 500 hp, a pistol firing
+## twice as fast as a gunner's, 2026-10-26). Everyone
 ## gone CALM_RANGE off for CALM_AFTER and he's back at his cart. Killed: his
 ## cart's left where it stood, tipped over (TraderWreck), his goods spilled
 ## out of it to take, and BACK_IN of play on, a replacement (TraderKeeper).
@@ -65,9 +66,8 @@ const HELPERS_GONE := 150.0
 const FLEE_TIME := 6.0
 const FLEE_SPEED := 4.0
 const FIGHTER := "res://scenes/enemy/enemy_gunner.tscn"
-const PKM := "res://weapons/pkm.tres"
-const PKM_BURST := 10
-const PKM_BURST_GAP := 0.08
+## His pistol (the gunner's own) fires this many times as fast as a gunner's.
+const FIRE_FASTER := 2.0
 const CALM_RANGE := 200.0
 const CALM_AFTER := 120.0
 ## A replacement after this much play (the user's: 80 minutes).
@@ -522,8 +522,8 @@ func _flee_tick(delta: float) -> void:
 		_ambush()
 
 
-## His fighting self: an armed gunner in his clothes and hat, the PKM, his
-## health -- from cover, at the robber.
+## His fighting self: an armed gunner in his clothes and hat, the gunner's
+## pistol firing FIRE_FASTER as fast, his health -- from cover, at the robber.
 func _ambush() -> void:
 	var scene := load(FIGHTER) as PackedScene
 	var settings := _settings()
@@ -533,14 +533,10 @@ func _ambush() -> void:
 		var variants: Array[PackedScene] = [settings.model]
 		model.set(&"variants", variants)
 		model.set(&"fit_height", settings.height)
-	var weapon := fighter.get_node_or_null(^"EnemyWeapon")
-	var pkm := load(PKM) as WeaponData if ResourceLoader.exists(PKM) else null
-	if weapon and pkm:
-		weapon.set(&"weapon_scene", pkm.viewmodel_scene)
-	if pkm:
-		fighter.attack_damage = pkm.damage
-	fighter.burst_shot_count = PKM_BURST
-	fighter.burst_shot_interval = PKM_BURST_GAP
+	fighter.attack_interval /= FIRE_FASTER
+	fighter.attack_windup /= FIRE_FASTER
+	fighter.attack_recovery /= FIRE_FASTER
+	fighter.burst_shot_interval /= FIRE_FASTER
 	fighter.sight_range = HELPER_SIGHT
 	fighter.memory_time = HELPER_MEMORY
 	fighter.can_mutate = false

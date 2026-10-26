@@ -20,8 +20,14 @@ const SHOVE := 20.0
 const HEALTH := 80.0
 const LASH_TIME := 0.35
 const ARM_PIECES := 14
-const BRONZE := Color(0.32, 0.36, 0.26)
-const ARM := Color(0.42, 0.4, 0.38)
+const BRONZE := Color(0.5, 0.55, 0.4)
+const ARM := Color(0.5, 0.48, 0.45)
+## Anyone within this, its arm hangs out of its mouth (HANG long), swinging
+## like a clapper (SWING_ANGLE either way, once every SWING_PERIOD).
+const NEAR := 30.0
+const HANG := 8.0
+const SWING_ANGLE := deg_to_rad(35.0)
+const SWING_PERIOD := 2.4
 
 var wraith_id := 0
 
@@ -34,6 +40,8 @@ var _arm: Array[MeshInstance3D] = []
 var _hand: MeshInstance3D
 var _bell: Node3D
 var _swing := 0.0
+## How far out its arm hangs (0: coiled up inside, 1: HANG out).
+var _hang := 0.0
 var _dead := false
 
 static var _bronze: StandardMaterial3D
@@ -114,8 +122,13 @@ static func bronze() -> StandardMaterial3D:
 	if _bronze == null:
 		_bronze = StandardMaterial3D.new()
 		_bronze.albedo_color = BRONZE
-		_bronze.metallic = 0.6
-		_bronze.roughness = 0.75
+		# Seen from outside and in (its open mouth), and never lost in the dark.
+		_bronze.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_bronze.metallic = 0.2
+		_bronze.roughness = 0.6
+		_bronze.emission_enabled = true
+		_bronze.emission = BRONZE
+		_bronze.emission_energy_multiplier = 0.15
 	return _bronze
 
 
@@ -123,6 +136,7 @@ static func skin() -> StandardMaterial3D:
 	if _skin == null:
 		_skin = StandardMaterial3D.new()
 		_skin.albedo_color = ARM
+		_skin.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_skin.roughness = 0.8
 	return _skin
 
@@ -163,13 +177,29 @@ func _process(delta: float) -> void:
 	# It sways as it wakes, settling still again.
 	_swing = maxf(_swing - delta * 0.15, 0.0)
 	_bell.rotation.z = sin(Time.get_ticks_msec() * 0.003) * 0.25 * _swing
+	# Anyone near: its arm hangs out, swinging (each game's own look).
+	_hang = move_toward(_hang, 1.0 if _anyone_near() else 0.0, delta * 0.5)
+	var hang_to := Vector3.ZERO
+	if _hang > 0.0:
+		var t := Time.get_ticks_msec() * 0.001 * TAU / SWING_PERIOD
+		var down := Vector3.DOWN.rotated(Vector3.BACK, sin(t) * SWING_ANGLE).rotated(Vector3.RIGHT, sin(t * 0.7) * SWING_ANGLE * 0.4)
+		hang_to = Vector3.DOWN * SIZE * 0.6 + down * HANG
 	if _lash_t >= 0.0:
 		_lash_t += delta
 		var out := _lash_t / LASH_TIME
-		_pose_arm(clampf(out, 0.0, 1.0) if out < 1.0 else clampf(2.0 - out, 0.0, 1.0))
+		_pose_arm(clampf(out, 0.0, 1.0) if out < 1.0 else clampf(2.0 - out, 0.0, 1.0), to_local(_lash_to))
 		if out >= 2.0:
 			_lash_t = -1.0
-			_pose_arm(0.0)
+	else:
+		_pose_arm(_hang, hang_to)
+
+
+func _anyone_near() -> bool:
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as PlayerMovement
+		if player and not player.is_dead() and player.global_position.distance_to(global_position) < NEAR:
+			return true
+	return false
 
 
 func _physics_process(delta: float) -> void:
@@ -203,14 +233,13 @@ func _land_lash(player: PlayerMovement, at: Vector3) -> void:
 	player.shove(out * SHOVE + Vector3.UP * SHOVE * 0.3)
 
 
-## The arm from the bell's mouth: coiled up inside (0) to out at the lash's
-## target (1).
-func _pose_arm(out: float) -> void:
+## The arm from the bell's mouth: coiled up inside (0) to out at `local_to`
+## (1; its own space) -- the lash's target, or where it's swinging to.
+func _pose_arm(out: float, local_to := Vector3.ZERO) -> void:
 	var mouth := Vector3.DOWN * SIZE * 0.6
 	var tip := mouth + Vector3.DOWN * 1.2
 	if out > 0.0:
-		var local_to := to_local(_lash_to)
-		tip = mouth.lerp(local_to, out)
+		tip = (mouth + Vector3.DOWN * 1.2).lerp(local_to, out)
 	for i in _arm.size():
 		var a := mouth.lerp(tip, float(i) / _arm.size())
 		var b := mouth.lerp(tip, float(i + 1) / _arm.size())
