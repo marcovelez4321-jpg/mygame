@@ -2058,3 +2058,9 @@ them:
   - **Lift jitter and landing-sound spam:** on_ground() measures your rise against the floor's own speed.
   - **The jolt:** the lift and the Ossuary move before players each physics tick (process_physics_priority -30).
   - **Smoother riding:** the Ossuary's height and tilt follow a wide average of 15 ground samples instead of 3.
+
+- 2026-10-26 The Ossuary's legs read from afar (the user's):
+  - **Higher steps:** feet lift 100 m.
+  - **Snappy steps:** each swing takes a third of the step (a quick whipped reach), then a long plant.
+  - **The lurch:** the building rocks 2.5 degrees side to side over each full step and drops 8 m as each pair of feet lands, easing back up. The lurch fades out as it settles.
+  - **Its feet** still aim from the steady pose.

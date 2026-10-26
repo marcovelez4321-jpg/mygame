@@ -31,8 +31,15 @@ const BUILDING_LENGTH := 400.0
 const BODY_HEIGHT := 150.0
 const SPEED := 6.0
 const STRIDE := 150.0
-## A foot's lift at the top of its step (m).
-const LIFT := 40.0
+## A foot's lift at the top of its step (m), and the share of each step it
+## swings (the user's, 2026-10-26: higher, snappier -- a quick whipped reach,
+## then a long heavy plant: it reads from far off).
+const LIFT := 100.0
+const SWING := 1.0 / 3.0
+## The building lurching with its steps (the user's: clearly): rocking side
+## to side ROCK, dropping BOB as each pair of feet comes down.
+const ROCK := deg_to_rad(2.5)
+const BOB := 8.0
 const WALK_TIME := 600.0
 const REST_TIME := 180.0
 const SETTLE_TIME := 20.0
@@ -284,7 +291,7 @@ func _physics_process(delta: float) -> void:
 		time = theirs if absf(theirs - time) > 5.0 else lerpf(time, theirs, minf(delta * 2.0, 1.0))
 	var walked := _walked(time)
 	var lower := _lowered(time)
-	var body_xf := _body_transform(walked, lower)
+	var body_xf := _body_transform(walked, lower, true)
 	_body.global_transform = body_xf
 	for leg in _legs:
 		_pose_leg(leg, walked, body_xf, host)
@@ -400,8 +407,9 @@ func _ground(at: Vector3) -> float:
 
 
 ## The building `s` along, `lower` set down: its underside over the ground
-## under it (BODY_HEIGHT up standing, on the ground set down), barely tipped.
-func _body_transform(s: float, lower: float) -> Transform3D:
+## under it (BODY_HEIGHT up standing, on the ground set down), barely tipped;
+## `lurch`: rocking and dropping with its steps (not where its feet aim).
+func _body_transform(s: float, lower: float, lurch: bool = false) -> Transform3D:
 	var route := _route_at(s)
 	var centre: Vector3 = route[0]
 	var heading: Vector3 = route[1]
@@ -426,7 +434,17 @@ func _body_transform(s: float, lower: float) -> Transform3D:
 	var pitch := clampf(atan2(front - back, BUILDING_LENGTH), -MAX_PITCH, MAX_PITCH)
 	var basis := Basis.looking_at(heading, Vector3.UP)
 	basis = basis * Basis(Vector3.RIGHT, pitch)
-	return Transform3D(basis, Vector3(centre.x, base + lerpf(BODY_HEIGHT, 0.0, lower), centre.z))
+	var height := base + lerpf(BODY_HEIGHT, 0.0, lower)
+	if lurch:
+		var still := 1.0 - lower
+		# Rocking side to side, a sway a full step (one pair, then the other).
+		basis = basis * Basis(Vector3.FORWARD, ROCK * sin(TAU * s / STRIDE) * still)
+		# Dropping as each pair comes down (twice a full step), easing back up.
+		var half := STRIDE * 0.5
+		var since := fposmod(s - STRIDE * SWING, half) / half # (0: a pair's just come down)
+		var near := minf(since, 1.0 - since)
+		height -= BOB * (1.0 - smoothstep(0.0, 0.35, near)) * still
+	return Transform3D(basis, Vector3(centre.x, height, centre.z))
 
 
 ## Where leg `leg`'s foot comes down on its `k`th step: out at its corner,
@@ -435,7 +453,7 @@ func _foot_down(leg: Dictionary, k: int) -> Vector3:
 	var cache: Dictionary = leg.cache
 	if cache.has(k):
 		return cache[k]
-	var s := float(leg.offset) + float(k) * STRIDE + STRIDE * 0.75
+	var s := float(leg.offset) + float(k) * STRIDE + STRIDE * (SWING + (1.0 - SWING) * 0.5) # (mid-plant)
 	var xf := _body_transform(s, 0.0)
 	var at := xf * Vector3(float(leg.side) * FOOT_OUT.x, 0.0, float(leg.end) * FOOT_OUT.z)
 	at.y = _ground(at)
@@ -454,8 +472,8 @@ func _pose_leg(leg: Dictionary, s: float, body_xf: Transform3D, host: bool) -> v
 	var k := int(floorf(rel / STRIDE))
 	var c := rel - float(k) * STRIDE
 	var foot: Vector3
-	if c < STRIDE * 0.5:
-		var a := c / (STRIDE * 0.5)
+	if c < STRIDE * SWING:
+		var a := c / (STRIDE * SWING)
 		foot = _foot_down(leg, k - 1).lerp(_foot_down(leg, k), smoothstep(0.0, 1.0, a)) + Vector3.UP * LIFT * sin(PI * a)
 	else:
 		foot = _foot_down(leg, k)
