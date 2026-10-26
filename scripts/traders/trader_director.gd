@@ -14,9 +14,9 @@ extends RefCounted
 ##   world round Grandma's. The first the road between Grandma's yard edge and
 ##   the Stack's plateau edge, by WILD_STOPS rests out in the wilds each way;
 ##   the others LOOP_STOPS rests in a loop out in their own wilds,
-##   LOOP_RADIUS from Grandma's. Each starts out on its own route, at the stop
-##   furthest from every other trader. New landmarks join the routes as
-##   they're made.
+##   LOOP_RADIUS from Grandma's. Each starts somewhere random along its own
+##   route every time it's made (the user's). New landmarks join the routes
+##   as they're made.
 
 const WANDERERS := 3
 const WILD_STOPS := 2
@@ -128,11 +128,17 @@ static func spawn(scene: Node, id: String, plan: Dictionary, fresh: bool = false
 	var at: Vector3 = plan.at
 	var facing: Vector3 = plan.facing
 	if plan.has("route"):
-		trader.route = plan.route
-		trader.set(&"_leg", 1 if fresh else int(plan.leg))
-		if fresh:
-			at = (plan.route as PackedVector3Array)[0]
-			facing = _flat((plan.route as PackedVector3Array)[1] - at)
+		# A wanderer: somewhere random along its own route, every time it's
+		# made -- a replacement too (the user's, 2026-10-26).
+		var route: PackedVector3Array = plan.route
+		var leg := randi() % route.size()
+		var from := route[(leg - 1 + route.size()) % route.size()]
+		at = from.lerp(route[leg], randf())
+		var terrain := scene.get_node_or_null(^"Terrain3D")
+		at = _on_ground(terrain, at)
+		facing = _flat(route[leg] - at)
+		trader.route = route
+		trader.set(&"_leg", leg)
 	scene.add_child(trader)
 	trader.global_transform = Transform3D(Basis.looking_at(_flat(facing), Vector3.UP), at)
 	return trader

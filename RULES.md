@@ -2066,3 +2066,5 @@ them:
   - **Its feet** still aim from the steady pose.
 
 - 2026-10-26 The Ossuary's feet lift 140 m (the user's: a little more dramatic).
+
+- 2026-10-26 Wanderers start at a random point along their own route every time they spawn, replacements included (the user's). Their routes stay in separate thirds of the world.
