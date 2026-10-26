@@ -2043,3 +2043,5 @@ them:
 - 2026-10-26 Traders spread out:
   - **Their own thirds:** each wanderer walks its own third of the world round Grandma's. The first keeps the yard-to-Stack road; the other two walk loops of 5 stops, 900-2800 m out in their own wilds.
   - **Where they start:** each at the stop on its route furthest from every trader already placed, the parked ones included.
+
+- 2026-10-26 The Ossuary starts right on the edge of the fog (the user's): its nearest foot at the world environment's fog_depth_end from the host's player (600 m if there's no fog), in a direction clear of the Stack and Grandma's, walking sideways along the fog line.

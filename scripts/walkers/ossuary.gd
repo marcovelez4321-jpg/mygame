@@ -98,7 +98,9 @@ var _craters: Array[Array] = [] # [decal, born msec]
 static var _crater_texture: ImageTexture
 
 
-## Every game: the Ossuary (once). The host picks its route and time.
+## Every game: the Ossuary (once). The host picks its route: it starts far
+## off, right on the edge of the fog (the user's, 2026-10-26) -- its nearest
+## foot at the fog's end from you -- walking along it, so it looms there.
 static func ensure(tree: SceneTree) -> void:
 	if not tree.get_nodes_in_group(&"ossuary").is_empty():
 		return
@@ -108,8 +110,36 @@ static func ensure(tree: SceneTree) -> void:
 	var walker := Ossuary.new()
 	walker.name = "CrawlingOssuary"
 	scene.add_child(walker)
-	if not Network.is_online() or tree.get_multiplayer().is_server():
+	if Network.is_online() and not tree.get_multiplayer().is_server():
+		return
+	var player := PlayerMovement.local_player(tree)
+	if player == null:
 		walker.start(randi(), randf() * WALK_TIME)
+		return
+	var far := fog_edge(tree) + FOOT_OUT.x
+	var seed := randi()
+	var dice := RandomNumberGenerator.new()
+	dice.seed = seed
+	for attempt in 24:
+		var out := Vector3.FORWARD.rotated(Vector3.UP, dice.randf() * TAU)
+		var at := player.global_position + out * far
+		if absf(at.x) > WORLD_HALF or absf(at.z) > WORLD_HALF or not walker._clear_way(at, at):
+			continue
+		var along := out.rotated(Vector3.UP, PI * 0.5 * (1.0 if dice.randf() < 0.5 else -1.0))
+		walker.start(seed, 0.0, Vector3(at.x, 0.0, at.z), along)
+		return
+	walker.start(seed, randf() * WALK_TIME) # (nowhere clear out there: anywhere)
+
+
+## Where the fog's solid from you (the world's environment), as the
+## encounters reckon it.
+static func fog_edge(tree: SceneTree) -> float:
+	var viewport := tree.root.get_viewport()
+	var environment: Environment = viewport.world_3d.environment if viewport and viewport.world_3d else null
+	var camera := viewport.get_camera_3d() if viewport else null
+	if environment == null and camera:
+		environment = camera.environment
+	return environment.fog_depth_end if environment and environment.fog_enabled and environment.fog_depth_end > 1.0 else 600.0
 
 
 func _ready() -> void:
