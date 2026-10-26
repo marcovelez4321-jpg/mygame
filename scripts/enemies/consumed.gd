@@ -38,6 +38,14 @@ const WING_SCALE := 4.5
 const LIMBS: Array[StringName] = [&"LeftUpperArm", &"LeftLowerArm", &"RightUpperArm", &"RightLowerArm",
 		&"LeftUpperLeg", &"LeftLowerLeg", &"LeftFoot", &"RightUpperLeg", &"RightLowerLeg", &"RightFoot"]
 const CORPSE_TIME := 60.0
+## Its hanging limbs (the user's: hanging low, still swinging, never wildly):
+## their swing damped this much, gravity this many times on them, their
+## drag through the air.
+const LIMB_SWING_DAMP := 8.0
+const LIMB_GRAVITY := 2.0
+const LIMB_DRAG := 0.5
+## The wings, off its back (its own space: lying face-down, head at -Z).
+const WINGS_AT := Vector3(0.0, 0.2, -0.35)
 
 ## Its look (an index into the human set) and, circling, round where.
 var look := 0
@@ -149,6 +157,11 @@ func _build_body() -> void:
 			bone.collision_layer = 0
 			bone.collision_mask = 0 # (they hang and swing; nothing to snag on)
 			bone.can_sleep = false
+			bone.angular_damp_mode = PhysicalBone3D.DAMP_MODE_REPLACE
+			bone.angular_damp = LIMB_SWING_DAMP
+			bone.linear_damp_mode = PhysicalBone3D.DAMP_MODE_REPLACE
+			bone.linear_damp = LIMB_DRAG
+			bone.gravity_scale = LIMB_GRAVITY
 	_ragdoll.physical_bones_start_simulation(LIMBS)
 	_gaze = ConsumedLook.new()
 	_skeleton.add_child(_gaze)
@@ -178,10 +191,8 @@ func _build_body() -> void:
 		flare.material_override = glare
 		flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		eye.add_child(flare)
-	# The roach's wings, scaled up, off its back.
-	var back := BoneAttachment3D.new()
-	back.bone_name = "UpperChest" if _skeleton.find_bone("UpperChest") >= 0 else "Chest"
-	_skeleton.add_child(back)
+	# The roach's wings, scaled up, off its back -- laid as on the roach's,
+	# flat along the lying body (on the body itself: its chest never moves).
 	if ResourceLoader.exists(ROACH):
 		var roach := (load(ROACH) as PackedScene).instantiate()
 		for pivot_name in ["WingPivotL", "WingPivotR"]:
@@ -190,9 +201,9 @@ func _build_body() -> void:
 				continue
 			roach.remove_child(pivot)
 			var holder := Node3D.new()
-			holder.scale = Vector3.ONE * WING_SCALE / fit
-			holder.position = Vector3(0.0, 0.05, -0.15) / fit
-			back.add_child(holder)
+			holder.scale = Vector3.ONE * WING_SCALE
+			holder.position = WINGS_AT
+			add_child(holder)
 			holder.add_child(pivot)
 			pivot.position = Vector3(0.04 * (-1.0 if pivot_name.ends_with("L") else 1.0), 0.0, 0.0)
 			_wings.append(pivot)
@@ -337,6 +348,12 @@ func _die(host: bool) -> void:
 			if bone:
 				bone.collision_layer = 1 << 3
 				bone.collision_mask = 1
+				# Limp now: a sack, falling free.
+				bone.angular_damp_mode = PhysicalBone3D.DAMP_MODE_COMBINE
+				bone.angular_damp = 0.0
+				bone.linear_damp_mode = PhysicalBone3D.DAMP_MODE_COMBINE
+				bone.linear_damp = 0.0
+				bone.gravity_scale = 1.0
 	if host and randf() < MEAT_CHANCE:
 		CarryItem.spawn_meat(get_tree().current_scene, global_position, MEAT_WEIGHT, false)
 	get_tree().create_timer(CORPSE_TIME).timeout.connect(queue_free)

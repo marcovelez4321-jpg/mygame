@@ -2085,3 +2085,5 @@ them:
   - **The Bell-wraith's bell:** brighter bronze, less metallic, double-sided, with a faint glow, so it shows from outside.
   - **The Bell-wraith's arm:** with anyone within 30 m it hangs 8 m out of the mouth, swinging like a clapper (35 degrees, every 2.4 s).
   - **The Consumed:** flies flat, face-down and head first (like Spider-Man), its limbs hanging. Wings 25% smaller (scale 4.5).
+
+- 2026-10-26 (the user's): the Consumed's wings lie flat along its lying body as on the roach (on the body itself, not the chest bone). Its hanging limbs are damped so they hang low and swing gently: angular damp 8, drag 0.5, gravity x2. They're all let go again when it dies.
