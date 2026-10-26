@@ -945,6 +945,15 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	var pre_slide_velocity := velocity
 
 	move_and_slide()
+	# Landed on something moving (a lift, the Ossuary): your speed's your own
+	# on it, not the world's -- what it gave you as you left it (Godot adds a
+	# floor's speed on leaving) comes off again, or every hop on it would add
+	# its speed once more (the user's: insane bhop speed riding it).
+	if was_airborne and is_on_floor():
+		var carried := get_platform_velocity()
+		if Vector2(carried.x, carried.z).length_squared() > 0.01:
+			velocity.x -= carried.x
+			velocity.z -= carried.z
 	# Whether we came into this tick's move in the air: the tick after a landing
 	# sees it, so a jump then is a bhop (no friction, speed kept and gained).
 	# (It was read after the move -- already on the ground -- so bhops never
@@ -1349,7 +1358,10 @@ func _look_for_wall(delta: float) -> void:
 ## On the ground for moving and jumping: touching the floor and not moving up
 ## off it faster than skim_speed (skimming up a hill is still flying).
 func on_ground() -> bool:
-	return is_on_floor() and velocity.y <= skim_speed
+	# Rising faster than skim_speed off the floor -- measured against the
+	# floor itself (a lift going up: its speed isn't yours leaving it; the
+	# user's bug: the landing sound spammed and jitter on the lift).
+	return is_on_floor() and velocity.y - get_platform_velocity().y <= skim_speed
 
 
 ## Just landed: on a downhill, the speed that went into the slope comes out

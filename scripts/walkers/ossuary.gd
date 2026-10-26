@@ -144,6 +144,7 @@ static func fog_edge(tree: SceneTree) -> float:
 
 func _ready() -> void:
 	add_to_group(&"ossuary")
+	process_physics_priority = -30 # (moved before whoever's riding it: no frame behind)
 	var scene := get_tree().current_scene
 	_terrain = scene.get_node_or_null(^"Terrain3D")
 	for node_name: String in AVOID:
@@ -404,10 +405,24 @@ func _body_transform(s: float, lower: float) -> Transform3D:
 	var route := _route_at(s)
 	var centre: Vector3 = route[0]
 	var heading: Vector3 = route[1]
-	var front := _ground(centre + heading * BUILDING_LENGTH * 0.5)
-	var back := _ground(centre - heading * BUILDING_LENGTH * 0.5)
-	var middle := _ground(centre)
-	var base := (front + back + middle) / 3.0
+	# The ground under it, averaged wide (smooth to ride: no bump from every
+	# rise it passes over -- the user's: it jolted you about).
+	var across := heading.cross(Vector3.UP).normalized()
+	var front := 0.0
+	var back := 0.0
+	var base := 0.0
+	for i in 5:
+		var along := lerpf(-0.5, 0.5, float(i) / 4.0) * BUILDING_LENGTH
+		for side: float in [-1.0, 0.0, 1.0]:
+			var h := _ground(centre + heading * along + across * side * 90.0)
+			base += h
+			if i == 0:
+				back += h
+			elif i == 4:
+				front += h
+	base /= 15.0
+	front /= 3.0
+	back /= 3.0
 	var pitch := clampf(atan2(front - back, BUILDING_LENGTH), -MAX_PITCH, MAX_PITCH)
 	var basis := Basis.looking_at(heading, Vector3.UP)
 	basis = basis * Basis(Vector3.RIGHT, pitch)

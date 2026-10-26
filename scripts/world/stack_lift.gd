@@ -43,6 +43,7 @@ var _sync_left := 0.0
 
 func _ready() -> void:
 	sync_to_physics = true
+	process_physics_priority = -30 # (moved before whoever's riding it: no frame behind)
 	if stops.size() > 0:
 		position = stops[0] - Vector3.UP * size.y * 0.5
 	var shape := CollisionShape3D.new()

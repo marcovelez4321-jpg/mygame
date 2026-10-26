@@ -2052,3 +2052,9 @@ them:
   - **Outside:** flying buttresses on piers up both long sides, and a crown of spikes (battlements, corner turrets, side spikes, great spikes on top) as func_detail_illusionary decor.
   - **Size:** 2416 solid brushes and 537 decor.
   - **Collision:** the walker now takes the building as one trimesh built from its mesh, instead of thousands of moving brush shapes.
+
+- 2026-10-26 Moving-platform fixes (the user's bugs):
+  - **Bhop speed on the Ossuary:** landing on a moving floor takes back the speed Godot added as you left it, so hops no longer stack the floor's speed.
+  - **Lift jitter and landing-sound spam:** on_ground() measures your rise against the floor's own speed.
+  - **The jolt:** the lift and the Ossuary move before players each physics tick (process_physics_priority -30).
+  - **Smoother riding:** the Ossuary's height and tilt follow a wide average of 15 ground samples instead of 3.
