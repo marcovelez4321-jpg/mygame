@@ -181,8 +181,11 @@ func _ready() -> void:
 			(leg[part] as Node3D).global_position = Vector3.DOWN * 5000.0
 
 
-## The building, from its baked map, on the moving body -- its collision
-## taken off the map's static bodies onto it, so it carries you.
+## The building, from its baked map, on the moving body. Its collision: one
+## trimesh made from the map's solid mesh (not its thousands of brushes --
+## a moving body with that many shapes would cost every frame), on the moving
+## body so it carries you; the map's own static bodies left with none. Its
+## decor (the crown of spikes: func_detail_illusionary) collides with nothing.
 func _take_building() -> void:
 	if not ResourceLoader.exists(BUILDING):
 		push_warning("Ossuary: no building yet -- run tools/make_the_ossuary.gd")
@@ -192,13 +195,14 @@ func _take_building() -> void:
 	for node in building.find_children("*", "StaticBody3D", true, false):
 		var holder := node as StaticBody3D
 		for child in holder.get_children():
-			var shape := child as CollisionShape3D
-			if shape == null:
-				continue
-			var at := _body.global_transform.affine_inverse() * shape.global_transform
-			holder.remove_child(shape)
-			_body.add_child(shape)
-			shape.transform = at
+			if child is CollisionShape3D:
+				child.queue_free()
+			elif child is MeshInstance3D and (child as MeshInstance3D).mesh:
+				var look := child as MeshInstance3D
+				var shape := CollisionShape3D.new()
+				shape.shape = look.mesh.create_trimesh_shape()
+				_body.add_child(shape)
+				shape.transform = _body.global_transform.affine_inverse() * look.global_transform
 		holder.collision_layer = 0
 		holder.collision_mask = 0
 

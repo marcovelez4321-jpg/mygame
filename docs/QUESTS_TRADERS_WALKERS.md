@@ -249,6 +249,24 @@ traps of the place, and new enemies.
       altar: the end of the climb. The belfry is atop the right.
     - At the back are skull-lined crypts off a gallery, with the catacombs
       above them, a maze of narrow tunnels.
+    - **The castle** (the user's, 2026-10-26: the rest of the base a
+      massive gothic castle, a massive silhouette) rises over the nave and
+      the back to 1 km, in four stepped tiers:
+      - 190 x 345 m up to 300 m;
+      - 156 x 310 m up to 550 m;
+      - 120 x 255 m up to 800 m;
+      - 84 x 180 m up to 1 km.
+    - **Inside the castle:** halls stacked every 30 m, each with a 14 m hole
+      to climb through (front and back in turn), tall slit windows, and
+      pillars every 60 m in the lower two tiers.
+    - **Outside the castle:**
+      - flying buttresses every 40 m up both long sides, leaping from piers
+        (spiked) on each step to the tier above;
+      - a crown of spikes: battlements along every tier's edges, spike
+        turrets at the corners, spikes every 40 m along the sides, and five
+        great spikes on top (decor, no collision).
+    - **The way in:** a shaft from the catacombs, with ledges up its inside,
+      into the first hall.
     - Textures start in the Horror set (Horror_Stone_01 outside,
       Horror_Wall_01 inside, Horror_Floor_01 floors, Plaster_01 trims); swap
       them in TrenchBroom.

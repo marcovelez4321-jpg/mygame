@@ -15,6 +15,14 @@ extends RefCounted
 ##   belfry atop the right.
 ##   AT THE BACK: skull-lined crypts off a gallery, and over them the
 ##   catacombs, a maze of narrow tunnels.
+##   THE CASTLE (the user's, 2026-10-26: the rest of the base a massive gothic
+##   castle, a massive silhouette, 1 km tall): over the nave and the back, four
+##   stepped tiers (CASTLE_TIERS) to 1 km -- halls stacked inside every
+##   HALL_GAP (holes to climb up through, in turn front and back), tall slit
+##   windows, flying buttresses leaping from piers on each step to the tier
+##   above, and a crown of spikes: battlements and spikes along every edge
+##   (decor: no collision), great spikes on top. Its way in: a shaft up from
+##   the catacombs into its first hall.
 ## Its own space: the underside's middle at the origin, the front toward -Z;
 ## megastructure maps are 8 units a metre.
 
@@ -66,8 +74,26 @@ const CATACOMB_TOP := 34.0
 const BACK_TOP := 37.0
 const CELL := 6.0
 const TUNNEL := 4.0
+## The castle's tiers: [bottom, top, half its width, its front, its back].
+const CASTLE_TIERS := [[36.0, 300.0, 95.0, -150.0, 195.0], [300.0, 550.0, 78.0, -130.0, 180.0],
+		[550.0, 800.0, 60.0, -105.0, 150.0], [800.0, 1000.0, 42.0, -70.0, 110.0]]
+const CASTLE_WALL := 6.0
+## The first hall's floor (over the nave's roof), then every HALL_GAP.
+const FIRST_HALL := 89.0
+const HALL_GAP := 30.0
+const HALL_HOLE := 7.0
+const PILLAR_GAP := 60.0
+const WINDOW_GAP := 30.0
+const BUTTRESS_GAP := 40.0
+const MERLON_GAP := 8.0
+const SPIKE_GAP := 40.0
+## The shaft up from the catacombs (its middle; half its inside).
+const SHAFT := Vector3(78.0, 0.0, 173.0)
+const SHAFT_HALF := 7.0
 
 var _world: Array = []
+## Decor: no collision (func_detail_illusionary) -- the crown of spikes.
+var _decor: Array = []
 var _points: Array = []
 var _dice := RandomNumberGenerator.new()
 
@@ -82,7 +108,8 @@ func run(_tree: SceneTree) -> void:
 	for i in SPIRE_X.size():
 		_spire(float(SPIRE_X[i]), i == 0)
 	_back()
-	print("map: ", MAP, " (", _world.size(), " brushes; error ", _write_map(ProjectSettings.globalize_path(MAP)), ")")
+	_castle()
+	print("map: ", MAP, " (", _world.size(), " brushes, ", _decor.size(), " decor; error ", _write_map(ProjectSettings.globalize_path(MAP)), ")")
 	var settings := load(MAP_SETTINGS)
 	var map := (load("res://addons/func_godot/src/map/func_godot_map.gd") as GDScript).new() as Node3D
 	map.name = "Map"
@@ -342,8 +369,8 @@ func _back() -> void:
 				var px := x0 + c * CELL
 				var pz := z0 + r * CELL
 				_world.append(_box(Vector3(px - 1.0, CATACOMB_FLOOR, pz + 1.0), Vector3(px + 1.0, CATACOMB_TOP, pz + CELL - 1.0), INSIDE))
-	# Its roof.
-	_world.append(_box(Vector3(-HALF_X, CATACOMB_TOP, NAVE_BACK + WALL), Vector3(HALF_X, BACK_TOP, BACK), OUTSIDE, {"-y": INSIDE}))
+	# Its roof (a hole where the shaft goes up into the castle).
+	_hole_slab(-HALF_X, HALF_X, NAVE_BACK + WALL, BACK, Vector2(SHAFT.x, SHAFT.z), SHAFT_HALF, CATACOMB_TOP, BACK_TOP, OUTSIDE)
 
 
 ## A maze (deterministic: _dice): the walls knocked through, as
@@ -375,6 +402,177 @@ func _maze(cols: int, rows: int) -> Dictionary:
 	for i in int(cols * rows * 0.06):
 		open[Vector3i(_dice.randi() % cols, 1 + _dice.randi() % maxi(rows - 1, 1), _dice.randi() % 2)] = true
 	return open
+
+
+# ---- The castle ------------------------------------------------------------------------------
+
+func _castle() -> void:
+	# The shaft up from the catacombs: walled, ledges up its inside, into
+	# the first hall.
+	var sx := SHAFT.x
+	var sz := SHAFT.z
+	var h := SHAFT_HALF
+	for side: float in [-1.0, 1.0]:
+		_world.append(_box(Vector3(sx - h - 2.0, BACK_TOP, sz + side * h - (2.0 if side < 0.0 else 0.0)), Vector3(sx + h + 2.0, FIRST_HALL, sz + side * h + (2.0 if side > 0.0 else 0.0)), INSIDE))
+		_world.append(_box(Vector3(sx + side * h - (2.0 if side < 0.0 else 0.0), BACK_TOP, sz - h), Vector3(sx + side * h + (2.0 if side > 0.0 else 0.0), FIRST_HALL, sz + h), INSIDE))
+	var y := BACK_TOP + 18.0
+	var turn := 0
+	while y < FIRST_HALL - 6.0:
+		var along := Vector3(1, 0, 0) if turn % 2 == 0 else Vector3(0, 0, 1)
+		var side := -1.0 if (turn / 2) % 2 == 0 else 1.0
+		if along.x > 0.0:
+			_world.append(_box(Vector3(sx - h, y - 1.5, sz + side * h - (3.0 if side > 0.0 else 0.0)), Vector3(sx + h * 0.3, y, sz + side * h + (3.0 if side < 0.0 else 0.0)), TRIM))
+		else:
+			_world.append(_box(Vector3(sx + side * h - (3.0 if side > 0.0 else 0.0), y - 1.5, sz - h), Vector3(sx + side * h + (3.0 if side < 0.0 else 0.0), y, sz + h * 0.3), TRIM))
+		turn += 1
+		y += 16.0
+	# The tiers.
+	for i in CASTLE_TIERS.size():
+		var t: Array = CASTLE_TIERS[i]
+		var below: Array = CASTLE_TIERS[i - 1] if i > 0 else []
+		_tier(t, below, i == CASTLE_TIERS.size() - 1)
+		if i > 0:
+			_buttresses(t, below)
+	# The crown on top: great spikes.
+	var top: Array = CASTLE_TIERS[CASTLE_TIERS.size() - 1]
+	var top_y: float = top[1] + 3.0
+	var mid_z := (float(top[3]) + float(top[4])) * 0.5
+	_decor.append(_pyramid(0.0, mid_z, 10.0, top_y, top_y + 90.0, OUTSIDE))
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		_decor.append(_pyramid(corner.x * (float(top[2]) - 8.0), mid_z + corner.y * (float(top[4]) - mid_z - 8.0), 6.0, top_y, top_y + 55.0, OUTSIDE))
+
+
+## One tier: its walls (slit windows a hall), its halls' floors inside (a
+## hole to climb through, in turn front and back), pillars in the big halls,
+## its roof (the step round the next tier: the floor of its first hall too),
+## and its crown of battlements and spikes.
+func _tier(t: Array, below: Array, last: bool) -> void:
+	var y0: float = t[0]
+	var y1: float = t[1]
+	var hx: float = t[2]
+	var z0: float = t[3]
+	var z1: float = t[4]
+	var w := CASTLE_WALL
+	# Its halls' floors.
+	var floors: Array[float] = []
+	var fy := FIRST_HALL if below.is_empty() else y0 + HALL_GAP
+	while fy < y1 - 10.0:
+		floors.append(fy)
+		fy += HALL_GAP
+	# The walls, a slit window a hall.
+	var slits_x: Array = []
+	var slits_z: Array = []
+	var x := -hx + WINDOW_GAP * 0.5
+	while x < hx - 8.0:
+		for f in floors:
+			slits_x.append([x - 3.0, x + 3.0, f + 6.0, f + 22.0])
+		x += WINDOW_GAP
+	var z := z0 + WINDOW_GAP * 0.5
+	while z < z1 - 8.0:
+		for f in floors:
+			slits_z.append([z - 3.0, z + 3.0, f + 6.0, f + 22.0])
+		z += WINDOW_GAP
+	_wall_x(-hx, hx, z0, z0 + w, y0, y1, slits_x, -1)
+	_wall_x(-hx, hx, z1 - w, z1, y0, y1, slits_x, 1)
+	_wall_z(-hx, -hx + w, z0 + w, z1 - w, y0, y1, slits_z, -1)
+	_wall_z(hx - w, hx, z0 + w, z1 - w, y0, y1, slits_z, 1)
+	# The halls' floors, their holes in turn front and back (the first over
+	# the shaft from the catacombs).
+	for n in floors.size():
+		var hole := Vector2(SHAFT.x, SHAFT.z) if below.is_empty() and n == 0 else Vector2(0.0, z0 + 30.0 if n % 2 == 0 else z1 - 30.0)
+		_hole_slab(-hx + w, hx - w, z0 + w, z1 - w, hole, HALL_HOLE, floors[n] - 3.0, floors[n], FLOOR)
+		# Pillars in the big halls (the lower two tiers).
+		if hx >= 70.0 and n + 1 < floors.size():
+			var px := -hx + PILLAR_GAP
+			while px < hx - 20.0:
+				var pz := z0 + PILLAR_GAP
+				while pz < z1 - 20.0:
+					if Vector2(px, pz).distance_to(hole) > 25.0:
+						_world.append(_box(Vector3(px - 3.0, floors[n], pz - 3.0), Vector3(px + 3.0, floors[n + 1] - 3.0, pz + 3.0), TRIM))
+					pz += PILLAR_GAP
+				px += PILLAR_GAP
+	# Its roof: the step round the tier above (and that tier's floor), a hole
+	# up into the tier above's first hall.
+	if last:
+		_world.append(_box(Vector3(-hx, y1, z0), Vector3(hx, y1 + 3.0, z1), OUTSIDE, {"-y": INSIDE}))
+	else:
+		_hole_slab(-hx, hx, z0, z1, Vector2(0.0, z1 - 30.0 if floors.size() % 2 == 0 else z0 + 30.0), HALL_HOLE, y1, y1 + 3.0, OUTSIDE)
+	# Its crown: battlements along its top edges, spikes at its corners and
+	# along its sides (decor).
+	var top := y1 + 3.0
+	x = -hx
+	while x < hx:
+		for edge: float in [z0, z1 - 3.0]:
+			_decor.append(_box(Vector3(x, top, edge), Vector3(minf(x + 4.0, hx), top + 5.0, edge + 3.0), TRIM))
+		x += MERLON_GAP
+	z = z0
+	while z < z1:
+		for edge: float in [-hx, hx - 3.0]:
+			_decor.append(_box(Vector3(edge, top, z), Vector3(edge + 3.0, top + 5.0, minf(z + 4.0, z1)), TRIM))
+		z += MERLON_GAP
+	for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		var cx := corner.x * (hx - 4.0)
+		var cz := z0 + 4.0 if corner.y < 0.0 else z1 - 4.0
+		_decor.append(_box(Vector3(cx - 4.0, top, cz - 4.0), Vector3(cx + 4.0, top + 20.0, cz + 4.0), OUTSIDE))
+		_decor.append(_pyramid(cx, cz, 4.0, top + 20.0, top + 60.0, OUTSIDE))
+	z = z0 + SPIKE_GAP
+	while z < z1 - 10.0:
+		for side: float in [-1.0, 1.0]:
+			_decor.append(_pyramid(side * (hx - 2.0), z, 2.5, top, top + 30.0, OUTSIDE))
+		z += SPIKE_GAP
+
+
+## Flying buttresses up the long sides: a pier on the step below, a spike on
+## it, and an arm leaping from the pier's top to the tier's wall.
+func _buttresses(t: Array, below: Array) -> void:
+	var step_y: float = below[1] + 3.0
+	var hx: float = t[2]
+	var lower_hx: float = below[2]
+	var pier_x := (hx + lower_hx) * 0.5
+	var z0: float = t[3]
+	var z1: float = t[4]
+	var z := z0 + BUTTRESS_GAP * 0.5
+	while z < z1 - 10.0:
+		for side: float in [-1.0, 1.0]:
+			var px := side * pier_x
+			_world.append(_box(Vector3(px - 3.0, step_y, z - 3.0), Vector3(px + 3.0, step_y + 60.0, z + 3.0), OUTSIDE))
+			_decor.append(_pyramid(px, z, 3.0, step_y + 60.0, step_y + 85.0, OUTSIDE))
+			_world.append(_beam(Vector3(px, step_y + 55.0, z), Vector3(side * hx, step_y + 150.0, z), 4.0, 3.0, OUTSIDE))
+		z += BUTTRESS_GAP
+
+
+## A slab x0..x1, z0..z1, y0..y1 with a square hole (`half`) round `hole`.
+func _hole_slab(x0: float, x1: float, z0: float, z1: float, hole: Vector2, half: float, y0: float, y1: float, texture: String) -> void:
+	var hx0 := clampf(hole.x - half, x0, x1)
+	var hx1 := clampf(hole.x + half, x0, x1)
+	var hz0 := clampf(hole.y - half, z0, z1)
+	var hz1 := clampf(hole.y + half, z0, z1)
+	for piece: Array in [[x0, x1, z0, hz0], [x0, x1, hz1, z1], [x0, hx0, hz0, hz1], [hx1, x1, hz0, hz1]]:
+		if piece[1] - piece[0] > 0.01 and piece[3] - piece[2] > 0.01:
+			_world.append(_box(Vector3(piece[0], y0, piece[2]), Vector3(piece[1], y1, piece[3]), texture, {"+y": FLOOR}))
+
+
+## A four-sided spike: a square base (`half`) at y0, its point at `top`.
+func _pyramid(cx: float, cz: float, half: float, y0: float, top: float, texture: String) -> Array:
+	var tip := Vector3(cx, top, cz)
+	return [
+		_f(Vector3(cx, y0, cz), Vector3.DOWN, texture),
+		_f(tip, _pyramid_face(Vector3(cx + half, y0, cz), tip, Vector3.RIGHT), texture),
+		_f(tip, _pyramid_face(Vector3(cx - half, y0, cz), tip, Vector3.LEFT), texture),
+		_f(tip, _pyramid_face(Vector3(cx, y0, cz + half), tip, Vector3.BACK), texture),
+		_f(tip, _pyramid_face(Vector3(cx, y0, cz - half), tip, Vector3.FORWARD), texture)]
+
+
+## A slanting beam from `a` to `b` (in a plane across Z): `width` across Z,
+## `thick` deep.
+func _beam(a: Vector3, b: Vector3, width: float, thick: float, texture: String) -> Array:
+	var along := (b - a).normalized()
+	var across := Vector3.BACK
+	var up := along.cross(across).normalized()
+	return [
+		_f(b, along, texture), _f(a, -along, texture),
+		_f(a + across * width * 0.5, across, texture), _f(a - across * width * 0.5, -across, texture),
+		_f(a + up * thick * 0.5, up, texture), _f(a - up * thick * 0.5, -up, texture)]
 
 
 # ---- Pieces ----------------------------------------------------------------------------------
@@ -481,6 +679,11 @@ func _write_map(path: String) -> Error:
 	for brush: Array in _world:
 		lines.append(_brush_text(brush))
 	lines.append("}")
+	if not _decor.is_empty():
+		lines.append("{\n\"classname\" \"func_detail_illusionary\"")
+		for brush: Array in _decor:
+			lines.append(_brush_text(brush))
+		lines.append("}")
 	for point: Array in _points:
 		var entity := PackedStringArray(["{", "\"classname\" \"%s\"" % point[0], "\"origin\" \"%s\"" % _v(_to_map(point[1]) * UNITS)])
 		for key: String in point[2]:

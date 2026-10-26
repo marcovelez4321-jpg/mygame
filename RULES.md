@@ -2045,3 +2045,10 @@ them:
   - **Where they start:** each at the stop on its route furthest from every trader already placed, the parked ones included.
 
 - 2026-10-26 The Ossuary starts right on the edge of the fog (the user's): its nearest foot at the world environment's fog_depth_end from the host's player (600 m if there's no fog), in a direction clear of the Stack and Grandma's, walking sideways along the fog line.
+
+- 2026-10-26 The Ossuary's castle (the user's: the rest of the base a massive gothic castle silhouette, 1 km tall):
+  - **The tiers:** four stepped tiers over the nave and the back.
+  - **Inside:** halls every 30 m with climbing holes, slit windows, pillars, and a shaft up from the catacombs.
+  - **Outside:** flying buttresses on piers up both long sides, and a crown of spikes (battlements, corner turrets, side spikes, great spikes on top) as func_detail_illusionary decor.
+  - **Size:** 2416 solid brushes and 537 decor.
+  - **Collision:** the walker now takes the building as one trimesh built from its mesh, instead of thousands of moving brush shapes.
