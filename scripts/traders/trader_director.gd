@@ -9,13 +9,23 @@ extends RefCounted
 ##   STACK_HEIGHTS, each session on a new spot near that height: a skybridge or
 ##   a block-top terrace (open ground found by rays down), or a room grown onto
 ##   a tower, WINDOW_CHANCE of the time a lit window room.
-##   WANDERERS: WANDERERS of them, between Grandma's yard edge and the Stack's
-##   plateau edge, by WILD_STOPS rests out in the wilds each way (each its own),
-##   resting at every one. New landmarks join the routes as they're made.
+##   WANDERERS: WANDERERS of them, spread out (the user's, 2026-10-26: never
+##   next to each other, each its own route): each walks its own third of the
+##   world round Grandma's. The first the road between Grandma's yard edge and
+##   the Stack's plateau edge, by WILD_STOPS rests out in the wilds each way;
+##   the others LOOP_STOPS rests in a loop out in their own wilds,
+##   LOOP_RADIUS from Grandma's. Each starts out on its own route, at the stop
+##   furthest from every other trader. New landmarks join the routes as
+##   they're made.
 
 const WANDERERS := 3
 const WILD_STOPS := 2
 const WILD_SIDEWAYS := Vector2(80.0, 200.0)
+const LOOP_STOPS := 5
+const LOOP_RADIUS := Vector2(900.0, 2800.0)
+## Its share of the world: this far either side of its third's middle.
+const LOOP_SPREAD := 0.8
+const WORLD_EDGE := 3500.0
 const STACK_HEIGHTS := [400.0, 2000.0, 4000.0]
 const WINDOW_CHANCE := 0.1
 ## Under the Flesh Tree: this far out past its trunk.
@@ -59,24 +69,48 @@ static func ensure(tree: SceneTree) -> void:
 		var spot := _stack_spot(stack, height, dice)
 		if spot.is_finite():
 			plans["stack_%d" % int(height)] = {at = spot, facing = Vector3.FORWARD.rotated(Vector3.UP, dice.randf() * TAU), parked = true}
-	# The wanderers.
+	# The wanderers, each its own third of the world.
 	var yard := _on_ground(terrain, house.global_position + toward * YARD_EDGE)
 	var foot := edge + toward.rotated(Vector3.UP, PI * 0.5) * 15.0 # (beside the one parked there)
+	var taken: Array[Vector3] = [under, edge] # (where traders already are)
 	for w in WANDERERS:
 		var route := PackedVector3Array()
-		route.append(yard)
-		for there_and_back in 2:
-			var from := yard if there_and_back == 0 else foot
-			var to := foot if there_and_back == 0 else yard
-			for s in WILD_STOPS:
-				var along := from.lerp(to, float(s + 1) / float(WILD_STOPS + 1))
-				var side := toward.rotated(Vector3.UP, PI * 0.5) * dice.randf_range(WILD_SIDEWAYS.x, WILD_SIDEWAYS.y) * (1.0 if dice.randf() < 0.5 else -1.0)
-				route.append(_on_ground(terrain, along + side))
-			if there_and_back == 0:
-				route.append(foot)
-		var leg := dice.randi() % route.size()
-		var start := route[(leg - 1 + route.size()) % route.size()].lerp(route[leg], dice.randf())
-		plans["wanderer_%d" % w] = {at = _on_ground(terrain, start), facing = _flat(route[leg] - start), parked = false, route = route, leg = leg}
+		if w == 0:
+			# The road: Grandma's yard, the wilds, the Stack's plateau, back.
+			route.append(yard)
+			for there_and_back in 2:
+				var from := yard if there_and_back == 0 else foot
+				var to := foot if there_and_back == 0 else yard
+				for s in WILD_STOPS:
+					var along := from.lerp(to, float(s + 1) / float(WILD_STOPS + 1))
+					var side := toward.rotated(Vector3.UP, PI * 0.5) * dice.randf_range(WILD_SIDEWAYS.x, WILD_SIDEWAYS.y) * (1.0 if dice.randf() < 0.5 else -1.0)
+					route.append(_on_ground(terrain, along + side))
+				if there_and_back == 0:
+					route.append(foot)
+		else:
+			# A loop out in its own wilds: stops round its third, in order.
+			var middle := toward.rotated(Vector3.UP, TAU * float(w) / float(WANDERERS))
+			for s in LOOP_STOPS:
+				var turn := lerpf(-LOOP_SPREAD, LOOP_SPREAD, float(s) / float(LOOP_STOPS - 1))
+				var out := middle.rotated(Vector3.UP, turn + dice.randf_range(-0.1, 0.1))
+				var at := house.global_position + out * dice.randf_range(LOOP_RADIUS.x, LOOP_RADIUS.y)
+				at.x = clampf(at.x, -WORLD_EDGE, WORLD_EDGE)
+				at.z = clampf(at.z, -WORLD_EDGE, WORLD_EDGE)
+				route.append(_on_ground(terrain, at))
+		# It starts at the stop furthest from every trader placed so far.
+		var leg := 0
+		var best := -1.0
+		for i in route.size():
+			var nearest := INF
+			for other in taken:
+				nearest = minf(nearest, Vector2(route[i].x - other.x, route[i].z - other.z).length())
+			if nearest > best:
+				best = nearest
+				leg = i
+		var start := route[leg]
+		taken.append(start)
+		var next := (leg + 1) % route.size()
+		plans["wanderer_%d" % w] = {at = start, facing = _flat(route[next] - start), parked = false, route = route, leg = next}
 	# The keeper: spawns them (a wreck where one died; none yet till the
 	# replacement's due), and the replacements as they come.
 	var keeper := TraderKeeper.new()
