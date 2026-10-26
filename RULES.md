@@ -2077,3 +2077,5 @@ them:
   - **Bell-wraiths:** 12 on the Ossuary, woken only by its bell for 10 s, with one 20 m lash each waking (20 damage, a 20 m/s shove). 80 hp, killable only while awake.
   - **Testing:** F9 buttons.
   - **The new Ossuary crawler:** later (the user's).
+
+- 2026-10-26 TESTING (the user's): ConsumedDirector.TEST_AT_HOUSE puts a nest on Grandma's house's right-hand wall (its first Consumed 5 s on), a Bell-wraith 30 m off the front 14 m up, and 3 Consumed in the air 30-50 m round the house. Set it false once they've been looked at.

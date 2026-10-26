@@ -20,6 +20,8 @@ const FLESH := Color(0.45, 0.08, 0.1)
 var nest_id := 0
 ## Circling round here, what it lets out (the Ossuary's spires); INF: none.
 var circle_at := Vector3.INF
+## Its first one out after this (seconds); below 0: some time in its first EVERY.
+var first_after := -1.0
 
 var _health: Health
 var _left := 0.0
@@ -54,7 +56,7 @@ func _ready() -> void:
 	_look.mesh = blob
 	_look.material_override = flesh()
 	add_child(_look)
-	_left = randf() * EVERY
+	_left = first_after if first_after >= 0.0 else randf() * EVERY
 	if not (Network.is_online() and not multiplayer.is_server()):
 		_health.died.connect(func(_attacker: int, _critical: bool) -> void: Network.send_nest_dead(nest_id))
 

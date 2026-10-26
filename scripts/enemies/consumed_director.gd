@@ -25,6 +25,11 @@ const GONE_PAST := 900.0
 const FREE_GONE := 500.0
 const CHECK_EVERY := 5.0
 const SEED := 7177
+## TESTING (the user's, 2026-10-26): a nest on Grandma's house, a Bell-wraith
+## hanging over her yard, and TEST_CONSUMED of the Consumed about it. Off
+## (false) once they've been looked at.
+const TEST_AT_HOUSE := true
+const TEST_CONSUMED := 3
 
 ## The Ossuary's, in its building's own space (tools/ossuary_bake.gd): nests
 ## up the spires' outer faces, [where, facing]; the Bell-wraiths' hanging
@@ -55,6 +60,8 @@ static func ensure(tree: SceneTree) -> void:
 func _ready() -> void:
 	add_to_group(&"consumed_director")
 	_stack_nests.call_deferred()
+	if TEST_AT_HOUSE:
+		_test_at_house.call_deferred()
 
 
 func _host() -> bool:
@@ -87,6 +94,38 @@ func _stack_nests() -> void:
 			get_tree().current_scene.add_child(nest)
 			var normal: Vector3 = hit.normal
 			nest.global_transform = Transform3D(Basis.looking_at(-normal, Vector3.UP) if absf(normal.y) < 0.95 else Basis.IDENTITY, (hit.position as Vector3) + normal * 1.5)
+
+
+## TESTING: the nest on the house's right-hand wall (a ray in from outside),
+## letting one out 5 s on; the Bell-wraith 30 m off its front, 14 m up; the
+## host's TEST_CONSUMED Consumed 30-50 m round it, in the air.
+func _test_at_house() -> void:
+	var house := get_tree().get_first_node_in_group(&"grandmas_house") as GrandmasHouse
+	if house == null:
+		return
+	var space := house.get_world_3d().direct_space_state
+	var wall := house.to_global(Vector3(0.0, 7.0, 2.0))
+	var out := house.global_basis.x
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(wall + out * 40.0, wall, 1))
+	if not hit.is_empty():
+		var nest := ConsumedNest.new()
+		nest.nest_id = 2000
+		nest.first_after = 5.0
+		get_tree().current_scene.add_child(nest)
+		var normal: Vector3 = hit.normal
+		nest.global_transform = Transform3D(Basis.looking_at(-normal, Vector3.UP), (hit.position as Vector3) + normal * 1.5)
+	var wraith := BellWraith.new()
+	wraith.wraith_id = 2000
+	get_tree().current_scene.add_child(wraith)
+	wraith.global_position = house.to_global(Vector3(0.0, 14.0, -30.0))
+	if not _host():
+		return
+	for i in TEST_CONSUMED:
+		var one := Consumed.new()
+		one.look = randi()
+		get_tree().current_scene.add_child(one)
+		var about := Vector3.FORWARD.rotated(Vector3.UP, TAU * float(i) / TEST_CONSUMED) * randf_range(30.0, 50.0)
+		one.global_position = house.global_position + about + Vector3.UP * randf_range(12.0, 20.0)
 
 
 func _process(delta: float) -> void:
