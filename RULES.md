@@ -2064,3 +2064,5 @@ them:
   - **Snappy steps:** each swing takes a third of the step (a quick whipped reach), then a long plant.
   - **The lurch:** the building rocks 2.5 degrees side to side over each full step and drops 8 m as each pair of feet lands, easing back up. The lurch fades out as it settles.
   - **Its feet** still aim from the steady pose.
+
+- 2026-10-26 The Ossuary's feet lift 140 m (the user's: a little more dramatic).

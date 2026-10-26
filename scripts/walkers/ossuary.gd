@@ -34,7 +34,7 @@ const STRIDE := 150.0
 ## A foot's lift at the top of its step (m), and the share of each step it
 ## swings (the user's, 2026-10-26: higher, snappier -- a quick whipped reach,
 ## then a long heavy plant: it reads from far off).
-const LIFT := 100.0
+const LIFT := 140.0 # (the user's: 100, then a little more)
 const SWING := 1.0 / 3.0
 ## The building lurching with its steps (the user's: clearly): rocking side
 ## to side ROCK, dropping BOB as each pair of feet comes down.
