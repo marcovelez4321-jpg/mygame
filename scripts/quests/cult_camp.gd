@@ -26,6 +26,7 @@ func net_restore(args: Dictionary) -> void:
 
 func _ready() -> void:
 	add_to_group(NetEntities.GROUP)
+	add_to_group(&"cult_camps")
 	set_meta(&"net_big", true)
 	var totem := QuestProps.altar(0.55, camp_seed)
 	add_child(totem)

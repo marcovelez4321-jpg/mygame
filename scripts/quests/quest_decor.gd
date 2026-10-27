@@ -31,6 +31,7 @@ func net_restore(args: Dictionary) -> void:
 
 func _ready() -> void:
 	add_to_group(NetEntities.GROUP)
+	add_to_group(&"quest_decor")
 	match kind:
 		CLIMBER_BODY:
 			var body := QuestProps.human(CLIMBER_MODEL)

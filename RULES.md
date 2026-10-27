@@ -2111,3 +2111,5 @@ them:
 - 2026-10-26 (the user's): the Consumed twice as slow: 11 m/s (was 22), and circling 7 m/s (was 14).
 
 - 2026-10-27 Built the quest web (the user's, every detail; see docs/QUESTS_TRADERS_WALKERS.md 'Built: the quest web'): Bones for the Voice, Feed the Tree, the Climber's Tags + Climb for him, the Bounty, the Fanatic (the 1.4 km tower's top collapse); the cult (faction, robes, 3 camps, ambushes); quest items; NPC lines in dialogue/*.tres. Antenna removed; Bell and Feather wait for the angels; no warning the Bounty's target. Fixed: F with an item in hand now uses things that take it (takes_held()) -- selling the last pack never worked before. Headless-tested on test_world: no script errors.
+
+- 2026-10-27 (the user's): F9 quest test buttons (QuestTests: start them all; give skull/offering, meat, bomb parts, tags; go to each quest place; cult ambush; Fanatic go off; blow the 1.4 km top). Grapple, like Pathfinder's: while pulled, input against the pull is ignored (only steering across it counts). Holding S used to out-push the pull (air accel 10x wishspeed beat pull_accel 70), and with no gravity during the pull you floated.

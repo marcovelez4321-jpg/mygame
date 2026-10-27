@@ -898,7 +898,16 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		# Launching or perched, the grapple moves you.
 		if not grapple.holds_still():
 			var before := Vector2(velocity.x, velocity.z).length()
-			_air_move(wishdir, delta)
+			# Pulled (the user's: like Pathfinder's grapple): nothing you hold
+			# fights the pull -- holding S used to out-push it (air steering
+			# beat the pull's acceleration) and, with no gravity, left you
+			# floating. Only steering across it counts.
+			var steer := wishdir
+			var rope := grapple.pull_direction()
+			var against := steer.dot(rope)
+			if against < 0.0:
+				steer -= rope * against
+			_air_move(steer, delta)
 			_cap_gain(before)
 
 		# Wall jump: airborne only (it's an air-movement tool, not a way to

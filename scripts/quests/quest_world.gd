@@ -40,6 +40,8 @@ var _check_left := 2.0
 var _ambush_left := 0.0
 var _skull_inside := {}
 var _climber_camp_at := Vector3.INF
+## His cold camp at 1 km, this session (F9's "Go to").
+var climber_camp: Camp
 var _mara_placed := false
 var _skull_placed := false
 var _parts_placed := false
@@ -141,6 +143,7 @@ func _place_on_stack(stack: Megastructure) -> void:
 		if spot.is_finite():
 			_climber_camp_at = spot
 			var camp := Camp.build(scene, Transform3D(Basis(Vector3.UP, Quests.world_dice(105).randf() * TAU), spot), 0, true)
+			climber_camp = camp
 			_climber_loot(camp)
 	# The summit cairn.
 	var top := stack.to_global(Vector3(tallest.x, tallest.y + 80.0, tallest.z))

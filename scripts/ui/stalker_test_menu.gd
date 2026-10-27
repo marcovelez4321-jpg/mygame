@@ -42,6 +42,9 @@ func _ready() -> void:
 		_add_button(grid, StringName(stunt.to_lower()), stunt.capitalize())
 	for extra: Array in EXTRA:
 		_add_button(grid, StringName(extra[0]), extra[1])
+	# The quest web's (QuestTests).
+	for test: Array in QuestTests.BUTTONS:
+		_add_button(grid, StringName(test[0]), test[1])
 	_result = Label.new()
 	_result.text = ""
 	box.add_child(_result)
@@ -81,6 +84,10 @@ func _trigger(event: StringName) -> void:
 		_result.text = "Host only: the host runs the Stalker."
 		return
 	var tree := get_tree()
+	if String(event).begins_with("q_"):
+		var me := PlayerMovement.local_player(tree)
+		_result.text = QuestTests.run(event, me) if me else "No player here."
+		return
 	if event == &"consumed_here":
 		var me := PlayerMovement.local_player(tree)
 		var one := Consumed.new()

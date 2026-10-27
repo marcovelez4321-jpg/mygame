@@ -523,6 +523,16 @@ func is_perched() -> bool:
 	return _rope == Rope.PERCH or _rope == Rope.TOUCH
 
 
+## Which way the pull's hauling you (ZERO when it isn't): PlayerMovement
+## won't let what you hold fight it (the user's: like Pathfinder's grapple --
+## hold S and you're still flung forward).
+func pull_direction() -> Vector3:
+	if _rope != Rope.PULL or not is_instance_valid(_anchor):
+		return Vector3.ZERO
+	var to := _to_spot()
+	return to.normalized() if to.length_squared() > 0.01 else Vector3.ZERO
+
+
 ## No gravity while it pulls or holds you.
 func gravity_scale() -> float:
 	return 0.0 if holds_still() or _rope == Rope.PULL else 1.0
