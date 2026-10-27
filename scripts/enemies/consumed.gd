@@ -18,7 +18,8 @@ extends RigidBody3D
 ## with net_spawn_args); every game dangles its own limbs and aims its own
 ## head (presentation).
 
-const SPEED := 22.0
+## (The user's: 22, then half, 2026-10-26.)
+const SPEED := 11.0
 ## Turning at most this many degrees a second toward you (the user's: like
 ## the heart's blood orbs, then twice theirs).
 const TURN_RATE := HeartOrb.TURN_RATE * 2.0
@@ -40,7 +41,7 @@ const MEAT_WEIGHT := 2.0
 const NOTICE := 120.0
 const LOSE := 400.0
 const CIRCLE_RADIUS := Vector2(60.0, 120.0)
-const CIRCLE_SPEED := 14.0
+const CIRCLE_SPEED := 7.0 # (halved with its speed)
 const HEIGHT := 1.8
 const MODEL_DIRS := ["res://art/characters/Characters_psx/Models/Male/", "res://art/characters/Characters_psx/Models/Female/"]
 const ROACH := "res://scenes/enemy/roach_model.tscn"

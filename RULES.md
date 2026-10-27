@@ -2107,3 +2107,5 @@ them:
   - **Tumbling, and for 5 s after death:** any simulated bone that went through something in a step is put back on its near side.
 
 - 2026-10-26 (the user's): the Consumed steer twice as hard (turn rate 2x the blood orbs', 67.5 degrees a second). Fixed them shooting into the sky after a tumble: their new heading was taken from their velocity while the ground-clearance lift was pushing them up. It's now taken level.
+
+- 2026-10-26 (the user's): the Consumed twice as slow: 11 m/s (was 22), and circling 7 m/s (was 14).
