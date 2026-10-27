@@ -734,8 +734,8 @@ func _keep_in_step() -> void:
 ## AIM_EYE_DISTANCE away, plus the weapon's aim_position as a nudge.
 ## Otherwise just aim_position.
 func aim_position_for(weapon: WeaponData) -> Vector3:
-	if weapon.aim_sight_node.is_empty() and _auto_sights != null and weapon.auto_sights:
-		return _auto_aim()[0] + weapon.viewmodel_position
+	if _auto_sights_on(weapon):
+		return weapon.viewmodel_position # (placed exactly while aiming instead: _aim_exactly())
 	if weapon.aim_sight_node.is_empty() or _sight_center == null:
 		return weapon.aim_position
 	var sight_offset: Vector3 = _model_rest_transform.basis * (_sight_center as Vector3)
@@ -817,21 +817,28 @@ func _find_auto_sights(weapon: WeaponData) -> Variant:
 	return [rear, front]
 
 
-## The aimed hand: [where it moves, how it turns] so the sights line up.
-func _auto_aim() -> Array:
+func _auto_sights_on(weapon: WeaponData) -> bool:
+	return weapon != null and _auto_sights != null and weapon.auto_sights and weapon.aim_sight_node.is_empty()
+
+
+## Aimed (the user's: the iron sights on the screen's centre, where the
+## reticle is): the hand placed in the camera's own space -- measured each
+## frame from where it actually hangs (the viewmodel's own offsets, the raise
+## and switch animations), so nothing can push it off -- the rear sight
+## AIM_EYE_DISTANCE dead ahead of your eye, the front sight on the same line;
+## blended in from the hip as the gun comes up.
+func _aim_exactly() -> void:
+	var weapon := _weapons.current_weapon() if _weapons else null
+	if not _auto_sights_on(weapon):
+		return
+	var camera := get_parent() as Node3D
+	var parent := camera.global_transform.affine_inverse() * _swing_pivot.global_transform
 	var rear: Vector3 = _auto_sights[0]
 	var front: Vector3 = _auto_sights[1]
 	var line := (front - rear).normalized()
 	var turn := Quaternion(line, Vector3.FORWARD) if line.dot(Vector3.FORWARD) > -0.99 else Quaternion.IDENTITY
-	return [Vector3(0.0, 0.0, -AIM_EYE_DISTANCE) - turn * rear, turn]
-
-
-## How the hand turns, fully aimed (the auto sights' straightening).
-func aim_turn() -> Quaternion:
-	var weapon := _weapons.current_weapon() if _weapons else null
-	if weapon == null or _auto_sights == null or not weapon.auto_sights or not weapon.aim_sight_node.is_empty():
-		return Quaternion.IDENTITY
-	return _auto_aim()[1]
+	var aimed := Transform3D(Basis(turn), Vector3(0.0, 0.0, -AIM_EYE_DISTANCE) - turn * rear)
+	_sway_pivot.transform = _sway_pivot.transform.interpolate_with(parent.affine_inverse() * aimed, aim_steady)
 
 
 ## What sways and bobs with your hands (the journal's held on it: JournalView).
@@ -1795,9 +1802,9 @@ func _update_sway(delta: float) -> void:
 	var heavy := _heavy_motion(delta)
 	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0) * calm + aim_offset + _preview_offset + LOWERED_OFFSET * dip + (heavy[0] as Vector3) * calm
 	_sway_pivot.rotation_degrees = Vector3(_sway_tilt.x, _sway_tilt.y, 0.0) * calm + Vector3(LOWERED_TILT_DEGREES * dip, 0.0, 0.0) + (heavy[1] as Vector3) * calm
-	# Aimed: the hand turned so the sights run straight ahead (auto sights).
+	# Aimed with the auto sights: placed exactly, the sights on the screen's centre.
 	if aim_steady > 0.0:
-		_sway_pivot.basis = Basis(Quaternion.IDENTITY.slerp(aim_turn(), aim_steady)) * _sway_pivot.basis
+		_aim_exactly()
 
 
 # ---- Heavy (grounded, the user's 2026-10-27: heavy inertia) ------------------------------

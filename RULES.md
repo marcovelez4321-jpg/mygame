@@ -2131,3 +2131,5 @@ them:
 - 2026-10-27 The Stacks demo (the user's, docs/ZOMBIES_DIRECTION.md): tools/make_stacks_demo.gd -> maps/zombies/stacks_demo.map + scenes/zombies/stacks_demo.tscn (rooms carved out of solid tower blocks; facades painted). Headless-tested: no script errors.
 
 - 2026-10-27 (the user's): the gun's sway back to how it was (go_heavy no longer changes it) and no walk bob; the sprint carry and landing dip kept. Movement 25% faster: walk 5.625, sprint 8.75, speed cap 15, wall jumps from walking speed (5.625).
+
+- 2026-10-27 (the user's: the gun sat too high aimed): auto sights now placed exactly in the camera's own space each frame (Viewmodel._aim_exactly: the hand's real offset from the eye measured, the rear sight AIM_EYE_DISTANCE dead ahead, the front on the same line), blended from the hip by aim_steady. The old way assumed the hand's pivot was at the eye.
