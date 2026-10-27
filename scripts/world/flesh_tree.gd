@@ -90,6 +90,39 @@ const FED_ROOTS := [
 @export var creature_size_min: float = 3.0
 @export var creature_size_max: float = 9.0
 @export var creature_seen_range: float = 1500.0
+@export_group("Towers")
+## The Zombies Stacks (the user's, 2026-10-27; docs/ZOMBIES_DIRECTION.md):
+## standing in the middle of a cluster of towers, its branches are tentacles
+## twisting out to the towers' corners and gripping them round like a squid's
+## -- one in each band of grip_heights at every corner facing it -- and the
+## mutation orbs grow at the end of every one (orbs_everywhere). Empty: the
+## open world's oak.
+@export var grip_towers: Array[AABB] = []
+## Bands of height (min, max metres) a branch grips a corner at.
+@export var grip_heights := PackedVector2Array()
+## A branch's thickness leaving the trunk, and at its tip.
+@export var grip_radius := Vector2(4.0, 1.2)
+## A branch carrying on from where a bridge runs into the trunk (global; INF:
+## none): from walkway_from (the bridge's end) it wraps round the trunk at
+## that height, flat on top, walkable, then out to walkway_to and into the
+## wall there.
+@export var walkway_from := Vector3.INF
+@export var walkway_to := Vector3.INF
+@export var walkway_radius: float = 3.0
+## Ripe: an orb at every branch's tip, each a random mutation that player
+## doesn't have (not the open world's three near the top).
+@export var orbs_everywhere: bool = false
+## How close you have to be to read an orb's mutation.
+@export var orb_read_range: float = 15.0
+## The spiral of limbs starts this high (the open world's from 12 m; the
+## Stacks': only in its crown, above the towers).
+@export var limbs_from: float = 12.0
+## The flare at its foot: this much wider at the ground, easing off over
+## flare_reach metres (0: a twelfth of its height, the open world's).
+@export var flare_share: float = 0.6
+@export var flare_reach: float = 0.0
+## Set down on the ground under it as it starts (off: it's placed exactly).
+@export var sit_on_ground: bool = true
 @export_group("Testing")
 ## The user's, for testing: three pods are ripe the moment the scene starts.
 @export var pods_on_start: bool = true
@@ -136,6 +169,12 @@ static func ripen_for(player: PlayerMovement) -> void:
 		for mutation: StringName in Virus.MUTATIONS:
 			pool.append(mutation)
 	if pool.is_empty():
+		return
+	if _tree.orbs_everywhere:
+		# An orb on every branch (the user's): each a random one of them.
+		for i in _tree._pod_spots.size():
+			_tree._grow_pod(pool.pick_random(), i)
+		_tree._net_ripened.rpc()
 		return
 	# The newest mutations first (the user's): the pool is in the order they
 	# were made (Virus.MUTATIONS), so the last made come up first.
@@ -246,8 +285,13 @@ func _ready() -> void:
 	_notifier.screen_exited.connect(_on_seen.bind(false))
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	_sit_on_ground()
+	if sit_on_ground:
+		_sit_on_ground()
 	_build(_steps, _seed)
+	# Built after the navmesh was read: read again, so nothing walks into it.
+	var navigation := get_tree().current_scene.get_node_or_null(^"WorldNavigation")
+	if navigation and navigation.has_method(&"refresh_static"):
+		navigation.call(&"refresh_static")
 	if not _decides():
 		_net_ask.rpc_id(1)
 	elif pods_on_start:
@@ -327,13 +371,14 @@ func _build(steps: int, layout_seed: int) -> void:
 		drift += Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * base_radius * gnarl * 0.15
 		drift = drift.limit_length(base_radius * gnarl * 2.0)
 		trunk.append(Vector3(drift.x, t * height, drift.y))
-		var flare := 1.0 + 0.6 * pow(1.0 - minf(t * 12.0, 1.0), 2.0)
+		var flare_over := flare_reach if flare_reach > 0.0 else height / 12.0
+		var flare := 1.0 + flare_share * pow(1.0 - minf(t * height / flare_over, 1.0), 2.0)
 		trunk_radii.append(lerpf(base_radius, base_radius * top_width_share, pow(t, 0.8)) * flare)
 	_tube(muscle, trunk, trunk_radii, Vector3.RIGHT)
 
 	# The limbs: spiralling up, every branch_every metres.
 	var angle := rng.randf() * TAU
-	var y := 12.0
+	var y := limbs_from
 	while y < height - 6.0:
 		angle += deg_to_rad(137.5) + rng.randf_range(-0.4, 0.4) # the golden angle round
 		var t := y / height
@@ -378,10 +423,16 @@ func _build(steps: int, layout_seed: int) -> void:
 		_tube(muscle, root, root_radii, Vector3.UP, true)
 	_house_roots(muscle, base_radius)
 
-	# Pods hang off the three highest limbs (round different sides).
+	# The Stacks': tentacles out to the towers' corners, gripping them.
+	var grip_tips := _grip_branches(rng, muscle, trunk, height, base_radius)
+	# Pods hang off the three highest limbs (round different sides) -- or
+	# (orbs_everywhere) one off the tip of every gripping branch.
 	_pod_spots.clear()
+	if orbs_everywhere and not grip_tips.is_empty():
+		for tip in grip_tips:
+			_pod_spots.append(tip + Vector3.DOWN * 1.2)
 	for i in range(tips.size() - 1, -1, -1):
-		if _pod_spots.size() >= POD_COUNT:
+		if not _pod_spots.is_empty() and (orbs_everywhere or _pod_spots.size() >= POD_COUNT):
 			break
 		_pod_spots.append(tips[i] + Vector3.DOWN * 1.2)
 
@@ -404,6 +455,8 @@ func _build(steps: int, layout_seed: int) -> void:
 	_mesh.mesh = mesh
 	_shape.shape = mesh.create_trimesh_shape()
 	var reach_out := maxf(root_reach * scale_up * 1.2, branch_length_max * 1.2 + base_radius)
+	for tip in grip_tips:
+		reach_out = maxf(reach_out, Vector2(tip.x, tip.z).length() + 20.0)
 	_notifier.aabb = AABB(Vector3(-reach_out, -10.0, -reach_out), Vector3(reach_out * 2.0, height + 20.0, reach_out * 2.0))
 	_place_creatures(rng, trunk, limbs, base_radius, height)
 	# Ripe pods move with the limbs.
@@ -430,6 +483,124 @@ func _house_roots(muscle: SurfaceTool, base_radius: float) -> void:
 			var u := float(i) / maxi(smooth.size() - 1, 1)
 			radii.append(lerpf(spec[1], spec[2], pow(u, 0.6)) * GrandmasHouse.SIZE)
 		_tube(muscle, smooth, radii, Vector3.UP, true)
+
+
+## The Stacks' tentacle branches (grip_towers): out of the trunk, twisting
+## across the air to a tower's corner, laid along the face it comes to, round
+## the corner and onto the other face, the tip curling off it -- one in each
+## band of grip_heights, at every corner with a face toward the tree. Left
+## out: any whose way there runs through a tower. Then the walkway (walkway_to).
+## The tips, in its own space (where the orbs hang).
+func _grip_branches(rng: RandomNumberGenerator, muscle: SurfaceTool, trunk: PackedVector3Array, height: float, base_radius: float) -> Array[Vector3]:
+	var tips: Array[Vector3] = []
+	if grip_towers.is_empty():
+		return tips
+	var boxes: Array[AABB] = []
+	for box in grip_towers:
+		boxes.append(AABB(box.position - global_position, box.size).grow(-0.5))
+	for box in boxes:
+		var middle := box.get_center()
+		for cx: float in [box.position.x, box.end.x]:
+			for cz: float in [box.position.z, box.end.z]:
+				var corner := Vector3(cx, 0.0, cz)
+				var face_x := Vector3(signf(cx - middle.x), 0.0, 0.0)
+				var face_z := Vector3(0.0, 0.0, signf(cz - middle.z))
+				var to_tree := -corner
+				to_tree.y = 0.0
+				if face_x.dot(to_tree) <= 0.0 and face_z.dot(to_tree) <= 0.0:
+					continue # (round the back of its tower)
+				var lay := face_x if face_x.dot(to_tree) >= face_z.dot(to_tree) else face_z
+				var wrap := face_z if lay == face_x else face_x
+				for band in grip_heights:
+					# (A few tries: a twist that swings it through a tower is rerolled.)
+					var path := PackedVector3Array()
+					for attempt in 5:
+						var top := minf(rng.randf_range(band.x, band.y), box.end.y - 10.0)
+						if top < band.x:
+							break
+						path = _grip_path(rng, corner, lay, wrap, top, trunk, height, base_radius, boxes)
+						if not path.is_empty():
+							break
+					if path.is_empty():
+						continue
+					var radii := PackedFloat32Array()
+					for i in path.size():
+						var u := float(i) / maxi(path.size() - 1, 1)
+						radii.append(lerpf(grip_radius.x, grip_radius.y, pow(u, 0.7)))
+					_tube(muscle, path, radii, Vector3.UP, true)
+					tips.append(path[path.size() - 1])
+	if walkway_to.is_finite() and walkway_from.is_finite():
+		_walkway(rng, muscle, trunk, height, base_radius)
+	return tips
+
+
+## One gripping branch's path (empty: its way runs through a tower).
+func _grip_path(rng: RandomNumberGenerator, corner: Vector3, lay: Vector3, wrap: Vector3, top: float,
+		trunk: PackedVector3Array, height: float, base_radius: float, boxes: Array[AABB]) -> PackedVector3Array:
+	var hug := grip_radius.y + 0.8
+	# Along the face it comes to, round the corner, onto the other, sliding
+	# down as it wraps; the tip curling off the wall.
+	var onto := corner + lay * (hug + 0.6) - wrap * rng.randf_range(6.0, 14.0) + Vector3.UP * (top + 5.0)
+	var round_it := corner + (lay + wrap).normalized() * (hug + 1.0) + Vector3.UP * (top + 1.5)
+	var past := corner + wrap * hug - lay * rng.randf_range(4.0, 9.0) + Vector3.UP * (top - 2.0)
+	var curl := past + wrap * 2.0 - lay * 2.5 + Vector3.UP * 1.5
+	# Out of the trunk lower down (it reaches up to its grip).
+	var low := clampf(top * rng.randf_range(0.55, 0.85), 6.0, height * 0.95)
+	var axis := _along(trunk, low, height)
+	var out := Vector3(onto.x - axis.x, 0.0, onto.z - axis.z).normalized()
+	var start := axis + out * _trunk_radius(low, height, base_radius) * 0.7
+	for box in boxes:
+		if box.intersects_segment(start, onto):
+			return PackedVector3Array()
+	# Twisting on the way, like a tentacle feeling for it.
+	var side := out.cross(Vector3.UP).normalized()
+	var span := start.distance_to(onto)
+	var twist := span * rng.randf_range(0.08, 0.16) * (1.0 if rng.randf() < 0.5 else -1.0)
+	var bend_a := start.lerp(onto, 0.33) + side * twist + Vector3.UP * span * 0.05
+	var bend_b := start.lerp(onto, 0.66) - side * twist * 0.7
+	var path := _smoothed(PackedVector3Array([start, bend_a, bend_b, onto, round_it, past, curl]), 4)
+	for i in path.size() - 1:
+		for box in boxes:
+			if i < path.size() - 8 and box.intersects_segment(path[i], path[i + 1]):
+				return PackedVector3Array() # (the twist swung it through a tower)
+	return path
+
+
+## The walkway: from the bridge's end (walkway_from), round the trunk hugging
+## it at that height (the way round chosen at random), then out to
+## walkway_to and into the wall there; its top at the bridge's height.
+func _walkway(rng: RandomNumberGenerator, muscle: SurfaceTool, trunk: PackedVector3Array, height: float, base_radius: float) -> void:
+	var from := to_local(walkway_from) + Vector3.DOWN * walkway_radius
+	var to := to_local(walkway_to) + Vector3.DOWN * walkway_radius
+	var y := from.y
+	var axis := _along(trunk, y, height)
+	axis.y = y
+	var hug := _trunk_radius(y, height, base_radius) + walkway_radius * 0.4
+	var a0 := atan2(from.z - axis.z, from.x - axis.x)
+	var a1 := atan2(to.z - axis.z, to.x - axis.x)
+	var sweep := wrapf(a1 - a0, -PI, PI)
+	if absf(absf(sweep) - PI) < 0.3:
+		sweep = absf(sweep) * (1.0 if rng.randf() < 0.5 else -1.0)
+	# (Starting out under the bridge's end.)
+	var points := PackedVector3Array([axis + Vector3(cos(a0), 0.0, sin(a0)) * (hug + 6.0)])
+	var steps := maxi(int(absf(sweep) * hug / 8.0), 3)
+	for k in steps + 1:
+		var a := a0 + sweep * float(k) / steps
+		points.append(axis + Vector3(cos(a), 0.0, sin(a)) * hug)
+	var out := Vector3(cos(a1), 0.0, sin(a1))
+	points.append(axis + out * (hug + (Vector2(to.x - axis.x, to.z - axis.z).length() - hug) * 0.5))
+	points.append(Vector3(to.x, y, to.z) + out * 1.5)
+	var path := _smoothed(points, 3)
+	for i in path.size():
+		path[i].y = y # (flat: walkable all the way)
+	var radii := PackedFloat32Array()
+	for i in path.size():
+		radii.append(walkway_radius)
+	_tube(muscle, path, radii, Vector3.UP)
+
+## The trunk's radius `y` up (no flare).
+func _trunk_radius(y: float, height: float, base_radius: float) -> float:
+	return lerpf(base_radius, base_radius * top_width_share, pow(clampf(y / height, 0.0, 1.0), 0.8))
 
 
 ## `points` as a smooth curve through them (Catmull-Rom), `steps` a stretch.
@@ -585,7 +756,7 @@ func _grow_pod(mutation: StringName, slot: int) -> void:
 	var pod := CarryItem.spawn(self, to_global(_pod_spots[slot]), {kind = CarryItem.POD, mutation = mutation})
 	pod.set_meta(&"on_tree", true)
 	pod.set_meta(&"net_big", true) # seen by clients from well below (NetEntities)
-	pod.set_meta(&"highlight_range", 15.0) # read up close (the user's: not from the ground)
+	pod.set_meta(&"highlight_range", orb_read_range) # read up close (the user's: not from the ground)
 	pod.freeze = true
 	_pods.append(pod)
 

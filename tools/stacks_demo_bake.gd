@@ -89,10 +89,22 @@ const LOADOUT := ["res://weapons/starter_gun.tres", "res://weapons/shotgun.tres"
 		"res://weapons/pkm.tres", "res://weapons/ppsh.tres", "res://weapons/rpg.tres", "res://weapons/revolver.tres",
 		"res://weapons/machine_gun.tres", "res://weapons/sniper.tres"]
 ## Cold dusk (the user's).
-const DUSK_FOG := Color(0.4, 0.43, 0.5)
-const SKY_TOP := Color(0.16, 0.19, 0.27)
-const SKY_HORIZON := Color(0.52, 0.42, 0.42)
-const SUN := Color(1.0, 0.64, 0.48)
+## The Flesh Tree (the user's, 2026-10-27: in the middle of the towers, 4 km
+## tall, a 50 m trunk; the bridge ends at it, a branch carries on to tower D):
+## its foot in the courtyard, and how far round it nothing else is put.
+const TREE_AT := Vector3(0.0, 0.0, 108.0)
+const TREE_HEIGHT := 4000.0
+const TREE_WIDTH := 50.0
+const TREE_CLEAR := 36.0
+## Where its walkway branch meets tower D (its doorway's floor).
+const TREE_WALKWAY_TO := Vector3(0.0, 30.0, 153.0)
+## Its tentacle branches' grips up the towers' corners: one in each band of
+## heights a corner (the lowest within the tentacle's reach of the courtyard).
+const TREE_GRIPS := [Vector2(12.0, 35.0), Vector2(60.0, 400.0), Vector2(400.0, 3000.0)]
+const OPEN_ENVIRONMENT := "res://worlds/test_world/environment.tres"
+const OPEN_FOG := 1.3333 # (the open world's BiomeAtmosphere.fog_distance)
+## The open world's cloud deck height.
+const CLOUDS_AT := 500.0
 const LAMP := Color(0.72, 0.82, 1.0)
 
 ## [lo, hi, outer lo, outer hi, is a tower (its outer faces painted)].
@@ -108,6 +120,7 @@ var _keep_clear: Array[AABB] = []
 ## Rebar: decor, no collision (func_detail_illusionary) -- nothing snags on it.
 var _decor_bars: Array = []
 var _dice := RandomNumberGenerator.new()
+var _sun: DirectionalLight3D
 
 
 func run(_tree: SceneTree) -> void:
@@ -269,9 +282,9 @@ func _courtyard() -> void:
 		var x0 := -72.0 if side < 0.0 else 66.0
 		_block(Vector3(x0, 0.0, 74.0), Vector3(x0 + 6.0, 1.2, 148.0)) # the raised walk
 		_ramp_z(x0, x0 + 6.0, 64.0, 0.0, 74.0, 1.2)
-	for at: Vector2 in [Vector2(-24.0, 90.0), Vector2(24.0, 90.0), Vector2(-24.0, 125.0), Vector2(24.0, 125.0)]:
+	# Planters out round the Flesh Tree (its trunk stands where the plinth was).
+	for at: Vector2 in [Vector2(-50.0, 90.0), Vector2(50.0, 90.0), Vector2(-50.0, 125.0), Vector2(50.0, 125.0)]:
 		_block(Vector3(at.x - 3.0, 0.0, at.y - 3.0), Vector3(at.x + 3.0, 1.0, at.y + 3.0)) # planters
-	_block(Vector3(-5.0, 0.0, 100.0), Vector3(5.0, 10.0, 110.0)) # the plinth
 	# Windows on the other towers: boarded into closets in them.
 	_crawl_window(Vector3(-73.0, 0.0, 100.0), Vector3.LEFT, Vector3(-82.0, 0.0, 96.0), Vector3(-74.0, 4.0, 104.0))
 	_crawl_window(Vector3(73.0, 0.0, 120.0), Vector3.RIGHT, Vector3(74.0, 0.0, 116.0), Vector3(82.0, 4.0, 124.0))
@@ -310,19 +323,21 @@ func _great_hall() -> void:
 ## courtyard from the great hall to the tower opposite, its edges bristling
 ## with rebar, washing strung along it, lamps, and rubble floating round it.
 func _bridge() -> void:
-	_block(Vector3(-5.0, 29.0, 60.0), Vector3(5.0, 30.0, 152.0))
+	# Into the Flesh Tree's trunk (its walkway branch carries on to tower D).
+	_block(Vector3(-5.0, 29.0, 60.0), Vector3(5.0, 30.0, TREE_AT.z - TREE_WIDTH * 0.36))
 	_room(Vector3(-3.0, 30.0, 152.0), Vector3(3.0, 36.0, 154.0))
 	_room(Vector3(-8.0, 30.0, 154.0), Vector3(8.0, 38.0, 166.0)) # a landing inside, for now
 	_thing(&"lamp", Transform3D(Basis.IDENTITY, Vector3(0.0, 36.0, 160.0)), {energy = 0.8, range = 14.0})
-	for z in range(66, 150, 12):
+	var bridge_end := int(TREE_AT.z - TREE_WIDTH * 0.5)
+	for z in range(66, bridge_end, 12):
 		for side: float in [-1.0, 1.0]:
 			_thing(&"pole", Transform3D(Basis.IDENTITY, Vector3(side * 4.6, 30.0, float(z))), {})
-			if z + 12 < 150:
+			if z + 12 < bridge_end:
 				_thing(&"clothes", Transform3D(Basis.IDENTITY, Vector3(side * 4.6, 32.8, float(z))), {to = Vector3(side * 4.6, 32.8, float(z + 12))})
 		if z % 36 == 6:
 			_thing(&"lamp_post", Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(4.2, 30.0, float(z))), {})
 	for k in 10:
-		var along := _dice.randf_range(64.0, 148.0)
+		var along := _dice.randf_range(64.0, float(bridge_end) - 2.0)
 		var side := -1.0 if _dice.randf() < 0.5 else 1.0
 		_rebar(Vector3(side * 5.0, 29.5, along), Vector3(side, -0.4, 0.0))
 	# Rubble floating in the courtyard's air, round the bridge.
@@ -330,6 +345,8 @@ func _bridge() -> void:
 		var at := Vector3(_dice.randf_range(-62.0, 62.0), _dice.randf_range(12.0, 62.0), _dice.randf_range(66.0, 146.0))
 		if absf(at.x) < 9.0 and at.y > 24.0 and at.y < 40.0:
 			at.x += 14.0 * signf(at.x if at.x != 0.0 else 1.0)
+		if not _off_tree(at, 6.0):
+			continue
 		_chunk(at, _dice.randf_range(2.0, 7.0))
 
 
@@ -437,14 +454,28 @@ func _dressing() -> void:
 	_thing(&"climber", Transform3D(Basis.IDENTITY, Vector3(-46.0, 0.0, 140.0)), {})
 	_camp(Vector3(-52.0, 1.2, 128.0))
 	# Cables across the courtyard, tower to tower, high up.
+	# (Any that would run through the Flesh Tree's trunk are tied onto it.)
 	for k in 7:
 		var y := _dice.randf_range(18.0, 80.0)
+		var from: Vector3
+		var to: Vector3
 		if _dice.randf() < 0.5:
 			var z := _dice.randf_range(70.0, 145.0)
-			_thing(&"wire", Transform3D(Basis.IDENTITY, Vector3(-72.0, y, z)), {to = Vector3(72.0, y - _dice.randf_range(0.0, 6.0), z + _dice.randf_range(-10.0, 10.0))})
+			from = Vector3(-72.0, y, z)
+			to = Vector3(72.0, y - _dice.randf_range(0.0, 6.0), z + _dice.randf_range(-10.0, 10.0))
 		else:
 			var x := _dice.randf_range(-60.0, 60.0)
-			_thing(&"wire", Transform3D(Basis.IDENTITY, Vector3(x, y, 60.0)), {to = Vector3(x + _dice.randf_range(-15.0, 15.0), y - _dice.randf_range(0.0, 6.0), 152.0)})
+			from = Vector3(x, y, 60.0)
+			to = Vector3(x + _dice.randf_range(-15.0, 15.0), y - _dice.randf_range(0.0, 6.0), 152.0)
+		var near := Geometry2D.get_closest_point_to_segment(Vector2(TREE_AT.x, TREE_AT.z), Vector2(from.x, from.z), Vector2(to.x, to.z))
+		var miss := near.distance_to(Vector2(TREE_AT.x, TREE_AT.z))
+		var trunk := TREE_WIDTH * 0.5
+		if miss < trunk:
+			var flat_from := Vector2(from.x, from.z)
+			var length := flat_from.distance_to(Vector2(to.x, to.z))
+			var meets := flat_from.distance_to(near) - sqrt(trunk * trunk - miss * miss)
+			to = from.lerp(to, clampf(meets / maxf(length, 0.01), 0.05, 1.0))
+		_thing(&"wire", Transform3D(Basis.IDENTITY, from), {to = to})
 	# Washing from the courtyard's walls to poles.
 	for k in 4:
 		var side := -1.0 if k < 2 else 1.0
@@ -455,8 +486,19 @@ func _dressing() -> void:
 
 
 ## A spot on `area`'s floor, at random.
+## (Never in the Flesh Tree's trunk.)
 func _on(area: AABB) -> Vector3:
-	return Vector3(_dice.randf_range(area.position.x, area.end.x), area.position.y, _dice.randf_range(area.position.z, area.end.z))
+	var at := Vector3.ZERO
+	for attempt in 20:
+		at = Vector3(_dice.randf_range(area.position.x, area.end.x), area.position.y, _dice.randf_range(area.position.z, area.end.z))
+		if _off_tree(at):
+			break
+	return at
+
+
+## Clear of the Flesh Tree's trunk (by `margin` more).
+func _off_tree(at: Vector3, margin: float = 0.0) -> bool:
+	return Vector2(at.x - TREE_AT.x, at.z - TREE_AT.z).length() > TREE_CLEAR + margin
 
 
 # ---- Pieces ----------------------------------------------------------------------------------
@@ -741,15 +783,21 @@ func _f(point: Vector3, normal: Vector3, texture: String) -> Dictionary:
 # ---- The scene's things ----------------------------------------------------------------------
 
 func _build_things(root: Node3D) -> void:
+	# The open world's sun (its angle and shadows), tinted by its air.
+	_sun = DirectionalLight3D.new()
+	_sun.name = "Sun"
+	_sun.transform = Transform3D(Vector3(0.8660254, 0.0, -0.5), Vector3(-0.38302222, 0.64278764, -0.66341394), Vector3(0.32139382, 0.76604444, 0.5566704), Vector3.ZERO)
+	_sun.light_energy = 1.15
+	_sun.shadow_enabled = true
+	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	_sun.directional_shadow_max_distance = 90.0
 	_add(root, _environment())
-	var sun := DirectionalLight3D.new()
-	sun.name = "Sun"
-	sun.light_color = SUN
-	sun.light_energy = 0.55
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 120.0
-	sun.basis = Basis.from_euler(Vector3(deg_to_rad(-9.0), deg_to_rad(-35.0), 0.0))
-	_add(root, sun)
+	_add(root, _sun)
+	var clouds := MeshInstance3D.new()
+	clouds.name = "CloudDeck"
+	clouds.set_script(load("res://scripts/world/cloud_deck.gd"))
+	clouds.set(&"height", CLOUDS_AT)
+	_add(root, clouds)
 	var skyline := Node3D.new()
 	skyline.name = "SkylineLayer"
 	skyline.set_script(load("res://scripts/world/skyline_layer.gd"))
@@ -762,6 +810,7 @@ func _build_things(root: Node3D) -> void:
 	spawner.name = "WindowSpawner"
 	spawner.set_script(load("res://scripts/zombies/window_spawner.gd"))
 	_add(root, spawner)
+	_add(root, _flesh_tree())
 	var horde := Node.new()
 	horde.name = "DemoHorde"
 	horde.set_script(load("res://scripts/zombies/demo_horde.gd"))
@@ -1011,31 +1060,55 @@ func _mesh(size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
 	return mesh
 
 
+## The Flesh Tree in the courtyard (FleshTree's towers layout): 4 km tall, a
+## 50 m trunk, its tentacles gripping the four towers' corners, orbs on every
+## one; its walkway round from the bridge's end to tower D. It doesn't grow
+## here; only its crown has the open world's spiral of limbs.
+func _flesh_tree() -> Node3D:
+	var tree := Node3D.new()
+	tree.name = "FleshTree"
+	tree.set_script(load("res://scripts/world/flesh_tree.gd"))
+	tree.position = TREE_AT + Vector3.DOWN * 1.0 # (sunk in a little)
+	var towers: Array[AABB] = []
+	for t: Array in TOWERS:
+		towers.append(AABB(t[0], t[1] - t[0]))
+	var grips := PackedVector2Array()
+	for band: Vector2 in TREE_GRIPS:
+		grips.append(band)
+	var settings := {
+		start_height = TREE_HEIGHT, grow_step = 0.0, trunk_width = TREE_WIDTH,
+		flare_share = 0.3, flare_reach = 15.0, limbs_from = 3700.0,
+		roots = 6, root_reach = 40.0, root_arch = 4.0,
+		grip_towers = towers, grip_heights = grips,
+		walkway_from = Vector3(0.0, 30.0, TREE_AT.z - TREE_WIDTH * 0.36), walkway_to = TREE_WALKWAY_TO,
+		orbs_everywhere = true, orb_read_range = 45.0, sit_on_ground = false,
+	}
+	for key: String in settings:
+		tree.set(StringName(key), settings[key])
+	return tree
+
+
+## The open world's sky, fog and light (the user's, 2026-10-27: the same sky,
+## clouds and fog, the giants looming in it): its environment, in the sewer's
+## air (BiomeAtmosphere's: the open world's own values, fog pushed out as
+## there, OPEN_FOG), applied once here -- the demo is all one air.
 func _environment() -> WorldEnvironment:
 	var world := WorldEnvironment.new()
 	world.name = "WorldEnvironment"
-	var environment := Environment.new()
-	var sky := Sky.new()
-	var look := ProceduralSkyMaterial.new()
-	look.sky_top_color = SKY_TOP
-	look.sky_horizon_color = SKY_HORIZON
-	look.ground_horizon_color = DUSK_FOG
-	look.ground_bottom_color = DUSK_FOG.darkened(0.5)
-	sky.sky_material = look
-	environment.background_mode = Environment.BG_SKY
-	environment.sky = sky
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.55
-	environment.fog_enabled = true
-	environment.fog_mode = Environment.FOG_MODE_DEPTH
-	environment.fog_light_color = DUSK_FOG
-	environment.fog_depth_begin = 40.0
-	environment.fog_depth_end = 700.0
-	environment.fog_depth_curve = 1.4
-	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	var environment := (load(OPEN_ENVIRONMENT) as Environment).duplicate() as Environment
+	var sewer := AlienAtmosphere.new()
+	sewer.fog_color = Color(0.27, 0.29, 0.16)
+	sewer.fog_start = 22.0
+	sewer.fog_end = 192.5
+	sewer.haze_height = 14.0
+	sewer.haze_density = 0.081
+	sewer.ambient_color = Color(0.32, 0.31, 0.2)
+	sewer.ambient_energy = 0.4
+	sewer.sun_color = Color(1.0, 0.93, 0.72)
+	sewer.sun_energy = 1.25
+	AlienAtmosphere.apply_blend(environment, sewer, sewer, 0.0, _sun, OPEN_FOG)
 	world.environment = environment
 	return world
-
 
 func _add(parent: Node, child: Node) -> void:
 	parent.add_child(child)

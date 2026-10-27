@@ -15,7 +15,7 @@ const FIRST := 30.0
 const AT_ONCE := 2
 const SPAWN_FROM := Vector2(25.0, 60.0)
 const GONE_PAST := 90.0
-const RUN := Vector2(14.0, 40.0)
+const RUN := Vector2(8.0, 30.0)
 ## Room either side of his line (the rickshaw's width), and floor steps he
 ## can't take (his height is kept with no terrain: Trader._ground).
 const HALF_WIDTH := 1.0
@@ -71,15 +71,18 @@ func _map() -> RID:
 
 func _bring_one(player: Node3D) -> void:
 	var space := player.get_world_3d().direct_space_state
-	for attempt in 16:
+	for attempt in 30:
 		var want := player.global_position + Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU) * randf_range(SPAWN_FROM.x, SPAWN_FROM.y)
 		var a := NavigationServer3D.map_get_closest_point(_map(), want)
 		if a == Vector3.ZERO or Vector2(a.x - want.x, a.z - want.z).length() > 10.0:
 			continue
 		var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 		var b := a + way * randf_range(RUN.x, RUN.y)
-		if not _clear_run(a, b, space) or _seen(a, space) or _seen(b, space):
+		var floor_y := _clear_run(a, b, space)
+		if is_nan(floor_y) or _seen(a, space) or _seen(b, space):
 			continue
+		a.y = floor_y
+		b.y = floor_y
 		if _near_trader(a):
 			continue
 		var plan := {at = a, facing = way, parked = false, route = PackedVector3Array([a, b])}
@@ -91,21 +94,29 @@ func _bring_one(player: Node3D) -> void:
 
 ## A straight run he can walk: nothing in the way at knee and chest height
 ## across his width, and floor under it every metre at the same height.
-func _clear_run(a: Vector3, b: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
+## The floor's height there (NAN: not a run he can walk). Measured from the
+## real floor under `a`: the navmesh sits a little above it.
+func _clear_run(a: Vector3, b: Vector3, space: PhysicsDirectSpaceState3D) -> float:
+	var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(a + Vector3.UP * 1.5, a + Vector3.DOWN * 2.0, 1))
+	if ground.is_empty():
+		return NAN
+	var floor_y: float = (ground.position as Vector3).y
+	a.y = floor_y
+	b.y = floor_y
 	var along := (b - a).normalized()
 	var side := along.cross(Vector3.UP).normalized() * HALF_WIDTH
-	for height: float in [0.5, 1.6]:
+	for height: float in [0.6, 1.6]:
 		for offset: Vector3 in [Vector3.ZERO, side, -side]:
-			var from := a + Vector3.UP * height + offset - along * 2.0
-			if not space.intersect_ray(PhysicsRayQueryParameters3D.create(from, b + Vector3.UP * height + offset + along * 2.0, 1)).is_empty():
-				return false
+			var from := a + Vector3.UP * height + offset - along
+			if not space.intersect_ray(PhysicsRayQueryParameters3D.create(from, b + Vector3.UP * height + offset + along, 1)).is_empty():
+				return NAN
 	var steps := int(a.distance_to(b))
 	for i in steps + 1:
 		var at := a.lerp(b, float(i) / maxf(steps, 1))
 		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3.UP, at + Vector3.DOWN * 1.0, 1))
-		if hit.is_empty() or absf((hit.position as Vector3).y - a.y) > STEP:
-			return false
-	return true
+		if hit.is_empty() or absf((hit.position as Vector3).y - floor_y) > STEP:
+			return NAN
+	return floor_y
 
 
 func _seen(at: Vector3, space: PhysicsDirectSpaceState3D) -> bool:

@@ -2159,3 +2159,11 @@ them:
   - **DemoTraders:** up to 2 wandering traders, out of sight 25-60 m off, walking their rickshaw back and forth along a clear straight run of floor; gone past 90 m from every player.
   - **DemoSound:** the open world Stack's MegastructureSound over the demo's rooms (hollow loop inside, far-off echoes, wind at the nearest windows, the drone approaching), an outside wind (stronger higher up, under open sky) with far-off one-shots, and a lamp hum by each lamp. The decoration Stack's drone is kept to 250 m.
   - **Committed with it:** the Megastructure texture materials the demo scene uses (they weren't tracked).
+
+- **2026-10-27, the Flesh Tree in the Stacks, the open world's sky, no leeches:**
+  - **The Flesh Tree (FleshTree's towers layout: grip_towers):** in the middle of the courtyard, 4 km tall, a 50 m trunk (flare 0.3 over 15 m; its spiral of limbs only in the crown, above 3.7 km; 6 roots reaching 40 m). Its tentacle branches twist out to every tower corner facing it and grip it round (one in each band of 12-35 m, 60-400 m, 400-3000 m; a twist that swings through a tower is rerolled), and an orb grows at the tip of every one (orbs_everywhere: each a random mutation that player doesn't have, readable from 45 m). 14 branches came out in the test, 6 orbs within the tentacle's reach of the courtyard. The bridge runs into the trunk; a flat-topped walkway branch wraps round the trunk from there and on into tower D. Earned by raw meat as in the open world (Virus); quests will call FleshTree.ripen_for when they exist. Orbs are ripe from the start for testing (pods_on_start). WorldNavigation.refresh_static() re-reads the navmesh once it's built.
+  - **The courtyard round it:** the plinth is gone, the planters moved out to x 50, dressing kept off the trunk, the courtyard cables that would cross it tied onto it.
+  - **The open world's sky:** its environment, the sewer air (fog distance 1.3333), its sun and the cloud deck at 500 m, with the skyline giants. This replaces the demo's dusk.
+  - **No leeches:** the demo's barnacle clumps grow none, and any the Stack's own clumps grow are removed.
+  - **The Ossuary:** passes 500 m off.
+  - **Traders:** the floor check measures from the real floor (the navmesh floats above it, so every run failed); runs 8-30 m.

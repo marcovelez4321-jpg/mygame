@@ -249,6 +249,16 @@ func _parse_static() -> void:
 	NavigationServer3D.parse_source_geometry_data(_template, _static_geometry, get_parent())
 
 
+## Something solid built after the start (the Stacks' Flesh Tree): parsed
+## again, and every player's ground baked again with it.
+func refresh_static() -> void:
+	if _use_tiles:
+		return
+	_parse_static()
+	for body: Variant in _baking:
+		(_baking[body] as Array)[1] = Vector3(INF, INF, INF)
+
+
 func _fallback_bake(delta: float) -> void:
 	if _static_geometry == null:
 		return

@@ -12,7 +12,8 @@ extends Node
 ##   Up to BANDS about each player; one costs a point of the budget (refills
 ##   one every REFILL s).
 ##   BARNACLES: CLUMPS barnacle clumps grown on ceilings round the map at the
-##   start (their leeches, roach and spider nests with them).
+##   start (their roach and spider nests with them; no leeches -- the
+##   user's, 2026-10-27).
 ##   THE CONSUMED: now and then a pack (CONSUMED_PACK) flying in out of sight
 ##   wherever someone's under open sky.
 ##   BELL-WRAITHS: WRAITHS hung high in the great hall, every game.
@@ -42,7 +43,7 @@ const WRAITHS := [Vector3(-25.0, 80.0, -25.0), Vector3(25.0, 80.0, -25.0), Vecto
 ## Where the Ossuary walks past (between the demo's towers and the real
 ## Stack), how far off at its nearest, and how often its bell tolls.
 const OSSUARY_CENTRE := Vector3(0.0, 0.0, -165.0)
-const OSSUARY_PASS := 650.0
+const OSSUARY_PASS := 500.0 # (the user's: 650, then closer)
 const OSSUARY_TOLL := 30.0
 const OSSUARY_GONE := 3000.0
 
@@ -104,6 +105,9 @@ func _physics_process(delta: float) -> void:
 		_grow_clumps(players[0])
 	_ossuary_again()
 	_drop_far(players)
+	# No leeches (the user's): any the Stack's own barnacle clumps grow, gone.
+	for leech in get_tree().get_nodes_in_group(&"leeches"):
+		leech.queue_free()
 	if _consumed_left <= 0.0:
 		_consumed_left = randf_range(CONSUMED_EVERY.x, CONSUMED_EVERY.y)
 		_consumed_in(players.pick_random())
@@ -273,7 +277,8 @@ func _grow_clumps(player: Node3D) -> void:
 		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(on + Vector3.UP, on + Vector3.UP * 9.0, 1))
 		if hit.is_empty() or (hit.normal as Vector3).y > -0.9:
 			continue
-		var clump := _make(CLUMP) as Node3D
+		var clump := _make(CLUMP) as BarnacleCluster
+		clump.leech_count = 0 # (the user's, 2026-10-27: no leeches)
 		get_tree().current_scene.add_child(clump)
 		# Its up out of the ceiling (down).
 		clump.global_transform = Transform3D(Basis(Vector3.RIGHT, PI), hit.position)
