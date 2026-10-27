@@ -25,8 +25,9 @@ signal respawned
 @export_group("General Movement")
 @export var gravity: float = 20.0
 @export var jump_velocity: float = 6.5
-## Walking (the user's, 2026-10-27: 4.5 -- grounded; it was 7).
-@export var ground_max_speed: float = 4.5
+## Walking (the user's, 2026-10-27: 4.5 -- grounded, it was 7 -- then 25%
+## faster: 5.625).
+@export var ground_max_speed: float = 5.625
 @export var ground_accel: float = 14.0
 @export var ground_friction: float = 6.0
 @export var stop_speed: float = 1.5
@@ -41,7 +42,7 @@ signal respawned
 ## a stamina bar every sprint_bar_time; not while aiming. Right mouse aims any
 ## gun. The grapple only once it's found (grapple_found).
 @export var grounded: bool = true
-@export var sprint_speed: float = 7.0
+@export var sprint_speed: float = 8.75 # (the user's: 7, then 25% faster)
 @export var sprint_bar_time: float = 2.0
 ## Brutal recoil (the user's): every gun's kick on your view and on the gun
 ## itself times this, and each shot shakes the camera this much.
@@ -58,7 +59,7 @@ var sprinting := false
 ## The user's: momentum carries through everything -- bhops and wall jumps
 ## keep your speed and add to it, up to speed_cap (horizontal m/s; 4x a run).
 ## Gains stop there; nothing slows you down to it.
-@export var speed_cap: float = 12.0 # (grounded, 2026-10-27: was 28)
+@export var speed_cap: float = 15.0 # (grounded, 2026-10-27: was 28; 12, then 25% faster)
 ## A bhop (jumping the tick you land): no ground friction that tick, and
 ## this much faster (0.1 = +10%).
 @export var bhop_gain: float = 0.05 # (grounded: was 0.1)
@@ -72,7 +73,7 @@ var sprinting := false
 ## A wall jump: your speed kept (at least wall_jump_min_speed), sent where
 ## you look (bent off the wall if you look into it), and this much faster.
 @export var wall_jump_gain: float = 0.08 # (grounded: was 0.15)
-@export var wall_jump_min_speed: float = 4.5 # (grounded: walking speed; was 7)
+@export var wall_jump_min_speed: float = 5.625 # (grounded: walking speed; was 7)
 ## Forgiveness: a jump pressed this long before you reach a wall still
 ## kicks off it, and a wall you were next to this long ago still counts.
 @export var wall_jump_buffer: float = 0.15

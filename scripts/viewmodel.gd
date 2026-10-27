@@ -1806,17 +1806,12 @@ func _update_sway(delta: float) -> void:
 var _heavy_body: PlayerMovement
 ## The gun's own fire kick this many times as hard (brutal recoil, the user's).
 var kick_boost := 1.0
-var _bob_time := 0.0
 var _sprint_pose := 0.0
 var _land_dip := 0.0
 var _was_grounded := true
 var _fall_speed := 0.0
-## Heavy (the user's: lags behind your turns and swings back, bobs heavily
-## with each step, dips when you land or sprint): these, all tunable.
-const HEAVY_SWAY := [0.03, 3.5, 0.12, 14.0, 6.0] # position, rotation, max offset, max tilt, smoothing
-const BOB_RATE := 1.6 # steps a metre, roughly
-const BOB_SIDE := 0.014
-const BOB_DROP := 0.02
+## Heavy (the user's: dips when you land or sprint -- the sway kept as it was
+## and no walk bob, the user's 2026-10-27): these, all tunable.
 const SPRINT_OFFSET := Vector3(0.06, -0.07, 0.03)
 const SPRINT_TILT := Vector3(-10.0, 28.0, 14.0)
 const LAND_DROP := 0.07
@@ -1826,24 +1821,14 @@ const LAND_DROP := 0.07
 func go_heavy(body: PlayerMovement, boost: float) -> void:
 	_heavy_body = body
 	kick_boost = boost
-	sway_position_amount = HEAVY_SWAY[0]
-	sway_rotation_amount = HEAVY_SWAY[1]
-	sway_max_offset = HEAVY_SWAY[2]
-	sway_max_tilt_degrees = HEAVY_SWAY[3]
-	sway_smoothing = HEAVY_SWAY[4]
 
 
-## The heavy gun's walk bob, sprint carry and landing dip: [offset, tilt].
+## The heavy gun's sprint carry and landing dip: [offset, tilt].
 func _heavy_motion(delta: float) -> Array:
 	if _heavy_body == null or not is_instance_valid(_heavy_body):
 		return [Vector3.ZERO, Vector3.ZERO]
 	var body := _heavy_body
 	var grounded_now := body.on_ground()
-	var flat := Vector2(body.velocity.x, body.velocity.z).length()
-	# Each step, a heavy bob (side to side, a drop on every footfall).
-	var stride := clampf(flat / maxf(body.ground_max_speed, 0.1), 0.0, 1.6) if grounded_now else 0.0
-	_bob_time += delta * flat * BOB_RATE * TAU * 0.5
-	var bob := Vector3(sin(_bob_time) * BOB_SIDE, -absf(cos(_bob_time)) * BOB_DROP, 0.0) * stride
 	# Sprinting: the gun swung down and across, carried.
 	_sprint_pose = move_toward(_sprint_pose, 1.0 if body.sprinting else 0.0, delta * 5.0)
 	var carry := smoothstep(0.0, 1.0, _sprint_pose)
@@ -1853,7 +1838,7 @@ func _heavy_motion(delta: float) -> Array:
 	_was_grounded = grounded_now
 	_fall_speed = maxf(-body.velocity.y, 0.0)
 	_land_dip = move_toward(_land_dip, 0.0, delta * 3.0)
-	var offset := bob + SPRINT_OFFSET * carry + Vector3.DOWN * LAND_DROP * _land_dip
+	var offset := SPRINT_OFFSET * carry + Vector3.DOWN * LAND_DROP * _land_dip
 	var tilt := SPRINT_TILT * carry + Vector3(-8.0 * _land_dip, 0.0, 0.0)
 	return [offset, tilt]
 

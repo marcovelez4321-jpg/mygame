@@ -2129,3 +2129,5 @@ them:
 - 2026-10-27 (the user's): tap E (within whip_tap 0.25 s) whips; hold E charges the grab. The lash throws what it hits like a heavy root: alive, knocked down; dead, the body thrown; whip_knock 9 m/s across and out, the caught limb whip_limb 1.6x as hard (EnemyRagdoll.whack: the whole limb together), with camera shake and a thud. Zombie pieces for the demo: Barricade (boarded windows: the horde tears 6 boards and crawls in; F puts boards back, free for now), WindowSpawner (a trickle through the windows), ZombieDoor (F clears it, free for now); Enemy.window hooks.
 
 - 2026-10-27 The Stacks demo (the user's, docs/ZOMBIES_DIRECTION.md): tools/make_stacks_demo.gd -> maps/zombies/stacks_demo.map + scenes/zombies/stacks_demo.tscn (rooms carved out of solid tower blocks; facades painted). Headless-tested: no script errors.
+
+- 2026-10-27 (the user's): the gun's sway back to how it was (go_heavy no longer changes it) and no walk bob; the sprint carry and landing dip kept. Movement 25% faster: walk 5.625, sprint 8.75, speed cap 15, wall jumps from walking speed (5.625).
