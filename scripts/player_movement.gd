@@ -36,8 +36,8 @@ signal respawned
 
 @export_group("Grounded")
 ## The Zombies direction (the user's, 2026-10-27: docs/ZOMBIES_DIRECTION.md):
-## walking and sprinting only -- no bhops, dash or wall jumps (all kept, off
-## while this is on). Shift sprints, forward only, at sprint_speed, draining
+## walking and sprinting, with bhops and wall jumps scaled down to them (the
+## user's: kept in the base game) -- no dash (kept, off while this is on). Shift sprints, forward only, at sprint_speed, draining
 ## a stamina bar every sprint_bar_time; not while aiming. Right mouse aims any
 ## gun. The grapple only once it's found (grapple_found).
 @export var grounded: bool = true
@@ -57,10 +57,10 @@ var sprinting := false
 ## The user's: momentum carries through everything -- bhops and wall jumps
 ## keep your speed and add to it, up to speed_cap (horizontal m/s; 4x a run).
 ## Gains stop there; nothing slows you down to it.
-@export var speed_cap: float = 28.0
+@export var speed_cap: float = 12.0 # (grounded, 2026-10-27: was 28)
 ## A bhop (jumping the tick you land): no ground friction that tick, and
 ## this much faster (0.1 = +10%).
-@export var bhop_gain: float = 0.1
+@export var bhop_gain: float = 0.05 # (grounded: was 0.1)
 ## Hills (the user's, Source's ramp rules): moving up faster than skim_speed
 ## you don't count as landed -- you skim up and over a slope instead of
 ## re-jumping on it every few frames (Source's NON_JUMP_VELOCITY, ~2.7 m/s).
@@ -70,8 +70,8 @@ var sprinting := false
 @export var slope_landing_boost: float = 1.1
 ## A wall jump: your speed kept (at least wall_jump_min_speed), sent where
 ## you look (bent off the wall if you look into it), and this much faster.
-@export var wall_jump_gain: float = 0.15
-@export var wall_jump_min_speed: float = 7.0
+@export var wall_jump_gain: float = 0.08 # (grounded: was 0.15)
+@export var wall_jump_min_speed: float = 4.5 # (grounded: walking speed; was 7)
 ## Forgiveness: a jump pressed this long before you reach a wall still
 ## kicks off it, and a wall you were next to this long ago still counts.
 @export var wall_jump_buffer: float = 0.15
@@ -185,12 +185,12 @@ enum WingStyle { BURST_AND_STRAFE, BURST_AND_GLIDE }
 @export var wall_behind_ray_count: int = 5
 ## Push straight away from the wall's own surface -- guarantees you actually
 ## clear it, blended with wall_jump_look_speed below rather than used alone.
-@export var wall_jump_push: float = 3.0
+@export var wall_jump_push: float = 2.0 # (grounded: was 3)
 ## How much of the kick follows wherever you're actually AIMING, not just
 ## straight off the wall's surface -- this is the part that makes it read as
 ## leaping/kicking off toward your look direction instead of climbing.
 @export var wall_jump_look_speed: float = 5.0
-@export var wall_jump_up_velocity: float = 11.0
+@export var wall_jump_up_velocity: float = 7.0 # (grounded: was 11)
 ## Same hit-stop trick as stomp_hit_stop_scale/stomp_hit_stop_time (see that
 ## export's comment for the co-op caveat), but much lighter -- a wall jump
 ## happens constantly during normal traversal, not just on a rare kill, so
@@ -918,8 +918,8 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	if on_ground() and not grapple.is_pulling():
 		_wall_jumped_since_reset = false # touching ground resets the wall-jump limiter
 		_wall_seen_left = 0.0
-		var do_jump: bool = input.want_jump if (auto_bhop and not grounded) else (input.want_jump and not _jump_held_prev)
-		if do_jump and _airborne_prev and not grounded:
+		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
+		if do_jump and _airborne_prev:
 			# A bhop (jumping the tick you land): no friction, and faster.
 			_gain_speed(bhop_gain)
 		elif _dash_time_left <= 0.0: # (a dash isn't slowed by the ground)
@@ -967,7 +967,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_look_for_wall(delta)
 		if fresh_jump:
 			_wall_jump_buffer_left = wall_jump_buffer
-		if not grounded and _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0 and spend_bars(wall_jump_cost): # (the user's: half a bar)
+		if _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0 and spend_bars(wall_jump_cost): # (the user's: half a bar)
 			_wall_jump(_last_wall_normal)
 			_wall_jump_buffer_left = 0.0
 			_wall_seen_left = 0.0
