@@ -2169,3 +2169,11 @@ them:
   - **Traders:** the floor check measures from the real floor (the navmesh floats above it, so every run failed); runs 8-30 m.
 
 - **2026-10-27, the demo's fog back:** the open world's fog was far too thick there. The demo keeps its own reworked fog (40 m to 700 m, curve 1.4, colour 0.4/0.43/0.5, no valley haze) under the open world's sky, sun, cloud deck and skyline giants. DemoDressing sets the global `world_fog_color` as the demo starts, so the clouds and giants fade into it.
+
+- **2026-10-27, the red creep (docs/RED_CREEP.md):** the red weed come alive in the Stacks demo.
+  - One bush in each area, twice the open world's size. Braided red ropes crawl out at about 1 m every 3 s, up walls and over ledges, toward life, noise and blood.
+  - Each patch is capped at about 15 m across. Seeds picked up by touch fall off 20 s to 3 min later and grow; whatever it kills, and any body its ropes reach, becomes a new bush.
+  - Patches link by runners and pulse as one network.
+  - Tendrils reach for anything within 4 m and wrap it: held, drained 5 hp/s, covered in 6 s, then frozen and drained to death. Shooting or fire frees it.
+  - Shots cut ropes; explosions burn them back.
+  - Co-op: the host's, sent to every game.

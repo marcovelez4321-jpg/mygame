@@ -166,7 +166,8 @@ func _ground(at: Vector2) -> float:
 ## One bush, about 1 m tall (instances scale it): looping vines knotted into
 ## a mound, runners out over the ground, tendrils drooping and curling off
 ## the top, a few pods.
-func _bush_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
+## (Static: the Stacks' red creep grows its bushes from it too: RedCreepPatch.)
+static func _bush_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var tops: Array = [] # [point, free] along the loops' upper halves
@@ -285,7 +286,7 @@ func _creeper_mesh(rng: RandomNumberGenerator, width: float, height: float) -> A
 
 ## A tube through `points` (`radii`), `sides` round, each ring's vertices
 ## coloured (free to move, shade) for the shader.
-func _tube(tool: SurfaceTool, points: PackedVector3Array, radii: PackedFloat32Array, free: PackedFloat32Array, shade: float, sides: int = SIDES) -> void:
+static func _tube(tool: SurfaceTool, points: PackedVector3Array, radii: PackedFloat32Array, free: PackedFloat32Array, shade: float, sides: int = SIDES) -> void:
 	var count := points.size()
 	var rings: Array[PackedVector3Array] = []
 	var normals: Array[PackedVector3Array] = []
@@ -317,7 +318,7 @@ func _tube(tool: SurfaceTool, points: PackedVector3Array, radii: PackedFloat32Ar
 
 
 ## A low, slightly squashed sphere: a pod.
-func _pod(tool: SurfaceTool, at: Vector3, radius: float, free: float) -> void:
+static func _pod(tool: SurfaceTool, at: Vector3, radius: float, free: float) -> void:
 	var rings := 4
 	var around := 7
 	var color := Color(free, 1.0, 0.0)

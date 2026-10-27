@@ -813,6 +813,7 @@ func _build_things(root: Node3D) -> void:
 	spawner.set_script(load("res://scripts/zombies/window_spawner.gd"))
 	_add(root, spawner)
 	_add(root, _flesh_tree())
+	_add(root, _red_creep())
 	var horde := Node.new()
 	horde.name = "DemoHorde"
 	horde.set_script(load("res://scripts/zombies/demo_horde.gd"))
@@ -1088,6 +1089,30 @@ func _flesh_tree() -> Node3D:
 	for key: String in settings:
 		tree.set(StringName(key), settings[key])
 	return tree
+
+
+## The red creep (RedCreep; docs/RED_CREEP.md): one bush in each area (the
+## user's), never in the Flesh Tree's trunk.
+func _red_creep() -> Node3D:
+	var creep := Node3D.new()
+	creep.name = "RedCreep"
+	creep.set_script(load("res://scripts/zombies/red_creep.gd"))
+	var areas: Array[AABB] = []
+	for box: Array in [
+			[Vector3(24.0, -12.0, 30.0), Vector3(48.0, -5.0, 50.0)], # the depths
+			[Vector3(44.0, -12.0, -2.0), Vector3(48.0, -2.0, 28.0)], # the tunnel
+			[Vector3(-20.0, 0.0, 28.0), Vector3(20.0, 12.0, 58.0)], # the lobby
+			[Vector3(-56.0, 0.0, -20.0), Vector3(-52.0, 6.5, 44.0)], # the corridor
+			[Vector3(-50.0, 0.0, 46.0), Vector3(-40.0, 6.5, 58.0)], # a flat
+			[Vector3(-24.0, 0.0, -56.0), Vector3(20.0, 24.0, 24.0)], # the stair hall
+			[GREAT.position, GREAT.end], # the great hall
+			[Vector3(-60.0, 0.0, 66.0), Vector3(60.0, 20.0, 146.0)]]: # the courtyard
+		areas.append(AABB(box[0], box[1] - box[0]))
+	var trunk := AABB(TREE_AT - Vector3(TREE_CLEAR, 5.0, TREE_CLEAR), Vector3(TREE_CLEAR * 2.0, 80.0, TREE_CLEAR * 2.0))
+	var keep_out: Array[AABB] = [trunk]
+	creep.set(&"areas", areas)
+	creep.set(&"keep_out", keep_out)
+	return creep
 
 
 ## The open world's sky, fog and light (the user's, 2026-10-27: the same sky,

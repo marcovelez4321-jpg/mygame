@@ -284,6 +284,11 @@ var _toggle_dual_held_prev := false
 
 
 func _ready() -> void:
+	# The Stacks' red creep (RedCreep): every shot's path can cut its ropes,
+	# and the noise and the blood draw it. The host's.
+	shot_resolved.connect(func(from: Vector3, to: Vector3, hit: bool) -> void:
+		if is_inside_tree() and multiplayer.is_server():
+			get_tree().call_group(&"red_creep", &"shot_line", from, to, hit))
 	_ammo[WeaponData.AmmoType.BULLETS] = starting_bullets
 	_ammo[WeaponData.AmmoType.SHELLS] = starting_shells
 	_ammo[WeaponData.AmmoType.ROCKETS] = 0
@@ -649,6 +654,9 @@ func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon:
 		# fresh click is a tug at it (Leech.tug()).
 		if fire_pressed:
 			_leeches[0].call("tug")
+		return
+	# Covered head to foot by the red creep (RedWrap): frozen, no shooting.
+	if _body and _body.has_meta(&"red_frozen"):
 		return
 	if _item_using >= 0:
 		return # both hands busy with pills or a bandage (tick_items())

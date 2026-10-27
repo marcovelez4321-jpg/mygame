@@ -72,6 +72,8 @@ static func explode(world: Node3D, center: Vector3, settings: Settings) -> Array
 		var none: Array[Hit] = []
 		return none
 	var hits := _apply_damage_and_push(world, center, settings)
+	# The Stacks' red creep (RedCreep): burned back, and drawn by the noise.
+	world.get_tree().call_group(&"red_creep", &"burn", center, settings.radius)
 	play_effects(world, center, settings.radius, settings.knockback)
 	if Network.is_online():
 		Network.send_explosion(center, settings.radius, settings.knockback, settings.attacker_id)
