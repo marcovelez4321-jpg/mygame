@@ -2115,3 +2115,5 @@ them:
 - 2026-10-27 (the user's): F9 quest test buttons (QuestTests: start them all; give skull/offering, meat, bomb parts, tags; go to each quest place; cult ambush; Fanatic go off; blow the 1.4 km top). Grapple, like Pathfinder's: while pulled, input against the pull is ignored (only steering across it counts). Holding S used to out-push the pull (air accel 10x wishspeed beat pull_accel 70), and with no gravity during the pull you floated.
 
 - 2026-10-27 (the user's): gravity on while the grapple pulls (only perched and riding hold you weightless), with pull_accel 70 -> 90 so straight-up pulls feel the same. The pull's leftover push lifts you back to the line when you sink off it, so long pulls bow a little while building speed, then run true.
+
+- 2026-10-27 NEW DIRECTION (the user's): a slower, grounded CoD-Zombies-style shooter in the procedural Stacks -- docs/ZOMBIES_DIRECTION.md, which wins over CLIMB_VISION.md and WORLD.md. The open-world version is tagged open-world-2026-10-27.
