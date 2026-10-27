@@ -124,3 +124,14 @@ Made by `tools/make_stacks_demo.gd` (`tools/stacks_demo_bake.gd`) into `maps/zom
 - **Windows:** 11 boarded (Barricade), most with closets behind for the horde, and 8 painted.
 - **Doors:** 5 (ZombieDoor), all free for now.
 - **The horde:** infected coming in through the windows (WindowSpawner).
+
+## The horde, decided (the user's, 2026-10-27) -- to build
+- **Through the windows:** mainly the lesser Stalkers, then the Consumed in packs and the spiders in packs.
+  - Everything is animated and immersive: breaking down the barricades, crawling through the windows, no clipping through them.
+- **The lesser Stalkers:**
+  - Pale, thin copies of the Stalker, with far simpler AI for performance. Hordes matter, so all the AI is optimized heavily.
+  - Half the Stalker's speed: crawl 3, sprint 9, lunge 12.5 m/s.
+  - The same attacks: a smack, and now and then a drag.
+  - Their behaviour: run up to you, smack you, then hide.
+- **The infected people:** spawned by the director out of sight, behind walls and round corners near you, and coming out of the parts of the building not yet bought open.
+- **The Alpha Stalker:** the full AI we built, hunting from round 1, always.
