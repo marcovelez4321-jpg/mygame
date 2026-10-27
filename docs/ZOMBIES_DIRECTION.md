@@ -104,3 +104,23 @@ Everything in each step, asked before it's built (Rule 10).
 - **Knockdown:** a knocked-down enemy is a full ragdoll. It gets back up after 3 s once it's lying still, easing out of its pose into its animation (no get-up clip yet).
 - **Picks of mine to tune:** knockdown 3 s, impacts from 6 m/s at 6 a m/s, the hold at 2.6 m, a 30 m/s top swing speed.
 - **To come:** absorbing a held enemy, tearing it apart with the coils, more attacks and their stamina costs, a get-up animation, and Euphoria-like active ragdolls later.
+
+## Built: the Stacks demo (2026-10-27) -- scenes/zombies/stacks_demo.tscn
+Made by `tools/make_stacks_demo.gd` (`tools/stacks_demo_bake.gd`) into `maps/zombies/stacks_demo.map` (edit in TrenchBroom, then Build the scene's Map).
+
+**The route:**
+- **The flooded depths (the start).** A door opens onto a two-flight ramp tunnel up to the lobby.
+- **The lobby:**
+  - pillars to loop round, and a ramp up to a mezzanine;
+  - windows on the courtyard;
+  - three doors: the apartment corridor, the stair hall and the courtyard.
+- **The apartment corridor:** low, closed doors down both sides, two flats open. It loops round to the stair hall (a door).
+- **The stair hall:** giant 1.2 m steps to mantle, a ledge, a bridge to a central block, a ramp down, and stairs to nowhere.
+- **The concrete courtyard:** walled by three more towers, raised walks, planters and a plinth.
+
+**The world:**
+- **Towers:** the Stack's sizes (1.4, 2, 2.8 and 3.6 km), in its painted-window concrete. The giants stand round them in the fog (SkylineLayer).
+- **Mood:** cold dusk: a low warm sun, a grey-blue sky, fog from 40 to 700 m, and cold lamps inside.
+- **Windows:** 11 boarded (Barricade), most with closets behind for the horde, and 8 painted.
+- **Doors:** 5 (ZombieDoor), all free for now.
+- **The horde:** infected coming in through the windows (WindowSpawner).
