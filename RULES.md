@@ -2098,3 +2098,10 @@ them:
     - **Bell-wraiths:** each arm is one MultiMesh draw (it was 14). It's posed only while it moves on screen or lashes, and who's near is checked every 0.25 s.
 
 - 2026-10-26 (the user's): the Consumed fly like the heart's blood orbs. Flat out along a heading that turns at most HeartOrb.TURN_RATE (33.75 degrees a second) toward you, so a late juke makes one overshoot and swing wide to come round again. Its heading starts afresh after each bounce and after circling.
+
+- 2026-10-26 (the user's): the Consumed no longer clip into the terrain.
+  - **Its limbs:** collide with the world now (mask 1, never with their own body).
+  - **Its body:** its capsule runs head to feet (1.75) and uses continuous collision.
+  - **Flying:** it keeps 1.4 m off the ground (not over a player).
+  - **Dead:** its body is put out of the way (no collision, frozen) so only the ragdoll falls.
+  - **Tumbling, and for 5 s after death:** any simulated bone that went through something in a step is put back on its near side.

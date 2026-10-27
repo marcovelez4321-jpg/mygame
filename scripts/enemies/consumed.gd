@@ -22,6 +22,14 @@ const SPEED := 22.0
 ## Turning at most this many degrees a second toward you (the user's: like
 ## the heart's blood orbs -- theirs).
 const TURN_RATE := HeartOrb.TURN_RATE
+## Flying, it keeps this far off the ground under it (its limbs hang clear),
+## lifting this fast (m/s per metre short).
+const CLEARANCE := 1.4
+const LIFT := 8.0
+## Its bones kept out of the ground this long after it dies (and while it
+## tumbles); a bone looked at only if it moved this far in a step.
+const GUARD_TIME := 5.0
+const GUARD_MOVE := 0.05
 const ACCEL := 45.0
 const HIT := 15.0
 const SHOVE := 12.0
@@ -89,6 +97,9 @@ var _circle_radius := 90.0
 var _hit_cooldown := 0.0
 ## Which way it's flying at them (ZERO: from how it's moving, next).
 var _heading := Vector3.ZERO
+var _guard_left := 0.0
+## Where each simulated bone was last step (_guard_bones).
+var _bones_were := {}
 
 static var _models: Array[String] = []
 
@@ -131,12 +142,13 @@ func _ready() -> void:
 	can_sleep = false
 	contact_monitor = true
 	max_contacts_reported = 4
+	continuous_cd = true # (fast and thin: never through the terrain in a step)
 	angular_damp = 4.0
 	linear_damp = 0.2
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.35
-	capsule.height = 1.4
+	capsule.height = 1.75 # (head to feet: none of it out past it as it rolls)
 	shape.shape = capsule
 	shape.rotation.x = PI * 0.5 # (lying along it, as it flies)
 	add_child(shape)
@@ -180,7 +192,10 @@ func _build_body() -> void:
 		var bone := node as PhysicalBone3D
 		if bone:
 			bone.collision_layer = 0
-			bone.collision_mask = 0 # (they hang and swing; nothing to snag on)
+			# They drag over the ground and walls (never through them); nothing
+			# hits them, and never their own body.
+			bone.collision_mask = 1
+			bone.add_collision_exception_with(self)
 			bone.can_sleep = false
 			bone.angular_damp_mode = PhysicalBone3D.DAMP_MODE_REPLACE
 			bone.angular_damp = LIMB_SWING_DAMP
@@ -351,6 +366,11 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Tumbling, or falling dead (every game's own): its bones kept out of the
+	# ground.
+	if _tumble_left > 0.0 or _guard_left > 0.0:
+		_guard_left = maxf(_guard_left - delta, 0.0)
+		_guard_bones()
 	if _dead or NetEntities.is_puppet(self) or (Network.is_online() and not multiplayer.is_server()):
 		return
 	_hit_cooldown = maxf(_hit_cooldown - delta, 0.0)
@@ -359,6 +379,7 @@ func _physics_process(delta: float) -> void:
 		if _tumble_left <= 0.0:
 			gravity_scale = 0.0
 		return
+	_keep_off_ground()
 	if is_instance_valid(_target) and (_target.is_dead() or _target.global_position.distance_to(global_position) > LOSE):
 		_target = null
 	if not is_instance_valid(_target):
@@ -390,6 +411,44 @@ func _physics_process(delta: float) -> void:
 	_upright(_heading)
 	if to.length() < 1.3:
 		_strike(_target)
+
+
+## Its simulated bones, tumbling or falling dead: any that went through the
+## ground or a wall in a step (fast and thin, too much for the physics to
+## catch) put back on its near side, no longer moving into it.
+func _guard_bones() -> void:
+	if _ragdoll == null:
+		return
+	var space := get_world_3d().direct_space_state
+	for node in _ragdoll.get_children():
+		var bone := node as PhysicalBone3D
+		if bone == null or not bone.is_simulating_physics():
+			continue
+		var now := bone.global_position
+		var was: Vector3 = _bones_were.get(bone, now)
+		_bones_were[bone] = now
+		if was.distance_squared_to(now) < GUARD_MOVE * GUARD_MOVE:
+			continue
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(was, now, 1, [get_rid()]))
+		if hit.is_empty():
+			continue
+		var normal: Vector3 = hit.normal
+		bone.global_position = (hit.position as Vector3) + normal * 0.05
+		bone.linear_velocity -= normal * minf(bone.linear_velocity.dot(normal), 0.0)
+		_bones_were[bone] = bone.global_position
+
+
+## Flying, it keeps CLEARANCE off the ground under it (its hanging limbs
+## clear of it): lifting, and its heading pulled out of any dive.
+func _keep_off_ground() -> void:
+	var query := PhysicsRayQueryParameters3D.create(global_position, global_position + Vector3.DOWN * CLEARANCE, 1, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty() or hit.collider is PlayerMovement:
+		return # (over you: diving on you, not lifting off)
+	var short := CLEARANCE - global_position.distance_to(hit.position as Vector3)
+	linear_velocity.y = maxf(linear_velocity.y, short * LIFT)
+	if _heading.y < 0.0:
+		_heading = Vector3(_heading.x, _heading.y * (1.0 - short / CLEARANCE), _heading.z).normalized()
 
 
 ## Its limbs' real physics on (near) or off (ConsumedHang hangs them).
@@ -474,7 +533,12 @@ func _die(host: bool) -> void:
 		return
 	_dead = true
 	remove_from_group("enemies")
-	gravity_scale = 1.0
+	# Only the ragdoll falls now: its body's left out of the way (else the
+	# two fight, and the bones are pushed into the ground).
+	set_deferred(&"collision_layer", 0)
+	set_deferred(&"collision_mask", 0)
+	set_deferred(&"freeze", true) # (deferred: it may die mid-physics)
+	_guard_left = GUARD_TIME
 	if _buzz:
 		_buzz.stop()
 	if _gaze:
