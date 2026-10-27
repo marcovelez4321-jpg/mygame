@@ -68,6 +68,18 @@ const REAL_SHARE := 0.75
 ## The original Stack's hall decorator runs this many times the room's size,
 ## everything it makes scaled back down (StackBuilder._hall_features).
 const HALL_SCALE := 0.4
+## The boarded windows (the user's: lower and smaller than the grid's, so the
+## horde can climb them): their size and sill.
+const CRAWL := Vector2(2.4, 2.6)
+const CRAWL_SILL := 0.9
+## The crates lying about (the PSX pack's boxes).
+const CRATE_MODELS := ["res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Large Props/cardboard_box_1.glb",
+		"res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Large Props/cardboard_box_2.glb",
+		"res://NEWPSXMODELS/PSX Mega Pack/Models/GLB (recommended)/Large Props/metal_barrel_mp_1.glb"]
+## THE GREAT HALL (the user's: the open world's bigger rooms) over the ground
+## floor, the main tower's width; the hatch up into it from the stair hall.
+const GREAT := AABB(Vector3(-56.0, 30.0, -56.0), Vector3(112.0, 60.0, 112.0))
+const STAIR_SLOPE := 35.0
 ## A crawl window's opening (Barricade.SIZE) and its sill.
 const WINDOW := Vector2(1.6, 1.6)
 const SILL := 0.9
@@ -93,6 +105,8 @@ var _world: Array = []
 var _things: Array = []
 ## Doorways nothing may stand in (the hall decorator's columns, ramps).
 var _keep_clear: Array[AABB] = []
+## Rebar: decor, no collision (func_detail_illusionary) -- nothing snags on it.
+var _decor_bars: Array = []
 var _dice := RandomNumberGenerator.new()
 
 
@@ -113,6 +127,11 @@ func run(_tree: SceneTree) -> void:
 	_corridor()
 	_stair_hall()
 	_courtyard()
+	_great_hall()
+	_bridge()
+	_stair_chains(AABB(Vector3(-20.0, 0.0, 28.0), Vector3(40.0, 12.0, 30.0)), 2, Vector2(2.5, 4.5), "LobbyStairs")
+	_stair_chains(AABB(Vector3(-24.0, 0.0, -56.0), Vector3(44.0, 24.0, 80.0)), 3, Vector2(3.0, 6.0), "HallStairs")
+	_dressing()
 	_carve()
 	print("map: ", MAP, " (", _world.size(), " brushes; error ", _write_map(ProjectSettings.globalize_path(MAP)), ")")
 	var root := Node3D.new()
@@ -240,8 +259,6 @@ func _stair_hall() -> void:
 	_block(Vector3(-6.0, 0.0, -6.0), Vector3(6.0, 9.6, 6.0)) # the central block
 	_block(Vector3(6.0, 9.0, -2.0), Vector3(11.0, 9.6, 2.0)) # the bridge
 	_ramp_z(-10.0, -6.0, -22.0, 0.0, 6.0, 9.6) # down the far side
-	_ramp_z(-20.0, -14.0, -20.0, 0.0, -6.0, 6.0) # stairs to nowhere
-	_block(Vector3(-20.0, 5.7, -6.0), Vector3(-14.0, 6.0, -4.0))
 	for at: Vector3 in [Vector3(-12.0, 20.0, -12.0), Vector3(12.0, 20.0, 12.0)]:
 		_thing(&"lamp", Transform3D(Basis.IDENTITY, at), {energy = 1.0, range = 26.0})
 
@@ -261,6 +278,185 @@ func _courtyard() -> void:
 	_crawl_window(Vector3(31.0, 0.0, 153.0), Vector3.BACK, Vector3(27.0, 0.0, 154.0), Vector3(35.0, 4.0, 162.0))
 	for at: Vector3 in [Vector3(-40.0, 0.0, 80.0), Vector3(40.0, 0.0, 80.0), Vector3(-40.0, 0.0, 135.0), Vector3(40.0, 0.0, 135.0)]:
 		_thing(&"lamp_post", Transform3D(Basis.IDENTITY, at), {})
+
+
+## The great hall: the original Stack's hall at a bigger scale, chains of
+## floating rubble bristling with rebar, abstract stair chains up to
+## platforms, glass all round; up through the hatch from the stair hall, out
+## by its north door onto the bridge.
+func _great_hall() -> void:
+	_room(GREAT.position, GREAT.end)
+	# The hatch: a long abstract stair up the stair hall's west side, up
+	# through the floor; the hatch over the hole slides aside (F).
+	_ramp_z(-19.0, -15.0, -52.0, 0.0, -9.0, 30.0)
+	_room(Vector3(-19.0, 23.5, -24.0), Vector3(-15.0, 30.5, -9.0))
+	_thing(&"door", Transform3D(Basis.IDENTITY, Vector3(-17.0, 29.8, -16.5)), {size = Vector3(4.0, 0.4, 15.0), open_move = Vector3(-4.6, 0.0, 0.0)})
+	_keep_clear.append(AABB(Vector3(-22.0, 0.0, -56.0), Vector3(10.0, 31.0, 50.0)))
+	_keep_clear.append(AABB(Vector3(-22.0, 30.0, -26.0), Vector3(10.0, 6.0, 22.0)))
+	# The way out north, onto the bridge.
+	_room(Vector3(-3.0, 30.0, 56.0), Vector3(3.0, 36.0, 60.0))
+	_door(Vector3(0.0, 33.0, 58.0), Vector3(6.0, 6.0, 0.4), 0.0)
+	_hall_decor(GREAT, "GreatHall", 0.8)
+	_stair_chains(GREAT, 4, Vector2(5.0, 11.0), "GreatStairs")
+	for k in 3:
+		_floating_chain(GREAT, 7)
+	for side: Array in [[Vector3.BACK, 56.0, 60.0], [Vector3.FORWARD, -56.0, -60.0], [Vector3.LEFT, -56.0, -60.0], [Vector3.RIGHT, 56.0, 60.0]]:
+		_grid_windows(GREAT, side[0], side[1], side[2], 3)
+	_thing(&"climber", Transform3D(Basis.IDENTITY, Vector3(38.0, 30.0, -38.0)), {})
+	_camp(Vector3(42.0, 30.0, -42.0))
+
+
+## The bridge (the procedural Stack's plates, the user's): 30 m over the
+## courtyard from the great hall to the tower opposite, its edges bristling
+## with rebar, washing strung along it, lamps, and rubble floating round it.
+func _bridge() -> void:
+	_block(Vector3(-5.0, 29.0, 60.0), Vector3(5.0, 30.0, 152.0))
+	_room(Vector3(-3.0, 30.0, 152.0), Vector3(3.0, 36.0, 154.0))
+	_room(Vector3(-8.0, 30.0, 154.0), Vector3(8.0, 38.0, 166.0)) # a landing inside, for now
+	_thing(&"lamp", Transform3D(Basis.IDENTITY, Vector3(0.0, 36.0, 160.0)), {energy = 0.8, range = 14.0})
+	for z in range(66, 150, 12):
+		for side: float in [-1.0, 1.0]:
+			_thing(&"pole", Transform3D(Basis.IDENTITY, Vector3(side * 4.6, 30.0, float(z))), {})
+			if z + 12 < 150:
+				_thing(&"clothes", Transform3D(Basis.IDENTITY, Vector3(side * 4.6, 32.8, float(z))), {to = Vector3(side * 4.6, 32.8, float(z + 12))})
+		if z % 36 == 6:
+			_thing(&"lamp_post", Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(4.2, 30.0, float(z))), {})
+	for k in 10:
+		var along := _dice.randf_range(64.0, 148.0)
+		var side := -1.0 if _dice.randf() < 0.5 else 1.0
+		_rebar(Vector3(side * 5.0, 29.5, along), Vector3(side, -0.4, 0.0))
+	# Rubble floating in the courtyard's air, round the bridge.
+	for k in 16:
+		var at := Vector3(_dice.randf_range(-62.0, 62.0), _dice.randf_range(12.0, 62.0), _dice.randf_range(66.0, 146.0))
+		if absf(at.x) < 9.0 and at.y > 24.0 and at.y < 40.0:
+			at.x += 14.0 * signf(at.x if at.x != 0.0 else 1.0)
+		_chunk(at, _dice.randf_range(2.0, 7.0))
+
+
+## Chains of abstract stairs (the procedural Stack's: 35-degree flights, each
+## up to a small platform, the next flight off that), spread round `room`:
+## `count` chains, each flight rising `rise` (metres).
+func _stair_chains(room: AABB, count: int, rise: Vector2, name: String) -> void:
+	var made := 0
+	for attempt in count * 12:
+		if made >= count:
+			break
+		var at := Vector3(_dice.randf_range(room.position.x + 6.0, room.end.x - 6.0), room.position.y,
+				_dice.randf_range(room.position.z + 6.0, room.end.z - 6.0))
+		var flights: Array = []
+		var ok := true
+		for step in _dice.randi_range(2, 4):
+			var up := _dice.randf_range(rise.x, rise.y)
+			if at.y + up > room.end.y - 3.5:
+				break
+			var run := up / tan(deg_to_rad(STAIR_SLOPE))
+			var heading := Vector3.FORWARD.rotated(Vector3.UP, _dice.randf() * TAU)
+			var top := at + heading * run + Vector3.UP * up
+			var landing := top + heading * 3.0
+			if not room.grow(-4.0).has_point(Vector3(landing.x, room.get_center().y, landing.z)):
+				break
+			var lean := Basis.looking_at((top - at).normalized(), Vector3.UP)
+			var flight := {c = (at + top) * 0.5, s = Vector3(4.0, 0.6, at.distance_to(top)), b = lean}
+			var platform := {c = landing - Vector3.UP * 0.5, s = Vector3(6.0, 1.0, 6.0), b = Basis(Vector3.UP, _dice.randf() * TAU)}
+			if _blocks_a_door(flight) or _blocks_a_door(platform):
+				ok = false
+				break
+			flights.append(flight)
+			flights.append(platform)
+			at = landing
+		if not ok or flights.size() < 2:
+			continue
+		for piece: Dictionary in flights:
+			_extra.append(_oriented(piece.c, piece.s, piece.b))
+		made += 1
+	print(name, ": ", made, " stair chains")
+
+
+## A chain of floating rubble (the procedural Stack's: tumbled chunks hung
+## high in the hall, each a jump or a grapple from the last), rebar
+## bristling off them.
+func _floating_chain(room: AABB, count: int) -> void:
+	var at := Vector3(_dice.randf_range(room.position.x + 10.0, room.end.x - 10.0), room.end.y - 8.0,
+			_dice.randf_range(room.position.z + 10.0, room.end.z - 10.0))
+	for i in count:
+		_chunk(at, _dice.randf_range(3.0, 7.0))
+		var way := Vector2.from_angle(_dice.randf() * TAU) * _dice.randf_range(6.0, 11.0)
+		at = Vector3(clampf(at.x + way.x, room.position.x + 8.0, room.end.x - 8.0), at.y - _dice.randf_range(3.0, 6.0),
+				clampf(at.z + way.y, room.position.z + 8.0, room.end.z - 8.0))
+		if at.y < room.position.y + 10.0:
+			break
+
+
+## One floating chunk of rubble, tumbled, rebar sticking out of it.
+func _chunk(at: Vector3, size: float) -> void:
+	var tumble := Basis.from_euler(Vector3(_dice.randf_range(-0.6, 0.6), _dice.randf() * TAU, _dice.randf_range(-0.6, 0.6)))
+	_extra.append(_oriented(at, Vector3(size, size * _dice.randf_range(0.3, 0.6), size * _dice.randf_range(0.6, 1.0)), tumble))
+	if _dice.randf() < 0.6:
+		_rebar(at, tumble * Vector3(1.0, 0.0, 0.0))
+
+
+## Rebar: 3-6 bent bars sticking out of `at` along `out`.
+func _rebar(at: Vector3, out: Vector3) -> void:
+	for i in _dice.randi_range(3, 6):
+		var way := (out.normalized() + Vector3(_dice.randf_range(-0.4, 0.4), _dice.randf_range(-0.4, 0.4), _dice.randf_range(-0.4, 0.4))).normalized()
+		var length := _dice.randf_range(1.5, 3.5)
+		var bar := {c = at + way * length * 0.5, s = Vector3(0.25, 0.25, length), b = Basis.looking_at(way, Vector3.UP if absf(way.y) < 0.95 else Vector3.RIGHT)}
+		_decor_bars.append(_oriented(bar.c, bar.s, bar.b))
+
+
+## A dead climber's cold camp (the open world's): tent, bedroll and dead fire,
+## and their supplies -- ammo, pills, a bandage, a grenade -- and a crate.
+func _camp(at: Vector3) -> void:
+	_thing(&"camp", Transform3D(Basis(Vector3.UP, _dice.randf() * TAU), at), {})
+	var spots := [["res://scenes/ammo_pickup.tscn", Vector3(2.5, 0.3, -1.0)], ["res://scenes/ammo_pickup.tscn", Vector3(3.0, 0.3, 0.2)],
+			["res://scenes/pills_pickup.tscn", Vector3(-2.0, 0.3, 2.2)], ["res://scenes/bandage_pickup.tscn", Vector3(-2.6, 0.3, 1.4)],
+			["res://scenes/grenade_pickup.tscn", Vector3(1.2, 0.3, 2.6)]]
+	for spot: Array in spots:
+		_thing(&"pickup", Transform3D(Basis.IDENTITY, at + (spot[1] as Vector3)), {scene = spot[0]})
+	_thing(&"crate", Transform3D(Basis(Vector3.UP, _dice.randf() * TAU), at + Vector3(-3.5, 0.0, -2.0)), {})
+
+
+## The open world's details, scattered (the user's): fire barrels, explosive
+## barrels in groups, crates, dead climbers' camps, cables across the
+## courtyard, washing strung from its walls.
+func _dressing() -> void:
+	var floors := [[AABB(Vector3(-60.0, 0.0, 66.0), Vector3(120.0, 0.0, 80.0)), 3, 2, 6], # the courtyard
+			[AABB(Vector3(-16.0, 0.0, 32.0), Vector3(30.0, 0.0, 22.0)), 1, 1, 2], # the lobby
+			[AABB(Vector3(-12.0, 0.0, -52.0), Vector3(28.0, 0.0, 26.0)), 1, 1, 4], # the stair hall's far end
+			[AABB(Vector3(-50.0, 30.0, -50.0), Vector3(100.0, 0.0, 100.0)), 2, 2, 8]] # the great hall
+	for spread: Array in floors:
+		var area: AABB = spread[0]
+		for i in int(spread[1]):
+			_thing(&"fire", Transform3D(Basis.IDENTITY, _on(area)), {})
+		for g in int(spread[2]):
+			var middle := _on(area)
+			for i in _dice.randi_range(3, 5):
+				_thing(&"explosive", Transform3D(Basis(Vector3.UP, _dice.randf() * TAU), middle + Vector3(_dice.randf_range(-1.6, 1.6), 0.0, _dice.randf_range(-1.6, 1.6))), {})
+		for i in int(spread[3]):
+			_thing(&"crate", Transform3D(Basis(Vector3.UP, _dice.randf() * TAU), _on(area)), {})
+	_thing(&"climber", Transform3D(Basis.IDENTITY, Vector3(-46.0, 0.0, 140.0)), {})
+	_camp(Vector3(-52.0, 1.2, 128.0))
+	# Cables across the courtyard, tower to tower, high up.
+	for k in 7:
+		var y := _dice.randf_range(18.0, 80.0)
+		if _dice.randf() < 0.5:
+			var z := _dice.randf_range(70.0, 145.0)
+			_thing(&"wire", Transform3D(Basis.IDENTITY, Vector3(-72.0, y, z)), {to = Vector3(72.0, y - _dice.randf_range(0.0, 6.0), z + _dice.randf_range(-10.0, 10.0))})
+		else:
+			var x := _dice.randf_range(-60.0, 60.0)
+			_thing(&"wire", Transform3D(Basis.IDENTITY, Vector3(x, y, 60.0)), {to = Vector3(x + _dice.randf_range(-15.0, 15.0), y - _dice.randf_range(0.0, 6.0), 152.0)})
+	# Washing from the courtyard's walls to poles.
+	for k in 4:
+		var side := -1.0 if k < 2 else 1.0
+		var z := _dice.randf_range(80.0, 140.0)
+		var pole := Vector3(side * 50.0, 0.0, z)
+		_thing(&"pole", Transform3D(Basis.IDENTITY, pole), {tall = 9.0})
+		_thing(&"clothes", Transform3D(Basis.IDENTITY, Vector3(side * 72.0, 8.0, z)), {to = pole + Vector3.UP * 8.0})
+
+
+## A spot on `area`'s floor, at random.
+func _on(area: AABB) -> Vector3:
+	return Vector3(_dice.randf_range(area.position.x, area.end.x), area.position.y, _dice.randf_range(area.position.z, area.end.z))
 
 
 # ---- Pieces ----------------------------------------------------------------------------------
@@ -340,7 +536,7 @@ func _stack_holes() -> Array[AABB]:
 ## along that axis: one a tile wherever a whole one fits the room, every
 ## storey it reaches -- REAL_SHARE of them real (half boarded, the lowest row
 ## only; half glass), the rest left painted (the facade's own).
-func _grid_windows(room: AABB, out: Vector3, inner: float, outer: float) -> void:
+func _grid_windows(room: AABB, out: Vector3, inner: float, outer: float, rows: int = 99) -> void:
 	var along_x := absf(out.z) > 0.5
 	var lo := room.position.x if along_x else room.position.z
 	var hi := room.end.x if along_x else room.end.z
@@ -358,7 +554,7 @@ func _grid_windows(room: AABB, out: Vector3, inner: float, outer: float) -> void
 			storey += 1
 			if sill < room.position.y + 0.5:
 				continue
-			if sill + GRID_TALL > room.end.y - 0.2:
+			if sill + GRID_TALL > room.end.y - 0.2 or storey > rows:
 				break
 			var middle := Vector3(centre, sill + GRID_TALL * 0.5, middle_out) if along_x else Vector3(middle_out, sill + GRID_TALL * 0.5, centre)
 			var half := Vector3(GRID_WIDE * 0.5, GRID_TALL * 0.5, depth * 0.5 + 0.05) if along_x else Vector3(depth * 0.5 + 0.05, GRID_TALL * 0.5, GRID_WIDE * 0.5)
@@ -367,12 +563,18 @@ func _grid_windows(room: AABB, out: Vector3, inner: float, outer: float) -> void
 				continue
 			if _dice.randf() > REAL_SHARE:
 				continue # painted (the facade's own)
-			_room(opening.position, opening.end)
-			var low := sill - room.position.y < GRID
+			var low := sill - room.position.y < GRID and room.position.y < 1.0
 			if low and _dice.randf() < 0.5:
-				_thing(&"barricade", Transform3D(Basis.looking_at(out, Vector3.UP), middle),
-						{size = Vector2(GRID_WIDE, GRID_TALL), drop = sill - room.position.y + GRID_TALL * 0.5, depth = depth})
+				# Boarded (the user's: lower and smaller, so the horde can use it):
+				# in the grid window's column, down near the floor.
+				var crawl_mid := middle
+				crawl_mid.y = room.position.y + CRAWL_SILL + CRAWL.y * 0.5
+				var crawl_half := Vector3(CRAWL.x * 0.5, CRAWL.y * 0.5, depth * 0.5 + 0.05) if along_x else Vector3(depth * 0.5 + 0.05, CRAWL.y * 0.5, CRAWL.x * 0.5)
+				_room(crawl_mid - crawl_half, crawl_mid + crawl_half)
+				_thing(&"barricade", Transform3D(Basis.looking_at(out, Vector3.UP), crawl_mid),
+						{size = CRAWL, drop = CRAWL_SILL + CRAWL.y * 0.5, depth = depth})
 			else:
+				_room(opening.position, opening.end)
 				_thing(&"glass", Transform3D(Basis.looking_at(out, Vector3.UP), middle), {size = Vector2(GRID_WIDE, GRID_TALL)})
 
 
@@ -381,7 +583,7 @@ func _grid_windows(room: AABB, out: Vector3, inner: float, outer: float) -> void
 ## leaning slab, stairs to nowhere, its lamps), made 1/HALL_SCALE the room's
 ## size and everything scaled back down into it. Rerolled till nothing stands
 ## in a doorway (_keep_clear); the last try's blockers left out.
-func _hall_decor(room: AABB, name: String) -> void:
+func _hall_decor(room: AABB, name: String, scale: float = HALL_SCALE) -> void:
 	var builder := StackBuilder.new(false)
 	var best: Array = []
 	var best_lamps: Array = []
@@ -393,12 +595,12 @@ func _hall_decor(room: AABB, name: String) -> void:
 		builder.nest_spots = PackedVector3Array()
 		builder.gang_spots = PackedVector4Array()
 		builder.random.seed = hash([name, attempt])
-		var big := AABB(room.position / HALL_SCALE, room.size / HALL_SCALE)
+		var big := AABB(room.position / scale, room.size / scale)
 		builder._hall_features({tower = -1, box = big, name = name})
 		var made: Array = []
 		var blocked := 0
 		for b: Dictionary in builder.boxes:
-			var piece := {c = (b.c as Vector3) * HALL_SCALE, s = (b.s as Vector3) * HALL_SCALE, b = b.b}
+			var piece := {c = (b.c as Vector3) * scale, s = (b.s as Vector3) * scale, b = b.b}
 			if _blocks_a_door(piece):
 				blocked += 1
 				piece[&"blocked"] = true
@@ -413,8 +615,8 @@ func _hall_decor(room: AABB, name: String) -> void:
 		if not piece.has(&"blocked"):
 			_extra.append(_oriented(piece.c, piece.s, piece.b))
 	for lamp: Array in best_lamps:
-		_thing(&"lamp", Transform3D(Basis.IDENTITY, (lamp[0] as Vector3) * HALL_SCALE),
-				{energy = float(lamp[2]) * 0.4, range = float(lamp[3]) * HALL_SCALE, color = lamp[1]})
+		_thing(&"lamp", Transform3D(Basis.IDENTITY, (lamp[0] as Vector3) * scale),
+				{energy = float(lamp[2]) * scale, range = float(lamp[3]) * scale, color = lamp[1]})
 	print(name, ": the Stack's hall, ", best.size(), " pieces (", fewest, " left out of doorways)")
 
 
@@ -470,6 +672,8 @@ func _carve() -> void:
 				next.append_array(_subtract(piece, room))
 			pieces = next
 		for piece in pieces:
+			if piece.size.x < 0.05 or piece.size.y < 0.05 or piece.size.z < 0.05:
+				continue # (a sliver: nothing to build)
 			_world.append(_piece_brush(piece, solid))
 	_world.append_array(_extra)
 
@@ -570,22 +774,33 @@ func _build_things(root: Node3D) -> void:
 	var holder := Node3D.new()
 	holder.name = "Things"
 	_add(root, holder)
+	var climbers := PackedVector3Array()
 	var counts := {}
 	for thing: Array in _things:
 		var kind: StringName = thing[0]
 		var xf: Transform3D = thing[1]
 		var settings: Dictionary = thing[2]
 		counts[kind] = int(counts.get(kind, 0)) + 1
+		if kind == &"climber":
+			climbers.append(xf.origin)
+			continue
 		var node := _made(kind, settings)
 		if node == null:
 			continue
 		node.name = "%s_%d" % [kind, counts[kind]]
 		node.transform = xf
+		if node.has_meta(&"to"):
+			_string_up(node)
 		if kind == &"spawn":
 			node.name = "Player"
 			_add(root, node)
 			continue
 		_add(holder, node)
+	var dressing := Node.new()
+	dressing.name = "DemoDressing"
+	dressing.set_script(load("res://scripts/zombies/demo_dressing.gd"))
+	dressing.set(&"climbers", climbers)
+	_add(root, dressing)
 	var hud := (load(HUD) as PackedScene).instantiate()
 	hud.name = "HUD"
 	_add(root, hud)
@@ -631,7 +846,43 @@ func _made(kind: StringName, settings: Dictionary) -> Node3D:
 			var door := StaticBody3D.new()
 			door.set_script(load("res://scripts/zombies/zombie_door.gd"))
 			door.set(&"size", settings.get("size", Vector3(4.0, 3.0, 0.4)))
+			door.set(&"open_move", settings.get("open_move", Vector3.ZERO))
 			return door
+		&"fire":
+			var fire := StaticBody3D.new()
+			fire.set_script(load("res://scripts/world/burning_barrel.gd"))
+			return fire
+		&"explosive":
+			return (load("res://scenes/props/explosive_barrel.tscn") as PackedScene).instantiate() as Node3D
+		&"pickup":
+			return (load(str(settings.scene)) as PackedScene).instantiate() as Node3D
+		&"camp":
+			var camp := Node3D.new()
+			camp.set_script(load("res://scripts/world/camp.gd"))
+			camp.set(&"tent", _dice.randi() % 2)
+			camp.set(&"abandoned", true)
+			return camp
+		&"crate":
+			var crate := RigidBody3D.new()
+			crate.mass = 12.0
+			var model := QuestProps._prop(CRATE_MODELS[_dice.randi() % CRATE_MODELS.size()], 1.4)
+			if model:
+				model.position.y = 0.7
+				crate.add_child(model)
+			var shape := CollisionShape3D.new()
+			var box := BoxShape3D.new()
+			box.size = Vector3(1.1, 1.1, 1.1)
+			shape.shape = box
+			shape.position.y = 0.6
+			crate.add_child(shape)
+			return crate
+		&"pole":
+			var pole := Node3D.new()
+			var tall: float = settings.get("tall", 3.2)
+			pole.add_child(_mesh(Vector3(0.12, tall, 0.12), Vector3(0.0, tall * 0.5, 0.0), Color(0.22, 0.2, 0.19)))
+			return pole
+		&"wire", &"clothes":
+			return _strung(settings.get("to", Vector3.ZERO), kind == &"clothes")
 		&"lamp":
 			var light := OmniLight3D.new()
 			light.light_color = settings.get("color", LAMP)
@@ -679,6 +930,48 @@ func _made(kind: StringName, settings: Dictionary) -> Node3D:
 			door.add_child(_mesh(Vector3(0.08, 0.08, 0.1), Vector3(0.38, -0.05, 0.05), Color(0.55, 0.5, 0.35)))
 			return door
 	return null
+
+
+## A cable (or a washing line, its shirts and trousers hanging off it --
+## the procedural Stack's) from the node's own spot to 	o (world).
+func _strung(to: Vector3, washing: bool) -> Node3D:
+	var root := Node3D.new()
+	root.set_meta(&"to", to)
+	root.set_meta(&"washing", washing)
+	return root
+
+
+## Strung lines get built once they know where they start (_build_things).
+func _string_up(root: Node3D) -> void:
+	var to: Vector3 = root.get_meta(&"to")
+	var washing: bool = root.get_meta(&"washing")
+	var from := root.position
+	var length := from.distance_to(to)
+	if length < 0.5:
+		return
+	var line := _mesh(Vector3(0.05, 0.05, length), Vector3.ZERO, Color(0.12, 0.12, 0.12))
+	line.transform = Transform3D(Basis.looking_at((to - from).normalized(), Vector3.UP), (to - from) * 0.5)
+	root.add_child(line)
+	if not washing:
+		return
+	var colours := [Color(0.45, 0.38, 0.32), Color(0.32, 0.36, 0.42), Color(0.5, 0.47, 0.42), Color(0.38, 0.22, 0.2), Color(0.25, 0.3, 0.26)]
+	var dir := (to - from) / length
+	var spot := _dice.randf_range(0.8, 2.0)
+	while spot < length - 0.8:
+		var shirt := _dice.randf() < 0.6
+		var piece := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.7, 0.75) if shirt else Vector2(0.45, 1.0)
+		piece.mesh = quad
+		var cloth := StandardMaterial3D.new()
+		cloth.albedo_color = colours[_dice.randi() % colours.size()]
+		cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
+		cloth.roughness = 1.0
+		piece.material_override = cloth
+		piece.position = dir * spot - Vector3.UP * (quad.size.y * 0.5 + 0.05)
+		piece.rotation.y = atan2(dir.x, dir.z) + PI * 0.5
+		root.add_child(piece)
+		spot += _dice.randf_range(0.9, 2.2)
 
 
 func _mesh(size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
@@ -735,6 +1028,11 @@ func _write_map(path: String) -> Error:
 	for brush: Array in _world:
 		lines.append(_brush_text(brush))
 	lines.append("}")
+	if not _decor_bars.is_empty():
+		lines.append("{\n\"classname\" \"func_detail_illusionary\"")
+		for brush: Array in _decor_bars:
+			lines.append(_brush_text(brush))
+		lines.append("}")
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()

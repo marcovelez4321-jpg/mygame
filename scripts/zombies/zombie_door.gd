@@ -13,6 +13,9 @@ const WOOD := Color(0.3, 0.22, 0.15)
 
 ## The doorway (width, height, depth).
 @export var size := Vector3(4.0, 3.0, 0.4)
+## Which way it goes when cleared, and how far (its own space): a door sinks
+## into the floor; a hatch in a floor (the user's, 2026-10-27) slides aside.
+@export var open_move := Vector3.ZERO
 
 var use_prompt: String = "Clear the way (free for now)"
 
@@ -72,7 +75,8 @@ func _do_open() -> void:
 		return
 	_open = true
 	var tween := create_tween()
-	tween.tween_property(self, ^"position:y", position.y - size.y - 0.1, OPEN_TIME).set_trans(Tween.TRANS_QUAD)
+	var move := open_move if open_move != Vector3.ZERO else Vector3.DOWN * (size.y + 0.1)
+	tween.tween_property(self, ^"position", position + basis * move, OPEN_TIME).set_trans(Tween.TRANS_QUAD)
 	tween.tween_callback(func() -> void:
 		collision_layer = 0
 		visible = false)

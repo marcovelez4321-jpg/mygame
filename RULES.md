@@ -2139,3 +2139,12 @@ them:
   - **Windows:** on the Stack's own 8 m grid in every room against an outer wall. 3 in 4 are real: half boarded (Barricade, now any size and wall thickness; lowest row only), half dirty glass. The rest are painted. No more reflective panes. The corridor and flats are now 6.5 m tall so the windows fit.
   - **Decoration:** the lobby and stair hall get the original Stack's hall decorator (StackBuilder._hall_features) at 0.4 scale, rerolled until nothing blocks a doorway.
   - **The Alpha Stalker:** brought in 3 s after the start (WindowSpawner), hunting from round 1.
+
+- 2026-10-27 Stacks demo, the procedural Stack's way (the user's):
+  - **The great hall** (112 x 112 x 60 m over the ground floor): the original hall decorator at 0.8, floating rubble chains with rebar, abstract stair chains up to platforms, glass on the grid all round (3 rows).
+  - **The hatch:** a long abstract stair up the stair hall through the floor; F slides it aside (ZombieDoor.open_move).
+  - **The bridge:** a plate bridge 30 m over the courtyard to tower D, with rebar, washing lines on poles, lamp posts and floating rubble round it.
+  - **More stairs:** stair chains in the lobby and stair hall.
+  - **Boarded windows:** lower and smaller (2.4 x 2.6, sill 0.9) in the grid columns.
+  - **Dressing:** fire barrels, explosive barrels in groups, crates, two dead climbers' cold camps with ammo, pills, bandages and grenades (DemoDressing lays the bodies), cables across the courtyard, washing from its walls.
+  - **Rebar:** decor at 0.25 m (thinner collapses in the map build).
