@@ -2096,3 +2096,5 @@ them:
     - **The Consumed, otherwise:** not drawn past 400 m. A target is looked for every 0.5 s, not every frame. Its eye and wound meshes are shared, and the wings cast no shadow.
     - **Nests:** pulse only while on screen.
     - **Bell-wraiths:** each arm is one MultiMesh draw (it was 14). It's posed only while it moves on screen or lashes, and who's near is checked every 0.25 s.
+
+- 2026-10-26 (the user's): the Consumed fly like the heart's blood orbs. Flat out along a heading that turns at most HeartOrb.TURN_RATE (33.75 degrees a second) toward you, so a late juke makes one overshoot and swing wide to come round again. Its heading starts afresh after each bounce and after circling.

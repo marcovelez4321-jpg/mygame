@@ -19,6 +19,9 @@ extends RigidBody3D
 ## head (presentation).
 
 const SPEED := 22.0
+## Turning at most this many degrees a second toward you (the user's: like
+## the heart's blood orbs -- theirs).
+const TURN_RATE := HeartOrb.TURN_RATE
 const ACCEL := 45.0
 const HIT := 15.0
 const SHOVE := 12.0
@@ -84,6 +87,8 @@ var _flap := 0.0
 var _circle_angle := 0.0
 var _circle_radius := 90.0
 var _hit_cooldown := 0.0
+## Which way it's flying at them (ZERO: from how it's moving, next).
+var _heading := Vector3.ZERO
 
 static var _models: Array[String] = []
 
@@ -365,12 +370,24 @@ func _physics_process(delta: float) -> void:
 	if _target == null:
 		_circle(delta)
 		return
-	# Rushing at them, flat out -- flinging itself.
+	# Rushing at them, flat out -- flinging itself. Like the heart's blood
+	# orbs (the user's): along its heading, turning at most TURN_RATE a second
+	# toward them -- juke it late and it overshoots, swinging wide to come
+	# round again.
 	var aim := _target.head.global_position + Vector3.DOWN * 0.4
 	var to := aim - global_position
-	linear_velocity = linear_velocity.move_toward(to.normalized() * SPEED, ACCEL * delta)
+	if _heading == Vector3.ZERO:
+		_heading = linear_velocity.normalized() if linear_velocity.length_squared() > 1.0 else -global_basis.z
+	var want := to.normalized()
+	var off := _heading.angle_to(want)
+	if off > 0.0001:
+		var axis := _heading.cross(want)
+		if axis.length_squared() < 0.000001:
+			axis = _heading.cross(Vector3.UP if absf(_heading.y) < 0.9 else Vector3.RIGHT) # (dead behind it: either way round)
+		_heading = _heading.rotated(axis.normalized(), minf(off, deg_to_rad(TURN_RATE) * delta)).normalized()
+	linear_velocity = linear_velocity.move_toward(_heading * SPEED, ACCEL * delta)
 	angular_velocity = Vector3.ZERO
-	_upright(to)
+	_upright(_heading)
 	if to.length() < 1.3:
 		_strike(_target)
 
@@ -407,6 +424,7 @@ func _pick_target() -> PlayerMovement:
 
 ## Looping round where it nests (the Ossuary's spires), waiting.
 func _circle(delta: float) -> void:
+	_heading = Vector3.ZERO
 	if not circle_at.is_finite():
 		linear_velocity = linear_velocity.move_toward(Vector3.ZERO, ACCEL * delta)
 		return
@@ -446,6 +464,7 @@ func _strike(player: PlayerMovement) -> void:
 	angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))
 	gravity_scale = 1.0
 	_tumble_left = TUMBLE_TIME
+	_heading = Vector3.ZERO # (coming round again from wherever it's thrown)
 
 
 ## Dead: limp, all of it a ragdoll, falling like a sack; the host's: now
