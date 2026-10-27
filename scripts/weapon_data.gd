@@ -104,6 +104,11 @@ enum ReloadStyle {
 ## it stays lined up however the gun is moved or resized. Empty = use
 ## aim_position as-is.
 @export var aim_sight_node: String = ""
+## Line the iron sights up by themselves (the user's, 2026-10-27: Black Ops 1
+## style): the gun's rear and front sights are found on its own mesh and lined
+## up with your eye (Viewmodel's auto sights) -- aim_position isn't used. Off:
+## aim_position as before. (An Aim Sight Node wins over this.)
+@export var auto_sights: bool = true
 ## How much the view zooms in when fully aimed: 1 = none, 2.5 = things look
 ## 2.5x bigger. Mouse turning slows down to match.
 @export var aim_zoom: float = 1.2

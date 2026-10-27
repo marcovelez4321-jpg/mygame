@@ -734,6 +734,8 @@ func _keep_in_step() -> void:
 ## AIM_EYE_DISTANCE away, plus the weapon's aim_position as a nudge.
 ## Otherwise just aim_position.
 func aim_position_for(weapon: WeaponData) -> Vector3:
+	if weapon.aim_sight_node.is_empty() and _auto_sights != null and weapon.auto_sights:
+		return _auto_aim()[0] + weapon.viewmodel_position
 	if weapon.aim_sight_node.is_empty() or _sight_center == null:
 		return weapon.aim_position
 	var sight_offset: Vector3 = _model_rest_transform.basis * (_sight_center as Vector3)
@@ -751,6 +753,85 @@ func _find_sight_center(weapon: WeaponData) -> Variant:
 		return null
 	var to_model := _model.global_transform.affine_inverse() * sight.global_transform
 	return to_model * sight.get_aabb().get_center()
+
+
+# ---- Auto sights (the user's, 2026-10-27: any gun's iron sights line up with
+# your eye by itself, Black Ops 1 style -- no aim position to tune per gun) --------------
+# Read off the gun's own mesh, in the hand's space as it's held: its top line
+# down the middle -- the REAR sight the highest point over the back half (not
+# the very back: hammers, stocks), the FRONT sight the highest over the muzzle
+# end. Aimed, the whole hand turns so that line runs straight ahead, and moves
+# so the rear sight sits AIM_EYE_DISTANCE in front of your eye: the front post
+# lands on the rear sight, dead centre, whatever pose the arms hold it in.
+
+## The muzzle end's share of the gun's length (the front sight's in there),
+## the back half's span (the rear sight's), and how wide the middle band is.
+const SIGHT_FRONT_SHARE := 0.2
+const SIGHT_REAR_SPAN := Vector2(0.45, 0.95)
+const SIGHT_BAND := 0.2
+
+## [rear, front] in the hand's space at rest (null: none found -- then
+## aim_position is used as before).
+var _auto_sights: Variant = null
+
+
+func _find_auto_sights(weapon: WeaponData) -> Variant:
+	if _gun == null or not weapon.auto_sights or not weapon.aim_sight_node.is_empty() \
+			or weapon.heal_item >= 0 or weapon.throws_grenade:
+		return null
+	var to_model := _model.global_transform.affine_inverse()
+	var points := PackedVector3Array()
+	for node in _gun.find_children("*", "MeshInstance3D", true, false):
+		var part := node as MeshInstance3D
+		if part.mesh == null:
+			continue
+		var into_hand := _model_rest_transform * (to_model * part.global_transform)
+		for s in part.mesh.get_surface_count():
+			var vertices: PackedVector3Array = part.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+			for v in vertices:
+				points.append(into_hand * v)
+	if points.size() < 8:
+		return null
+	var low := points[0]
+	var high := points[0]
+	for p in points:
+		low = low.min(p)
+		high = high.max(p)
+	var length := high.z - low.z
+	if length < 0.01:
+		return null
+	var middle := (low.x + high.x) * 0.5
+	var band := maxf((high.x - low.x) * SIGHT_BAND, 0.005)
+	var rear := Vector3(0.0, -INF, 0.0)
+	var front := Vector3(0.0, -INF, 0.0)
+	for p in points:
+		if absf(p.x - middle) > band:
+			continue
+		var t := (p.z - low.z) / length # 0: the muzzle (-Z), 1: the back
+		if t <= SIGHT_FRONT_SHARE and p.y > front.y:
+			front = p
+		elif t >= SIGHT_REAR_SPAN.x and t <= SIGHT_REAR_SPAN.y and p.y > rear.y:
+			rear = p
+	if not rear.is_finite() or not front.is_finite():
+		return null
+	return [rear, front]
+
+
+## The aimed hand: [where it moves, how it turns] so the sights line up.
+func _auto_aim() -> Array:
+	var rear: Vector3 = _auto_sights[0]
+	var front: Vector3 = _auto_sights[1]
+	var line := (front - rear).normalized()
+	var turn := Quaternion(line, Vector3.FORWARD) if line.dot(Vector3.FORWARD) > -0.99 else Quaternion.IDENTITY
+	return [Vector3(0.0, 0.0, -AIM_EYE_DISTANCE) - turn * rear, turn]
+
+
+## How the hand turns, fully aimed (the auto sights' straightening).
+func aim_turn() -> Quaternion:
+	var weapon := _weapons.current_weapon() if _weapons else null
+	if weapon == null or _auto_sights == null or not weapon.auto_sights or not weapon.aim_sight_node.is_empty():
+		return Quaternion.IDENTITY
+	return _auto_aim()[1]
 
 
 ## What sways and bobs with your hands (the journal's held on it: JournalView).
@@ -987,6 +1068,7 @@ func _show_weapon(weapon: WeaponData) -> void:
 	_gun.visible = not _waiting_for_grenade
 	_apply_transform(weapon)
 	_sight_center = _find_sight_center(weapon)
+	_auto_sights = _find_auto_sights(weapon)
 	# An empty launcher comes out empty.
 	if weapon.fires_projectile:
 		_show_loaded_projectile(_weapons.get_magazine_ammo() > 0)
@@ -1713,6 +1795,9 @@ func _update_sway(delta: float) -> void:
 	var heavy := _heavy_motion(delta)
 	_sway_pivot.position = Vector3(_sway_position.x, _sway_position.y, 0.0) * calm + aim_offset + _preview_offset + LOWERED_OFFSET * dip + (heavy[0] as Vector3) * calm
 	_sway_pivot.rotation_degrees = Vector3(_sway_tilt.x, _sway_tilt.y, 0.0) * calm + Vector3(LOWERED_TILT_DEGREES * dip, 0.0, 0.0) + (heavy[1] as Vector3) * calm
+	# Aimed: the hand turned so the sights run straight ahead (auto sights).
+	if aim_steady > 0.0:
+		_sway_pivot.basis = Basis(Quaternion.IDENTITY.slerp(aim_turn(), aim_steady)) * _sway_pivot.basis
 
 
 # ---- Heavy (grounded, the user's 2026-10-27: heavy inertia) ------------------------------

@@ -307,6 +307,7 @@ metadata/own_look = true
 
 [node name="BiomeAtmosphere" type="Node" parent="." unique_id=1690203013]
 script = ExtResource("27_0bcx0")
+fog_distance = 1.3333
 biomes = ExtResource("5_u65ls")
 reef_air = SubResource("Resource_axar3")
 sewer_air = SubResource("Resource_sshxm")
