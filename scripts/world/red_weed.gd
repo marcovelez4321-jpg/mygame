@@ -40,6 +40,7 @@ var _players := PackedVector3Array()
 
 
 func _ready() -> void:
+	add_to_group(&"red_weed")
 	_material = ShaderMaterial.new()
 	_material.shader = SHADER
 	await get_tree().physics_frame
@@ -65,7 +66,16 @@ func _process(_delta: float) -> void:
 
 # ---- Where it grows ------------------------------------------------------------------------
 
+## Grown again (the Tree fed: twice as thick -- QuestWorld).
+func regrow() -> void:
+	for child in get_children():
+		child.queue_free()
+	_grow()
+
+
 func _grow() -> void:
+	# Fed (the user's, Feed the Tree): twice the bushes.
+	var thick := 2 if Quests.tree_fed() else 1
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var house := get_tree().get_first_node_in_group(&"grandmas_house") as Node3D
@@ -73,12 +83,12 @@ func _grow() -> void:
 	var tree := FleshTree._tree
 	if tree and is_instance_valid(tree):
 		var middle := Vector2(tree.global_position.x, tree.global_position.z)
-		for i in tree_bushes:
+		for i in tree_bushes * thick:
 			# Thicker near the trunk.
 			var reach := lerpf(tree_near, tree_far, pow(rng.randf(), 1.6))
 			_try_spot(spots, middle + Vector2.from_angle(rng.randf() * TAU) * reach, house)
 	var yard := Vector2(global_position.x, global_position.z)
-	for i in yard_bushes:
+	for i in yard_bushes * thick:
 		_try_spot(spots, yard + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(yard_near, yard_far), house)
 	# The bushes: each one of the shapes, turned and sized at random.
 	var meshes: Array[ArrayMesh] = []

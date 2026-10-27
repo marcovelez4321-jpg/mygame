@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="NpcLines" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/npc_lines.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+speaker_name = "The cultist"
+lines = {
+"offer": "The Tree is hungry, little one. It was planted for you. Bring it the flesh of a great one, raw, still warm with the virus. Press it to the bark. Seven scrap... and a gun, to keep it fed.",
+"reply_accept": "I'll feed it.",
+"reply_decline": "Feed it yourself.",
+"refused": "Then you are not with us. We will remember your face.",
+"reminder": "It hungers still. I can hear it from here.",
+"reply_hand_in": "[Tell him the Tree is fed]",
+"done": "It drank. Do you feel the roots move? Take these. Go with the Tree.",
+"reply_leave": "[Leave]"
+}

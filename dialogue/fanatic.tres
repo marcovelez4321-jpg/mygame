@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="NpcLines" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/npc_lines.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+speaker_name = "The Fanatic"
+lines = {
+"greeting": "Don't touch her! Don't... oh. Another climber. Look at her. Isn't she beautiful? Piece by piece. When she's at the top, the whole sky will see.",
+"reply_help": "Need a hand?",
+"reply_why": "Why the top?",
+"reply_threat": "Put it down or I put you down.",
+"help": "Three pieces left. Gas, pipe, wire. They're down there somewhere. Bring them and we light the sky together.",
+"reply_accept": "I'll find them.",
+"reply_decline": "Not now.",
+"why": "So they'll see. So SOMEONE sees.",
+"reply_see": "I see you. That's enough.",
+"talked_down": "...Maybe it is. Maybe it is. Take them, then. Take them all, cheap. I don't want them anymore.",
+"kamikaze": "Then we BOTH see the sky!",
+"reply_hand_in": "[Give him what you found]",
+"parts_left": "Gas, pipe, wire. Bring them and we light the sky together.",
+"all_parts": "We light the sky together.",
+"reply_leave": "[Leave]"
+}

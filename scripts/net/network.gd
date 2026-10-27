@@ -575,7 +575,7 @@ func _clear_facts() -> void:
 ## "hand_in"), for the host to decide.
 func ask_quest(id: StringName, action: StringName) -> void:
 	if not is_online() or multiplayer.is_server():
-		GrandmaQuests.act(get_tree(), multiplayer.get_unique_id() if is_online() else 1, id, action)
+		_act_quest(multiplayer.get_unique_id() if is_online() else 1, id, action)
 	else:
 		_net_ask_quest.rpc_id(1, id, action)
 
@@ -583,7 +583,31 @@ func ask_quest(id: StringName, action: StringName) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func _net_ask_quest(id: StringName, action: StringName) -> void:
 	if multiplayer.is_server():
-		GrandmaQuests.act(get_tree(), multiplayer.get_remote_sender_id(), id, action)
+		_act_quest(multiplayer.get_remote_sender_id(), id, action)
+
+
+## Host: Grandma's quest, or the web past her (Quests).
+func _act_quest(peer: int, id: StringName, action: StringName) -> void:
+	if id == GrandmaQuests.CIGARETTES:
+		GrandmaQuests.act(get_tree(), peer, id, action)
+	else:
+		Quests.act(get_tree(), peer, id, action)
+
+
+## A moment in the quests every game sees (Quests: the Fanatic going off).
+signal quest_event(event: StringName, at: Vector3)
+
+
+## Host: event on every game (QuestWorld acts on it).
+func send_quest_event(event: StringName, at: Vector3) -> void:
+	quest_event.emit(event, at)
+	if is_online():
+		_net_quest_event.rpc(event, at)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _net_quest_event(event: StringName, at: Vector3) -> void:
+	quest_event.emit(event, at)
 
 
 ## Host: `amount` of `kind` taken out of a player's pack -- their own copy

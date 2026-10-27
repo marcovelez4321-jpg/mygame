@@ -65,6 +65,15 @@ const HOUSE_ROOTS := [
 	[[Vector3(1.2, 1.5, 15.0), Vector3(1.4, 6.0, 9.5), Vector3(1.5, 8.45, 2.5), Vector3(1.5, 7.0, 4.6),
 		Vector3(1.6, 5.0, 4.7), Vector3(1.7, 2.5, 4.75), Vector3(1.9, 0.3, 4.9), Vector3(2.2, -1.5, 5.4)], 1.9, 0.35],
 ]
+## Fed (the user's, Feed the Tree: two more draping roots over the house, four
+## in all): the first two's mirror images, on the other sides.
+const FED_ROOTS := [
+	[[Vector3(2.8, 1.0, 14.0), Vector3(3.2, 4.5, 8.0), Vector3(3.6, 7.4, 4.6), Vector3(3.8, 8.95, 2.0),
+		Vector3(3.9, 10.6, 0.0), Vector3(4.0, 8.95, -2.0), Vector3(4.4, 7.0, -4.3), Vector3(5.6, 4.5, -5.0),
+		Vector3(6.7, 1.5, -6.0), Vector3(7.3, -1.5, -6.6)], 1.8, 0.35],
+	[[Vector3(-0.8, 1.5, 15.0), Vector3(-0.6, 6.0, 9.5), Vector3(-0.5, 8.45, 2.5), Vector3(-0.5, 7.0, 4.6),
+		Vector3(-0.6, 5.0, 4.7), Vector3(-0.7, 2.5, 4.75), Vector3(-0.9, 0.3, 4.9), Vector3(-1.2, -1.5, 5.4)], 1.7, 0.3],
+]
 @export_group("Shape")
 ## How crooked everything is (share of a part's thickness).
 @export var gnarl: float = 0.35
@@ -138,6 +147,42 @@ static func ripen_for(player: PlayerMovement) -> void:
 
 ## A pod was grappled off: the others stay till one's eaten (the user's:
 ## you read it in your hand first -- mutation_eaten()).
+## Remade (for everyone, once nobody's looking): fed, its new roots.
+static func refresh() -> void:
+	if _tree and is_instance_valid(_tree):
+		_tree._built_steps = -1
+
+
+## Raw meat (a big one's: not rotten, not cooked) in player's hand.
+static func raw_in_hand(player: PlayerMovement) -> bool:
+	return player != null and player.hand.held_kind() == Backpack.Kind.MEAT and not CarryItem.is_rotten_data(player.hand.data)
+
+
+## Its body, as F finds it: Feed the Tree (the user's: hold the meat, F on
+## the trunk -- the bark takes it). The host decides (Quests.fed).
+class Trunk extends StaticBody3D:
+	var use_prompt: String = "Feed it"
+
+	func _ready() -> void:
+		add_to_group(PlayerMovement.USABLE_GROUP)
+
+	func can_use() -> bool:
+		return Quests.state(Quests.FEED) == Quests.State.ACTIVE and not Quests.tree_fed() \
+				and FleshTree.raw_in_hand(PlayerMovement.local_player(get_tree()))
+
+	func takes_held(_player: Node) -> bool:
+		return can_use()
+
+	func use_by(player: Node) -> void:
+		var p := player as PlayerMovement
+		if p == null or (Network.is_online() and not multiplayer.is_server()) or not FleshTree.raw_in_hand(p):
+			return
+		if Quests.state(Quests.FEED) != Quests.State.ACTIVE or Quests.tree_fed():
+			return
+		p.hand.use_up()
+		Quests.fed(p)
+
+
 static func pod_taken(pod: CarryItem) -> void:
 	if _tree == null:
 		return
@@ -352,7 +397,7 @@ func _build(steps: int, layout_seed: int) -> void:
 		_mesh = MeshInstance3D.new()
 		_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		add_child(_mesh)
-		_body = StaticBody3D.new()
+		_body = Trunk.new()
 		add_child(_body)
 		_shape = CollisionShape3D.new()
 		_body.add_child(_shape)
@@ -373,7 +418,7 @@ func _house_roots(muscle: SurfaceTool, base_radius: float) -> void:
 	var house := get_tree().get_first_node_in_group(&"grandmas_house") as Node3D
 	if house == null:
 		return
-	for spec: Array in HOUSE_ROOTS:
+	for spec: Array in HOUSE_ROOTS + (FED_ROOTS if Quests.tree_fed() else []):
 		var path := PackedVector3Array()
 		for point: Vector3 in spec[0]:
 			path.append(to_local(house.to_global(point * GrandmasHouse.SIZE)))

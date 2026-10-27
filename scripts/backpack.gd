@@ -23,7 +23,11 @@ signal changed
 
 ## What a stack is.
 enum Kind { NONE = -1, GUN, BULLETS, SHELLS, ROCKETS, GRENADES, PILLS, BANDAGE, SCRAP, SILK, CAMP_KIT,
-		MEAT, ROTTEN_MEAT, COOKED_MEAT, GLUED_MEAT, GLUED_COOKED, KEY, CIGARETTES, JOURNAL }
+		MEAT, ROTTEN_MEAT, COOKED_MEAT, GLUED_MEAT, GLUED_COOKED, KEY, CIGARETTES, JOURNAL,
+		# The quests' things (the user's, 2026-10-27: QuestProps, Quests).
+		SKULL, OFFERING, TAGS, BLACK_BLOOD, BOMB_GAS, BOMB_PIPE, BOMB_WIRE }
+## The quests' things: one stack each, kept in quest_items.
+const QUEST_KINDS: Array[int] = [Kind.SKULL, Kind.OFFERING, Kind.TAGS, Kind.BLACK_BLOOD, Kind.BOMB_GAS, Kind.BOMB_PIPE, Kind.BOMB_WIRE]
 
 const MAX_STACKS := 12
 ## Camp kits: only one on you at a time (the user's).
@@ -33,6 +37,8 @@ const WEIGHTS := {
 	Kind.BULLETS: 0.012, Kind.SHELLS: 0.04, Kind.ROCKETS: 2.0, Kind.GRENADES: 0.4,
 	Kind.PILLS: 0.05, Kind.BANDAGE: 0.08, Kind.SCRAP: 0.6, Kind.SILK: 0.15, Kind.CAMP_KIT: 3.0, Kind.KEY: 0.02,
 	Kind.CIGARETTES: 0.03,
+	Kind.SKULL: 0.8, Kind.OFFERING: 1.0, Kind.TAGS: 0.05, Kind.BLACK_BLOOD: 0.3,
+	Kind.BOMB_GAS: 4.0, Kind.BOMB_PIPE: 2.0, Kind.BOMB_WIRE: 1.0,
 }
 
 ## Up to free_weight (kg) the pack costs nothing ("overweight" past it: the
@@ -60,6 +66,8 @@ var camp_kits := 0
 var keys := 0
 ## The last pack of cigarettes in the world (Grandma's quest: GrandmaQuests).
 var cigarettes := 0
+## The quests' things (QUEST_KINDS): kind -> how many.
+var quest_items := {}
 ## Meat chunks (CarryItem.to_data(): their weight, boss or not, when they
 ## rot, cooked or not). They go on rotting in here (the user's).
 var meat: Array[Dictionary] = []
@@ -136,6 +144,9 @@ func stacks() -> Array[Dictionary]:
 			[Kind.SILK, silk], [Kind.CAMP_KIT, camp_kits], [Kind.KEY, keys], [Kind.CIGARETTES, cigarettes]]:
 		if pair[1] > 0:
 			found.append({kind = pair[0], count = pair[1], weapon = null})
+	for quest_kind: int in QUEST_KINDS:
+		if int(quest_items.get(quest_kind, 0)) > 0:
+			found.append({kind = quest_kind, count = int(quest_items[quest_kind]), weapon = null})
 	var meats := {}
 	# Enough for a camp kit and none on you: it shows, ready to craft (the
 	# user's: double-click it).
@@ -278,7 +289,9 @@ func add(kind: Kind, amount: int) -> int:
 		Kind.JOURNAL:
 			return amount # (always yours: back from your hand)
 		_:
-			return 0
+			if kind not in QUEST_KINDS:
+				return 0
+			quest_items[kind] = int(quest_items.get(kind, 0)) + amount
 	changed.emit()
 	return amount
 
@@ -309,12 +322,14 @@ func take_all() -> Dictionary:
 	gear.camp_kits = camp_kits
 	gear.keys = keys
 	gear.cigarettes = cigarettes
+	gear.quest_items = quest_items.duplicate()
 	gear.meat = meat.duplicate(true)
 	scrap = 0
 	silk = 0
 	camp_kits = 0
 	keys = 0
 	cigarettes = 0
+	quest_items.clear()
 	meat.clear()
 	placing_camp = false
 	changed.emit()
@@ -330,6 +345,9 @@ func give_all(gear: Dictionary) -> void:
 	camp_kits = mini(camp_kits + int(gear.get("camp_kits", 0)), MAX_CAMP_KITS)
 	keys += int(gear.get("keys", 0))
 	cigarettes += int(gear.get("cigarettes", 0))
+	var items: Dictionary = gear.get("quest_items", {})
+	for quest_kind in items:
+		quest_items[int(quest_kind)] = int(quest_items.get(int(quest_kind), 0)) + int(items[quest_kind])
 	for chunk: Dictionary in gear.get("meat", []):
 		meat.append(chunk)
 	changed.emit()
@@ -377,9 +395,18 @@ func take(kind: Kind, amount: int) -> bool:
 		Kind.JOURNAL:
 			return true # (into your hand: it's never used up)
 		_:
-			return false
+			if kind not in QUEST_KINDS or int(quest_items.get(kind, 0)) < amount:
+				return false
+			quest_items[kind] = int(quest_items[kind]) - amount
+			if int(quest_items[kind]) <= 0:
+				quest_items.erase(kind)
 	changed.emit()
 	return true
+
+
+## How many of a quest thing (QUEST_KINDS) are in here.
+func count_of(kind: int) -> int:
+	return int(quest_items.get(kind, 0))
 
 
 ## A key door opened (SecretDoor): one key used up.

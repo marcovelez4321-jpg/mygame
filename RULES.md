@@ -2109,3 +2109,5 @@ them:
 - 2026-10-26 (the user's): the Consumed steer twice as hard (turn rate 2x the blood orbs', 67.5 degrees a second). Fixed them shooting into the sky after a tumble: their new heading was taken from their velocity while the ground-clearance lift was pushing them up. It's now taken level.
 
 - 2026-10-26 (the user's): the Consumed twice as slow: 11 m/s (was 22), and circling 7 m/s (was 14).
+
+- 2026-10-27 Built the quest web (the user's, every detail; see docs/QUESTS_TRADERS_WALKERS.md 'Built: the quest web'): Bones for the Voice, Feed the Tree, the Climber's Tags + Climb for him, the Bounty, the Fanatic (the 1.4 km tower's top collapse); the cult (faction, robes, 3 camps, ambushes); quest items; NPC lines in dialogue/*.tres. Antenna removed; Bell and Feather wait for the angels; no warning the Bounty's target. Fixed: F with an item in hand now uses things that take it (takes_held()) -- selling the last pack never worked before. Headless-tested on test_world: no script errors.

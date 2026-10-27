@@ -32,6 +32,8 @@ const GOODS := [
 	{name = "Bandage", data = {kind = Backpack.Kind.BANDAGE, amount = 1}, price = 2, show = &"eave"},
 	{name = "Cooked meat", data = {kind = Backpack.Kind.COOKED_MEAT, amount = 1, meat_weight = 1.0, age = 0.0, cooked_for = CarryItem.COOK_TIME}, price = 2, show = &"shelf"},
 	{name = "Camp kit", data = {kind = Backpack.Kind.CAMP_KIT, amount = 1}, price = 6, show = &"shelf"},
+	# The offering (the user's: a bound bundle of meat and teeth, rare -- Bones for the Voice).
+	{name = "Offering", data = {kind = Backpack.Kind.OFFERING, amount = 1}, price = 10, show = &"eave"},
 ]
 
 

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="NpcLines" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/npc_lines.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+speaker_name = "Mara"
+lines = {
+"reply_tags": "[Give her his tags]",
+"tags": "His tags... but that doesn't mean... people lose tags. He could still be up there.",
+"offer": "If he's up there, he'll be at the top of the tallest one. Go and look. And if he's... leave the tags there. So he knows someone came.",
+"reply_accept": "I'll look for him.",
+"reply_decline": "I can't right now.",
+"reminder": "Did you find him? ...Not yet. Okay.",
+"reply_hand_in": "[Tell her you left them at the top]",
+"done": "Then that's where he is. At the top. Thank you. Here.",
+"hates": "You took everything I had left.",
+"reply_leave": "[Leave]"
+}

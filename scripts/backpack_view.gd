@@ -348,6 +348,10 @@ const REAL_SIZE := {
 	Backpack.Kind.MEAT: 0.2, Backpack.Kind.ROTTEN_MEAT: 0.2, Backpack.Kind.COOKED_MEAT: 0.2,
 	Backpack.Kind.GLUED_MEAT: 0.3, Backpack.Kind.GLUED_COOKED: 0.3, Backpack.Kind.KEY: 0.08,
 	Backpack.Kind.CIGARETTES: 0.09, Backpack.Kind.JOURNAL: 0.15,
+	# The quests' things (QuestProps).
+	Backpack.Kind.SKULL: 0.22, Backpack.Kind.OFFERING: 0.25, Backpack.Kind.TAGS: 0.07,
+	Backpack.Kind.BLACK_BLOOD: 0.12, Backpack.Kind.BOMB_GAS: 0.3, Backpack.Kind.BOMB_PIPE: 0.3,
+	Backpack.Kind.BOMB_WIRE: 0.15,
 }
 
 var _bodies: Array[Dictionary] = [] # {key, kind, body: RigidBody3D, node: the prop, area: its click zone}
@@ -873,6 +877,8 @@ static func model_of(kind: int, weapon: WeaponData, grenade: WeaponData) -> Node
 	if kind == Backpack.Kind.GRENADES:
 		if grenade and grenade.viewmodel_scene:
 			return _wrapped(grenade.viewmodel_scene.instantiate() as Node3D)
+	if kind in Backpack.QUEST_KINDS:
+		return _wrapped(QuestProps.item_model(kind))
 	var source: Variant = PROPS.get(kind)
 	if source == null:
 		return null

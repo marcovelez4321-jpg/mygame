@@ -266,6 +266,9 @@ static func _size_settings(node: Node) -> Dictionary:
 	# One of the big ones (BigOnes): the puppet's made big too.
 	if node.has_meta(&"big"):
 		settings[&"__big"] = true
+	# One of the cult (Enemy.cult): robed on the clients too.
+	if node.get(&"cult") == true:
+		settings[&"cult"] = true
 	var size: Variant = node.get(&"size")
 	if size is float:
 		if node.get(&"size_min") is float:

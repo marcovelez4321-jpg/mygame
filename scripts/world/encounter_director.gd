@@ -117,6 +117,8 @@ func _ready() -> void:
 		chunks.chunk_loaded.connect(_on_chunk_loaded)
 	# The heights' creatures (the user's): their nests and bells, on every game.
 	get_tree().create_timer(2.0).timeout.connect(func() -> void: ConsumedDirector.ensure(get_tree()))
+	# The quest web past Grandma's (the user's): its people and things.
+	get_tree().create_timer(2.5).timeout.connect(func() -> void: QuestWorld.ensure(get_tree()))
 	# The Stalker (the user's): one of a kind, hunting from the first minute.
 	if multiplayer.is_server():
 		get_tree().create_timer(first_delay).timeout.connect(func() -> void: Stalker.ensure(get_tree()))

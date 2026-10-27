@@ -64,6 +64,40 @@ func wreck(ground: Node3D) -> void:
 		_light.visible = false
 
 
+## Its banner torn right across the eye (the user's: the Bounty's target).
+func tear_banner() -> void:
+	if _banner_mesh:
+		var look := (_banner_mesh.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+		look.albedo_texture = _torn_banner()
+		look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		_banner_mesh.material_override = look
+
+
+static var _torn_texture: ImageTexture
+
+
+## The banner, a ragged rip straight across its eye.
+static func _torn_banner() -> ImageTexture:
+	if _torn_texture:
+		return _torn_texture
+	var image := _banner().get_image()
+	image.convert(Image.FORMAT_RGBA8)
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 13
+	var w := image.get_width()
+	var h := image.get_height()
+	var edge := h * 0.5
+	for x in w:
+		edge += dice.randf_range(-1.6, 1.6)
+		edge = clampf(edge, h * 0.35, h * 0.65)
+		var gap := 2.0 + dice.randf_range(0.0, 3.0)
+		for y in h:
+			if absf(y - edge) < gap:
+				image.set_pixel(x, y, Color(0, 0, 0, 0))
+	_torn_texture = ImageTexture.create_from_image(image)
+	return _torn_texture
+
+
 ## Rolled `distance` m forward: the wheels turn with it.
 func roll(distance: float) -> void:
 	for wheel in _wheels:

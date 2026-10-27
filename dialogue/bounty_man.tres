@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="NpcLines" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/npc_lines.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+speaker_name = "The stranger"
+lines = {
+"offer": "Sit. Warm your hands. There's a trader on the roads, his banner torn right across the eye. I want him gone. Do this for me and anything you've ever wanted can come true.",
+"reply_accept": "Consider it done.",
+"reply_decline": "No.",
+"refused": "Then forget my face.",
+"reminder": "The torn eye still walks the roads.",
+"reply_hand_in": "[Tell him it's done]",
+"right_one": "It's done. You chose well. Take this. You'll know what it's for, soon.",
+"wrong_one": "Not him. Not him, you fool. We all saw. We all laughed.",
+"ritual_hint": "You fed it. Then you're close to us, so I'll say it plainly: there's a ritual. It ends all this. It needs things from up high, and from the dark below. You'll learn the rest when you've earned it.",
+"reply_leave": "[Leave]"
+}

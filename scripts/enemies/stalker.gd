@@ -1323,7 +1323,9 @@ func _pack_tick() -> void:
 		var carrier := LastPack.carrier(get_tree())
 		if carrier:
 			LastPack.recovered(carrier)
-			_start_chase(carrier)
+			# An offering left in its home first (the user's): it lets you go.
+			if not Quests.flag("stalker.offering"):
+				_start_chase(carrier)
 			return
 		if _lair_at.is_finite() and _chase_left <= 0.0 and state not in [State.HOME, State.APPROACH, State.STUNT] \
 				and _anyone_within(_lair_at, LAIR_NOTICE):
@@ -2570,6 +2572,14 @@ func _lair_tick() -> void:
 ## Well-trodden: a square of the land they've come through TRODDEN times.
 func _trodden(at: Vector3) -> bool:
 	return int(_route_cells.get(Vector2i(floori(at.x / ROUTE_CELL), floori(at.z / ROUTE_CELL)), 0)) >= TRODDEN
+
+
+## Bones for the Voice, a skull taken with no offering left (Quests, the
+## user's): its grudge on `peer` maxed (it picks them first), and furious
+## for `time`.
+func enrage(peer: int, time: float) -> void:
+	_grudge[peer] = maxf(float(_grudge.get(peer, 0.0)), GRUDGE_MIN * 20.0)
+	_furious_left = maxf(_furious_left, time)
 
 
 ## The player it holds a grudge against (over GRUDGE_MIN), or null.

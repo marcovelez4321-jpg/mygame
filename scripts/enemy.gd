@@ -215,6 +215,8 @@ signal shot_fired(end_point: Vector3)
 ## the same model (see spawn_mutant()), so a mutated rusher is still a rusher,
 ## just red, tougher and faster -- no separate mutant scene to keep in sync.
 @export var can_mutate: bool = true
+## One of the cult (Cult.cultist(): robed and hooded, its own side).
+var cult := false
 ## Chance (0..1) a non-critical kill mutates rather than just dying outright.
 @export_range(0.0, 1.0, 0.05) var mutate_chance: float = 0.5
 ## What the mutant gets on top of being a copy of this enemy. Rule 3: these
@@ -350,6 +352,8 @@ func _ready() -> void:
 	health.died.connect(_on_died)
 	Drops.on_death(self, Backpack.Kind.SCRAP, Drops.SCRAP_CHANCE) # (the user's: for camp kits)
 	_apply_tint()
+	if cult:
+		Cult.robe_up.call_deferred(self) # (once its model's made)
 	_set_home.call_deferred() # once whoever spawned it has put it in place
 	_gang_timer = randf() * 0.5 # spread the gang's checks out
 
@@ -1123,9 +1127,10 @@ func get_state() -> State:
 	return _state
 
 
-## Which side it fights for (Factions). Tweakers; the Rat Bender overrides.
+## Which side it fights for (Factions). Tweakers -- or the cult (cult, in
+## its robe: Cult.cultist()); the Rat Bender overrides.
 func faction() -> int:
-	return Factions.Side.TWEAKER
+	return Factions.Side.CULT if cult else Factions.Side.TWEAKER
 
 
 ## The nearest living thing it's hostile to -- a player, or a roach or rat

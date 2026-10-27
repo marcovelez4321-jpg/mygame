@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="NpcLines" format=3]
+
+[ext_resource type="Script" path="res://scripts/quests/npc_lines.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+speaker_name = "The trader"
+lines = {
+"offer": "It's real. It's REAL, and nobody listens. They laugh. Go down to its home, under the water. Bring me one of the skulls it keeps. Forty scrap, and I'll make them see.",
+"offering_hint": "Take it a gift. Meat and teeth, bound. Leave it in its home. Please. Don't anger it.",
+"reply_accept": "I'll go.",
+"reply_decline": "I'm not going down there.",
+"reminder": "It knows. It knows someone's coming. Hurry.",
+"reply_hand_in": "[Give him the skull]",
+"hand_in": "Yes... YES. Now they'll listen. Take it, take your scrap.",
+"reply_leave": "[Leave]"
+}

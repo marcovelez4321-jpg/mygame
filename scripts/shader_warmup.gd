@@ -168,9 +168,11 @@ func _effects(world: Node, facing: Vector3, forward: Vector3) -> void:
 
 ## The materials made in code that no effect above draws: each on a card.
 func _materials(world: Node) -> void:
-	for material: Material in [InsectWings._material(), ConsumedNest.flesh(), BellWraith.bronze(), BellWraith.skin(), Consumed._veins(), Consumed._torn_skin(), Stalker._glow_material(Color.WHITE, false),
+	var made: Array[Material] = [InsectWings._material(), ConsumedNest.flesh(), BellWraith.bronze(), BellWraith.skin(), Consumed._veins(), Consumed._torn_skin(), Stalker._glow_material(Color.WHITE, false),
 			Stalker._glow_material(Color.WHITE, true), BackpackView.forest_material(), BackpackView.pack_material(),
-			_shader_material(GrappleIndicator.SHADER, 10)]:
+			_shader_material(GrappleIndicator.SHADER, 10), Cult.robe_material()]
+	made.append_array(QuestProps.materials())
+	for material: Material in made:
 		var card := MeshInstance3D.new()
 		var quad := QuadMesh.new()
 		quad.size = Vector2.ONE

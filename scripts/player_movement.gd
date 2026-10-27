@@ -1014,6 +1014,11 @@ func _tick_use(use_held: bool) -> bool:
 	if not fresh_press:
 		return false
 	if hand.is_holding():
+		# Something that takes what you hold (an NPC you hand it to, the Flesh
+		# Tree you feed): F uses it instead of stowing.
+		if usable_in_view and usable_in_view.has_method(&"takes_held") and usable_in_view.call(&"takes_held", self):
+			usable_in_view.call("use_by", self)
+			return false
 		return true
 	if usable_in_view:
 		usable_in_view.call("use_by", self)

@@ -246,6 +246,8 @@ func _build_body() -> void:
 			if pivot == null:
 				continue
 			roach.remove_child(pivot)
+			for part in [pivot] + pivot.find_children("*", "", true, false):
+				(part as Node).owner = null # (its own now: not the roach scene's)
 			var root := WINGS_AT + Vector3.RIGHT * WINGS_APART * (-1.0 if pivot_name.ends_with("L") else 1.0)
 			var holder := Node3D.new()
 			holder.scale = Vector3.ONE * WING_SCALE

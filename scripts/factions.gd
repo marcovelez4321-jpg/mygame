@@ -8,6 +8,8 @@ extends RefCounted
 ##   ROACH   - flying roaches, spitters included (FlyingRoach)
 ##   RAT     - rats and the Rat Bender (Rat, RatBender)
 ##   SPIDER  - wall-crawling spider packs (Spider)
+##   CULT    - the robed cult (the user's, 2026-10-27: Cult; Enemy.cult): on
+##             sight, unless the group's sided with them (Cult.sided()).
 ## Every side hates every other side, but not equally -- Source's NPC
 ## relationships (CBaseCombatCharacter: a relationship type and a PRIORITY
 ## per class). An NPC picks its enemy the way CAI_BaseNPC::BestEnemy() does:
@@ -20,7 +22,7 @@ extends RefCounted
 
 ## Sides are passed around as plain ints (Side values) -- Godot's type check
 ## treats "Side" here and "Factions.Side" elsewhere as different types.
-enum Side { PLAYER, TWEAKER, ROACH, RAT, SPIDER }
+enum Side { PLAYER, TWEAKER, ROACH, RAT, SPIDER, CULT }
 
 const GROUPS := {
 	Side.PLAYER: "player",
@@ -28,14 +30,16 @@ const GROUPS := {
 	Side.ROACH: "roaches",
 	Side.RAT: "rats",
 	Side.SPIDER: "spiders",
+	Side.CULT: "cult",
 }
 
 ## How much each side wants to fight each other side (higher = first).
 const PRIORITY := {
-	Side.TWEAKER: {Side.PLAYER: 3, Side.ROACH: 2, Side.RAT: 1, Side.SPIDER: 1},
-	Side.ROACH: {Side.PLAYER: 3, Side.RAT: 2, Side.TWEAKER: 1, Side.SPIDER: 1},
-	Side.RAT: {Side.PLAYER: 3, Side.TWEAKER: 2, Side.ROACH: 1, Side.SPIDER: 1},
-	Side.SPIDER: {Side.PLAYER: 3, Side.RAT: 2, Side.ROACH: 2, Side.TWEAKER: 1},
+	Side.TWEAKER: {Side.PLAYER: 3, Side.ROACH: 2, Side.RAT: 1, Side.SPIDER: 1, Side.CULT: 2},
+	Side.ROACH: {Side.PLAYER: 3, Side.RAT: 2, Side.TWEAKER: 1, Side.SPIDER: 1, Side.CULT: 1},
+	Side.RAT: {Side.PLAYER: 3, Side.TWEAKER: 2, Side.ROACH: 1, Side.SPIDER: 1, Side.CULT: 1},
+	Side.SPIDER: {Side.PLAYER: 3, Side.RAT: 2, Side.ROACH: 2, Side.TWEAKER: 1, Side.CULT: 1},
+	Side.CULT: {Side.PLAYER: 3, Side.TWEAKER: 2, Side.ROACH: 1, Side.RAT: 1, Side.SPIDER: 1},
 	Side.PLAYER: {},
 }
 ## Whatever hurt you within REVENGE_TIME seconds counts this much higher.
@@ -77,6 +81,8 @@ static func nearest_hostile(tree: SceneTree, side: int, from: Vector3, max_range
 	for other: int in GROUPS:
 		if other == side:
 			continue
+		if side == Side.CULT and other == Side.PLAYER and Cult.sided():
+			continue # (the group's sided with them: the Bounty)
 		for node in tree.get_nodes_in_group(GROUPS[other]):
 			var target := node as Node3D
 			if target == null or not is_alive_target(target):

@@ -31,6 +31,66 @@ const ENTRIES := {
 		},
 		sketch = &"cigarettes",
 	},
+	# The web past Grandma's (the user's, 2026-10-27: Quests).
+	&"bones_voice": {
+		open = "The trader up at 400 m. The only one who talks. He says it's real, the thing in the dark -- he wants a skull off its pile to prove it. Forty scrap. He begged me to leave it a gift first: meat and teeth, bound.",
+		done = {
+			&"": ["Gave him the skull. He held it like it was holy. Forty scrap.",
+					"{name} gave him the skull. Forty scrap."],
+		},
+	},
+	&"feed_tree": {
+		open = "A cultist at a shrine of roots and skulls. He wants the Tree fed: a big one's raw meat, pressed to the bark. Seven scrap and a revolver.",
+		steps = [
+			[&"fed_by", "Fed it. The bark opened and took it. The roots moved.",
+					"{name} fed it. The roots moved."],
+		],
+		done = {
+			&"": ["He paid. Seven scrap and a revolver. Go with the Tree, he said.",
+					"{name} took his pay. Go with the Tree, he said."],
+		},
+	},
+	&"climbers_tags": {
+		open = "A dead climber at the foot of the tallest tower. A letter on him: \"Mara, if this finds you: I'm close. I've got a camp up on the tallest one, a kilometre up, everything I own's there. When I reach the top I'll come down and we'll go somewhere quiet. I promise this time.\" Mara rides with the traders.",
+		steps = [
+			[&"found_by", "Took his tags.", "{name} took his tags."],
+		],
+		done = {
+			&"": ["Gave Mara his tags. She thinks he might still be up there.",
+					"{name} gave Mara his tags. She thinks he might still be up there."],
+		},
+	},
+	&"climb_for_him": {
+		open = "Mara wants his tags at the top of the tallest tower. So he knows someone came.",
+		steps = [
+			[&"left_by", "Left his tags on the cairn at the very top.", "{name} left his tags at the very top."],
+		],
+		done = {
+			&"": ["Told Mara. Fifty scrap -- all she had.", "{name} told Mara. Fifty scrap."],
+		},
+	},
+	&"bounty": {
+		open = "A stranger at a fire out in the wilds wants a trader dead: the one whose banner's torn across the eye. Anything I've ever wanted, he says.",
+		steps = [
+			[&"note_by", "A note on him. He was one of the robed ones. The cultist at the shrine won't deal with us now.",
+					"{name} found a note on him. He was one of the robed ones."],
+		],
+		done = {
+			&"right": ["The right one. The stranger gave me a jar of black blood. The robed ones leave us be now.",
+					"{name} did it. A jar of black blood. The robed ones leave us be now."],
+			&"wrong": ["The wrong trader. They laughed at us.", "{name} killed the wrong trader. They laughed at us."],
+			&"killed": ["Killed the stranger instead.", "{name} killed the stranger."],
+		},
+	},
+	&"fanatic": {
+		open = "A man hauling a bomb up the 1.4 km tower on a sled, piece by piece. He wants its top off. Gas, pipe, wire.",
+		done = {
+			&"helped": ["Brought him all three. Forty scrap and ten grenades. Then he went up.",
+					"{name} brought him the last of it. Then he went up."],
+			&"talked_down": ["Talked him down. He sells what he's got left, cheap.", "{name} talked him down."],
+			&"kamikaze": ["Pushed him too far. He went off.", "{name} pushed him too far. He went off."],
+		},
+	},
 }
 ## A teammate with no name (no Steam).
 const NAMELESS := "Someone"

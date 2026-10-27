@@ -195,6 +195,7 @@ func _ready() -> void:
 	else:
 		add_to_group(InteractHighlight.GROUP)
 	add_to_group(NetEntities.GROUP)
+	add_to_group(&"carry_items") # (QuestWorld: an offering left, a quest thing lying about)
 	mass = clampf(weight(), 0.05, 15.0)
 	continuous_cd = kind == Backpack.Kind.MEAT or kind == Backpack.Kind.COOKED_MEAT
 	can_sleep = true

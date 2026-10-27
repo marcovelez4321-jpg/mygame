@@ -630,3 +630,77 @@ F9 -> "A Consumed, at me", "Wake the Bell-wraiths".
 ### Not yet
 The new Ossuary crawler (the user's: later); the Stack's high interiors
 (their own nests and wraiths come with them).
+
+## Built: the quest web (2026-10-27)
+
+Six quests and the cult, every detail the user's. Changes from the plan:
+- **Out:** the Antenna (the user's: removed), with its two links (the bomb killing the antenna, the radio finding the Fanatic). The shrine cultist's sabotage ask is gone with it.
+- **Later:** the Bell and the Feather (they need the Seraphim).
+- **Not for now:** warning the Bounty's target (no warn option; no discount, no mark).
+
+### The quests (`scripts/quests/quests.gd`: host logic; `quest_talk.gd`: the talks)
+- **Bones for the Voice:**
+  - The 400 m trader (`stack_400`), the only trader who talks. Lines: `dialogue/voice_trader.tres`, the terrified zealot.
+  - **The skull:** grappled off its pile in the Stalker's lair. It appears there while the quest is open.
+  - **Reward:** 40 scrap.
+  - **The offering:** a trader good, 10 scrap, rare. Drop it (G) anywhere in the lair and it's taken.
+    - Left before the cigarettes are taken: no chase.
+    - Next camp you make: a rare gun (Shotgun, Sniper, PKM or RPG) and its ammo by the bed.
+  - **No offering left:** carry the skull out and its grudge on you is maxed and it's furious for 10 minutes.
+- **Feed the Tree:**
+  - The shrine cultist, robed, at a flesh-root altar 600 m to 1.5 km out, rolled per world. Lines: the devout whisper.
+  - **Feeding:** hold raw (not rotten) meat and F on the Flesh Tree.
+  - **Reward:** back at the cultist, 7 scrap and a revolver.
+  - **Fed:** two more roots over the house (FleshTree.FED_ROOTS, four in all) and twice the red weed.
+  - **Refused:** cult ambushes.
+  - **Bounty man's note read:** he refuses you.
+- **The Climber's Tags:**
+  - His body at the tallest tower's foot, on the house's side. His letter floats over it (the "letter to her" text).
+  - **Reading it:** puts his tags in your bag.
+  - **His camp:** at 1 km on the tallest tower, cold. A light gun rolled per world (Pistol, Revolver or MP5), bullets, pills, bandages and a camp kit.
+  - **Then:** give Mara the tags.
+- **Climb for him:**
+  - Mara asks. F at the summit cairn on the tallest tower's top with the tags lays them there.
+  - **Reward:** back at Mara, 50 scrap.
+  - Mara: "hopeful denial". She walks beside the torn-banner trader (a wanderer, rolled per world).
+- **The Bounty:**
+  - The stranger at his own fire, 800 m to 2.2 km out, rolled per world. Lines: the smooth promiser.
+  - **The right trader** (torn banner): back at him, a jar of black blood, and the cult's on your side for good.
+  - **The wrong trader:** failed for good; he mocks you.
+  - **Kill him:** his note, which turns the shrine cultist away.
+  - **Fed the Tree first:** he tells you about the ritual once.
+  - **Killing the torn-banner trader at any time:** Mara hates you.
+- **The Fanatic:**
+  - On the 1.4 km tower: 200 m his first session, 200 m higher each session. A junk-pile sled bomb that grows. Lines: rapturous.
+  - **Help him:** bring gas, pipe and wire (they lie about the Stack's rooms while it's open). 40 scrap and 10 grenades. 30 s later the top 400 m is gone.
+  - **Talk him down** ("Why the top?" then "I see you"): he sells grenades and rockets for 2 scrap and the RPG for 20, laid out on the sled.
+  - **Threaten or hurt him:** coat open, 2 s of beeping, then a 25 m, 300 damage blast.
+
+### The collapse (`stack_collapse.gd`)
+- The skyline shader cuts a box (`cut_min` / `cut_max`).
+- Shapes in it are switched off.
+- Six blasts the moment it goes, then a smoking stump for good.
+- It's the world fact `stack.top_gone`.
+
+### The cult (`cult.gd`, `cult_camp.gd`)
+- **Who:** robed humans in dirty oxblood, with deep hoods. Mixed melee, gunners and rushers. Their own faction (Factions.Side.CULT).
+- **Camps:** 3 in the wilds, rolled per world. Each has a smaller flesh-root altar, a fire, and 4-6 cultists who come out when you're within 250 m.
+- **Ambushes:** every 25-35 min, 4-6 of them from out of sight.
+- **Sided with them:** they leave you be.
+
+### New items (Backpack.QUEST_KINDS, `quest_props.gd`)
+Skull, offering, tags, jar of black blood, and the three bomb parts.
+
+### Fixed in passing
+F with something in your hand always stowed it, so "sell the last pack to a trader" never worked. Usables can now take what you hold (`takes_held()`).
+
+### Picks of mine, to change
+- **NPC models:** QuestNpc.MODELS and QuestDecor.CLIMBER_MODEL.
+- **Speaker names:** "The trader", "The cultist", "The stranger", "Mara", "The Fanatic".
+- **Prompts:** "Feed it", "Leave his tags".
+- **Fanatic lines I added:** the hand-in replies, and his "parts left" / "all parts" lines, made from his "help" line.
+- **Mara's bracketed reply:** "[Tell her you left them at the top]".
+- **Health:** the bounty man 60 hp, the Fanatic 80 hp.
+- **Ambush gap:** 25-35 min.
+- **Fanatic's fuse:** 30 s after the parts.
+- **The two new roots' paths:** the first two mirrored.

@@ -164,6 +164,8 @@ func _ready() -> void:
 	var scene := get_tree().current_scene
 	_terrain = scene.get_node_or_null(^"Terrain3D") if scene else null
 	_cart = Rickshaw.new(look_seed)
+	if trader_id == Quests.torn_trader():
+		_cart.tear_banner() # (the Bounty's target: the user's)
 	add_child(_cart)
 	for node in _cart.find_children("*", "GeometryInstance3D", true, false):
 		(node as GeometryInstance3D).visibility_range_end = SEEN_RANGE
@@ -211,11 +213,23 @@ func _exit_tree() -> void:
 
 var use_prompt: String:
 	get:
+		if _voice_talks() and not _pack_near():
+			return "Talk"
 		return "Sell the last pack: %d scrap" % LastPack.PRICE
 
 
 func can_use() -> bool:
-	return mood == Mood.CALM and not _dead and _pack_near()
+	return mood == Mood.CALM and not _dead and (_pack_near() or _voice_talks())
+
+
+## F with the pack (or a skull) in your hand: him, not the bag.
+func takes_held(player: Node) -> bool:
+	return can_use()
+
+
+## The 400 m trader, the only one who talks (the user's: Bones for the Voice).
+func _voice_talks() -> bool:
+	return trader_id == Quests.VOICE_TRADER and is_inside_tree() and QuestTalk.can_talk(&"voice", PlayerMovement.local_player(get_tree()))
 
 
 ## Someone by him with the pack in their hand.
@@ -234,6 +248,9 @@ static func _holds_pack(player: PlayerMovement) -> bool:
 ## The host: the pack out of their hand, the scrap into their bag.
 func use_by(by: Node) -> void:
 	var player := by as PlayerMovement
+	if player and not _holds_pack(player) and _voice_talks():
+		QuestTalk.talk(&"voice", player) # (his own game's talk: QuestTalk)
+		return
 	if (Network.is_online() and not multiplayer.is_server()) or player == null or not _holds_pack(player):
 		return
 	if GrandmaQuests.state(LastPack.QUEST) == GrandmaQuests.State.DONE:
@@ -588,6 +605,7 @@ func _die(corpse: bool) -> void:
 	if _dead:
 		return
 	_dead = true
+	Quests.trader_killed(trader_id) # (the Bounty; Mara's)
 	var scene := get_tree().current_scene
 	var at := global_transform
 	Network.send_fact(StringName("trader.%s.wreck" % trader_id), at.origin)

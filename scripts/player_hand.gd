@@ -36,6 +36,14 @@ const PROMPTS := {
 	Backpack.Kind.CAMP_KIT: "left click to place the camp",
 	Backpack.Kind.KEY: "a key: F at a locked door (it's used up)",
 	Backpack.Kind.CIGARETTES: "the last pack of cigarettes: for Grandma\nleft click to smoke them",
+	# The quests' things (Quests): what they're for.
+	Backpack.Kind.SKULL: "a skull off its pile: proof, for the trader at 400 m",
+	Backpack.Kind.OFFERING: "an offering: meat and teeth, bound\nG in its home to leave it",
+	Backpack.Kind.TAGS: "his tags: for Mara",
+	Backpack.Kind.BLACK_BLOOD: "a jar of black blood: for the ritual",
+	Backpack.Kind.BOMB_GAS: "gas: for the Fanatic's bomb",
+	Backpack.Kind.BOMB_PIPE: "a pipe: for the Fanatic's bomb",
+	Backpack.Kind.BOMB_WIRE: "wire: for the Fanatic's bomb",
 }
 ## Smoking the last pack (the user's, 2026-10-25: LastPack): quick and quiet
 ## -- one drag, a puff of smoke -- standing still SMOKE_TIME; then three pods
@@ -228,6 +236,10 @@ func take_from_backpack(code: int) -> void:
 				backpack.craft_camp_kit() # crafted from scrap and silk (the user's)
 			if backpack.take(kind, 1):
 				taken = {kind = kind, amount = 1}
+		Backpack.Kind.SKULL, Backpack.Kind.OFFERING, Backpack.Kind.TAGS, Backpack.Kind.BLACK_BLOOD, \
+				Backpack.Kind.BOMB_GAS, Backpack.Kind.BOMB_PIPE, Backpack.Kind.BOMB_WIRE:
+			if backpack.take(kind, 1):
+				taken = {kind = kind, amount = 1}
 		Backpack.Kind.MEAT, Backpack.Kind.ROTTEN_MEAT, Backpack.Kind.COOKED_MEAT:
 			taken = backpack.take_meat(kind)
 		Backpack.Kind.GLUED_MEAT, Backpack.Kind.GLUED_COOKED:
@@ -398,7 +410,9 @@ func store(item: Dictionary) -> bool:
 		Backpack.Kind.GRENADES:
 			if not _stow_grenade(amount):
 				return false
-		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY, Backpack.Kind.CIGARETTES, Backpack.Kind.JOURNAL:
+		Backpack.Kind.SCRAP, Backpack.Kind.SILK, Backpack.Kind.CAMP_KIT, Backpack.Kind.KEY, Backpack.Kind.CIGARETTES, Backpack.Kind.JOURNAL, \
+				Backpack.Kind.SKULL, Backpack.Kind.OFFERING, Backpack.Kind.TAGS, Backpack.Kind.BLACK_BLOOD, \
+				Backpack.Kind.BOMB_GAS, Backpack.Kind.BOMB_PIPE, Backpack.Kind.BOMB_WIRE:
 			if backpack.add(kind as Backpack.Kind, amount) < amount:
 				return false
 		_:
@@ -453,6 +467,11 @@ func picked_up() -> void:
 ## The camp kit built (CampBuilder): gone from the hand.
 func use_up() -> void:
 	_empty()
+
+
+## The host: what kind is in the hand (-1: nothing).
+func held_kind() -> int:
+	return int(data.get("kind", -1)) if is_holding() else -1
 
 
 ## Back in the bag (right click while placing a camp); dropped if no room.
