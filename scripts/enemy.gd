@@ -424,6 +424,8 @@ const GET_UP_STILL := 1.5
 
 ## On a player's tentacle (PlayerGrapple).
 var held := false
+## Coming in through this window (a Barricade: the demo's horde), or null.
+var window: Node
 ## Who swung or threw it (their id: the kills they make are theirs).
 var thrown_by := Health.NO_ATTACKER
 var _knocked_left := 0.0
@@ -457,10 +459,28 @@ func knock_down(push: Vector3, time: float = KNOCK_TIME) -> void:
 	_body_prev = Vector3.INF
 
 
+## The host: lashed by `by`'s tentacle whip (PlayerGrapple) at `at`: alive, it's
+## knocked down and thrown; dead, its body's thrown. The limb caught swings
+## harder (EnemyRagdoll.whack).
+func whipped(at: Vector3, push: Vector3, by: int, limb: float = 1.6) -> void:
+	if _ragdoll == null:
+		return
+	if _state != State.DEAD:
+		thrown_by = by
+		if is_instance_valid(window):
+			window.call(&"forget", self)
+		window = null
+		knock_down(Vector3.ZERO)
+	_ragdoll.whack.call_deferred(at, push, limb)
+
+
 ## The host: onto `by`'s tentacle.
 func grab(by: int) -> void:
 	thrown_by = by
 	held = true
+	if is_instance_valid(window):
+		window.call(&"forget", self) # (off the window, on the tentacle)
+	window = null
 	knock_down(Vector3.ZERO, INF)
 	_set_wrapped(true)
 
@@ -469,6 +489,11 @@ func grab(by: int) -> void:
 func hold_toward(target: Vector3) -> void:
 	if held and is_knocked():
 		_ragdoll.drive(target)
+
+
+## The host, at a window (Barricade): walking up to it, or standing tearing.
+func window_pose(walking: bool) -> void:
+	_state = State.CHASE if walking else State.ATTACK
 
 
 ## The host: let go -- it flies on with the swing it has, and gets up later.
@@ -575,6 +600,12 @@ func _physics_process(delta: float) -> void:
 	if is_knocked():
 		_knocked_tick(delta)
 		return
+	# Coming in through a window (Barricade drives it till it's in).
+	if window != null:
+		if is_instance_valid(window):
+			window.call(&"drive", self, delta)
+			return
+		window = null
 
 	if _state == State.SPAWNING:
 		_spawning_time_left -= delta

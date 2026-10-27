@@ -183,6 +183,13 @@ const GRAB_COST := 1.0
 @export var whip_reach: float = 5.0
 @export var whip_damage: float = 50.0
 @export var whip_sweep_degrees: float = 120.0
+## The tentacle's lash, for everyone (the user's, 2026-10-27): a TAP of E (let
+## go within whip_tap) whips; holding E charges the grab as before. What it
+## hits is thrown -- the whole body knocked down at whip_knock (m/s), the limb
+## it caught swung whip_limb times as hard (a heavy root crashing into them).
+@export var whip_tap: float = 0.25
+@export var whip_knock: float = 9.0
+@export var whip_limb: float = 1.6
 
 @export_group("Seeded Growth")
 ## The Seeded Growth mutation (the user's, SeededGrowth): a tap of right
@@ -415,6 +422,10 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 			_hold += delta
 		else:
 			_coiling = false
+			if _hold < whip_tap and (infinite_charges or _player.spend_stamina()):
+				_start_whip(aim) # a tap: the lash (the user's)
+				coil = 0.0
+				return false
 			if _hold < seed_tap_time and _player.virus.has(Virus.SEEDED):
 				# A tap: Seeded Growth. With the whip too, it waits a beat for a
 				# second tap (the user's: that one's the whip).
@@ -1048,9 +1059,19 @@ func _whip_strike(collider: Node, at: Vector3) -> void:
 	_whip_hit.append(node)
 	var health := node.get_node(^"Health") as Health
 	var direction := (at - _player.global_position).normalized()
-	health.take_damage(whip_damage, _attacker_id, direction, at, 6.0)
-	Factions.provoke(node, _player)
-	_player.weapons.hit_confirmed.emit(health.is_dead, WeaponController.HitKind.NORMAL)
+	# Thrown the way the lash sweeps (right to left across you) and out.
+	var across := -_player.global_basis.x
+	var push := (Vector3(direction.x, 0.0, direction.z).normalized() * 0.5 + across).normalized() * whip_knock + Vector3.UP * whip_knock * 0.25
+	if not health.is_dead:
+		health.take_damage(whip_damage, _attacker_id, direction, at, 6.0)
+		Factions.provoke(node, _player)
+		_player.weapons.hit_confirmed.emit(health.is_dead, WeaponController.HitKind.NORMAL)
+	if node is Enemy:
+		(node as Enemy).whipped(at, push, _attacker_id, whip_limb)
+	# Weight: it lands like a blow.
+	_player.camera.shake(4.0)
+	_player.camera.kick_fov(5.0)
+	WalkerSound.play("thud", at, get_tree().current_scene, 40.0, 2.0, 1.0)
 
 
 func _kick(direction: Vector3) -> void:

@@ -835,6 +835,33 @@ func drive(target: Vector3) -> void:
 			bone.angular_velocity *= 0.8
 
 
+## Struck (the whip, the user's: like a heavy root crashing into them): the
+## whole body thrown by `push` (on top of how it's moving), and the limb it
+## caught -- the one nearest `at` and the rest of its arm, leg or the torso,
+## together (the thrash lesson) -- `limb` times as hard.
+const LIMBS := [["LeftUpperArm", "LeftLowerArm", "LeftHand"], ["RightUpperArm", "RightLowerArm", "RightHand"],
+		["LeftUpperLeg", "LeftLowerLeg", "LeftFoot"], ["RightUpperLeg", "RightLowerLeg", "RightFoot"],
+		["Spine", "Chest", "UpperChest", "Neck", "Head"]]
+
+
+func whack(at: Vector3, push: Vector3, limb: float) -> void:
+	if _bones.is_empty():
+		return
+	var nearest: PhysicalBone3D = null
+	for bone in _bones:
+		if _in_space(bone) and (nearest == null or bone.global_position.distance_to(at) < nearest.global_position.distance_to(at)):
+			nearest = bone
+	if nearest == null:
+		return
+	var caught: Array = []
+	for names: Array in LIMBS:
+		if nearest.bone_name in names:
+			caught = names
+	for bone in _bones:
+		if _in_space(bone):
+			bone.linear_velocity += push * (limb if bone.bone_name in caught else 1.0)
+
+
 ## Where it's held from (its chest), in the world.
 func grip_position() -> Vector3:
 	return _grip_bone.global_position if _grip_bone and is_instance_valid(_grip_bone) else body_position()
