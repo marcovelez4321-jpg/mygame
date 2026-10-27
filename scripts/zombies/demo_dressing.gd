@@ -15,6 +15,11 @@ const BODY := "res://scenes/enemy/enemy.tscn"
 
 
 func _ready() -> void:
+	# Every game: the clouds and the skyline giants fade into the demo's own
+	# fog colour (what BiomeAtmosphere sets in the open world).
+	var world := get_tree().current_scene.get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+	if world and world.environment:
+		RenderingServer.global_shader_parameter_set(&"world_fog_color", world.environment.fog_light_color)
 	if Network.is_online() and not multiplayer.is_server():
 		return
 	_lay_out.call_deferred()

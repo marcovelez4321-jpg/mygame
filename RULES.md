@@ -2167,3 +2167,5 @@ them:
   - **No leeches:** the demo's barnacle clumps grow none, and any the Stack's own clumps grow are removed.
   - **The Ossuary:** passes 500 m off.
   - **Traders:** the floor check measures from the real floor (the navmesh floats above it, so every run failed); runs 8-30 m.
+
+- **2026-10-27, the demo's fog back:** the open world's fog was far too thick there. The demo keeps its own reworked fog (40 m to 700 m, curve 1.4, colour 0.4/0.43/0.5, no valley haze) under the open world's sky, sun, cloud deck and skyline giants. DemoDressing sets the global `world_fog_color` as the demo starts, so the clouds and giants fade into it.

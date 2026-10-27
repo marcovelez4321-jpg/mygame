@@ -103,6 +103,8 @@ const TREE_WALKWAY_TO := Vector3(0.0, 30.0, 153.0)
 const TREE_GRIPS := [Vector2(12.0, 35.0), Vector2(60.0, 400.0), Vector2(400.0, 3000.0)]
 const OPEN_ENVIRONMENT := "res://worlds/test_world/environment.tres"
 const OPEN_FOG := 1.3333 # (the open world's BiomeAtmosphere.fog_distance)
+## The demo's own fog colour (its reworked fog, kept: the user's).
+const DEMO_FOG := Color(0.4, 0.43, 0.5)
 ## The open world's cloud deck height.
 const CLOUDS_AT := 500.0
 const LAMP := Color(0.72, 0.82, 1.0)
@@ -1107,6 +1109,16 @@ func _environment() -> WorldEnvironment:
 	sewer.sun_color = Color(1.0, 0.93, 0.72)
 	sewer.sun_energy = 1.25
 	AlienAtmosphere.apply_blend(environment, sewer, sewer, 0.0, _sun, OPEN_FOG)
+	# But the fog the demo's own (the user's, 2026-10-27: the open world's was
+	# far too thick): its distance, curve and colour from before, no valley haze.
+	environment.fog_enabled = true
+	environment.fog_mode = Environment.FOG_MODE_DEPTH
+	environment.fog_light_color = DEMO_FOG
+	environment.background_color = DEMO_FOG
+	environment.fog_depth_begin = 40.0
+	environment.fog_depth_end = 700.0
+	environment.fog_depth_curve = 1.4
+	environment.fog_height_density = 0.0
 	world.environment = environment
 	return world
 
