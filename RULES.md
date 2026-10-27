@@ -2105,3 +2105,5 @@ them:
   - **Flying:** it keeps 1.4 m off the ground (not over a player).
   - **Dead:** its body is put out of the way (no collision, frozen) so only the ragdoll falls.
   - **Tumbling, and for 5 s after death:** any simulated bone that went through something in a step is put back on its near side.
+
+- 2026-10-26 (the user's): the Consumed steer twice as hard (turn rate 2x the blood orbs', 67.5 degrees a second). Fixed them shooting into the sky after a tumble: their new heading was taken from their velocity while the ground-clearance lift was pushing them up. It's now taken level.

@@ -20,8 +20,8 @@ extends RigidBody3D
 
 const SPEED := 22.0
 ## Turning at most this many degrees a second toward you (the user's: like
-## the heart's blood orbs -- theirs).
-const TURN_RATE := HeartOrb.TURN_RATE
+## the heart's blood orbs, then twice theirs).
+const TURN_RATE := HeartOrb.TURN_RATE * 2.0
 ## Flying, it keeps this far off the ground under it (its limbs hang clear),
 ## lifting this fast (m/s per metre short).
 const CLEARANCE := 1.4
@@ -398,7 +398,12 @@ func _physics_process(delta: float) -> void:
 	var aim := _target.head.global_position + Vector3.DOWN * 0.4
 	var to := aim - global_position
 	if _heading == Vector3.ZERO:
-		_heading = linear_velocity.normalized() if linear_velocity.length_squared() > 1.0 else -global_basis.z
+		# Level, the way it's going (never up: off the ground after a tumble
+		# it's lifting, and it'd shoot off into the sky).
+		var flat := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
+		if flat.length_squared() < 1.0:
+			flat = Vector3(-global_basis.z.x, 0.0, -global_basis.z.z)
+		_heading = flat.normalized() if flat.length_squared() > 0.0001 else to.normalized()
 	var want := to.normalized()
 	var off := _heading.angle_to(want)
 	if off > 0.0001:
