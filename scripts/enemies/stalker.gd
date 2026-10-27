@@ -1058,6 +1058,7 @@ func _physics_process(delta: float) -> void:
 		_fall(delta)
 	else:
 		_crawl(delta)
+		_keep_off_walls()
 	_face()
 	_unstick(delta)
 
@@ -3816,6 +3817,38 @@ func _crawl(delta: float) -> void:
 		global_position = (back.position as Vector3) + _normal * RIDE
 		return
 	state = State.FALL
+
+
+## Its body kept off the walls beside it (the user's, 2026-10-27: its body and
+## limbs clipped into the map): rays out from its middle to its sides and
+## behind, along the surface it's on; a wall nearer than BODY_CLEAR pushes it
+## back off (its legs then plant clear of it too). Never straight ahead: it
+## still crawls up onto a wall in front of it.
+const BODY_CLEAR := 0.45 * SPAN
+const CLEAR_ANGLES := [70.0, 90.0, 115.0, 150.0, 180.0, 210.0, 245.0, 270.0, 290.0]
+
+
+func _keep_off_walls() -> void:
+	var up := _normal
+	var forward := _flat_perpendicular(up, _heading)
+	var side := forward.cross(up).normalized()
+	var middle := global_position + up * BODY_HEIGHT * 0.5
+	var push := Vector3.ZERO
+	for degrees: float in CLEAR_ANGLES:
+		var a := deg_to_rad(degrees)
+		var way := (forward * cos(a) + side * sin(a)).normalized()
+		var hit := _ray(middle, middle + way * BODY_CLEAR)
+		if hit.is_empty():
+			continue
+		var n: Vector3 = hit.normal
+		if absf(n.dot(up)) > WALL_DOT:
+			continue # (the surface it's on, a step: not a wall)
+		var away := n - up * n.dot(up)
+		if away.length_squared() < 0.0001:
+			continue
+		push += away.normalized() * (BODY_CLEAR - middle.distance_to(hit.position as Vector3))
+	if push != Vector3.ZERO:
+		global_position += push.limit_length(BODY_CLEAR * 0.5)
 
 
 func _fall(delta: float) -> void:

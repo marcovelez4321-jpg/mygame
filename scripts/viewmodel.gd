@@ -757,12 +757,14 @@ func _find_sight_center(weapon: WeaponData) -> Variant:
 
 # ---- Auto sights (the user's, 2026-10-27: any gun's iron sights line up with
 # your eye by itself, Black Ops 1 style -- no aim position to tune per gun) --------------
-# Read off the gun's own mesh, in the hand's space as it's held: its top line
-# down the middle -- the REAR sight the highest point over the back half (not
-# the very back: hammers, stocks), the FRONT sight the highest over the muzzle
-# end. Aimed, the whole hand turns so that line runs straight ahead, and moves
-# so the rear sight sits AIM_EYE_DISTANCE in front of your eye: the front post
-# lands on the rear sight, dead centre, whatever pose the arms hold it in.
+# Read off the gun's own mesh, in the model's own space (upright, the barrel
+# along its longest level axis -- not as it's held: the pistol's held rolled
+# over, which threw the old reading off): down the middle of its top, the
+# FRONT sight the highest point over the muzzle end, the REAR sight the highest
+# over the back half (not the very back: hammers, stocks). Aimed, the hand
+# turns so the barrel runs straight ahead and the gun sits upright (no roll),
+# and moves so the top of the sights sits on your eye line AIM_EYE_DISTANCE
+# ahead: the front post dead centre, whatever pose the arms hold it in.
 
 ## The muzzle end's share of the gun's length (the front sight's in there),
 ## the back half's span (the rear sight's), and how wide the middle band is.
@@ -770,8 +772,8 @@ const SIGHT_FRONT_SHARE := 0.2
 const SIGHT_REAR_SPAN := Vector2(0.45, 0.95)
 const SIGHT_BAND := 0.2
 
-## [rear, front] in the hand's space at rest (null: none found -- then
-## aim_position is used as before).
+## [the eye point on the sights, the barrel's direction, the gun's up], in the
+## hand's space at rest (null: none found -- then aim_position is used).
 var _auto_sights: Variant = null
 
 
@@ -780,16 +782,16 @@ func _find_auto_sights(weapon: WeaponData) -> Variant:
 			or weapon.heal_item >= 0 or weapon.throws_grenade:
 		return null
 	var to_model := _model.global_transform.affine_inverse()
-	var points := PackedVector3Array()
+	var points := PackedVector3Array() # (in the model's own space)
 	for node in _gun.find_children("*", "MeshInstance3D", true, false):
 		var part := node as MeshInstance3D
 		if part.mesh == null:
 			continue
-		var into_hand := _model_rest_transform * (to_model * part.global_transform)
+		var into_model := to_model * part.global_transform
 		for s in part.mesh.get_surface_count():
 			var vertices: PackedVector3Array = part.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
 			for v in vertices:
-				points.append(into_hand * v)
+				points.append(into_model * v)
 	if points.size() < 8:
 		return null
 	var low := points[0]
@@ -797,24 +799,40 @@ func _find_auto_sights(weapon: WeaponData) -> Variant:
 	for p in points:
 		low = low.min(p)
 		high = high.max(p)
-	var length := high.z - low.z
+	# The barrel runs along the longer level axis; its muzzle end is the one
+	# held pointing ahead (-Z).
+	var along := Vector3.AXIS_X if high.x - low.x > high.z - low.z else Vector3.AXIS_Z
+	var across := Vector3.AXIS_Z if along == Vector3.AXIS_X else Vector3.AXIS_X
+	var length := high[along] - low[along]
 	if length < 0.01:
 		return null
-	var middle := (low.x + high.x) * 0.5
-	var band := maxf((high.x - low.x) * SIGHT_BAND, 0.005)
+	var axis := Vector3.ZERO
+	axis[along] = 1.0
+	var muzzle_high := (_model_rest_transform.basis * axis).z < 0.0
+	var middle := (low[across] + high[across]) * 0.5
+	var band := maxf((high[across] - low[across]) * SIGHT_BAND, 0.0005)
 	var rear := Vector3(0.0, -INF, 0.0)
 	var front := Vector3(0.0, -INF, 0.0)
 	for p in points:
-		if absf(p.x - middle) > band:
+		if absf(p[across] - middle) > band:
 			continue
-		var t := (p.z - low.z) / length # 0: the muzzle (-Z), 1: the back
+		var t := (p[along] - low[along]) / length # 0: the muzzle, 1: the back
+		if muzzle_high:
+			t = 1.0 - t
 		if t <= SIGHT_FRONT_SHARE and p.y > front.y:
 			front = p
 		elif t >= SIGHT_REAR_SPAN.x and t <= SIGHT_REAR_SPAN.y and p.y > rear.y:
 			rear = p
-	if not rear.is_finite() or not front.is_finite():
+	if not front.is_finite():
 		return null
-	return [rear, front]
+	# The eye line: over the taller of the two (the front post's top on the
+	# centre, never hidden behind the rear), above the rear sight, down the middle.
+	var eye := rear if rear.is_finite() else front
+	eye[across] = middle
+	eye.y = maxf(front.y, rear.y) if rear.is_finite() else front.y
+	var ahead := _model_rest_transform.basis * (axis * (1.0 if muzzle_high else -1.0))
+	var up := _model_rest_transform.basis * Vector3.UP
+	return [_model_rest_transform * eye, ahead.normalized(), up.normalized()]
 
 
 func _auto_sights_on(weapon: WeaponData) -> bool:
@@ -833,11 +851,12 @@ func _aim_exactly() -> void:
 		return
 	var camera := get_parent() as Node3D
 	var parent := camera.global_transform.affine_inverse() * _swing_pivot.global_transform
-	var rear: Vector3 = _auto_sights[0]
-	var front: Vector3 = _auto_sights[1]
-	var line := (front - rear).normalized()
-	var turn := Quaternion(line, Vector3.FORWARD) if line.dot(Vector3.FORWARD) > -0.99 else Quaternion.IDENTITY
-	var aimed := Transform3D(Basis(turn), Vector3(0.0, 0.0, -AIM_EYE_DISTANCE) - turn * rear)
+	var eye: Vector3 = _auto_sights[0]
+	var ahead: Vector3 = _auto_sights[1]
+	var up: Vector3 = _auto_sights[2]
+	# The turn that runs the barrel straight ahead and stands the gun upright.
+	var turn := Basis.looking_at(ahead, up).inverse()
+	var aimed := Transform3D(turn, Vector3(0.0, 0.0, -AIM_EYE_DISTANCE) - turn * eye)
 	_sway_pivot.transform = _sway_pivot.transform.interpolate_with(parent.affine_inverse() * aimed, aim_steady)
 
 

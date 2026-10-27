@@ -762,6 +762,30 @@ func _build_things(root: Node3D) -> void:
 	spawner.name = "WindowSpawner"
 	spawner.set_script(load("res://scripts/zombies/window_spawner.gd"))
 	_add(root, spawner)
+	var horde := Node.new()
+	horde.name = "DemoHorde"
+	horde.set_script(load("res://scripts/zombies/demo_horde.gd"))
+	_add(root, horde)
+	var traders := Node.new()
+	traders.name = "DemoTraders"
+	traders.set_script(load("res://scripts/zombies/demo_traders.gd"))
+	_add(root, traders)
+	var sound := Node.new()
+	sound.name = "DemoSound"
+	sound.set_script(load("res://scripts/zombies/demo_sound.gd"))
+	# Its inside: every room (not the holes down through the ground); its
+	# windows: every real one (boarded or glass).
+	var rooms: Array[AABB] = []
+	for void_box in _voids:
+		if void_box.position.y > -20.0 and void_box.size.y >= 2.0:
+			rooms.append(void_box)
+	var openings := PackedVector3Array()
+	for thing: Array in _things:
+		if thing[0] == &"barricade" or thing[0] == &"glass":
+			openings.append((thing[1] as Transform3D).origin)
+	sound.set(&"rooms", rooms)
+	sound.set(&"openings", openings)
+	_add(root, sound)
 	var loadout := Node.new()
 	loadout.name = "Loadout"
 	loadout.set_script(load("res://scripts/world/loadout.gd"))

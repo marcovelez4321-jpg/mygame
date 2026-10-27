@@ -11,7 +11,8 @@ const EXTRA := [["silence", "Wrong silence"], ["breathing", "Breathing (it waits
 		["sign", "Small sign (random)"], ["tracks", "Sign: tracks across"], ["kill", "Sign: a kill ahead"], ["peak", "Big moment now"], ["home", "Home in its lair"],
 		["comeback", "Comeback (session start)"], ["forget", "Forget me (wipe its memory)"],
 		["forget_world", "Forget the world (quest facts)"], ["ossuary_here", "Ossuary: walk past me"], ["ossuary_rest", "Ossuary: rest now"],
-		["consumed_here", "A Consumed, at me"], ["bells_wake", "Wake the Bell-wraiths"]]
+		["consumed_here", "A Consumed, at me"], ["bells_wake", "Wake the Bell-wraiths"],
+		["grapple_unlock", "Unlock / lock the grapple"]]
 
 var _panel: PanelContainer
 var _result: Label
@@ -96,6 +97,14 @@ func _trigger(event: StringName) -> void:
 		tree.current_scene.add_child(one)
 		one.global_position = me.global_position - me.head.global_basis.z * 30.0 + Vector3.UP * 6.0
 		_result.text = "A Consumed, 30 m in front of you"
+		return
+	if event == &"grapple_unlock":
+		var me := PlayerMovement.local_player(tree)
+		if me == null:
+			_result.text = "No player here."
+			return
+		me.grapple_found = not me.grapple_found
+		_result.text = "The grapple: %s" % ("unlocked" if me.grapple_found else "locked (enemies and things only)")
 		return
 	if event == &"bells_wake":
 		var count := tree.get_nodes_in_group(&"bell_wraiths").size()

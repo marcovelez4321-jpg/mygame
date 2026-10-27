@@ -50,8 +50,10 @@ signal respawned
 @export var shot_shake: float = 3.5
 
 ## The tentacle (grounded: on E). The user's, 2026-10-27: yours from the
-## start -- it grabs enemies (PlayerGrapple GRAB) as well as pulling you.
-var grapple_found := true
+## start -- it grabs enemies (PlayerGrapple GRAB). Pulling you to things (the
+## grapple) only once that's unlocked (the user's, 2026-10-27): till then a
+## throw at anything but an enemy just reels back in, like a miss.
+var grapple_found := false
 ## Sprinting right now (the viewmodel dips the gun).
 var sprinting := false
 
@@ -786,9 +788,10 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_F)
 	input.grapple = (right and not right_aims) or (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_E))
-	# Grounded: the grapple only once it's been found, and only on E.
+	# Grounded: the tentacle on E (the grapple's pull only once it's been
+	# found: PlayerGrapple._fire).
 	if grounded:
-		input.grapple = grapple_found and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+		input.grapple = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 				and Input.is_physical_key_pressed(KEY_E)
 	# Placing a camp: right click puts the kit away (CampBuilder), no grapple.
 	if camp_builder.is_placing():

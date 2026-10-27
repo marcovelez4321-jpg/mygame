@@ -85,6 +85,11 @@ const SYNC_EVERY := 0.5
 
 var route_seed := 0
 var time := 0.0
+## Its bell tolled every this many seconds as it walks too (0: only as it
+## settles and rises). The Stacks demo's (the user's, 2026-10-27: walking past
+## the Stack, ringing its bell). Every game counts it off the same 	ime.
+var toll_every := 0.0
+var _toll_was := -1
 ## Where its route starts and which way (INF: from its seed, at random).
 var start_at := Vector3.INF
 var start_heading := Vector3.ZERO
@@ -140,6 +145,27 @@ static func ensure(tree: SceneTree) -> void:
 		walker.start(seed, 0.0, Vector3(at.x, 0.0, at.z), along)
 		return
 	walker.start(seed, randf() * WALK_TIME) # (nowhere clear out there: anywhere)
+
+
+## Every game: the Ossuary walking past centre (the Stacks demo: no
+## terrain, so not ensure()), distance off at its nearest, its bell tolling
+## every 	oll s. The host picks the way it comes (start()); a client's
+## copy waits for the host's word (synced()). A new pass: call it again.
+static func pass_by(tree: SceneTree, centre: Vector3, distance: float, toll: float) -> Ossuary:
+	var walker := tree.get_first_node_in_group(&"ossuary") as Ossuary
+	if walker == null:
+		walker = Ossuary.new()
+		walker.name = "CrawlingOssuary"
+		tree.current_scene.add_child(walker)
+	walker.toll_every = toll
+	if Network.is_online() and not tree.get_multiplayer().is_server():
+		return walker
+	var along := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	var side := along.cross(Vector3.UP) * (1.0 if randf() < 0.5 else -1.0)
+	# Its first leg runs LEG_MAX straight (start()): the nearest point mid-way.
+	var from := centre + side * distance - along * LEG_MAX * 0.5
+	walker.start(randi(), 0.0, Vector3(from.x, 0.0, from.z), along)
+	return walker
 
 
 ## Where the fog's solid from you (the world's environment), as the
@@ -606,6 +632,13 @@ func _phase_sounds() -> void:
 			WalkerSound.play("bell", _body.global_transform * BELL_AT, get_tree().current_scene, BELL_RANGE, 4.0, 60.0)
 			bell_tolled.emit()
 		_phase_was = phase
+	if toll_every > 0.0 and phase == 0:
+		var toll := int(floorf(time / toll_every))
+		if toll != _toll_was:
+			if _toll_was >= 0:
+				WalkerSound.play("bell", _body.global_transform * BELL_AT, get_tree().current_scene, BELL_RANGE, 4.0, 60.0)
+				bell_tolled.emit()
+			_toll_was = toll
 	if _choir and not _choir.playing and is_inside_tree():
 		_choir.play()
 

@@ -36,6 +36,8 @@ const SCREEN_BLOOD_FADE_TIME := 0.7
 ## match the player's max_stamina_charges (_build_stamina_pips: 4), centred
 ## under the crosshair, styled like the scene's own first pip.
 var stamina_pips: Array[ColorRect] = []
+## How much faster than the gun comes up the crosshair's gone (2: by halfway).
+const AIM_FADE_SPEED := 2.0
 ## The weapon wheel (middle mouse): off -- guns go through the backpack.
 const WEAPON_WHEEL_ENABLED := false
 const PIP_WIDTH := 14.0
@@ -165,9 +167,15 @@ func _process(_delta: float) -> void:
 			and not (weapon and weapon.heal_item == WeaponController.Item.BANDAGE):
 		ammo_label.text += "   [B] Bandages: %d" % player.weapons.bandages
 	health_label.text = "Health: %d" % ceili(_player_health.current_health)
-	# Aiming down the sights: the sights (or scope) are the crosshair now.
+	# Aiming down the sights: the sights (or scope) are the crosshair now --
+	# it and everything around it (the stamina pips, the [F] prompt) fade
+	# out as the gun comes up (the user's, 2026-10-27), back as it goes down.
 	# The backpack out: no shooting, and its own cursor (the same dot) picks.
-	$Crosshair.visible = player.weapons.aim_amount() <= 0.0 and not player.bag_open
+	var shown := clampf(1.0 - player.weapons.aim_amount() * AIM_FADE_SPEED, 0.0, 1.0)
+	$Crosshair.visible = shown > 0.0 and not player.bag_open
+	$Crosshair.modulate.a = shown
+	($StaminaBar as Control).modulate.a = shown
+	_use_prompt_label.modulate.a = shown
 	_update_stamina_bar()
 	_update_use_prompt()
 	_update_hand_prompt()

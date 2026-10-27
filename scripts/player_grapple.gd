@@ -630,7 +630,11 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 	var grab := _enemy_of(target) if big == null else null
 	if grab and not grab.can_be_grabbed():
 		grab = null
-	if target == null or (big == null and grab == null and _is_small_enemy(target)):
+	# The grapple not unlocked yet (grounded: PlayerMovement.grapple_found):
+	# only a grab (an enemy) or a throwable thing takes hold; anything else,
+	# it reels back in.
+	var locked := target != null and grab == null and not _unlocked() and not _throwable(target)
+	if target == null or locked or (big == null and grab == null and _is_small_enemy(target)):
 		_rope = Rope.MISS
 		_lash_end = origin + aim * reach if target == null else (hit.position as Vector3)
 		_lash_time = 0.0
@@ -1125,6 +1129,21 @@ func _enemy_of(node: Node) -> Enemy:
 	return null
 
 
+## Pulling you to things: always, unless grounded and not found yet
+## (PlayerMovement.grapple_found).
+func _unlocked() -> bool:
+	return not _player.grounded or _player.grapple_found
+
+
+## Something the tentacle picks up (into your hand) or carries to throw.
+func _throwable(node: Node) -> bool:
+	if node == null or _big_enemy(node) != null:
+		return false
+	if PlayerHand.is_item(node):
+		return true
+	return node is RigidBody3D and not (node as RigidBody3D).freeze and (node as RigidBody3D).mass <= MAX_CARRY
+
+
 func _is_small_enemy(node: Node) -> bool:
 	while node != null:
 		if node.is_in_group("enemies"):
@@ -1195,6 +1214,11 @@ func _update_indicator(delta: float) -> void:
 		return
 	var target := hit.collider as Node3D
 	var grabs := target != null and (_big_enemy(target) != null or not _is_small_enemy(target))
+	# The grapple locked (the user's, 2026-10-27): red unless it's on an enemy
+	# it'd grab or a thing it'd pick up or throw.
+	if grabs and not _unlocked():
+		var enemy := _enemy_of(target) if _big_enemy(target) == null else null
+		grabs = (enemy != null and enemy.can_be_grabbed()) or _throwable(target)
 	_indicator.show_at(hit.position, hit.normal, grabs, fill, origin, delta)
 
 

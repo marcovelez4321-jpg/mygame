@@ -2148,3 +2148,14 @@ them:
   - **Boarded windows:** lower and smaller (2.4 x 2.6, sill 0.9) in the grid columns.
   - **Dressing:** fire barrels, explosive barrels in groups, crates, two dead climbers' cold camps with ammo, pills, bandages and grenades (DemoDressing lays the bodies), cables across the courtyard, washing from its walls.
   - **Rebar:** decor at 0.25 m (thinner collapses in the map build).
+
+- **2026-10-27 batch (Stalker, ADS, the demo's roster, sound, traders, the grapple):**
+  - **Stalker off the walls:** `_keep_off_walls()` after each crawl step: rays out to its sides and behind along the surface it's on; a wall nearer than BODY_CLEAR pushes it back (never straight ahead, so it still climbs walls in front).
+  - **Auto sights read upright:** the sights are found in the gun's own space (barrel along its longest level axis), and aiming turns the gun so the barrel runs straight ahead with no roll; the eye line sits on the taller of the front and rear sights. (The pistol is held rolled about 11 degrees and the SMG's "rear sight" landed on its low receiver.)
+  - **ADS fade:** the crosshair, stamina pips and [F] prompt fade out as the gun comes up (gone by halfway, AIM_FADE_SPEED 2).
+  - **Speeds:** spiders 80% slower (spider_pack.tscn spider_speed 40 to 8); roaches 30% slower (roach.tscn cruise 9 to 6.3, dive 13 to 9.1).
+  - **The tentacle and the grapple:** E always throws the tentacle. Until the grapple is unlocked (PlayerMovement.grapple_found, now false) it only takes hold of an enemy it can grab or a thing it picks up or carries; anything else reels back like a miss, and the ring shows red. F9 has "Unlock / lock the grapple" for testing.
+  - **DemoHorde (scripts/zombies/demo_horde.gd):** bands out of sight 22-50 m off (tweakers incl. mutants, rats, roaches, spider packs, Harvestmen in rooms with headroom, a Rat Bender, the Swarm King), up to 3 per player, gone past 110 m; 8 barnacle clumps on ceilings; packs of the Consumed under open sky; 4 Bell-wraiths high in the great hall; the Crawling Ossuary walking past 650 m off, tolling its bell every 30 s (Ossuary.pass_by, toll_every), coming round again once 3 km away. Not in: the Burrow Worm (needs terrain), the Deepmaw crawlers (shelved).
+  - **DemoTraders:** up to 2 wandering traders, out of sight 25-60 m off, walking their rickshaw back and forth along a clear straight run of floor; gone past 90 m from every player.
+  - **DemoSound:** the open world Stack's MegastructureSound over the demo's rooms (hollow loop inside, far-off echoes, wind at the nearest windows, the drone approaching), an outside wind (stronger higher up, under open sky) with far-off one-shots, and a lamp hum by each lamp. The decoration Stack's drone is kept to 250 m.
+  - **Committed with it:** the Megastructure texture materials the demo scene uses (they weren't tracked).
