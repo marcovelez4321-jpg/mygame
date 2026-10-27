@@ -19,9 +19,13 @@ const BOARDS := 6
 const TEAR_TIME := 1.4
 const CRAWL_TIME := 1.0
 const REPAIR_TIME := 0.7
-## The opening, and where its floor is below its middle.
-const SIZE := Vector2(1.6, 1.6)
-const DROP := 1.7
+## The opening (width, height), and how far its floor is below its middle
+## (a small window low down; the Stack's grid windows are 3 x 3.75, their
+## sills 2.25 up: 4.125).
+@export var size := Vector2(1.6, 1.6)
+@export var drop := 1.7
+## How thick the wall it's in is.
+@export var depth := 2.0
 const WOOD := Color(0.3, 0.22, 0.15)
 const OPEN_LAYER := 1 << 21
 
@@ -41,7 +45,7 @@ func _ready() -> void:
 	add_to_group(PlayerMovement.USABLE_GROUP)
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(SIZE.x, SIZE.y, 0.4)
+	box.size = Vector3(size.x, size.y, maxf(depth - 0.2, 0.4))
 	shape.shape = box
 	add_child(shape)
 	var look := StandardMaterial3D.new()
@@ -50,10 +54,10 @@ func _ready() -> void:
 	for i in BOARDS:
 		var board := MeshInstance3D.new()
 		var plank := BoxMesh.new()
-		plank.size = Vector3(SIZE.x + 0.3, 0.2, 0.05)
+		plank.size = Vector3(size.x + 0.3, 0.2, 0.05)
 		board.mesh = plank
 		board.material_override = look
-		var y := lerpf(-SIZE.y * 0.42, SIZE.y * 0.42, float(i) / (BOARDS - 1))
+		var y := lerpf(-size.y * 0.42, size.y * 0.42, float(i) / (BOARDS - 1))
 		board.position = Vector3(0.0, y, 0.05 + 0.03 * (i % 2))
 		board.rotation.z = 0.22 if i % 2 == 0 else -0.18
 		add_child(board)
@@ -63,16 +67,16 @@ func _ready() -> void:
 
 ## Where the horde stands to tear it open, and comes out inside (the world).
 func outside_point() -> Vector3:
-	return global_transform * Vector3(0.0, -DROP, -1.4)
+	return global_transform * Vector3(0.0, -drop, -depth * 0.5 - 0.4)
 
 
 func inside_point() -> Vector3:
-	return global_transform * Vector3(0.0, -DROP, 1.2)
+	return global_transform * Vector3(0.0, -drop, depth * 0.5 + 0.2)
 
 
 ## Where WindowSpawner puts a new one (a little further out).
 func spawn_point() -> Vector3:
-	return global_transform * Vector3(0.0, -DROP + 0.1, -3.0)
+	return global_transform * Vector3(0.0, -drop + 0.1, -depth * 0.5 - 2.0)
 
 
 ## The host: `enemy` is coming in here.
@@ -130,7 +134,7 @@ func drive(enemy: Enemy, delta: float) -> void:
 func _crawl(enemy: Enemy, delta: float) -> void:
 	_crawl_t += delta / CRAWL_TIME
 	var t := clampf(_crawl_t, 0.0, 1.0)
-	var lift := sin(t * PI) * DROP * 0.8
+	var lift := sin(t * PI) * drop * 0.8
 	enemy.global_position = outside_point().lerp(inside_point(), t) + Vector3.UP * lift
 	if t >= 1.0:
 		_crawler = null

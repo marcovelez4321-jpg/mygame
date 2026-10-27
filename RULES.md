@@ -2133,3 +2133,9 @@ them:
 - 2026-10-27 (the user's): the gun's sway back to how it was (go_heavy no longer changes it) and no walk bob; the sprint carry and landing dip kept. Movement 25% faster: walk 5.625, sprint 8.75, speed cap 15, wall jumps from walking speed (5.625).
 
 - 2026-10-27 (the user's: the gun sat too high aimed): auto sights now placed exactly in the camera's own space each frame (Viewmodel._aim_exactly: the hand's real offset from the eye measured, the rear sight AIM_EYE_DISTANCE dead ahead, the front on the same line), blended from the hip by aim_steady. The old way assumed the hand's pivot was at the eye.
+
+- 2026-10-27 The Stacks demo reworked (the user's):
+  - **The real Stack:** the open world's Stack (its baked scene, untouched) is attached south of the demo, across open ground. Its shaft and outfall are holed through our ground. The stair hall now reaches the main tower's south face, with a door out to it.
+  - **Windows:** on the Stack's own 8 m grid in every room against an outer wall. 3 in 4 are real: half boarded (Barricade, now any size and wall thickness; lowest row only), half dirty glass. The rest are painted. No more reflective panes. The corridor and flats are now 6.5 m tall so the windows fit.
+  - **Decoration:** the lobby and stair hall get the original Stack's hall decorator (StackBuilder._hall_features) at 0.4 scale, rerolled until nothing blocks a doorway.
+  - **The Alpha Stalker:** brought in 3 s after the start (WindowSpawner), hunting from round 1.

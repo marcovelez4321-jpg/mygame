@@ -1,0 +1,14 @@
+[remap]
+
+importer="func_godot.map"
+type="Resource"
+uid="uid://bgrxgf8n4hr30"
+path="res://.godot/imported/stacks_demo.map-f84cff4074c5a738f601b89ad746cdc7.tres"
+
+[deps]
+
+source_file="res://maps/zombies/stacks_demo.map"
+dest_files=["res://.godot/imported/stacks_demo.map-f84cff4074c5a738f601b89ad746cdc7.tres"]
+
+[params]
+

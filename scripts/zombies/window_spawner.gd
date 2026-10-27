@@ -14,11 +14,19 @@ const SCENES := ["res://scenes/enemy/enemy.tscn", "res://scenes/enemy/enemy.tscn
 const GROUP := &"window_infected"
 
 var _left := 3.0
+## The Alpha Stalker (the user's: the full AI, hunting from round 1): brought
+## in once, ALPHA_AFTER in.
+const ALPHA_AFTER := 3.0
+var _alpha_left := ALPHA_AFTER
 
 
 func _physics_process(delta: float) -> void:
 	if Network.is_online() and not multiplayer.is_server():
 		return
+	if _alpha_left > 0.0:
+		_alpha_left -= delta
+		if _alpha_left <= 0.0:
+			Stalker.ensure(get_tree())
 	_left -= delta
 	if _left > 0.0:
 		return
