@@ -2117,3 +2117,5 @@ them:
 - 2026-10-27 (the user's): gravity on while the grapple pulls (only perched and riding hold you weightless), with pull_accel 70 -> 90 so straight-up pulls feel the same. The pull's leftover push lifts you back to the line when you sink off it, so long pulls bow a little while building speed, then run true.
 
 - 2026-10-27 NEW DIRECTION (the user's): a slower, grounded CoD-Zombies-style shooter in the procedural Stacks -- docs/ZOMBIES_DIRECTION.md, which wins over CLIMB_VISION.md and WORLD.md. The open-world version is tagged open-world-2026-10-27.
+
+- 2026-10-27 Grounded feel pass (the user's; PlayerMovement 'Grounded' group): walk 4.5, Shift sprints at 7 forward only, 1 stamina bar every 2 s, not while aiming or firing. No bhops, dash or wall jumps while grounded is on (kept, off). Right mouse aims any gun: 1.2x zoom, 60% speed (WeaponData defaults). The grapple only on E once found (grapple_found). Brutal recoil: view kick and gun kick x2 (recoil_boost), shot shake 3.5, and guns with no spray pattern still kick. Heavy gun (Viewmodel.go_heavy): laggier, bigger sway; a heavy walk bob; swung down and across while sprinting; dips when you land.

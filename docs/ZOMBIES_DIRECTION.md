@@ -54,6 +54,21 @@ style, the eeriness and the original vision stay; only the gameplay changes.
   a wonder weapon.
 - **Not chosen:** the power being out (generators lighting floors).
 
+## The feel (the user's)
+- **Speeds:** walking 4.5 m/s, sprinting 7 m/s.
+- **Sprinting:** limited by the stamina bars, 1 bar every 2 s (about 8 s from
+  full).
+- **Aiming:** hold right mouse to aim down sights -- 1.2x zoom, moving at 60%
+  speed.
+- **Recoil:** brutal. A big kick, weapon sway and shake: every shot feels like
+  a hit to you too.
+- **The gun's weight:** heavy inertia. It lags behind your turns and swings
+  back, bobs heavily with each step, and dips when you land or sprint.
+- **Hits:** enemies flinch, and limbs can come off.
+- **Later, once the new game's main structure is down:** Euphoria-like active
+  ragdolls, like Max Payne 3 (a major project; the current ragdolls stay till
+  then).
+
 ## The plan
 1. **Setup:** the git tag (done); a zombies-mode main scene; a movement
    profile with the fast movement off.

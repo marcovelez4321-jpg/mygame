@@ -41,7 +41,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	var weapon := _player.weapons.current_weapon()
 	var aim := _player.weapons.aim_amount()
-	if weapon == null or not weapon.can_aim:
+	if weapon == null or not (weapon.can_aim or (_player.weapons.aim_any and _player.weapons.is_gun(weapon))):
 		aim = 0.0
 	var eased := smoothstep(0.0, 1.0, aim)
 

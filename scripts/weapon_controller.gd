@@ -231,6 +231,10 @@ var _reload_blocked_left: float = 0.0
 var _spray_index: int = 0
 var _time_since_shot: float = 999.0
 var _pending_recoil := Vector2.ZERO
+## Grounded (PlayerMovement sets these, the user's 2026-10-27): any gun aims
+## down its sights, and every kick on your view is this many times as hard.
+var aim_any := false
+var recoil_boost := 1.0
 ## How far the gun is raised to your eye: 0 = at the hip, 1 = fully aimed
 ## (WeaponData's Aim Down Sights). Part of the simulation, not just the look,
 ## because it decides each shot's spread -- in co-op the host needs it too.
@@ -687,7 +691,7 @@ func tick(fire: bool, reload: bool, aim: bool, quick_throw: bool, select_weapon:
 		return
 
 	# Raise toward your eye while aiming, lower otherwise. Reloading lowers it.
-	var aiming := aim and weapon.can_aim and _reload_time_left <= 0.0
+	var aiming := aim and (weapon.can_aim or (aim_any and is_gun(weapon))) and _reload_time_left <= 0.0
 	_aim = move_toward(_aim, 1.0 if aiming else 0.0, delta / maxf(weapon.aim_time, 0.01))
 
 	if weapon.throws_grenade:
@@ -1113,18 +1117,24 @@ func _add_recoil(weapon: WeaponData) -> void:
 		_spray_index = 0
 	_time_since_shot = 0.0
 	var pattern := weapon.recoil_pattern
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(Vector2i(_spray_index, Engine.get_physics_frames()))
+	var kick := Vector2.ZERO
 	if pattern.is_empty():
-		return
-	var index := _spray_index
-	if index >= pattern.size():
-		var tail := mini(4, pattern.size())
-		index = pattern.size() - tail + (index - pattern.size()) % tail
-	var kick := pattern[index] * weapon.recoil_scale
+		if recoil_boost <= 1.0:
+			return
+		# No pattern of its own (grounded's brutal recoil, the user's): still
+		# a kick up, a third of the gun's own kick, wandering a little sideways.
+		kick = Vector2(rng.randf_range(-0.4, 0.4), 1.0) * weapon.recoil_kick_rotation_degrees * 0.35
+	else:
+		var index := _spray_index
+		if index >= pattern.size():
+			var tail := mini(4, pattern.size())
+			index = pattern.size() - tail + (index - pattern.size()) % tail
+		kick = pattern[index] * weapon.recoil_scale
 	if weapon.recoil_jitter > 0.0:
-		var rng := RandomNumberGenerator.new()
-		rng.seed = hash(Vector2i(_spray_index, Engine.get_physics_frames()))
 		kick += Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * weapon.recoil_jitter
-	_pending_recoil += kick
+	_pending_recoil += kick * recoil_boost
 	_spray_index += 1
 
 

@@ -25,13 +25,33 @@ signal respawned
 @export_group("General Movement")
 @export var gravity: float = 20.0
 @export var jump_velocity: float = 6.5
-@export var ground_max_speed: float = 7.0
+## Walking (the user's, 2026-10-27: 4.5 -- grounded; it was 7).
+@export var ground_max_speed: float = 4.5
 @export var ground_accel: float = 14.0
 @export var ground_friction: float = 6.0
 @export var stop_speed: float = 1.5
 ## If true, holding jump keeps bhopping automatically on every landing.
 ## If false, you must tap jump right as you land, like vanilla Quake.
 @export var auto_bhop: bool = true
+
+@export_group("Grounded")
+## The Zombies direction (the user's, 2026-10-27: docs/ZOMBIES_DIRECTION.md):
+## walking and sprinting only -- no bhops, dash or wall jumps (all kept, off
+## while this is on). Shift sprints, forward only, at sprint_speed, draining
+## a stamina bar every sprint_bar_time; not while aiming. Right mouse aims any
+## gun. The grapple only once it's found (grapple_found).
+@export var grounded: bool = true
+@export var sprint_speed: float = 7.0
+@export var sprint_bar_time: float = 2.0
+## Brutal recoil (the user's): every gun's kick on your view and on the gun
+## itself times this, and each shot shakes the camera this much.
+@export var recoil_boost: float = 2.0
+@export var shot_shake: float = 3.5
+
+## The grapple's been found this match (grounded): E throws it.
+var grapple_found := false
+## Sprinting right now (the viewmodel dips the gun).
+var sprinting := false
 
 @export_group("Momentum (Vholume-style)")
 ## The user's: momentum carries through everything -- bhops and wall jumps
@@ -491,10 +511,16 @@ func _ready() -> void:
 		var hands: Node3D = viewmodel.sway_pivot() if viewmodel and viewmodel.sway_pivot() else camera
 		hands.add_child(journal)
 		journal.setup(self, camera)
+		# Grounded: the gun heavy in your hands, its kick brutal (the user's).
+		if viewmodel and grounded:
+			viewmodel.go_heavy(self, recoil_boost)
 	else:
 		camera.current = false
 	weapons.shot_resolved.connect(_on_shot_resolved_net)
 	weapons.shot_fired.connect(_on_shot_fired_net)
+	# Grounded (the user's): any gun aims, every kick brutal.
+	weapons.aim_any = grounded
+	weapons.recoil_boost = recoil_boost if grounded else 1.0
 	# Saved sensitivity from the pause menu, if the player has ever set one.
 	if GameSettings.mouse_sensitivity > 0.0:
 		mouse_sensitivity = GameSettings.mouse_sensitivity
@@ -743,7 +769,8 @@ func _gather_input() -> PlayerInput:
 	var right := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 	var held := weapons.current_weapon()
-	var right_aims := held != null and held.can_aim
+	# Grounded: right mouse aims any gun (the user's).
+	var right_aims := held != null and (held.can_aim or (grounded and weapons.is_gun(held)))
 	input.aim = right and right_aims
 	input.quick_throw = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_Q)
@@ -757,6 +784,10 @@ func _gather_input() -> PlayerInput:
 			and Input.is_physical_key_pressed(KEY_F)
 	input.grapple = (right and not right_aims) or (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
 			and Input.is_physical_key_pressed(KEY_E))
+	# Grounded: the grapple only once it's been found, and only on E.
+	if grounded:
+		input.grapple = grapple_found and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED \
+				and Input.is_physical_key_pressed(KEY_E)
 	# Placing a camp: right click puts the kit away (CampBuilder), no grapple.
 	if camp_builder.is_placing():
 		input.grapple = false
@@ -868,8 +899,14 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	# Shift: a dash -- unless you've the Insect wings (then Shift is the wings,
 	# _update_wings()).
 	var fresh_dash: bool = input.want_dash and not _dash_held_prev
-	if fresh_dash and not virus.has(Virus.WINGS) and _dash_cooldown_left <= 0.0 and spend_stamina():
+	if not grounded and fresh_dash and not virus.has(Virus.WINGS) and _dash_cooldown_left <= 0.0 and spend_stamina():
 		_start_dash(wishdir)
+	# Grounded: Shift held sprints -- moving forward, on the ground, not
+	# aiming, while there's stamina (a bar every sprint_bar_time).
+	sprinting = grounded and input.want_dash and input.wishdir.y < -0.1 and on_ground() \
+			and weapons.aim_amount() < 0.1 and stamina > 0.0 and not input.fire
+	if sprinting:
+		drain_stamina(delta / maxf(sprint_bar_time, 0.01))
 
 	# The tentacle grapple (E). Space used to let go of it isn't also a wall jump.
 	if grapple.tick(input.grapple and not input.bag_open, fresh_jump, delta, head.global_position, -head.global_transform.basis.z, get_multiplayer_authority(), input.wishdir):
@@ -881,8 +918,8 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 	if on_ground() and not grapple.is_pulling():
 		_wall_jumped_since_reset = false # touching ground resets the wall-jump limiter
 		_wall_seen_left = 0.0
-		var do_jump: bool = input.want_jump if auto_bhop else (input.want_jump and not _jump_held_prev)
-		if do_jump and _airborne_prev:
+		var do_jump: bool = input.want_jump if (auto_bhop and not grounded) else (input.want_jump and not _jump_held_prev)
+		if do_jump and _airborne_prev and not grounded:
 			# A bhop (jumping the tick you land): no friction, and faster.
 			_gain_speed(bhop_gain)
 		elif _dash_time_left <= 0.0: # (a dash isn't slowed by the ground)
@@ -930,7 +967,7 @@ func _simulate_movement(input: PlayerInput, delta: float) -> void:
 		_look_for_wall(delta)
 		if fresh_jump:
 			_wall_jump_buffer_left = wall_jump_buffer
-		if _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0 and spend_bars(wall_jump_cost): # (the user's: half a bar)
+		if not grounded and _wall_jump_buffer_left > 0.0 and _wall_seen_left > 0.0 and spend_bars(wall_jump_cost): # (the user's: half a bar)
 			_wall_jump(_last_wall_normal)
 			_wall_jump_buffer_left = 0.0
 			_wall_seen_left = 0.0
@@ -1643,7 +1680,7 @@ func _hit_stop(scale: float, duration: float) -> void:
 
 
 func _on_shot_fired() -> void:
-	camera.shake(1.5)
+	camera.shake(shot_shake if grounded else 1.5) # (grounded: brutal, the user's)
 	camera.kick_fov(4.0)
 
 
@@ -1928,8 +1965,10 @@ func _ground_move(wishdir: Vector3, delta: float) -> void:
 		velocity.x *= scale
 		velocity.z *= scale
 
-	# A heavy pack slows you down too (Backpack.move_scale()).
-	_accelerate(wishdir, ground_max_speed * _aim_speed_scale() * backpack.move_scale(), ground_accel, delta)
+	# A heavy pack slows you down too (Backpack.move_scale()). Sprinting
+	# (grounded): sprint_speed instead.
+	var top := sprint_speed if sprinting else ground_max_speed
+	_accelerate(wishdir, top * _aim_speed_scale() * backpack.move_scale(), ground_accel, delta)
 
 
 ## Walking slows while aiming down the sights (WeaponData.aim_move_speed_scale),
