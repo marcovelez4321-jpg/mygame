@@ -13,7 +13,8 @@ extends Node3D
 ##   Let go right as it fills (good_window): a tiny extra boost, and a sound.
 ##   PULL (the user's: back to the original, Titanfall 2 style -- the straight
 ##   launch didn't feel natural): once it bites it hauls you toward the spot,
-##   building up to pull_speed, no gravity; you can still steer, and you keep
+##   building up to pull_speed, gravity on (2026-10-27); you can still steer
+##   across it (never against it: PlayerMovement), and you keep
 ##   your speed when you let go. Press right mouse again in the last moments
 ##   before you arrive (perfect_window): let go at speed with another tiny
 ##   boost and a second sound, flying on past.
@@ -90,8 +91,9 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 ## Pull speed at full power, m/s; at the least charge, this share of it.
 @export var pull_speed: float = 20.0
 @export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
-## How hard it pulls you up to that speed, m/s per second.
-@export var pull_accel: float = 70.0
+## How hard it pulls you up to that speed, m/s per second (the user's: 90 with
+## gravity on, 2026-10-27 -- straight up, the same feel as 70 had without).
+@export var pull_accel: float = 90.0
 ## Slows the pull near the spot so you settle onto it (speed is capped at
 ## distance x this).
 @export var arrive_slowdown: float = 1.0
@@ -533,9 +535,11 @@ func pull_direction() -> Vector3:
 	return to.normalized() if to.length_squared() > 0.01 else Vector3.ZERO
 
 
-## No gravity while it pulls or holds you.
+## No gravity while it holds you still (perched, riding); pulled, you feel
+## your weight (the user's, 2026-10-27: like Pathfinder's -- the pull's
+## stronger to make up for it, pull_accel).
 func gravity_scale() -> float:
-	return 0.0 if holds_still() or _rope == Rope.PULL else 1.0
+	return 0.0 if holds_still() else 1.0
 
 
 ## Called by PlayerMovement just before move_and_slide().
@@ -677,9 +681,19 @@ func _pull(delta: float) -> void:
 	var heavy := _player.backpack.pull_scale()
 	# At a big enemy it eases in; into a wall it keeps its speed (you bounce).
 	var speed := minf(_pull_speed * heavy, distance * arrive_slowdown) if _to_enemy else _pull_speed * heavy
+	# Gravity's on while it pulls (the user's, 2026-10-27: you feel your
+	# weight). The pull's push goes first into speed along the line; what's
+	# left holds you up to it -- sinking off the line, it lifts you back -- so
+	# a long pull bows a little while it builds, then runs true.
+	var budget := pull_accel * heavy * delta
 	var along := _player.velocity.dot(direction)
 	if along < speed:
-		_player.velocity += direction * minf(pull_accel * heavy * delta, speed - along)
+		var add := minf(budget, speed - along)
+		_player.velocity += direction * add
+		budget -= add
+	var sinking := (_player.velocity - direction * _player.velocity.dot(direction)).y
+	if sinking < 0.0 and budget > 0.0:
+		_player.velocity.y += minf(budget, -sinking)
 	_pull_velocity = _player.velocity # (what it hits a wall with, next tick)
 
 
