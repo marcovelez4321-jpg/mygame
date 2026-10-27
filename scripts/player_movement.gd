@@ -48,8 +48,9 @@ signal respawned
 @export var recoil_boost: float = 2.0
 @export var shot_shake: float = 3.5
 
-## The grapple's been found this match (grounded): E throws it.
-var grapple_found := false
+## The tentacle (grounded: on E). The user's, 2026-10-27: yours from the
+## start -- it grabs enemies (PlayerGrapple GRAB) as well as pulling you.
+var grapple_found := true
 ## Sprinting right now (the viewmodel dips the gun).
 var sprinting := false
 

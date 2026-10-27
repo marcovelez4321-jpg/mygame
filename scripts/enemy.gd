@@ -408,9 +408,172 @@ func start_spawning() -> void:
 var _shove := Vector3.ZERO
 
 
+# ---- Knocked down, held, thrown (the tentacle: the user's, 2026-10-27) -------------------
+# A ragdoll, alive: knocked down by a hit, or held on a player's tentacle and
+# swung (PlayerGrapple). Its body hits what it flies into: over IMPACT_SPEED,
+# IMPACT_DAMAGE for every m/s over -- to whoever it hits (knocked down in
+# turn, or killed: the user's, by speed) and half to itself; slammed into the
+# world, the same to itself. Not held, it gets up after KNOCK_TIME (once it's
+# lying still). The host's; a client's copy shows the same (net_state).
+
+const KNOCK_TIME := 3.0
+const IMPACT_SPEED := 6.0
+const IMPACT_DAMAGE := 6.0
+const IMPACT_REACH := 1.0
+const GET_UP_STILL := 1.5
+
+## On a player's tentacle (PlayerGrapple).
+var held := false
+## Who swung or threw it (their id: the kills they make are theirs).
+var thrown_by := Health.NO_ATTACKER
+var _knocked_left := 0.0
+var _body_prev := Vector3.INF
+var _body_speed := 0.0
+var _impacted := {}
+## A client: where the host's held body is (INF: not held).
+var _held_at := Vector3.INF
+## The tentacle's coils round it while it's held (every game's own).
+var _wrap: TentacleWrap
+@onready var _ragdoll: EnemyRagdoll = get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
+
+
+func is_knocked() -> bool:
+	return _ragdoll != null and _ragdoll.knocked()
+
+
+## A tentacle can take it: alive, a body that ragdolls, not still spawning.
+func can_be_grabbed() -> bool:
+	return _ragdoll != null and _state != State.DEAD and _state != State.SPAWNING
+
+
+## The host: knocked down for `time`, thrown by `push`.
+func knock_down(push: Vector3, time: float = KNOCK_TIME) -> void:
+	if not can_be_grabbed():
+		return
+	_knocked_left = maxf(_knocked_left, time)
+	velocity = Vector3.ZERO
+	$CollisionShape3D.set_deferred("disabled", true)
+	_ragdoll.knock_down(push)
+	_body_prev = Vector3.INF
+
+
+## The host: onto `by`'s tentacle.
+func grab(by: int) -> void:
+	thrown_by = by
+	held = true
+	knock_down(Vector3.ZERO, INF)
+	_set_wrapped(true)
+
+
+## The host: the tentacle pulls it toward `target`.
+func hold_toward(target: Vector3) -> void:
+	if held and is_knocked():
+		_ragdoll.drive(target)
+
+
+## The host: let go -- it flies on with the swing it has, and gets up later.
+func let_go() -> void:
+	held = false
+	_knocked_left = KNOCK_TIME
+	_set_wrapped(false)
+
+
+## The tentacle's coils on (or drawing back off) it.
+func _set_wrapped(on: bool) -> void:
+	if on and _wrap == null:
+		_wrap = TentacleWrap.wrap(self)
+	elif not on and _wrap:
+		_wrap.unwrap()
+		_wrap = null
+
+
+## Its chest, while it's a ragdoll (else its middle).
+func body_position() -> Vector3:
+	return _ragdoll.grip_position() if is_knocked() else global_position + Vector3.UP * 0.9
+
+
+func _knocked_tick(delta: float) -> void:
+	var at := _ragdoll.body_position()
+	if _body_prev.is_finite():
+		var speed := at.distance_to(_body_prev) / maxf(delta, 0.0001)
+		var velocity_now := (at - _body_prev) / maxf(delta, 0.0001)
+		# Slammed into something: its speed gone at once.
+		if _body_speed - speed > IMPACT_SPEED:
+			health.take_damage((_body_speed - speed - IMPACT_SPEED) * IMPACT_DAMAGE, thrown_by)
+		_body_speed = speed
+		if speed > IMPACT_SPEED:
+			_hit_others(at, velocity_now)
+	_body_prev = at
+	if held or _state == State.DEAD:
+		return
+	_knocked_left -= delta
+	if _knocked_left <= 0.0 and _body_speed < GET_UP_STILL:
+		_get_up()
+
+
+## Flying (swung, thrown, knocked) into another: both hurt by the speed; the
+## other knocked down, or killed.
+func _hit_others(at: Vector3, flying: Vector3) -> void:
+	var now := Time.get_ticks_msec()
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var other := node as Enemy
+		if other == null or other == self or other.get_state() == State.DEAD:
+			continue
+		if other.body_position().distance_to(at) > IMPACT_REACH:
+			continue
+		if now - int(_impacted.get(other.get_instance_id(), 0)) < 500:
+			continue
+		_impacted[other.get_instance_id()] = now
+		var damage := (flying.length() - IMPACT_SPEED) * IMPACT_DAMAGE
+		other.health.take_damage(damage, thrown_by, flying.normalized(), at)
+		if not other.health.is_dead:
+			other.thrown_by = thrown_by
+			other.knock_down(flying * 0.7)
+		health.take_damage(damage * 0.5, thrown_by)
+
+
+## Up again: standing where its body lay, back to its business.
+func _get_up() -> void:
+	var stand := _ragdoll.stand_up()
+	global_transform = Transform3D(stand.basis, stand.origin + Vector3.DOWN * 0.9)
+	velocity = Vector3.ZERO
+	$CollisionShape3D.set_deferred("disabled", false)
+	thrown_by = Health.NO_ATTACKER
+	_body_prev = Vector3.INF
+	_body_speed = 0.0
+	if _animator:
+		_animator._on_state_changed(_state)
+
+
+## Co-op: a client's copy is down, held and where, as the host's is.
+func net_state() -> Array:
+	return [is_knocked(), held, _ragdoll.grip_position() if held and is_knocked() else Vector3.INF]
+
+
+func net_apply(state: Variant) -> void:
+	if not state is Array or (state as Array).size() < 3 or _ragdoll == null or _state == State.DEAD:
+		return
+	var down: bool = state[0]
+	if down and not is_knocked():
+		_ragdoll.knock_down(Vector3.ZERO)
+	elif not down and is_knocked():
+		_ragdoll.stand_up()
+		if _animator:
+			_animator._on_state_changed(_state)
+	_held_at = state[2] if bool(state[1]) else Vector3.INF
+	_set_wrapped(bool(state[1]) and is_knocked())
+
+
 func _physics_process(delta: float) -> void:
+	# Co-op, a client: a held body follows where the host's is.
+	if not multiplayer.is_server() and _state != State.DEAD and is_knocked() and _held_at.is_finite():
+		_ragdoll.drive(_held_at)
 	# Only the host thinks. Offline, multiplayer.is_server() is true.
 	if not multiplayer.is_server() or _state == State.DEAD:
+		return
+	# Knocked down (or held on the tentacle): a ragdoll till it gets up.
+	if is_knocked():
+		_knocked_tick(delta)
 		return
 
 	if _state == State.SPAWNING:
@@ -1032,6 +1195,8 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 	mutation_health_left = mutation_health
 	_state = State.DEAD
 	velocity = Vector3.ZERO
+	held = false
+	_set_wrapped(false)
 	# Turn off collision so shots and players pass through the body.
 	$CollisionShape3D.set_deferred("disabled", true)
 	# A mutating corpse isn't removed on the usual timer -- EnemyRagdoll's

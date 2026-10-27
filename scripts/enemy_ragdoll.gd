@@ -766,6 +766,104 @@ func _apply_hit_impulse_deferred() -> void:
 			bone.apply_central_impulse(impulse if bone == nearest else impulse * body_share)
 
 
+# ---- Knocked down, held (the tentacle: the user's, 2026-10-27) -----------------------
+
+## The torso, driven together while it's held (one push for all of them, so
+## the joints between them have nothing to fight: the thrash lesson) -- the
+## arms and legs left to hang and swing.
+const TORSO := ["Hips", "Spine", "Spine1", "Spine2", "Chest", "UpperChest", "Neck", "Head"]
+## Held: how hard it's pulled to the hold point (per second of the gap), and
+## the fastest it's swung.
+const HELD_SNAP := 14.0
+const HELD_MAX_SPEED := 30.0
+
+var _knocked := false
+var _torso: Array[PhysicalBone3D] = []
+var _grip_bone: PhysicalBone3D
+
+
+## Down, alive (Enemy.knock_down): a ragdoll knocked about by the world.
+func knocked() -> bool:
+	return _knocked
+
+
+## Knocked down: the whole body a ragdoll, colliding with the world, thrown by
+## `push` (m/s, every bone alike); alive -- it gets up again (stand_up()).
+func knock_down(push: Vector3) -> void:
+	if _knocked:
+		_push_all.call_deferred(push)
+		return
+	if _bones.is_empty() and not _build_bones():
+		return
+	_knocked = true
+	if _animation_player:
+		_animation_player.stop(true)
+	for bone in _bones:
+		bone.collision_layer = RAGDOLL_LAYER
+		bone.collision_mask = WORLD_MASK
+	_simulator.physical_bones_start_simulation()
+	for bone in _bones:
+		bone.can_sleep = false
+		bone.gravity_scale = bone_gravity_scale
+	if _torso.is_empty():
+		for bone in _bones:
+			if bone.bone_name in TORSO:
+				_torso.append(bone)
+		_grip_bone = bone_named("Spine2")
+		if _grip_bone == null:
+			_grip_bone = bone_named("Chest") if bone_named("Chest") else bone_named("Hips")
+	_push_all.call_deferred(push)
+
+
+func _push_all(push: Vector3) -> void:
+	if push == Vector3.ZERO:
+		return
+	for bone in _bones:
+		if _in_space(bone):
+			bone.linear_velocity = push
+
+
+## Held on the tentacle: the torso pulled toward `target` together; the limbs
+## dangle and swing after it.
+func drive(target: Vector3) -> void:
+	if not _knocked or _grip_bone == null or not _in_space(_grip_bone):
+		return
+	var want := ((target - _grip_bone.global_position) * HELD_SNAP).limit_length(HELD_MAX_SPEED)
+	for bone in _torso:
+		if _in_space(bone):
+			bone.linear_velocity = want
+			bone.angular_velocity *= 0.8
+
+
+## Where it's held from (its chest), in the world.
+func grip_position() -> Vector3:
+	return _grip_bone.global_position if _grip_bone and is_instance_valid(_grip_bone) else body_position()
+
+
+## Back on its feet: the ragdoll stops, its pose eased out into the animation
+## (PoseBlendOut). Returns where it stands: under its hips, facing the way its
+## head lay.
+func stand_up() -> Transform3D:
+	var skeleton := _simulator.get_parent() as Skeleton3D if _simulator else null
+	var hips := body_position()
+	var head := bone_named("Head")
+	var facing := Vector3(head.global_position.x - hips.x, 0.0, head.global_position.z - hips.z) if head else Vector3.ZERO
+	if facing.length_squared() < 0.01:
+		facing = -_enemy.global_basis.z
+	var blend := PoseBlendOut.new()
+	if skeleton:
+		for i in skeleton.get_bone_count():
+			blend.world_poses.append(skeleton.global_transform * skeleton.get_bone_global_pose(i))
+	_simulator.physical_bones_stop_simulation()
+	for bone in _bones:
+		bone.collision_layer = 0
+		bone.collision_mask = 0
+	_knocked = false
+	if skeleton:
+		skeleton.add_child(blend)
+	return Transform3D(Basis.looking_at(facing.normalized(), Vector3.UP), hips)
+
+
 ## A bone the physics can push: in the tree AND in a physics space. A body
 ## switched off (process disabled -- a tendril's grab, a sleeping group, a
 ## burst) is taken out of the space, and Jolt errors on any push to it.

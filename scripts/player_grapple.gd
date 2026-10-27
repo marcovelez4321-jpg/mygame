@@ -64,7 +64,10 @@ const BIG_GROUP := "grapple_big"
 ## to MAX_CARRY kg hanging off the tentacle in front of you (left click
 ## throws it, right click lets go). WHIP: the Tentacle whip mutation's lash.
 ## TOUCH: just hit the wall the pull brought you to -- a moment to kick off it.
-enum Rope { NONE, LASH, PULL, PERCH, RIDE, MISS, FETCH, CARRY, WHIP, TOUCH }
+## GRAB (the user's, 2026-10-27: the tentacle's main thing): an enemy wrapped
+## and held, a live ragdoll swung on the tentacle (Enemy.grab()); E again
+## lets go, flying on with the swing it has.
+enum Rope { NONE, LASH, PULL, PERCH, RIDE, MISS, FETCH, CARRY, WHIP, TOUCH, GRAB }
 ## Where the tendrils look: fanned ahead the way you're flying, or up and on.
 enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 
@@ -93,7 +96,7 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 @export_range(0.0, 1.0, 0.05) var min_speed_scale: float = 0.6
 ## How hard it pulls you up to that speed, m/s per second (the user's: 90 with
 ## gravity on, 2026-10-27 -- straight up, the same feel as 70 had without).
-@export var pull_accel: float = 90.0
+@export var pull_accel: float = 85.0
 ## Slows the pull near the spot so you settle onto it (speed is capped at
 ## distance x this).
 @export var arrive_slowdown: float = 1.0
@@ -161,6 +164,10 @@ enum TendrilSpread { FAN_AHEAD, UP_AND_ONWARD }
 ## A prop (not an item) this heavy or lighter hangs off the tentacle; heavier
 ## is an anchor (the user's).
 const MAX_CARRY := 15.0
+## A grabbed enemy: held this far in front of your eyes; a grab costs this
+## many stamina bars in all (the user's: one; the throw's own share first).
+const GRAB_DISTANCE := 2.6
+const GRAB_COST := 1.0
 ## How far in front of your eyes it hangs (the old F prop mover's), how fast
 ## it can be dragged there, and the throw (the user's: 25 m/s).
 @export var carry_distance: float = 2.0
@@ -253,6 +260,9 @@ var _seed_arm := 0.0
 ## you're pulled).
 var _for_fetch := false
 var _for_carry := false
+var _for_grab := false
+## The enemy on the tentacle (GRAB).
+var _grabbed: Enemy
 ## Your speed as you perched (given back when you let go: momentum kept).
 var _perch_kept := Vector3.ZERO
 ## The whip: seconds into the lash, which way it faces, and what it's hit.
@@ -361,6 +371,13 @@ func tick(held: bool, jump_pressed: bool, delta: float, origin: Vector3, aim: Ve
 		_start_whip(aim)
 		return false
 
+	# An enemy on the tentacle: swung with your aim; E again lets go.
+	if _rope == Rope.GRAB:
+		if pressed or not is_instance_valid(_grabbed) or _grabbed.get_state() == Enemy.State.DEAD:
+			release()
+		else:
+			_grabbed.hold_toward(origin + aim * GRAB_DISTANCE)
+		return false
 	# A prop on the tentacle: right click again lets it drop.
 	if _rope == Rope.CARRY:
 		if pressed:
@@ -491,7 +508,12 @@ func is_pulling() -> bool:
 ## Attached to anything: you (pulling, perched, riding), an item flying in,
 ## or a prop on it.
 func is_attached() -> bool:
-	return is_pulling() or _rope == Rope.FETCH or _rope == Rope.CARRY
+	return is_pulling() or _rope == Rope.FETCH or _rope == Rope.CARRY or _rope == Rope.GRAB
+
+
+## An enemy on the tentacle (GRAB).
+func is_grabbing() -> bool:
+	return _rope == Rope.GRAB
 
 
 ## A prop hanging off it (left click throws: carry_fire()).
@@ -561,6 +583,9 @@ func release() -> void:
 		released.emit()
 	if _rope == Rope.FETCH:
 		_player.hand.cancel_fetch() # (out of stamina mid-flight: it drops)
+	if _rope == Rope.GRAB and is_instance_valid(_grabbed):
+		_grabbed.let_go() # (flying on with its swing: a throw)
+	_grabbed = null
 	if _rope == Rope.CARRY and is_instance_valid(_anchor) and _anchor is RigidBody3D:
 		var prop := _anchor as RigidBody3D
 		prop.linear_velocity = prop.linear_velocity.limit_length(6.0) # let go: a toss, not a throw
@@ -590,7 +615,11 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 	if not hit.is_empty():
 		target = hit.collider as Node3D
 	var big := _big_enemy(target)
-	if target == null or (big == null and _is_small_enemy(target)):
+	# An enemy that ragdolls: wrapped and grabbed (the user's).
+	var grab := _enemy_of(target) if big == null else null
+	if grab and not grab.can_be_grabbed():
+		grab = null
+	if target == null or (big == null and grab == null and _is_small_enemy(target)):
 		_rope = Rope.MISS
 		_lash_end = origin + aim * reach if target == null else (hit.position as Vector3)
 		_lash_time = 0.0
@@ -603,8 +632,10 @@ func _fire(origin: Vector3, aim: Vector3) -> void:
 	_to_enemy = big != null
 	# An item: into your right hand. A light prop: onto the tentacle. Anything
 	# heavier (or fixed): you're pulled to it, as ever (the user's).
-	_for_fetch = big == null and PlayerHand.is_item(target)
-	_for_carry = big == null and not _for_fetch and target is RigidBody3D \
+	_for_grab = grab != null
+	_grabbed = grab
+	_for_fetch = big == null and not _for_grab and PlayerHand.is_item(target)
+	_for_carry = big == null and not _for_grab and not _for_fetch and target is RigidBody3D \
 			and not (target as RigidBody3D).freeze and (target as RigidBody3D).mass <= MAX_CARRY
 	_lash_end = hit.position
 	_lash_time = 0.0
@@ -625,6 +656,18 @@ func _land() -> void:
 	if _for_carry:
 		_rope = Rope.CARRY
 		attached.emit(false)
+		return
+	if _for_grab:
+		# The rest of a grab's cost (a bar in all), else it can't hold on.
+		if not is_instance_valid(_grabbed) or not _grabbed.can_be_grabbed() \
+				or not (infinite_charges or _player.spend_bars(maxf(GRAB_COST - fire_cost, 0.0))):
+			_rope = Rope.NONE
+			_grabbed = null
+			_anchor = null
+			return
+		_rope = Rope.GRAB
+		_grabbed.grab(_attacker_id)
+		attached.emit(true)
 		return
 	var power_t := inverse_lerp(min_charge_share, 1.0, _power) if min_charge_share < 1.0 else 1.0
 	_pull_speed = pull_speed * lerpf(min_speed_scale, 1.0, clampf(power_t, 0.0, 1.0))
@@ -1052,6 +1095,15 @@ func _big_enemy(node: Node) -> Node:
 	return null
 
 
+## The Enemy `node` is part of (it or a parent), or null.
+func _enemy_of(node: Node) -> Enemy:
+	while node != null:
+		if node is Enemy:
+			return node as Enemy
+		node = node.get_parent()
+	return null
+
+
 func _is_small_enemy(node: Node) -> bool:
 	while node != null:
 		if node.is_in_group("enemies"):
@@ -1195,6 +1247,9 @@ func rope_tip() -> Vector3:
 		Rope.PULL, Rope.PERCH, Rope.RIDE, Rope.CARRY, Rope.TOUCH:
 			if is_instance_valid(_anchor):
 				return _anchor_point()
+		Rope.GRAB:
+			if is_instance_valid(_grabbed):
+				return _grabbed.body_position()
 		Rope.FETCH:
 			# The item as it flies in (the hand moves it, not its own body).
 			if is_instance_valid(_anchor):

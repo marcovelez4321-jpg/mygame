@@ -89,3 +89,18 @@ The Terrain3D open world, the sky-high climbing traversal, the 1v1v1v1 race.
 
 ## Still to decide
 Everything in each step, asked before it's built (Rule 10).
+
+## The tentacle (the user's, 2026-10-27)
+- **Yours from the start, on E:** hold E with the grapple's own indicator, animation and lunge out.
+- **Grabbing an enemy:**
+  - **The wrap:** procedural tendrils burst from the grabbed spot and coil round its body like Venom (TentacleWrap).
+  - **The hold:** it's held as a live ragdoll 2.6 m in front of you. Its torso follows your aim; its arms and legs dangle.
+  - **The cost:** one stamina bar. Bigger attacks will cost more (later).
+  - **Letting go:** E again lets go, and it flies on with your swing: a throw.
+- **Impacts (by speed):** a swung, thrown or knocked body flying into another enemy hurts both.
+  - Struck: 6 damage for every m/s over 6 m/s, and knocked down too, or killed.
+  - The flying body: half that.
+  - Slamming into the world hurts it the same.
+- **Knockdown:** a knocked-down enemy is a full ragdoll. It gets back up after 3 s once it's lying still, easing out of its pose into its animation (no get-up clip yet).
+- **Picks of mine to tune:** knockdown 3 s, impacts from 6 m/s at 6 a m/s, the hold at 2.6 m, a 30 m/s top swing speed.
+- **To come:** absorbing a held enemy, tearing it apart with the coils, more attacks and their stamina costs, a get-up animation, and Euphoria-like active ragdolls later.
