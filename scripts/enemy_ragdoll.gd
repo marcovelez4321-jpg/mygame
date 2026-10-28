@@ -626,6 +626,14 @@ func body_position() -> Vector3:
 	return _bones[0].global_position if not _bones.is_empty() else _enemy.global_position
 
 
+## Its head (where it lies, the way it lies: RedCreep's cocoons).
+func head_position() -> Vector3:
+	for bone in _bones:
+		if "Head" in bone.name:
+			return bone.global_position
+	return body_position()
+
+
 ## Roaches lifting the body or rats hauling it by its limbs (RoachCarry,
 ## RatSwarm): `pushes` maps each bone one of them has hold of to the impulse it
 ## pulls with this tick (its force times the tick), and the whole body weighs

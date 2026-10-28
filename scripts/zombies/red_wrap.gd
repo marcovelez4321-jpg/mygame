@@ -11,8 +11,12 @@ extends Node3D
 ## Held: a player by held_point (as a Harvestman holds you: look about, shoot
 ## the ropes, but no walking), frozen: no shooting either (WeaponController);
 ## an enemy stopped (its thinking off, pinned), frozen: its animation too.
+## A body lying about (`corpse`; the user's, 2026-10-27): no holding, no
+## draining -- the cocoon's laid along it where it lies (its own up along the
+## body), and BURST_AFTER after it's covered a bush bursts out of it (RedCreep.
+## cocoon_burst); the cocoon stays.
 ## Rule 1 (co-op): the host holds and drains; every game draws the cocoon
-## (RedCreep tells them where, how big, and when it started).
+## (RedCreep tells them where, which way, how big, and when it started).
 
 const COVER_TIME := 6.0 # (the user's)
 const DRAIN := 5.0 # health a second (the user's)
@@ -23,6 +27,8 @@ const TURNS := 2.6
 const COIL_RADIUS := 0.05
 ## The vines over its head show once it's covered to here (of its height).
 const OVER_HEAD := 1.0
+## A body's cocoon: its bush bursts out this long after it's covered.
+const BURST_AFTER := 20.0
 
 var wrap_id := 0
 var target: Node3D
@@ -32,6 +38,9 @@ var height := 1.8
 var radius := 0.45
 var started_msec := 0
 var host := true
+## A body's cocoon (not something alive held).
+var corpse := false
+var _burst := false
 
 var _director: RedCreep
 var _hits := 0
@@ -45,7 +54,7 @@ var _animators: Array[Node] = []
 var _seed := 0
 
 
-func setup(director: RedCreep, id_: int, pin: Vector3, tall: float, wide: float, start_msec: int, is_host: bool) -> void:
+func setup(director: RedCreep, id_: int, pin: Vector3, tall: float, wide: float, start_msec: int, is_host: bool, turn: Basis = Basis.IDENTITY) -> void:
 	_director = director
 	wrap_id = id_
 	height = tall
@@ -54,7 +63,7 @@ func setup(director: RedCreep, id_: int, pin: Vector3, tall: float, wide: float,
 	host = is_host
 	_seed = id_ * 31 + 7
 	top_level = true
-	global_position = pin
+	global_transform = Transform3D(turn, pin)
 	_material = ShaderMaterial.new()
 	_material.shader = load("res://shaders/red_creep.gdshader")
 	_mesh = MeshInstance3D.new()
@@ -83,6 +92,19 @@ func hold(what: Node3D, from_patch: RedCreepPatch, from_rope: int) -> void:
 		body.freeze = true
 
 
+## Host: the body it's laid on (from the tendril that touched it).
+func lay_on(body: Node3D, from_patch: RedCreepPatch, from_rope: int) -> void:
+	corpse = true
+	target = body
+	patch = from_patch
+	rope = from_rope
+
+
+## Its middle (halfway along it).
+func middle() -> Vector3:
+	return global_position + global_basis.y * height * 0.5
+
+
 ## How far it's covered (0..1).
 func cover() -> float:
 	return clampf(float(Time.get_ticks_msec() - started_msec) / 1000.0 / COVER_TIME, 0.0, 1.0)
@@ -90,6 +112,12 @@ func cover() -> float:
 
 func _physics_process(delta: float) -> void:
 	if not host:
+		return
+	if corpse:
+		# (The body may fade away inside it: the cocoon's its own.)
+		if not _burst and float(Time.get_ticks_msec() - started_msec) / 1000.0 >= COVER_TIME + BURST_AFTER:
+			_burst = true
+			_director.cocoon_burst(self)
 		return
 	if not is_instance_valid(target) or not Factions.is_alive_target(target):
 		_director.end_wrap(self, true)
@@ -136,7 +164,8 @@ func hit() -> bool:
 
 ## Host: let go (cut free, burned, or it's dead).
 func release() -> void:
-	if not is_instance_valid(target):
+	if not is_instance_valid(target) or corpse:
+		target = null
 		return
 	if target is PlayerMovement:
 		var player := target as PlayerMovement
@@ -160,7 +189,7 @@ func release() -> void:
 ## Whether a shot from `a` to `b` passes through the cocoon.
 func crossed_by(a: Vector3, b: Vector3) -> bool:
 	var foot := global_position
-	var head := global_position + Vector3.UP * height * maxf(cover(), 0.3)
+	var head := global_position + global_basis.y * height * maxf(cover(), 0.3)
 	var near := Geometry3D.get_closest_points_between_segments(a, b, foot, head)
 	return near[0].distance_to(near[1]) < radius + 0.15
 

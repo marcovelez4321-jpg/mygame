@@ -16,11 +16,12 @@ extends Node
 ##   user's, 2026-10-27).
 ##   THE CONSUMED: now and then a pack (CONSUMED_PACK) flying in out of sight
 ##   wherever someone's under open sky.
-##   BELL-WRAITHS: WRAITHS hung high in the great hall, every game.
 ## Not here: the Burrow Worm (it needs the open world's ground), the Deepmaw
-## crawlers (shelved), and the Ossuary (the user's, 2026-10-27: out for now --
+## crawlers (shelved), the Ossuary (the user's, 2026-10-27: out for now --
 ## its legs walked through the towers, and it cost too much; Ossuary.pass_by
-## is kept for when it's simplified and rideable).
+## is kept for when it's simplified and rideable), and for now (the user's,
+## 2026-10-27) the Bell-Wraiths and the Harvestman (till the game's
+## rebalanced: its band's weight is 0, its scenes kept below).
 ## Every band turns up somewhere a player can walk to from where they are
 ## (a whole path on the navmesh) and not inside a wall's solid mass (the
 ## navmesh grows walkable floor inside the towers' blocks: they came through
@@ -41,11 +42,10 @@ const TALL_ROOM := 14.0
 const CLUMPS := 8
 const CONSUMED_EVERY := Vector2(45.0, 90.0)
 const CONSUMED_PACK := Vector2i(2, 3)
-const WRAITHS := [Vector3(-25.0, 80.0, -25.0), Vector3(25.0, 80.0, -25.0), Vector3(-25.0, 80.0, 25.0), Vector3(25.0, 80.0, 25.0)]
 
 enum Band { TWEAKERS, RATS, ROACHES, SPIDERS, HARVESTMAN, RAT_BENDER, SWARM_KING }
 const WEIGHTS := {Band.TWEAKERS: 3.0, Band.RATS: 2.0, Band.ROACHES: 2.0, Band.SPIDERS: 2.0,
-		Band.HARVESTMAN: 0.7, Band.RAT_BENDER: 0.5, Band.SWARM_KING: 0.25}
+		Band.HARVESTMAN: 0.0, Band.RAT_BENDER: 0.5, Band.SWARM_KING: 0.25} # (no Harvestman for now: the user's)
 const TWEAKERS := ["res://scenes/enemy/enemy.tscn", "res://scenes/enemy/enemy_gunner.tscn",
 		"res://scenes/enemy/enemy_rusher.tscn", "res://scenes/enemy/mutant_enemy.tscn"]
 const HARVESTMEN := ["res://scenes/enemy/harvestman/harvestman_leech.tscn", "res://scenes/enemy/harvestman/harvestman_barnacle.tscn",
@@ -72,14 +72,8 @@ func _host() -> bool:
 	return not Network.is_online() or multiplayer.is_server()
 
 
-## The wraiths, the Consumed's nests up the Stack: every game.
+## The Consumed's nests up the Stack: every game.
 func _every_game() -> void:
-	var scene := get_tree().current_scene
-	for i in WRAITHS.size():
-		var wraith := BellWraith.new()
-		wraith.wraith_id = 3000 + i
-		scene.add_child(wraith)
-		wraith.global_position = WRAITHS[i]
 	ConsumedDirector.ensure(get_tree())
 
 

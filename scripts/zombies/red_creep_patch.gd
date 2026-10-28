@@ -151,7 +151,7 @@ func _process(delta: float) -> void:
 ## The host: every rope's tip on along its way, and its next points worked
 ## out as the tip nears the end of them.
 func _grow(delta: float) -> void:
-	var life := director.life()
+	var life := director.targets() # (the living and the dead)
 	for index in ropes.size():
 		var rope := ropes[index]
 		match rope.state:
@@ -260,7 +260,7 @@ func _advance(index: int, life: Array[Node3D]) -> bool:
 	else:
 		var close := _nearest_life(p, life, SENSE)
 		if close:
-			want = close.global_position
+			want = RedCreep.aim_of(close)
 			pull = 1.2
 		elif lure.is_finite():
 			want = lure
@@ -338,16 +338,17 @@ func _crawl(p: Vector3, n: Vector3, h: Vector3, rope: Dictionary) -> Array:
 
 # ---- Reaching for life (the host's) ----------------------------------------------------------
 
-## Life within REACH of a rope (not already reached for, not already
-## wrapped): a tendril rises off the nearest point toward it.
+## Life (or a body lying about) within REACH of a rope (not already reached
+## for, not already wrapped or cocooned): a tendril rises off the nearest
+## point toward it.
 func reach_for(life: Array[Node3D]) -> void:
 	for gone: Variant in _reaching.keys():
 		if not is_instance_valid(gone):
 			_reaching.erase(gone)
 	for target in life:
-		if not is_instance_valid(target) or _reaching.has(target) or director.is_wrapped(target):
+		if not is_instance_valid(target) or _reaching.has(target) or target.has_meta(&"red_cocooned") or director.is_wrapped(target):
 			continue
-		var to := target.global_position
+		var to := RedCreep.aim_of(target)
 		if Vector2(to.x - global_position.x, to.z - global_position.z).length() > RADIUS + REACH + 2.0:
 			continue
 		var best_d := REACH
@@ -378,12 +379,16 @@ func reach_for(life: Array[Node3D]) -> void:
 
 ## A tendril reaching on through the air for its target, its tip sliding
 ## smoothly out (`shown`), its way worked out ahead; touching it, the wrap
-## (RedCreep.start_wrap); lost (gone, dead, moved off), it withers.
+## (RedCreep.start_wrap) -- a body, its cocoon (RedCreep.start_cocoon); lost
+## (gone, moved off, cocooned by another), it withers. (Something that dies
+## while it reaches is reached for still: a body now.)
 func _reach_on(index: int, delta: float) -> void:
 	var rope := ropes[index]
 	var target := rope.target as Node3D
 	var root: Vector3 = rope.pts[0]
-	if not is_instance_valid(target) or not Factions.is_alive_target(target) or target.global_position.distance_to(root) > REACH_LOST:
+	if not is_instance_valid(target) or target.has_meta(&"red_cocooned") \
+			or (not RedCreep.is_corpse(target) and not Factions.is_alive_target(target)) \
+			or RedCreep.aim_of(target).distance_to(root) > REACH_LOST:
 		_drop_tendril(index)
 		return
 	var chest := _chest(target)
@@ -405,7 +410,10 @@ func _reach_on(index: int, delta: float) -> void:
 	if tip_of(rope).distance_to(chest) < TOUCH:
 		rope.state = State.WRAPPING
 		rope.shown = _length(rope)
-		director.start_wrap(target, self, index)
+		if RedCreep.is_corpse(target):
+			director.start_cocoon(target, self, index)
+		else:
+			director.start_wrap(target, self, index)
 
 
 func _drop_tendril(index: int) -> void:
@@ -421,16 +429,16 @@ func wrap_ended(index: int) -> void:
 
 
 func _chest(target: Node3D) -> Vector3:
-	return target.global_position + Vector3.UP * 1.1
+	return RedCreep.aim_of(target)
 
 
 func _nearest_life(at: Vector3, life: Array[Node3D], reach: float) -> Node3D:
 	var best: Node3D = null
 	var best_d := reach
 	for target in life:
-		if not is_instance_valid(target):
+		if not is_instance_valid(target) or target.has_meta(&"red_cocooned"):
 			continue
-		var d := target.global_position.distance_to(at)
+		var d := RedCreep.aim_of(target).distance_to(at)
 		if d < best_d:
 			best_d = d
 			best = target

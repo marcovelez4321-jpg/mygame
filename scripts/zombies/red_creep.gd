@@ -8,8 +8,10 @@ extends Node3D
 ##   SEEDS: anything alive that touches a bush or its ropes picks up its seeds
 ##   (red barbs on it); they fall off SEED_TIME later wherever it's got to,
 ##   and a new small bush grows there.
-##   NURSERIES: anything it drains to death, and any body its ropes reach,
-##   is grown over into a new bush.
+##   NURSERIES: anything it drains to death is grown over into a new bush.
+##   BODIES: it goes for the dead lying about too (ragdolls, corpses: the
+##   user's, 2026-10-27) -- drawn to them, reaching for them, cocooning them
+##   where they lie; a bush bursts out of the cocoon BURST_AFTER later.
 ##   NOISE AND BLOOD: gunshots, hits and explosions (WeaponController,
 ##   Explosion) draw its growing tips that way for STIMULUS_TIME, faster.
 ##   LINKS: a patch sends a runner to any other within LINK_RANGE; joined,
@@ -34,10 +36,15 @@ const LINK_ROPES := 4
 ## seed's (a small one, the user's) 1-2 m.
 const BUSH_SIZE := Vector2(1.0, 4.0)
 const SEEDLING_SIZE := Vector2(1.0, 2.0)
+## A bush grown out of a body (a cocoon, or something drained to death) can
+## be this close to another (it's the body that matters, not the spacing).
+const NURSERY_GAP := 1.5
+## A body's cocoon: how long it lies, and how thick (RedWrap).
+const CORPSE_LENGTH := 1.8
+const CORPSE_RADIUS := 0.35
 const TICK := 0.25
 const SEND_EVERY := 0.5
 const SEEDS_EVERY := 0.5
-const BODIES_EVERY := 1.0
 const LINKS_EVERY := 2.0
 const TOUCH := 0.6
 ## Rope pieces remade a frame, across every patch (RedCreepPatch.rebuild).
@@ -64,9 +71,11 @@ var _phases := {} # patch id -> pulse phase
 var _tick_left := TICK
 var _send_left := SEND_EVERY
 var _seeds_left := SEEDS_EVERY
-var _bodies_left := BODIES_EVERY
 var _links_left := LINKS_EVERY
 var _life: Array[Node3D] = []
+## The living and the dead (not yet cocooned): what it grows toward and
+## reaches for.
+var _targets: Array[Node3D] = []
 var _mesh_queue: Array = [] # [patch, rope]
 var _far_tick := 0
 
@@ -107,12 +116,12 @@ func _plant_areas() -> void:
 
 
 ## Host: a new patch at `at` (on a surface facing `normal`). Its id, or -1:
-## too many, or too near another.
-func start_patch(at: Vector3, normal: Vector3, size: float) -> int:
+## too many, or within `gap` of another.
+func start_patch(at: Vector3, normal: Vector3, size: float, gap: float = PATCH_GAP) -> int:
 	if _patches.size() >= MAX_PATCHES:
 		return -1
 	for patch: RedCreepPatch in _patches.values():
-		if patch.global_position.distance_to(at) < PATCH_GAP:
+		if patch.global_position.distance_to(at) < gap:
 			return -1
 	var id := _next_id
 	_next_id += 1
@@ -147,16 +156,12 @@ func _physics_process(delta: float) -> void:
 		for patch: RedCreepPatch in _patches.values():
 			patch.near = _anyone_near(patch.global_position, RedCreepPatch.NEAR) or patch.drawn()
 			if patch.near or _far_tick == 0:
-				patch.reach_for(_life)
+				patch.reach_for(_targets)
 		_runners_on()
 	_seeds_left -= delta
 	if _seeds_left <= 0.0:
 		_seeds_left = SEEDS_EVERY
 		_seeds()
-	_bodies_left -= delta
-	if _bodies_left <= 0.0:
-		_bodies_left = BODIES_EVERY
-		_bodies()
 	_links_left -= delta
 	if _links_left <= 0.0:
 		_links_left = LINKS_EVERY
@@ -189,6 +194,24 @@ func life() -> Array[Node3D]:
 	return _life
 
 
+## Everything alive, and the dead not yet cocooned (the last tick's list).
+func targets() -> Array[Node3D]:
+	return _targets
+
+
+## A dead body lying about (a corpse, a ragdoll).
+static func is_corpse(target: Node3D) -> bool:
+	return target.is_in_group(RatSwarm.CORPSE_GROUP)
+
+
+## Where to reach for: the living's chest; a body's hips, where it lies.
+static func aim_of(target: Node3D) -> Vector3:
+	if not is_corpse(target):
+		return target.global_position + Vector3.UP * 1.1
+	var ragdoll := target.get(&"_ragdoll") as EnemyRagdoll
+	return ragdoll.body_position() if ragdoll else target.global_position + Vector3.UP * 0.3
+
+
 func _anyone_near(at: Vector3, reach: float) -> bool:
 	for node in get_tree().get_nodes_in_group("player"):
 		var player := node as Node3D
@@ -197,7 +220,8 @@ func _anyone_near(at: Vector3, reach: float) -> bool:
 	return false
 
 
-## Everything alive it could reach: the players and the creatures.
+## Everything alive it could reach (the players and the creatures), and the
+## bodies lying about not yet cocooned (nor being dragged off).
 func _gather_life() -> void:
 	_life.clear()
 	for group: String in ["player", "enemies"]:
@@ -205,6 +229,11 @@ func _gather_life() -> void:
 			var body := node as Node3D
 			if body and Factions.is_alive_target(body):
 				_life.append(body)
+	_targets = _life.duplicate()
+	for node in get_tree().get_nodes_in_group(RatSwarm.CORPSE_GROUP):
+		var body := node as Node3D
+		if body and not body.is_queued_for_deletion() and not body.has_meta(&"red_cocooned") and not body.has_meta(&"dragged"):
+			_targets.append(body)
 
 
 # ---- Noise and blood --------------------------------------------------------------------------
@@ -315,8 +344,9 @@ func _seeds() -> void:
 		_grow_from(body.global_position, SEEDLING_SIZE)
 
 
-## A new bush on the ground under `at` (if there's room for one).
-func _grow_from(at: Vector3, size: Vector2) -> void:
+## A new bush on the ground under `at` (if there's room for one: `gap` from
+## any other).
+func _grow_from(at: Vector3, size: Vector2, gap: float = PATCH_GAP) -> void:
 	var space := get_world_3d().direct_space_state
 	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3.UP, at + Vector3.DOWN * 4.0, 1))
 	if hit.is_empty() or (hit.normal as Vector3).y < 0.6:
@@ -324,7 +354,7 @@ func _grow_from(at: Vector3, size: Vector2) -> void:
 	var spot: Vector3 = hit.position
 	if keep_out.any(func(box: AABB) -> bool: return box.has_point(spot + Vector3.UP)):
 		return
-	start_patch(spot, hit.normal, randf_range(size.x, size.y))
+	start_patch(spot, hit.normal, randf_range(size.x, size.y), gap)
 
 
 ## Its seeds stuck on whatever's carrying them: a few red barbs (the host's
@@ -351,32 +381,6 @@ func _barbs_on(target: Node3D) -> void:
 		barb.rotation = Vector3(randf() * TAU, randf() * TAU, 0.0)
 		barbs.add_child(barb)
 	target.add_child(barbs)
-
-
-# ---- Nurseries --------------------------------------------------------------------------------
-
-## A body its ropes reach: grown over into a new bush.
-func _bodies() -> void:
-	for node in get_tree().get_nodes_in_group("enemies"):
-		var body := node as Node3D
-		if body == null or body.has_meta(&"red_nursery"):
-			continue
-		var health := body.get_node_or_null("Health") as Health
-		if health == null or not health.is_dead:
-			continue
-		var at := body.global_position
-		for patch: RedCreepPatch in _patches.values():
-			if patch.global_position.distance_to(at) > RedCreepPatch.RADIUS + 3.0:
-				continue
-			var reached := false
-			for tip in patch.tips():
-				if tip.distance_to(at) < 1.2:
-					reached = true
-					break
-			if reached:
-				body.set_meta(&"red_nursery", true)
-				_grow_from(at, SEEDLING_SIZE)
-				break
 
 
 # ---- Links ------------------------------------------------------------------------------------
@@ -470,17 +474,51 @@ func start_wrap(target: Node3D, patch: RedCreepPatch, rope: int) -> void:
 	_next_wrap += 1
 	var size := _size_of(target)
 	var now := Time.get_ticks_msec()
-	var wrap := _make_wrap(id, target.global_position, size.x, size.y, now)
+	var wrap := _make_wrap(id, target.global_position, size.x, size.y, now, Basis.IDENTITY)
 	wrap.hold(target, patch, rope)
 	if Network.is_online():
-		_net_wrap.rpc(id, target.global_position, size.x, size.y)
+		_net_wrap.rpc(id, target.global_position, size.x, size.y, Basis.IDENTITY)
 
 
-func _make_wrap(id: int, pin: Vector3, tall: float, wide: float, start_msec: int) -> RedWrap:
+## Host: a tendril's touched a body: a cocoon laid along it where it lies
+## (from its hips toward its head), a bush bursting out of it later.
+func start_cocoon(body: Node3D, patch: RedCreepPatch, rope: int) -> void:
+	body.set_meta(&"red_cocooned", true)
+	var hips := aim_of(body)
+	var along := Vector3.ZERO
+	var ragdoll := body.get(&"_ragdoll") as EnemyRagdoll
+	if ragdoll:
+		along = ragdoll.head_position() - hips
+	along.y = 0.0
+	if along.length() < 0.2:
+		along = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	along = along.normalized()
+	var ground := hips.y - 0.3
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(hips + Vector3.UP * 0.5, hips + Vector3.DOWN * 2.0, 1))
+	if not hit.is_empty():
+		ground = (hit.position as Vector3).y
+	# Its own up along the body (the cocoon's made standing: laid down).
+	var side := along.cross(Vector3.UP).normalized()
+	var turn := Basis(side, along, side.cross(along))
+	var pin := Vector3(hips.x, ground + CORPSE_RADIUS, hips.z) - along * CORPSE_LENGTH * 0.45
+	var id := _next_wrap
+	_next_wrap += 1
+	var wrap := _make_wrap(id, pin, CORPSE_LENGTH, CORPSE_RADIUS, Time.get_ticks_msec(), turn)
+	wrap.lay_on(body, patch, rope)
+	if Network.is_online():
+		_net_wrap.rpc(id, pin, CORPSE_LENGTH, CORPSE_RADIUS, turn)
+
+
+## Host: a cocoon's bush bursts out of it.
+func cocoon_burst(wrap: RedWrap) -> void:
+	_grow_from(wrap.middle(), SEEDLING_SIZE, NURSERY_GAP)
+
+
+func _make_wrap(id: int, pin: Vector3, tall: float, wide: float, start_msec: int, turn: Basis) -> RedWrap:
 	var wrap := RedWrap.new()
 	wrap.name = "Wrap_%d" % id
 	add_child(wrap)
-	wrap.setup(self, id, pin, tall, wide, start_msec, _host())
+	wrap.setup(self, id, pin, tall, wide, start_msec, _host(), turn)
 	_wraps[id] = wrap
 	return wrap
 
@@ -497,8 +535,8 @@ func end_wrap(wrap: RedWrap, died: bool) -> void:
 	wrap.queue_free()
 	if is_instance_valid(patch):
 		patch.wrap_ended(rope)
-	if died:
-		_grow_from(pin, SEEDLING_SIZE)
+	if died and not wrap.corpse:
+		_grow_from(pin, SEEDLING_SIZE, NURSERY_GAP)
 	if Network.is_online():
 		_net_unwrap.rpc(wrap.wrap_id)
 
@@ -581,9 +619,9 @@ func _net_phases(phases: Dictionary) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _net_wrap(id: int, pin: Vector3, tall: float, wide: float) -> void:
+func _net_wrap(id: int, pin: Vector3, tall: float, wide: float, turn: Basis) -> void:
 	if not _wraps.has(id):
-		_make_wrap(id, pin, tall, wide, Time.get_ticks_msec())
+		_make_wrap(id, pin, tall, wide, Time.get_ticks_msec(), turn)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -606,4 +644,4 @@ func _net_ask() -> void:
 		_net_growth.rpc_id(peer, id, patch.all_growth())
 	for id: int in _wraps.keys():
 		var wrap: RedWrap = _wraps[id]
-		_net_wrap.rpc_id(peer, id, wrap.global_position, wrap.height, wrap.radius)
+		_net_wrap.rpc_id(peer, id, wrap.global_position, wrap.height, wrap.radius, wrap.global_basis)
