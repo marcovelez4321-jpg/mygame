@@ -565,6 +565,11 @@ func cut(index: int, from: int) -> void:
 		_reaching.erase(rope.target)
 		if host:
 			director.wrap_cut(rope.target)
+		# Freeing what it held ends its wrap, and that cuts this tendril
+		# itself, whole (RedCreep.end_wrap -> wrap_ended): done, then. (Going
+		# on would cut what was already emptied: points with no lengths.)
+		if rope.state == State.DEAD:
+			return
 	if from < 2:
 		rope.state = State.DEAD
 		rope.pts = PackedVector3Array()
@@ -572,7 +577,7 @@ func cut(index: int, from: int) -> void:
 		rope.alg = PackedFloat32Array()
 		rope.shown = 0.0
 	else:
-		rope.pts = pts.slice(0, from)
+		rope.pts = (rope.pts as PackedVector3Array).slice(0, from)
 		rope.nrm = (rope.nrm as PackedVector3Array).slice(0, from)
 		rope.alg = (rope.alg as PackedFloat32Array).slice(0, from)
 		rope.shown = minf(rope.shown, _length(rope))
@@ -710,6 +715,19 @@ func rebuild(index: int) -> void:
 	var pts: PackedVector3Array = rope.pts
 	var nrm: PackedVector3Array = rope.nrm
 	var alg: PackedFloat32Array = rope.alg
+	if alg.size() != pts.size() or nrm.size() != pts.size():
+		# (Out of step: never meant to be. Its lengths worked out again from
+		# its points rather than a crash.)
+		alg.resize(pts.size())
+		for i in pts.size():
+			alg[i] = 0.0 if i == 0 else alg[i - 1] + pts[i].distance_to(pts[i - 1])
+		var was := nrm.size()
+		nrm.resize(pts.size())
+		for i in range(was, pts.size()):
+			nrm[i] = Vector3.UP
+		rope.alg = alg
+		rope.nrm = nrm
+		from = 0
 	var chunks: Array = rope.chunks
 	var wanted := 0 if pts.size() < 2 else ceili(float(pts.size() - 1) / CHUNK)
 	while chunks.size() > wanted:

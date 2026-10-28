@@ -1260,7 +1260,6 @@ func _red_creep() -> Node3D:
 	creep.set_script(load("res://scripts/zombies/red_creep.gd"))
 	var areas: Array[AABB] = []
 	for box: Array in [
-			[Vector3(21.0, -12.0, 30.0), Vector3(51.0, -3.25, 55.0)], # the depths
 			[Vector3(43.5, -12.0, -2.0), Vector3(48.5, 0.5, 28.0)], # the tunnel
 			[Vector3(-20.0, 0.0, 28.0), Vector3(20.0, 12.0, 58.0)], # the lobby
 			[Vector3(-56.0, 0.0, -21.0), Vector3(-51.0, 8.125, 44.0)], # the corridor
@@ -1270,7 +1269,10 @@ func _red_creep() -> Node3D:
 			[Vector3(-60.0, 0.0, 66.0), Vector3(60.0, 20.0, 146.0)]]: # the courtyard
 		areas.append(AABB(box[0], box[1] - box[0]))
 	var trunk := AABB(TREE_AT - Vector3(TREE_CLEAR, 5.0, TREE_CLEAR), Vector3(TREE_CLEAR * 2.0, 80.0, TREE_CLEAR * 2.0))
-	var keep_out: Array[AABB] = [trunk]
+	# Nor in the depths, where you start (the user's, 2026-10-28): no bush
+	# grows there, from the start or later (seeds, bodies).
+	var spawn_room := AABB(Vector3(21.0, -12.5, 30.0), Vector3(30.0, 9.25, 25.0))
+	var keep_out: Array[AABB] = [trunk, spawn_room]
 	creep.set(&"areas", areas)
 	creep.set(&"keep_out", keep_out)
 	return creep
