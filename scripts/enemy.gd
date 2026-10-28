@@ -434,8 +434,6 @@ var _body_speed := 0.0
 var _impacted := {}
 ## A client: where the host's held body is (INF: not held).
 var _held_at := Vector3.INF
-## The tentacle's coils round it while it's held (every game's own).
-var _wrap: TentacleWrap
 @onready var _ragdoll: EnemyRagdoll = get_node_or_null(^"EnemyRagdoll") as EnemyRagdoll
 
 
@@ -482,7 +480,6 @@ func grab(by: int) -> void:
 		window.call(&"forget", self) # (off the window, on the tentacle)
 	window = null
 	knock_down(Vector3.ZERO, INF)
-	_set_wrapped(true)
 
 
 ## The host: the tentacle pulls it toward `target`.
@@ -500,16 +497,6 @@ func window_pose(walking: bool) -> void:
 func let_go() -> void:
 	held = false
 	_knocked_left = KNOCK_TIME
-	_set_wrapped(false)
-
-
-## The tentacle's coils on (or drawing back off) it.
-func _set_wrapped(on: bool) -> void:
-	if on and _wrap == null:
-		_wrap = TentacleWrap.wrap(self)
-	elif not on and _wrap:
-		_wrap.unwrap()
-		_wrap = null
 
 
 ## Its chest, while it's a ragdoll (else its middle).
@@ -586,7 +573,6 @@ func net_apply(state: Variant) -> void:
 		if _animator:
 			_animator._on_state_changed(_state)
 	_held_at = state[2] if bool(state[1]) else Vector3.INF
-	_set_wrapped(bool(state[1]) and is_knocked())
 
 
 func _physics_process(delta: float) -> void:
@@ -1227,7 +1213,6 @@ func _on_died(attacker_id: int, is_critical: bool) -> void:
 	_state = State.DEAD
 	velocity = Vector3.ZERO
 	held = false
-	_set_wrapped(false)
 	# Turn off collision so shots and players pass through the body.
 	$CollisionShape3D.set_deferred("disabled", true)
 	# A mutating corpse isn't removed on the usual timer -- EnemyRagdoll's

@@ -58,6 +58,11 @@ const LEFT_ROOT := "shoulder.L"
 ## it shoves out the rest of the way at push_speed.
 @export var coil_reach: float = 0.65
 @export var push_speed: float = 9.0
+## Reaching out, the arm swings from the shoulder out to the left and down a
+## little (degrees, at full reach), so the hand isn't in the middle of the
+## screen (the user's, 2026-10-27).
+@export var reach_out_degrees: float = 14.0
+@export var reach_down_degrees: float = 9.0
 ## How much of the coil a full hold winds (the rest snaps on at release), and
 ## how fast that last bit snaps on (per second, 0..1).
 @export_range(0.0, 1.0, 0.05) var coil_before_release: float = 0.8
@@ -663,7 +668,12 @@ func tick(delta: float, coiling: bool, coil_amount: float, rope_out: bool, left_
 	var parent_basis := bone_in_rig(parent).basis if parent != -1 else Basis.IDENTITY
 	var drop := parent_basis.inverse() * Vector3(0.0, -hide_drop * (1.0 - smooth_raise), 0.0)
 	var shown := raise > 0.01
-	_current[_left_root] = [(root_pose[0] as Vector3) + drop, root_pose[1],
+	# Swung out left and down as it reaches (the rig faces +Z: its left is +X).
+	var lean := Basis(Vector3.UP, deg_to_rad(reach_out_degrees) * smooth_reach) \
+			* Basis(Vector3.RIGHT, deg_to_rad(reach_down_degrees) * smooth_reach)
+	var frame := parent_basis.orthonormalized()
+	var turned := (frame.inverse() * lean * frame * Basis(root_pose[1] as Quaternion)).get_rotation_quaternion()
+	_current[_left_root] = [(root_pose[0] as Vector3) + drop, turned,
 			(root_pose[2] as Vector3) if shown else Vector3.ONE * 0.001]
 	_write()
 

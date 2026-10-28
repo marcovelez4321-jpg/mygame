@@ -1212,14 +1212,23 @@ func _update_indicator(delta: float) -> void:
 	if hit.is_empty():
 		_indicator.show_at(origin + aim * reach, Vector3.UP, false, fill, origin, delta)
 		return
-	var target := hit.collider as Node3D
-	var grabs := target != null and (_big_enemy(target) != null or not _is_small_enemy(target))
-	# The grapple locked (the user's, 2026-10-27): red unless it's on an enemy
-	# it'd grab or a thing it'd pick up or throw.
-	if grabs and not _unlocked():
-		var enemy := _enemy_of(target) if _big_enemy(target) == null else null
-		grabs = (enemy != null and enemy.can_be_grabbed()) or _throwable(target)
-	_indicator.show_at(hit.position, hit.normal, grabs, fill, origin, delta)
+	_indicator.show_at(hit.position, hit.normal, _would_take(hit.collider as Node3D), fill, origin, delta)
+
+
+## Whether firing at `target` would take hold of it -- the same rules as
+## _fire: an enemy it can grab (white, the user's, 2026-10-27: it was red on
+## them); not yet unlocked, only that or a thing to pick up or throw; else
+## anything but a small enemy it can't grab.
+func _would_take(target: Node3D) -> bool:
+	if target == null:
+		return false
+	var big := _big_enemy(target)
+	var grab := _enemy_of(target) if big == null else null
+	if grab and grab.can_be_grabbed():
+		return true
+	if not _unlocked():
+		return _throwable(target)
+	return not (big == null and _is_small_enemy(target))
 
 
 ## Your own view: each tendril spot's tendril (a dark line from where it
@@ -1330,7 +1339,9 @@ func _process(delta: float) -> void:
 			arm_points = arms.left_arm_points()
 			arm_coil = arms.coil
 		var path := whip_points(_start_point(), clampf(_whip_time / whip_time, 0.0, 1.0)) if _rope == Rope.WHIP else PackedVector3Array()
-		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, arm_points, arm_coil, delta, path)
+		# Holding an enemy: its tip's tendrils wrap it (GrappleTentacle).
+		var held := _grabbed if _rope == Rope.GRAB and is_instance_valid(_grabbed) else null
+		_tentacle.show_rope(showing, _start_point(), tip, normal, stuck, arm_points, arm_coil, delta, path, held)
 		_update_indicator(delta)
 		_light_spot_in_sight()
 		if _line:

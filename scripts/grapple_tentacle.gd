@@ -22,6 +22,12 @@ const SPIDER_MODEL := "res://NEWPSXMODELS/PSX Mega Pack/Models/Spider/Spider.fbx
 const WORM_TEXTURE := "res://art/props/PSX Creatures/Textures/tape_worm.png"
 ## Sides of the tube.
 const SIDES := 6
+## The bones the wrap coils along (EnemyRagdoll's: whichever it has), the
+## torso first.
+const WRAP_CHAINS := [["Hips", "Spine", "Spine1", "Spine2", "Chest", "UpperChest", "Neck", "Head"],
+		["LeftUpperArm", "LeftLowerArm", "LeftHand"], ["RightUpperArm", "RightLowerArm", "RightHand"],
+		["LeftUpperLeg", "LeftLowerLeg", "LeftFoot"], ["RightUpperLeg", "RightLowerLeg", "RightFoot"]]
+const WRAP_STEP := 0.05
 
 @export_group("Shape")
 ## Rope points per meter (smoother, more vertices), and the most it uses.
@@ -49,6 +55,16 @@ const SIDES := 6
 @export var coil_turns: float = 3.5
 @export var coil_thickness: float = 0.7
 @export var coil_crawl_speed: float = 0.6
+## Holding an enemy (the user's, 2026-10-27: the strands off the main
+## tentacle are what wrap it): the tip's tendrils run from where it holds it
+## and coil round its bones instead -- up its torso, down each arm and leg
+## (its ragdoll's: WRAP_CHAINS) -- this far out round the torso and a limb,
+## this many turns a metre, growing out over wrap_grow_time and writhing.
+@export var wrap_torso_radius: float = 0.17
+@export var wrap_limb_radius: float = 0.09
+@export var wrap_turns_per_meter: float = 2.2
+@export var wrap_grow_time: float = 0.35
+@export var wrap_writhe: float = 3.0
 
 @export_group("Flesh Worm")
 @export var worm_radius: float = 0.06
@@ -84,6 +100,7 @@ var _horde: MultiMeshInstance3D
 var _symbiote_material: ShaderMaterial
 var _worm_material: StandardMaterial3D
 var _coil_points := PackedVector3Array()
+var _wrap_grow := 0.0
 
 
 func _ready() -> void:
@@ -111,9 +128,12 @@ func _ready() -> void:
 ## arm's [elbow, wrist, palm, finger direction] (empty while it's down) and
 ## `coil` how much of it is wrapped round the forearm (0..1).
 ## `path`: a shape of its own to draw (the whip's), with no writhe on top.
+## `held`: the enemy it's holding (its tendrils wrap it), or null.
 func show_rope(showing: bool, start: Vector3, tip: Vector3, normal: Vector3, stuck: bool, arm: Array[Vector3], coil: float, delta: float,
-		path: PackedVector3Array = PackedVector3Array()) -> void:
+		path: PackedVector3Array = PackedVector3Array(), held: Enemy = null) -> void:
 	_time += delta
+	var ragdoll := held.get(&"_ragdoll") as EnemyRagdoll if is_instance_valid(held) else null
+	_wrap_grow = move_toward(_wrap_grow, 1.0, delta / wrap_grow_time) if ragdoll and showing else 0.0
 	_immediate.clear_surfaces()
 	if _horde:
 		_horde.visible = false
@@ -143,7 +163,9 @@ func show_rope(showing: bool, start: Vector3, tip: Vector3, normal: Vector3, stu
 				_tube_along(_coil_points, _coil_radius_at, 0.0)
 			if rope:
 				_tube_along(_points, _symbiote_radius.bind(length), length * 2.0)
-				if stuck:
+				if ragdoll:
+					_draw_wrap(tip, ragdoll)
+				elif stuck:
 					_draw_tendrils(tip, normal, start)
 			_immediate.surface_end()
 		GameSettings.TentacleStyle.FLESH_WORM:
@@ -292,6 +314,72 @@ func _draw_tendrils(tip: Vector3, normal: Vector3, start: Vector3) -> void:
 			var lift := sin(u * PI) * 0.12 * (0.6 + 0.4 * sin(_time * 3.0 + t * 1.7))
 			strand.append(tip + direction * u * tendril_length + normal * (0.02 + lift))
 		_tube_along(strand, _tendril_radius, 0.0)
+
+
+## Holding an enemy: the tendrils off the tip, each running from it to the
+## start of one of the body's chains of bones and coiling on along it (as
+## far as they've grown), drawn on its ragdoll's bones where they are now.
+func _draw_wrap(tip: Vector3, ragdoll: EnemyRagdoll) -> void:
+	var grown := smoothstep(0.0, 1.0, _wrap_grow)
+	for c in WRAP_CHAINS.size():
+		var chain := PackedVector3Array()
+		for bone_name: String in WRAP_CHAINS[c]:
+			var bone := ragdoll.bone_named(bone_name)
+			if bone:
+				chain.append(bone.global_position)
+		if chain.size() < 2:
+			continue
+		var strand := _wrap_strand(tip, chain, wrap_torso_radius if c == 0 else wrap_limb_radius, float(c) * 1.7, grown)
+		_tube_along(strand, _wrap_radius, 0.0)
+
+
+## One tendril: from the tip to the chain's first bone, then spiralling round
+## the chain, `grown` (0..1) of the way along it all.
+func _wrap_strand(tip: Vector3, chain: PackedVector3Array, radius: float, phase: float, grown: float) -> PackedVector3Array:
+	var length := 0.0
+	for i in chain.size() - 1:
+		length += chain[i].distance_to(chain[i + 1])
+	var first := _coil_point(chain, 0.0, radius, phase)
+	var bridge := tip.distance_to(first)
+	var reach := (bridge + length) * grown
+	var strand := PackedVector3Array([tip])
+	# Across from the tip to the chain.
+	var steps := maxi(int(bridge / WRAP_STEP), 1)
+	for i in range(1, steps + 1):
+		var d := bridge * i / steps
+		if d > reach:
+			strand.append(tip.lerp(first, reach / maxf(bridge, 0.001)))
+			return strand
+		strand.append(tip.lerp(first, float(i) / steps))
+	# Round and on along it.
+	var s := WRAP_STEP
+	while s <= minf(reach - bridge, length):
+		strand.append(_coil_point(chain, s, radius, phase))
+		s += WRAP_STEP
+	return strand
+
+
+## The point `s` metres along `chain`, coiled round it, writhing.
+func _coil_point(chain: PackedVector3Array, s: float, radius: float, phase: float) -> Vector3:
+	var at := chain[chain.size() - 1]
+	var dir := Vector3.DOWN
+	var left := s
+	for i in chain.size() - 1:
+		var piece := chain[i].distance_to(chain[i + 1])
+		if left <= piece or i == chain.size() - 2:
+			dir = (chain[i + 1] - chain[i]) / piece if piece > 0.0001 else Vector3.DOWN
+			at = chain[i] + dir * minf(left, piece)
+			break
+		left -= piece
+	var side := dir.cross(Vector3.UP if absf(dir.y) < 0.9 else Vector3.RIGHT).normalized()
+	var up := side.cross(dir).normalized()
+	var turn := s * wrap_turns_per_meter * TAU + _time * wrap_writhe + phase
+	var wobble := 1.0 + 0.15 * sin(_time * 5.0 + s * 9.0 + phase)
+	return at + (side * cos(turn) + up * sin(turn)) * radius * wobble
+
+
+func _wrap_radius(s: float) -> float:
+	return symbiote_radius * 0.6 * (1.0 - s * 0.6)
 
 
 ## Radius along the symbiote (s = 0 at your hand, 1 at the tip): tapering,
