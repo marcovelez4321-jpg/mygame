@@ -74,22 +74,27 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(_skeleton) or _chains.is_empty():
 		return
 	var world := _skeleton.global_transform
-	_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _material)
-	for c in _chains.size():
-		var ids: Array = _chains[c]
+	var chains: Array[PackedVector3Array] = []
+	var any := false
+	for ids: Array in _chains:
 		var points := PackedVector3Array()
 		for id: int in ids:
 			points.append(world * _skeleton.get_bone_global_pose(id).origin)
-		_tendril(points, TORSO_RADIUS if c == 0 else LIMB_RADIUS, float(c) * 1.7)
+		chains.append(points)
+		# Grown at least a step (two rings: something to draw).
+		any = any or _length(points) * smoothstep(0.0, 1.0, _grow) >= STEP
+	if not any:
+		return # (just starting, or drawn all the way back in: an empty surface errors)
+	_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _material)
+	for c in chains.size():
+		_tendril(chains[c], TORSO_RADIUS if c == 0 else LIMB_RADIUS, float(c) * 1.7)
 	_mesh.surface_end()
 
 
 ## One tendril, spiralling down `points` (a chain of bones) as far as it's
 ## grown.
 func _tendril(points: PackedVector3Array, radius: float, phase: float) -> void:
-	var length := 0.0
-	for i in points.size() - 1:
-		length += points[i].distance_to(points[i + 1])
+	var length := _length(points)
 	var reach := length * smoothstep(0.0, 1.0, _grow)
 	var rings: Array[PackedVector3Array] = []
 	var centres := PackedVector3Array()
@@ -118,6 +123,13 @@ func _tendril(points: PackedVector3Array, radius: float, phase: float) -> void:
 				_mesh.surface_set_normal((point - centres[int(corner[1])]).normalized())
 				_mesh.surface_set_uv(Vector2(float(corner[2]) / SIDES, float(corner[1]) * STEP * 2.0))
 				_mesh.surface_add_vertex(point)
+
+
+static func _length(points: PackedVector3Array) -> float:
+	var length := 0.0
+	for i in points.size() - 1:
+		length += points[i].distance_to(points[i + 1])
+	return length
 
 
 ## The point `s` metres down the chain, and which way it runs there.

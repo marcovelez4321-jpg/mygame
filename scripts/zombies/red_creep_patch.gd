@@ -29,7 +29,9 @@ enum Kind { CRAWL, TENDRIL, RUNNER }
 enum State { GROWING, RESTING, PAUSED, WRAPPING, DEAD }
 
 const GROW_SPEED := 1.0 / 3.0 # (the user's: steady, about 1 m every 3 s)
-const REACH_SPEED := 1.6
+## Faster than anything runs (the user's, 2026-10-27: it catches up to
+## enemies; the fastest, a rusher, runs 7.5 m/s).
+const REACH_SPEED := 9.0
 const STEP := 0.35
 const LOOKAHEAD := STEP * 1.5
 const RADIUS := 7.5
@@ -39,8 +41,9 @@ const START_ROPES := 4
 const BRANCH_CHANCE := 0.05
 const SENSE := 10.0
 const REACH := 4.0
-## A tendril gives up on what's moved this far from where it rose.
-const REACH_LOST := 6.5
+## A tendril gives up on what's moved this far from where it rose (the
+## user's, 2026-10-27: half as far again, players and enemies alike).
+const REACH_LOST := 9.75
 const TOUCH := 0.7
 const DANGLE_MAX := 10
 const REGROW_PAUSE := 5.0

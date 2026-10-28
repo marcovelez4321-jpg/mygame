@@ -2190,3 +2190,12 @@ them:
   - **The Ossuary:** out of the demo. Its feet reach 470 m out, so it walked through the towers, and its moving trimesh was heavy. `pass_by` is kept for later.
   - **Windows:** every grid window on an outer wall is real (REAL_SHARE 1.0), and the great hall has windows on every storey (407 panes). Wall slivers under 0.15 m between openings are left out (func_godot can't build them).
   - **Decor:** each hall feature (a column, the pyramid, a deck with its ramps, the slab, the stairs) is kept only if it stands at least 1 m clear of those before it; the layout that drops the fewest wins. Stair chains and floating rubble keep clear of them too.
+
+- **2026-10-27 batch (speeds, barnacles, the weed, lamp posts, the Stalker):**
+  - **Spiders:** 50% slower again (spider_speed 4).
+  - **Barnacles:** the biggest 25% smaller (a clump's size_max 2.5 to 1.875, the small ones as they were). The look-only decoy barnacles are gone, code and all.
+  - **Tweakers:** every kind (plain, rusher, gunner, mutant) comes in through the barricades; the director's roaming gangs keep them too. Headless check: 8 in 40 s from the start, all climbed in through their windows.
+  - **Red weed:** half as much at the start, a bush in 4 of the 8 areas, a different 4 each game. Its reaching tendrils grow at 9 m/s, faster than anything runs (a rusher's 7.5), and give up only once the target is 9.75 m from where they rose (half as far again), players and enemies alike.
+  - **Lamp posts:** 20 more scattered by the bake: the great hall 5, the stair hall 3, the lobby 3, the courtyard 5, the corridor 2, a flat 1, the depths 1. Each one stands on open floor, inside a room if indoors, clear of decor, blocks, doorways, the Flesh Tree, other things and barricades, and 8 m from the next post. Lamp posts are solid now.
+  - **The Stalker:** 25% smaller again (SIZE 1.125), back to coming in 3 s in.
+  - **Tentacle grab error:** "No vertices were added" at the start and end of the wrap, when no tendril had grown a full step yet. It now draws nothing then.

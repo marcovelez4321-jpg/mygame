@@ -126,6 +126,24 @@ var _decor_bars: Array = []
 ## merging into each other).
 var _decor_bounds: Array[AABB] = []
 const DECOR_GAP := 1.0
+## The blocks' and ramps' bounds (the lamp posts kept off them).
+var _block_bounds: Array[AABB] = []
+## Lamp posts scattered at random (the user's, 2026-10-27: 20, through the
+## halls, the lobby, the courtyard, the corridors, flats and depths):
+## [floor area, how many, indoors (wholly inside a room)]; kept LAMP_POST_GAP apart.
+const LAMP_POSTS := [
+		[AABB(Vector3(-54.0, 30.0, -54.0), Vector3(108.0, 0.0, 108.0)), 5, true], # the great hall
+		[AABB(Vector3(-22.0, 0.0, -54.0), Vector3(40.0, 0.0, 76.0)), 3, true], # the stair hall
+		[AABB(Vector3(-18.0, 0.0, 30.0), Vector3(36.0, 0.0, 26.0)), 3, true], # the lobby
+		[AABB(Vector3(-58.0, 0.0, 66.0), Vector3(116.0, 0.0, 80.0)), 5, false], # the courtyard (open sky)
+		[AABB(Vector3(-54.0, 0.0, -18.0), Vector3(0.0, 0.0, 60.0)), 1, true], # the corridor's west leg
+		[AABB(Vector3(-50.0, 0.0, 42.0), Vector3(24.0, 0.0, 0.0)), 1, true], # the corridor by the flats
+		[AABB(Vector3(-48.0, 0.0, 49.0), Vector3(20.0, 0.0, 6.0)), 1, true], # the flats
+		[AABB(Vector3(26.0, -12.0, 32.0), Vector3(20.0, 0.0, 16.0)), 1, true]] # the depths
+const LAMP_POST_GAP := 8.0
+## Its footprint (the post and its arm, any way round) and height.
+const LAMP_POST_HALF := 1.1
+const LAMP_POST_TALL := 6.2
 var _dice := RandomNumberGenerator.new()
 var _sun: DirectionalLight3D
 
@@ -152,6 +170,7 @@ func run(_tree: SceneTree) -> void:
 	_stair_chains(AABB(Vector3(-20.0, 0.0, 28.0), Vector3(40.0, 12.0, 30.0)), 2, Vector2(2.5, 4.5), "LobbyStairs")
 	_stair_chains(AABB(Vector3(-24.0, 0.0, -56.0), Vector3(44.0, 24.0, 80.0)), 3, Vector2(3.0, 6.0), "HallStairs")
 	_dressing()
+	_lamp_posts()
 	_carve()
 	print("map: ", MAP, " (", _world.size(), " brushes; error ", _write_map(ProjectSettings.globalize_path(MAP)), ")")
 	var root := Node3D.new()
@@ -508,6 +527,49 @@ func _on(area: AABB) -> Vector3:
 	return at
 
 
+## The lamp posts scattered through the Stacks (LAMP_POSTS): each on open
+## floor, indoors wholly inside a room (its full height under the ceiling),
+## clear of the decor, the blocks and ramps, the doorways, the Flesh Tree,
+## the other things set down (more off the barricades: the horde's way in),
+## and the other lamp posts.
+func _lamp_posts() -> void:
+	var posts: Array[Vector3] = []
+	var others: Array[Vector3] = []
+	for thing: Array in _things:
+		var at: Vector3 = (thing[1] as Transform3D).origin
+		if thing[0] == &"lamp_post":
+			posts.append(at)
+		elif thing[0] != &"lamp" and thing[0] != &"wire" and thing[0] != &"glass" and thing[0] != &"water":
+			others.append(at)
+	var placed := 0
+	for spread: Array in LAMP_POSTS:
+		var area: AABB = spread[0]
+		var made := 0
+		for attempt in 200:
+			if made >= int(spread[1]):
+				break
+			var at := Vector3(_dice.randf_range(area.position.x, area.end.x), area.position.y, _dice.randf_range(area.position.z, area.end.z))
+			var box := AABB(at + Vector3(-LAMP_POST_HALF, 0.05, -LAMP_POST_HALF), Vector3(LAMP_POST_HALF * 2.0, LAMP_POST_TALL, LAMP_POST_HALF * 2.0))
+			if not _off_tree(at, 4.0) or posts.any(func(p: Vector3) -> bool: return p.distance_to(at) < LAMP_POST_GAP):
+				continue
+			if bool(spread[2]) and not _voids.any(func(room: AABB) -> bool: return room.encloses(box)):
+				continue
+			var near := box.grow(DECOR_GAP)
+			if _decor_bounds.any(func(b: AABB) -> bool: return b.intersects(near)) \
+					or _block_bounds.any(func(b: AABB) -> bool: return b.intersects(near)) \
+					or _keep_clear.any(func(b: AABB) -> bool: return b.intersects(box)):
+				continue
+			if others.any(func(p: Vector3) -> bool: return Vector2(p.x - at.x, p.z - at.z).length() < 2.5 and absf(p.y - at.y) < 6.0):
+				continue
+			if _things.any(func(thing: Array) -> bool: return thing[0] == &"barricade" and (thing[1] as Transform3D).origin.distance_to(at) < 5.0):
+				continue
+			_thing(&"lamp_post", Transform3D(Basis(Vector3.UP, _dice.randf() * TAU), at), {})
+			posts.append(at)
+			made += 1
+		placed += made
+	print("lamp posts: ", placed, " scattered")
+
+
 ## Clear of the Flesh Tree's trunk (by `margin` more).
 func _off_tree(at: Vector3, margin: float = 0.0) -> bool:
 	return Vector2(at.x - TREE_AT.x, at.z - TREE_AT.z).length() > TREE_CLEAR + margin
@@ -521,6 +583,7 @@ func _room(lo: Vector3, hi: Vector3) -> void:
 
 func _block(lo: Vector3, hi: Vector3) -> void:
 	_extra.append(_box(lo, hi, WALL, {"+y": FLOOR}))
+	_block_bounds.append(AABB(lo, hi - lo))
 
 
 ## A ramp along Z between (z_low, y_low) and (z_high, y_high), x0..x1 wide.
@@ -531,6 +594,7 @@ func _ramp_z(x0: float, x1: float, z_low: float, y_low: float, z_high: float, y_
 	var bottom := minf(y_low, y_high) - 0.5
 	var z0 := minf(z_low, z_high)
 	var z1 := maxf(z_low, z_high)
+	_block_bounds.append(AABB(Vector3(x0, bottom, z0), Vector3(x1 - x0, maxf(y_low, y_high) - bottom, z1 - z0)))
 	_extra.append([
 		_f(Vector3(x0, y_low, z_low), normal, FLOOR),
 		_f(Vector3(x0, bottom, z0), Vector3.DOWN, WALL),
@@ -1022,6 +1086,15 @@ func _made(kind: StringName, settings: Dictionary) -> Node3D:
 			var post := Node3D.new()
 			post.add_child(_mesh(Vector3(0.25, 6.0, 0.25), Vector3(0.0, 3.0, 0.0), Color(0.2, 0.2, 0.22)))
 			post.add_child(_mesh(Vector3(1.2, 0.2, 0.4), Vector3(0.5, 6.0, 0.0), Color(0.2, 0.2, 0.22)))
+			# Solid (you don't walk through a lamp post).
+			var pole := StaticBody3D.new()
+			var shape := CollisionShape3D.new()
+			var column := BoxShape3D.new()
+			column.size = Vector3(0.25, 6.0, 0.25)
+			shape.shape = column
+			shape.position = Vector3(0.0, 3.0, 0.0)
+			pole.add_child(shape)
+			post.add_child(pole)
 			var bulb := OmniLight3D.new()
 			bulb.light_color = LAMP
 			bulb.light_energy = 1.4

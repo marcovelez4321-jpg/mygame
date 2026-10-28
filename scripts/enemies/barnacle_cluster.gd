@@ -33,14 +33,6 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 ## Flat fungal mounds around the barnacles (no collision, look only).
 @export var fungus_count: int = 14
 @export var fungus_color: Color = Color(0.26, 0.24, 0.12)
-## Look-only barnacles filling the clump out (no hitbox, no spawning, no
-## thinking): they throb along with the real ones near them, a ripple
-## spreading out from each one that's about to spit.
-@export var decoy_count: int = 18
-@export var decoy_size_min: float = 0.5
-@export var decoy_size_max: float = 1.3
-## How far a real barnacle's throb carries to the decoys round it (metres).
-@export var decoy_reach: float = 3.5
 @export var leech_scene: PackedScene = preload("res://scenes/enemy/leech.tscn")
 @export var leech_count: int = 3
 ## Off for now: leeches are switched off game-wide until they're fixed. Turn
@@ -56,17 +48,9 @@ enum Nest { RANDOM, ROACHES, SPIDERS }
 @export var guard_count: int = 0 # off for now: the crawlers are shelved (scripts and scenes kept)
 
 const GROUP := "barnacle_clusters"
-const BARNACLE_MODEL := preload("res://art/props/PSX Creatures/Models/FBX/barnacle.fbx")
-const BARNACLE_TEXTURE := preload("res://art/props/PSX Creatures/Textures/barnacle.png")
-## The barnacles' throb (as Barnacle's: swell_time, swell_amount).
-const THROB_TIME := 1.2
-const THROB_AMOUNT := 0.3
 
 static var _fungus_mesh: SphereMesh
-## The decoys' skin, roach nest and spider nest (made once).
-static var _decoy_skins := {}
 var _fungus_material: StandardMaterial3D
-var _decoys: Array[Node3D] = []
 
 
 ## Its pieces are drawn only this close.
@@ -123,7 +107,6 @@ func _grow() -> void:
 			barnacle.size = clampf(lerpf(size_min, size_max, t) + randf_range(-0.08, 0.08), size_min, size_max)
 			barnacle.brood = Barnacle.Brood.SPIDERS if nest == Nest.SPIDERS else Barnacle.Brood.ROACHES
 			barnacle.spider_pack = pack
-			barnacle.swelling.connect(_on_barnacle_swelling.bind(barnacle))
 			add_child(barnacle)
 			barnacle.global_transform = Transform3D(_basis_on(hit.normal), hit.position)
 			
@@ -149,15 +132,6 @@ func _grow() -> void:
 		var hit := _surface_near(up, radius * 1.2)
 		if not hit.is_empty():
 			_add_fungus(hit.position, hit.normal)
-			
-	for i in decoy_count:
-		while FrameBudget.over():
-			await get_tree().process_frame
-		if not is_inside_tree():
-			return
-		var hit := _surface_near(up, radius * 1.3)
-		if not hit.is_empty():
-			_add_decoy(hit.position, hit.normal)
 	# Drawn only within SEEN_RANGE (small things: invisible further off; a
 	# few hundred of these, drawn from anywhere, added up -- the user's frame
 	# drops by the Stack).
@@ -167,59 +141,6 @@ func _grow() -> void:
 			geometry.visibility_range_end = SEEN_RANGE
 			geometry.visibility_range_end_margin = SEEN_RANGE * 0.1
 
-
-## A look-only barnacle: just the model, in the PS1 look, the nest's skin.
-func _add_decoy(at: Vector3, normal: Vector3) -> void:
-	var spiders := nest == Nest.SPIDERS
-	if not _decoy_skins.has(spiders):
-		_decoy_skins[spiders] = PS1Look.material(BARNACLE_TEXTURE, Color(0.72, 0.76, 0.9) if spiders else Color.WHITE, false)
-	var decoy := BARNACLE_MODEL.instantiate() as Node3D
-	if not decoy:
-		return
-	add_child(decoy)
-	for mesh in decoy.find_children("*", "MeshInstance3D", true, false):
-		(mesh as MeshInstance3D).material_override = _decoy_skins[spiders]
-	var size := randf_range(decoy_size_min, decoy_size_max) * 1.4 # as big as the real ones (Barnacle.scale_boost)
-	decoy.global_transform = Transform3D(_basis_on(normal), at)
-	decoy.scale = Vector3.ONE * size
-	decoy.set_meta(&"rest", decoy.scale)
-	_decoys.append(decoy)
-
-
-## A real one's about to spit: the decoys round it throb too, the nearest
-## first, a ripple spreading out.
-func _on_barnacle_swelling(barnacle: Barnacle) -> void:
-	if not is_instance_valid(barnacle):
-		return
-	var barnacle_pos := barnacle.global_position
-	for decoy in _decoys:
-		if not is_instance_valid(decoy):
-			continue
-		var distance := decoy.global_position.distance_to(barnacle_pos)
-		if distance < decoy_reach:
-			_throb(decoy, distance * 0.12)
-
-
-## Three swelling pulses, each bigger than the last (taller than wide), then
-## a little squash: Barnacle's throb, without the spit.
-func _throb(decoy: Node3D, delay: float) -> void:
-	if decoy.has_meta(&"throb"):
-		var previous := decoy.get_meta(&"throb") as Tween
-		if previous and previous.is_valid():
-			return # already throbbing
-			
-	var rest: Vector3 = decoy.get_meta(&"rest")
-	var pulse := THROB_TIME / 6.0
-	var tween := create_tween()
-	tween.tween_interval(delay)
-	for i in 3:
-		var amount := THROB_AMOUNT * (i + 1) / 3.0
-		tween.tween_property(decoy, "scale", rest * Vector3(1.0 + amount * 0.6, 1.0 + amount, 1.0 + amount * 0.6), pulse) \
-				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tween.tween_property(decoy, "scale", rest, pulse).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	tween.tween_property(decoy, "scale", rest * Vector3(1.15, 0.8, 1.15), 0.08)
-	tween.tween_property(decoy, "scale", rest, 0.2).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-	decoy.set_meta(&"throb", tween)
 
 ## A spot on the surface under a random point within `within` of the middle
 ## (a ray from just off the surface back into it), or {} if there's nothing

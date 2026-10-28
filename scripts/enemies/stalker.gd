@@ -114,7 +114,7 @@ var _floor_only := false
 var _perch_left := 0.0
 const WALL_DOT := 0.7
 ## Twice a person (the user's): everything about its body scales with this.
-const SIZE := 1.5 # (the user's, 2026-10-27: 2, then 25% smaller)
+const SIZE := 1.125 # (the user's, 2026-10-27: 2, then 25% smaller, twice)
 const RIDE := 0.25 * SIZE
 const SPAN := 1.6 * SIZE
 const GRAVITY := 22.0

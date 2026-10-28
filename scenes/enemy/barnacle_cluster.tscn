@@ -5,6 +5,6 @@
 [node name="BarnacleCluster" type="Node3D" unique_id=549713200]
 script = ExtResource("1_cluster")
 radius = 8.0
-size_max = 2.5
+size_max = 1.875
 fungus_count = 5
 defender_count = 1

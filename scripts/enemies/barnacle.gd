@@ -17,8 +17,7 @@ extends StaticBody3D
 ## its clump's SpiderPack so they swarm together.
 ## Rule 1 (co-op): the host runs the timers and spawns the roaches.
 
-## It's started to throb toward a spit (its clump's look-only barnacles
-## swell along with it: BarnacleCluster).
+## It's started to throb toward a spit.
 signal swelling
 
 enum Brood { ROACHES, SPIDERS }

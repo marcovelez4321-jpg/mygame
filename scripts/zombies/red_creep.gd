@@ -3,7 +3,7 @@ extends Node3D
 
 ## The red creep (the user's, 2026-10-27; docs/RED_CREEP.md): the red weed
 ## come alive in the Stacks -- a sentient, mold-like growth whose one goal is
-## to spread. It starts as one bush in each area (`areas`), each sending out
+## to spread. It starts as one bush in half the areas (`areas`), each sending out
 ## its ropes (RedCreepPatch), and then:
 ##   SEEDS: anything alive that touches a bush or its ropes picks up its seeds
 ##   (red barbs on it); they fall off SEED_TIME later wherever it's got to,
@@ -22,6 +22,7 @@ extends Node3D
 ## from the host's word (_net_*), a late joiner asking for all of it.
 
 const SEED_TIME := Vector2(20.0, 180.0) # (the user's: random 20 s - 3 min)
+const START_SHARE := 0.5 # (the user's)
 const MAX_PATCHES := 16
 const PATCH_GAP := 6.0
 const STIMULUS_RANGE := 25.0
@@ -44,7 +45,8 @@ const MESH_BUDGET := 6
 ## Far patches look for life to reach this many ticks apart.
 const FAR_REACH_TICKS := 4
 
-## Where it starts: one bush in each (a floor found in it, at random).
+## Where it starts: one bush in each of START_SHARE of them (a floor found in
+## it, at random).
 @export var areas: Array[AABB] = []
 ## Kept out of (the Flesh Tree's trunk).
 @export var keep_out: Array[AABB] = []
@@ -85,7 +87,12 @@ func _host() -> bool:
 
 func _plant_areas() -> void:
 	var space := get_world_3d().direct_space_state
-	for area in areas:
+	# Only some of them, a different few each game (the user's, 2026-10-27:
+	# half as much at the start).
+	var some := areas.duplicate()
+	some.shuffle()
+	some.resize(ceili(some.size() * START_SHARE))
+	for area: AABB in some:
 		for attempt in 30:
 			var x := randf_range(area.position.x + 2.0, area.end.x - 2.0)
 			var z := randf_range(area.position.z + 2.0, area.end.z - 2.0)

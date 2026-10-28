@@ -10,14 +10,16 @@ extends Node
 const EVERY := 4.0
 const MAX_ALIVE := 10
 const REACH := 45.0
-const SCENES := ["res://scenes/enemy/enemy.tscn", "res://scenes/enemy/enemy.tscn", "res://scenes/enemy/enemy_rusher.tscn"]
+## Every kind of tweaker (the user's, 2026-10-27; the director's roaming
+## gangs have them too: DemoHorde).
+const SCENES := ["res://scenes/enemy/enemy.tscn", "res://scenes/enemy/enemy.tscn", "res://scenes/enemy/enemy_rusher.tscn",
+		"res://scenes/enemy/enemy_gunner.tscn", "res://scenes/enemy/mutant_enemy.tscn"]
 const GROUP := &"window_infected"
 
 var _left := 3.0
 ## The Alpha Stalker (the user's: the full AI, hunting from round 1): brought
-## in once, ALPHA_AFTER in (the user's, 2026-10-27: it was on you the moment
-## you spawned -- it comes a while in now).
-const ALPHA_AFTER := 60.0
+## in once, ALPHA_AFTER in (the user's, 2026-10-27: 3 s, as it was).
+const ALPHA_AFTER := 3.0
 var _alpha_left := ALPHA_AFTER
 
 

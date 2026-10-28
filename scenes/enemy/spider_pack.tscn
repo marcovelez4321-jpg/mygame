@@ -5,7 +5,7 @@
 [node name="SpiderPack" type="Node3D" unique_id=794336678]
 script = ExtResource("1_pack")
 spider_scale = 1.5
-spider_speed = 8.0
+spider_speed = 4.0
 roam_pace = 0.8
 pack_radius_min = 4.0
 pack_radius_max = 10.0
