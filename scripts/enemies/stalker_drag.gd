@@ -230,10 +230,11 @@ func _exit_tree() -> void:
 	var viewmodel := player.get_node_or_null(^"Head/Camera3D/Viewmodel") as Node3D
 	if viewmodel:
 		viewmodel.visible = true
-	# The gun comes back up, drawn.
+	# The gun comes back up, drawn -- a frame on (gone with the rest if the
+	# game's closing: its draw sound can't play while the tree comes down).
 	var gun := player.weapons.current_weapon()
 	if gun and not player.weapons.gun_stowed:
-		player.weapons.weapon_switched.emit(gun, maxf(gun.draw_time, 0.3))
+		player.weapons.weapon_switched.emit.call_deferred(gun, maxf(gun.draw_time, 0.3))
 
 
 func _physics_process(delta: float) -> void:
