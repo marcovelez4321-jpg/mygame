@@ -21,7 +21,8 @@ const HITS := 3
 const COILS := 7
 const TURNS := 2.6
 const COIL_RADIUS := 0.05
-const REMAKE_EVERY := 0.15
+## The vines over its head show once it's covered to here (of its height).
+const OVER_HEAD := 1.0
 
 var wrap_id := 0
 var target: Node3D
@@ -36,7 +37,6 @@ var _director: RedCreep
 var _hits := 0
 var _drain_left := DRAIN_EVERY
 var _frozen := false
-var _remake_left := 0.0
 var _mesh: MeshInstance3D
 var _material: ShaderMaterial
 var _was_processing := true
@@ -61,6 +61,9 @@ func setup(director: RedCreep, id_: int, pin: Vector3, tall: float, wide: float,
 	_mesh.material_override = _material
 	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_mesh)
+	# Made once, whole; the shader shows it climbing (grow_to: how high).
+	_mesh.mesh = _cocoon()
+	_mesh.set_instance_shader_parameter(&"grow_to", 0.0)
 
 
 ## Host: what it holds (from the tendril that touched it).
@@ -164,53 +167,51 @@ func crossed_by(a: Vector3, b: Vector3) -> bool:
 
 # ---- The cocoon (every game) -------------------------------------------------------------------
 
-func _process(delta: float) -> void:
-	_remake_left -= delta
-	if _remake_left > 0.0:
-		return
-	_remake_left = REMAKE_EVERY
+## Climbing it as it's covered (the shader shows the vines up to there).
+func _process(_delta: float) -> void:
 	var c := cover()
-	if c >= 1.0 and _mesh.mesh != null and _mesh.has_meta(&"done"):
-		return
-	_mesh.mesh = _cocoon(c)
+	var shown := c * height * 1.02
 	if c >= 1.0:
-		_mesh.set_meta(&"done", true)
+		shown = height * 2.0 # (and over its head)
+	_mesh.set_instance_shader_parameter(&"grow_to", shown)
 
 
-## Vines coiling up round it, each from the ground up to `c` of its height
-## (and over its head once it's covered), in its own space.
-func _cocoon(c: float) -> ArrayMesh:
+## Vines coiling up round it from the ground to its full height, and loops
+## over its head; how far along each point is = how high it is (the vines
+## over the head after everything else), in its own space.
+func _cocoon() -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var count := COILS + (5 if c >= 1.0 else 0)
-	for k in count:
+	tool.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
+	for k in COILS + 5:
 		var start := rng.randf() * TAU
 		var turns := TURNS * rng.randf_range(0.8, 1.3) * (1.0 if k % 2 == 0 else -1.0)
-		var reach := clampf(c * rng.randf_range(1.0, 1.15), 0.0, 1.05)
-		if k >= COILS:
-			reach = 1.08 # (over the head)
-		var steps := maxi(int(reach * 26.0), 2)
+		var over := k >= COILS
+		var steps := 26
 		var points := PackedVector3Array()
 		var radii := PackedFloat32Array()
 		var frees := PackedFloat32Array()
 		var alongs := PackedFloat32Array()
-		var along := 0.0
+		var reach := rng.randf_range(0.95, 1.05)
 		for i in steps + 1:
-			var u := float(i) / steps * reach
-			var a := start + u * turns * TAU
-			var r := radius * (1.0 - 0.35 * pow(maxf(u - 0.8, 0.0) / 0.28, 2.0)) + 0.03 * sin(u * 23.0 + k)
-			var p := Vector3(cos(a) * r, u * height, sin(a) * r)
-			if k >= COILS:
-				# Over the top: a loop up over the head and down the other side.
-				var over := float(i) / steps
-				var b := start + over * PI
-				p = Vector3(cos(b) * radius * sin(over * PI) * 0.7, height * (0.75 + 0.3 * sin(over * PI)), sin(b) * radius * 0.5)
-			if i > 0:
-				along += p.distance_to(points[points.size() - 1])
+			var u := float(i) / steps
+			var p: Vector3
+			var along: float
+			if over:
+				# A loop up over the head and down the other side.
+				var b := start + u * PI
+				p = Vector3(cos(b) * radius * sin(u * PI) * 0.7, height * (0.75 + 0.3 * sin(u * PI)), sin(b) * radius * 0.5)
+				along = height * (OVER_HEAD + 0.05 + u * 0.3)
+			else:
+				var h := u * reach
+				var a := start + h * turns * TAU
+				var r := radius * (1.0 - 0.35 * pow(maxf(h - 0.8, 0.0) / 0.28, 2.0)) + 0.03 * sin(h * 23.0 + k)
+				p = Vector3(cos(a) * r, h * height, sin(a) * r)
+				along = p.y
 			points.append(p)
-			radii.append(COIL_RADIUS * (1.0 - 0.5 * float(i) / steps))
+			radii.append(COIL_RADIUS * (1.0 - 0.4 * u))
 			frees.append(0.06)
 			alongs.append(along)
 		RedCreepPatch._strand(tool, points, radii, frees, alongs, rng.randf_range(0.5, 1.0))

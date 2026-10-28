@@ -79,7 +79,7 @@ func _bring_one(player: Node3D) -> void:
 		var way := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 		var b := a + way * randf_range(RUN.x, RUN.y)
 		var floor_y := _clear_run(a, b, space)
-		if is_nan(floor_y) or _seen(a, space) or _seen(b, space):
+		if is_nan(floor_y) or _seen(a, space) or _seen(b, space) or DemoHorde.in_solid(space, a + Vector3.UP):
 			continue
 		a.y = floor_y
 		b.y = floor_y

@@ -39,6 +39,10 @@ const SEEDS_EVERY := 0.5
 const BODIES_EVERY := 1.0
 const LINKS_EVERY := 2.0
 const TOUCH := 0.6
+## Rope pieces remade a frame, across every patch (RedCreepPatch.rebuild).
+const MESH_BUDGET := 6
+## Far patches look for life to reach this many ticks apart.
+const FAR_REACH_TICKS := 4
 
 ## Where it starts: one bush in each (a floor found in it, at random).
 @export var areas: Array[AABB] = []
@@ -61,6 +65,8 @@ var _seeds_left := SEEDS_EVERY
 var _bodies_left := BODIES_EVERY
 var _links_left := LINKS_EVERY
 var _life: Array[Node3D] = []
+var _mesh_queue: Array = [] # [patch, rope]
+var _far_tick := 0
 
 
 func _ready() -> void:
@@ -130,8 +136,11 @@ func _physics_process(delta: float) -> void:
 		_tick_left = TICK
 		_gather_life()
 		_forget_stimuli()
+		_far_tick = (_far_tick + 1) % FAR_REACH_TICKS
 		for patch: RedCreepPatch in _patches.values():
-			patch.grow(TICK, _life)
+			patch.near = _anyone_near(patch.global_position, RedCreepPatch.NEAR) or patch.drawn()
+			if patch.near or _far_tick == 0:
+				patch.reach_for(_life)
 		_runners_on()
 	_seeds_left -= delta
 	if _seeds_left <= 0.0:
@@ -149,6 +158,36 @@ func _physics_process(delta: float) -> void:
 	if _send_left <= 0.0:
 		_send_left = SEND_EVERY
 		_send_growth()
+
+
+## Every game: a few rope pieces remade a frame (never all at once: no hitch).
+func _process(_delta: float) -> void:
+	for k in mini(MESH_BUDGET, _mesh_queue.size()):
+		var job: Array = _mesh_queue.pop_front()
+		var patch := job[0] as RedCreepPatch
+		if is_instance_valid(patch):
+			patch.rebuild(job[1])
+
+
+## A patch's rope wants its pieces remade (once in the queue at a time).
+func queue_mesh(patch: RedCreepPatch, rope: int) -> void:
+	for job: Array in _mesh_queue:
+		if job[0] == patch and job[1] == rope:
+			return
+	_mesh_queue.append([patch, rope])
+
+
+## Everything alive now (the last tick's list).
+func life() -> Array[Node3D]:
+	return _life
+
+
+func _anyone_near(at: Vector3, reach: float) -> bool:
+	for node in get_tree().get_nodes_in_group("player"):
+		var player := node as Node3D
+		if player and player.global_position.distance_to(at) < reach:
+			return true
+	return false
 
 
 ## Everything alive it could reach: the players and the creatures.

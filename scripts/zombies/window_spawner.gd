@@ -15,8 +15,9 @@ const GROUP := &"window_infected"
 
 var _left := 3.0
 ## The Alpha Stalker (the user's: the full AI, hunting from round 1): brought
-## in once, ALPHA_AFTER in.
-const ALPHA_AFTER := 3.0
+## in once, ALPHA_AFTER in (the user's, 2026-10-27: it was on you the moment
+## you spawned -- it comes a while in now).
+const ALPHA_AFTER := 60.0
 var _alpha_left := ALPHA_AFTER
 
 

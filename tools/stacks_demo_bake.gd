@@ -64,7 +64,7 @@ const GRID := StackBuilder.TEX_METRES
 const GRID_WIDE := StackBuilder.WINDOW_WIDTH
 const GRID_SILL := StackBuilder.WINDOW_BOTTOM
 const GRID_TALL := StackBuilder.WINDOW_TOP - StackBuilder.WINDOW_BOTTOM
-const REAL_SHARE := 0.75
+const REAL_SHARE := 1.0 # (the user's, 2026-10-27: windows along all the walls, like the open world Stack)
 ## The original Stack's hall decorator runs this many times the room's size,
 ## everything it makes scaled back down (StackBuilder._hall_features).
 const HALL_SCALE := 0.4
@@ -121,6 +121,11 @@ var _things: Array = []
 var _keep_clear: Array[AABB] = []
 ## Rebar: decor, no collision (func_detail_illusionary) -- nothing snags on it.
 var _decor_bars: Array = []
+## Where the rooms' decor already stands (each piece's bounds): nothing new
+## is put within DECOR_GAP of it (the user's, 2026-10-27: dispersed, not
+## merging into each other).
+var _decor_bounds: Array[AABB] = []
+const DECOR_GAP := 1.0
 var _dice := RandomNumberGenerator.new()
 var _sun: DirectionalLight3D
 
@@ -316,7 +321,7 @@ func _great_hall() -> void:
 	for k in 3:
 		_floating_chain(GREAT, 7)
 	for side: Array in [[Vector3.BACK, 56.0, 60.0], [Vector3.FORWARD, -56.0, -60.0], [Vector3.LEFT, -56.0, -60.0], [Vector3.RIGHT, 56.0, 60.0]]:
-		_grid_windows(GREAT, side[0], side[1], side[2], 3)
+		_grid_windows(GREAT, side[0], side[1], side[2])
 	_thing(&"climber", Transform3D(Basis.IDENTITY, Vector3(38.0, 30.0, -38.0)), {})
 	_camp(Vector3(42.0, 30.0, -42.0))
 
@@ -377,7 +382,7 @@ func _stair_chains(room: AABB, count: int, rise: Vector2, name: String) -> void:
 			var lean := Basis.looking_at((top - at).normalized(), Vector3.UP)
 			var flight := {c = (at + top) * 0.5, s = Vector3(4.0, 0.6, at.distance_to(top)), b = lean}
 			var platform := {c = landing - Vector3.UP * 0.5, s = Vector3(6.0, 1.0, 6.0), b = Basis(Vector3.UP, _dice.randf() * TAU)}
-			if _blocks_a_door(flight) or _blocks_a_door(platform):
+			if _blocks_a_door(flight) or _blocks_a_door(platform) or _hits_decor(flight) or _hits_decor(platform):
 				ok = false
 				break
 			flights.append(flight)
@@ -387,6 +392,7 @@ func _stair_chains(room: AABB, count: int, rise: Vector2, name: String) -> void:
 			continue
 		for piece: Dictionary in flights:
 			_extra.append(_oriented(piece.c, piece.s, piece.b))
+			_decor_bounds.append(_bounds_of(piece))
 		made += 1
 	print(name, ": ", made, " stair chains")
 
@@ -409,7 +415,11 @@ func _floating_chain(room: AABB, count: int) -> void:
 ## One floating chunk of rubble, tumbled, rebar sticking out of it.
 func _chunk(at: Vector3, size: float) -> void:
 	var tumble := Basis.from_euler(Vector3(_dice.randf_range(-0.6, 0.6), _dice.randf() * TAU, _dice.randf_range(-0.6, 0.6)))
-	_extra.append(_oriented(at, Vector3(size, size * _dice.randf_range(0.3, 0.6), size * _dice.randf_range(0.6, 1.0)), tumble))
+	var piece := {c = at, s = Vector3(size, size * _dice.randf_range(0.3, 0.6), size * _dice.randf_range(0.6, 1.0)), b = tumble}
+	if _hits_decor(piece):
+		return # (it'd sink into the decor: left out)
+	_decor_bounds.append(_bounds_of(piece))
+	_extra.append(_oriented(piece.c, piece.s, piece.b))
 	if _dice.randf() < 0.6:
 		_rebar(at, tumble * Vector3(1.0, 0.0, 0.0))
 
@@ -625,11 +635,14 @@ func _grid_windows(room: AABB, out: Vector3, inner: float, outer: float, rows: i
 ## The original Stack's hall (StackBuilder._hall_features: its columns, a
 ## mezzanine and its switchback ramps, the hanging stepped pyramid, the
 ## leaning slab, stairs to nowhere, its lamps), made 1/HALL_SCALE the room's
-## size and everything scaled back down into it. Rerolled till nothing stands
-## in a doorway (_keep_clear); the last try's blockers left out.
+## size and everything scaled back down into it. Each feature (its `unit`: a
+## column, the pyramid, a deck and its ramps...) is kept only if it stands
+## clear of the ones kept before it (DECOR_GAP) and out of every doorway
+## (_keep_clear); rerolled for the layout that loses the fewest.
 func _hall_decor(room: AABB, name: String, scale: float = HALL_SCALE) -> void:
 	var builder := StackBuilder.new(false)
 	var best: Array = []
+	var best_bounds: Array[AABB] = []
 	var best_lamps: Array = []
 	var fewest := 1 << 30
 	for attempt in 24:
@@ -641,28 +654,65 @@ func _hall_decor(room: AABB, name: String, scale: float = HALL_SCALE) -> void:
 		builder.random.seed = hash([name, attempt])
 		var big := AABB(room.position / scale, room.size / scale)
 		builder._hall_features({tower = -1, box = big, name = name})
-		var made: Array = []
-		var blocked := 0
+		# Its features, each its pieces.
+		var units := {}
+		var order: Array = []
 		for b: Dictionary in builder.boxes:
-			var piece := {c = (b.c as Vector3) * scale, s = (b.s as Vector3) * scale, b = b.b}
-			if _blocks_a_door(piece):
-				blocked += 1
-				piece[&"blocked"] = true
-			made.append(piece)
-		if blocked < fewest:
-			fewest = blocked
-			best = made
+			var unit: int = b.get("unit", 0)
+			if not units.has(unit):
+				units[unit] = []
+				order.append(unit)
+			(units[unit] as Array).append({c = (b.c as Vector3) * scale, s = (b.s as Vector3) * scale, b = b.b})
+		var kept: Array = []
+		var bounds: Array[AABB] = _decor_bounds.duplicate()
+		var lost := 0
+		for unit: int in order:
+			var pieces: Array = units[unit]
+			var clear := true
+			var mine: Array[AABB] = []
+			for piece: Dictionary in pieces:
+				var box := _bounds_of(piece)
+				if _blocks_a_door(piece) or bounds.any(func(other: AABB) -> bool: return other.intersects(box.grow(DECOR_GAP))):
+					clear = false
+					break
+				mine.append(box)
+			if not clear:
+				lost += 1
+				continue
+			kept.append_array(pieces)
+			bounds.append_array(mine)
+		if lost < fewest:
+			fewest = lost
+			best = kept
+			best_bounds = bounds
 			best_lamps = builder.lamps.duplicate()
-		if blocked == 0:
+		if lost == 0:
 			break
+	_decor_bounds = best_bounds
 	for piece: Dictionary in best:
-		if not piece.has(&"blocked"):
-			_extra.append(_oriented(piece.c, piece.s, piece.b))
+		_extra.append(_oriented(piece.c, piece.s, piece.b))
 	for lamp: Array in best_lamps:
 		_thing(&"lamp", Transform3D(Basis.IDENTITY, (lamp[0] as Vector3) * scale),
 				{energy = float(lamp[2]) * scale, range = float(lamp[3]) * scale, color = lamp[1]})
-	print(name, ": the Stack's hall, ", best.size(), " pieces (", fewest, " left out of doorways)")
+	print(name, ": the Stack's hall, ", best.size(), " pieces (", fewest, " features left out: in a doorway or too close)")
 
+
+## A turned box's bounds (its eight corners).
+func _bounds_of(piece: Dictionary) -> AABB:
+	var basis: Basis = piece.b
+	var half: Vector3 = (piece.s as Vector3) * 0.5
+	var c: Vector3 = piece.c
+	var box := AABB(c, Vector3.ZERO)
+	for corner in 8:
+		var sign := Vector3(1.0 if corner & 1 else -1.0, 1.0 if corner & 2 else -1.0, 1.0 if corner & 4 else -1.0)
+		box = box.expand(c + basis * (half * sign))
+	return box
+
+
+## Whether `piece` would stand within DECOR_GAP of the decor already there.
+func _hits_decor(piece: Dictionary) -> bool:
+	var box := _bounds_of(piece).grow(DECOR_GAP)
+	return _decor_bounds.any(func(other: AABB) -> bool: return other.intersects(box))
 
 func _blocks_a_door(piece: Dictionary) -> bool:
 	var reach := (piece.s as Vector3).length() * 0.5
@@ -716,7 +766,9 @@ func _carve() -> void:
 				next.append_array(_subtract(piece, room))
 			pieces = next
 		for piece in pieces:
-			if piece.size.x < 0.05 or piece.size.y < 0.05 or piece.size.z < 0.05:
+			# (func_godot can't build a brush much under 0.1 m: such slivers fall
+			# between window openings; left out.)
+			if piece.size.x < 0.15 or piece.size.y < 0.15 or piece.size.z < 0.15:
 				continue # (a sliver: nothing to build)
 			_world.append(_piece_brush(piece, solid))
 	_world.append_array(_extra)

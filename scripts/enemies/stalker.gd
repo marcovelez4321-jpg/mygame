@@ -114,7 +114,7 @@ var _floor_only := false
 var _perch_left := 0.0
 const WALL_DOT := 0.7
 ## Twice a person (the user's): everything about its body scales with this.
-const SIZE := 2.0
+const SIZE := 1.5 # (the user's, 2026-10-27: 2, then 25% smaller)
 const RIDE := 0.25 * SIZE
 const SPAN := 1.6 * SIZE
 const GRAVITY := 22.0
@@ -2186,6 +2186,15 @@ func _cut_off_tick(delta: float, p: PlayerMovement) -> bool:
 	return false
 
 
+## Whether t is inside something solid (a wall's or a tower's mass).
+func _in_solid(at: Vector3) -> bool:
+	var query := PhysicsPointQueryParameters3D.new()
+	query.position = at
+	query.collision_mask = 1
+	query.exclude = [get_rid()]
+	return not get_world_3d().direct_space_state.intersect_point(query, 1).is_empty()
+
+
 func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
 	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
@@ -2223,6 +2232,8 @@ func _turn_up(how_far: Vector2 = RELOCATE_TO) -> void:
 			continue
 		var at: Vector3 = ground.position
 		_normal = ground.normal
+		if _in_solid(at + _normal * (RIDE + 0.3)):
+			continue # (landed inside a wall's mass: never turn up in there)
 		if _visible_from_any(_body_points(at, Basis.IDENTITY)):
 			continue
 		global_position = at + _normal * RIDE

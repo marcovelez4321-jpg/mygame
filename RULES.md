@@ -2179,3 +2179,14 @@ them:
   - Co-op: the host's, sent to every game.
 
 - **2026-10-27, red creep crash fix:** the creep's list of living things is refreshed every 0.25 s but read every 0.5 s by the seed check. A creature freed in between (killed and removed) crashed the game on load ("previously freed"). The seed check, the reach and the nearest-life search now skip anything that's gone, and tendrils forget targets that no longer exist.
+
+- **2026-10-27 batch (the creep smooth and cheap, walls, the Stalker, windows, decor):**
+  - **Red creep, smooth:** rope points are worked out a step ahead and the tip slides out along them continuously. The shader shows each rope only up to `grow_to`, tapering to a point, so there are no growth spurts. Tendrils reach the same way.
+  - **Red creep, cheap:** ropes are drawn in pieces of 12 points; only the newest piece is remade, and RedCreep queues at most 6 a frame across every patch. A patch not drawn (out of sight and away) keeps its changes for later. A patch more than 45 m from every player and off the host's screen grows in 2 s steps and checks for life every 1 s. Cocoons are built once and revealed by the shader.
+  - **Headless check:** worst frame 22 ms over the run, no frame over 30 ms (it was hitching every couple of seconds).
+  - **Seeds:** unchanged, one at a time per creature (the user's).
+  - **Through the walls:** the navmesh grows walkable floor inside the towers' solid blocks. Bands, traders and the Stalker now never turn up inside solid geometry (a point test), and a band has to have a whole walking path to the player. The demo's rooms are registered with HallEcho as inside, so the Stalker turns up in your own room instead of being dropped from 60 m up onto roofs or into the towers.
+  - **The Stalker:** 25% smaller (SIZE 1.5); it comes 60 s in, not 3 s.
+  - **The Ossuary:** out of the demo. Its feet reach 470 m out, so it walked through the towers, and its moving trimesh was heavy. `pass_by` is kept for later.
+  - **Windows:** every grid window on an outer wall is real (REAL_SHARE 1.0), and the great hall has windows on every storey (407 panes). Wall slivers under 0.15 m between openings are left out (func_godot can't build them).
+  - **Decor:** each hall feature (a column, the pyramid, a deck with its ramps, the slab, the stairs) is kept only if it stands at least 1 m clear of those before it; the layout that drops the fewest wins. Stair chains and floating rubble keep clear of them too.

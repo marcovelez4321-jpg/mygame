@@ -61,6 +61,10 @@ func _ready() -> void:
 	sound.drone_reach = DRONE_REACH
 	sound.drone_height = DRONE_HEIGHT
 	add_child(sound)
+	# Its rooms are inside for everything that asks (HallEcho: the Stalker
+	# turning up in your own room, not dropped onto a roof or into the
+	# towers' solid mass; the echoes; the wind).
+	HallEcho.places.append(sound)
 	_wind = AudioStreamPlayer.new()
 	_wind.stream = sound.wind_stream
 	_wind.volume_db = SILENT

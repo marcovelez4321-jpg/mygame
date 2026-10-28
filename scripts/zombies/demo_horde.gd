@@ -17,13 +17,15 @@ extends Node
 ##   THE CONSUMED: now and then a pack (CONSUMED_PACK) flying in out of sight
 ##   wherever someone's under open sky.
 ##   BELL-WRAITHS: WRAITHS hung high in the great hall, every game.
-##   THE OSSUARY (the user's: walking past the Stack, ringing its bell): it
-##   passes OSSUARY_PASS off, tolling every OSSUARY_TOLL s (the wraiths wake
-##   to it); gone far off, it comes round again.
-## Not here: the Burrow Worm (it needs the open world's ground) and the
-## Deepmaw crawlers (shelved).
-## Rule 1 (co-op): the host's (normal spawns); the wraiths and the Ossuary are
-## every game's, from the same numbers.
+## Not here: the Burrow Worm (it needs the open world's ground), the Deepmaw
+## crawlers (shelved), and the Ossuary (the user's, 2026-10-27: out for now --
+## its legs walked through the towers, and it cost too much; Ossuary.pass_by
+## is kept for when it's simplified and rideable).
+## Every band turns up somewhere a player can walk to from where they are
+## (a whole path on the navmesh) and not inside a wall's solid mass (the
+## navmesh grows walkable floor inside the towers' blocks: they came through
+## the walls from there).
+## Rule 1 (co-op): the host's (normal spawns); the wraiths are every game's.
 
 const CHECK := 4.0
 const FIRST := 20.0
@@ -40,12 +42,6 @@ const CLUMPS := 8
 const CONSUMED_EVERY := Vector2(45.0, 90.0)
 const CONSUMED_PACK := Vector2i(2, 3)
 const WRAITHS := [Vector3(-25.0, 80.0, -25.0), Vector3(25.0, 80.0, -25.0), Vector3(-25.0, 80.0, 25.0), Vector3(25.0, 80.0, 25.0)]
-## Where the Ossuary walks past (between the demo's towers and the real
-## Stack), how far off at its nearest, and how often its bell tolls.
-const OSSUARY_CENTRE := Vector3(0.0, 0.0, -165.0)
-const OSSUARY_PASS := 500.0 # (the user's: 650, then closer)
-const OSSUARY_TOLL := 30.0
-const OSSUARY_GONE := 3000.0
 
 enum Band { TWEAKERS, RATS, ROACHES, SPIDERS, HARVESTMAN, RAT_BENDER, SWARM_KING }
 const WEIGHTS := {Band.TWEAKERS: 3.0, Band.RATS: 2.0, Band.ROACHES: 2.0, Band.SPIDERS: 2.0,
@@ -76,7 +72,7 @@ func _host() -> bool:
 	return not Network.is_online() or multiplayer.is_server()
 
 
-## The wraiths, the Consumed's nests up the Stack, the Ossuary: every game.
+## The wraiths, the Consumed's nests up the Stack: every game.
 func _every_game() -> void:
 	var scene := get_tree().current_scene
 	for i in WRAITHS.size():
@@ -85,7 +81,6 @@ func _every_game() -> void:
 		scene.add_child(wraith)
 		wraith.global_position = WRAITHS[i]
 	ConsumedDirector.ensure(get_tree())
-	Ossuary.pass_by(get_tree(), OSSUARY_CENTRE, OSSUARY_PASS, OSSUARY_TOLL)
 
 
 func _physics_process(delta: float) -> void:
@@ -103,7 +98,6 @@ func _physics_process(delta: float) -> void:
 	if not _clumped:
 		_clumped = true
 		_grow_clumps(players[0])
-	_ossuary_again()
 	_drop_far(players)
 	# No leeches (the user's): any the Stack's own barnacle clumps grow, gone.
 	for leech in get_tree().get_nodes_in_group(&"leeches"):
@@ -162,12 +156,30 @@ func _hidden_spot(player: Node3D, room: float = 0.0) -> Vector3:
 		if on == Vector3.ZERO or absf(on.y - player.global_position.y) > SAME_LEVEL \
 				or Vector2(on.x - want.x, on.z - want.z).length() > 12.0:
 			continue
-		if _seen(on, space) or _crowded(on):
+		if _seen(on, space) or _crowded(on) or in_solid(space, on + Vector3.UP):
+			continue
+		# Somewhere they can walk to from you: a whole path, not much longer
+		# than the way straight there.
+		var path := NavigationServer3D.map_get_path(_map(), player.global_position, on, true)
+		if path.is_empty() or path[path.size() - 1].distance_to(on) > 1.5:
+			continue
+		var walked := 0.0
+		for i in range(1, path.size()):
+			walked += path[i].distance_to(path[i - 1])
+		if walked > player.global_position.distance_to(on) * 3.0 + 20.0:
 			continue
 		if room > 0.0 and not space.intersect_ray(PhysicsRayQueryParameters3D.create(on + Vector3.UP, on + Vector3.UP * room, 1)).is_empty():
 			continue
 		return on
 	return Vector3.INF
+
+
+## Whether t is inside something solid (a wall's or a tower's mass).
+static func in_solid(space: PhysicsDirectSpaceState3D, at: Vector3) -> bool:
+	var query := PhysicsPointQueryParameters3D.new()
+	query.position = at
+	query.collision_mask = 1
+	return not space.intersect_point(query, 1).is_empty()
 
 
 func _seen(at: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
@@ -302,13 +314,3 @@ func _consumed_in(player: Node3D) -> void:
 			get_tree().current_scene.add_child(one)
 			one.global_position = at + Vector3(randf_range(-4.0, 4.0), randf_range(-2.0, 2.0), randf_range(-4.0, 4.0))
 		return
-
-
-## The Ossuary far off: round again (a new pass).
-func _ossuary_again() -> void:
-	var walker := get_tree().get_first_node_in_group(&"ossuary") as Ossuary
-	if walker == null:
-		return
-	var body := walker.building()
-	if body and Vector2(body.global_position.x - OSSUARY_CENTRE.x, body.global_position.z - OSSUARY_CENTRE.z).length() > OSSUARY_GONE:
-		Ossuary.pass_by(get_tree(), OSSUARY_CENTRE, OSSUARY_PASS, OSSUARY_TOLL)
