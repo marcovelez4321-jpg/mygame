@@ -1341,6 +1341,11 @@ func _environment() -> WorldEnvironment:
 	environment.fog_depth_curve = 1.4
 	environment.fog_height_density = 0.0
 	world.environment = environment
+	# Its own look: SewerLook's sewer grade and ground fog kept off it. (It
+	# never reached the demo while the demo was the first scene in; through
+	# the loading screen it did, and turned the rooms to night -- the user's,
+	# 2026-10-27.)
+	world.set_meta(&"own_look", true)
 	return world
 
 func _add(parent: Node, child: Node) -> void:
