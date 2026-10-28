@@ -2177,3 +2177,5 @@ them:
   - Tendrils reach for anything within 4 m and wrap it: held, drained 5 hp/s, covered in 6 s, then frozen and drained to death. Shooting or fire frees it.
   - Shots cut ropes; explosions burn them back.
   - Co-op: the host's, sent to every game.
+
+- **2026-10-27, red creep crash fix:** the creep's list of living things is refreshed every 0.25 s but read every 0.5 s by the seed check. A creature freed in between (killed and removed) crashed the game on load ("previously freed"). The seed check, the reach and the nearest-life search now skip anything that's gone, and tendrils forget targets that no longer exist.

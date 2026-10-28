@@ -244,7 +244,8 @@ func _remove_patch(id: int) -> void:
 func _seeds() -> void:
 	var now := Time.get_ticks_msec()
 	for target in _life:
-		if _carriers.has(target):
+		# (The list's from the last tick: something may have been freed since.)
+		if not is_instance_valid(target) or _carriers.has(target):
 			continue
 		var at := target.global_position + Vector3.UP * 0.3
 		for patch: RedCreepPatch in _patches.values():

@@ -212,8 +212,11 @@ func _crawl(p: Vector3, n: Vector3, h: Vector3, rope: Dictionary) -> Array:
 ## Life within REACH of a rope (not already reached for, not already
 ## wrapped): a tendril rises off the nearest point toward it.
 func _reach_for(life: Array[Node3D]) -> void:
+	for gone: Variant in _reaching.keys():
+		if not is_instance_valid(gone):
+			_reaching.erase(gone)
 	for target in life:
-		if _reaching.has(target) or director.is_wrapped(target):
+		if not is_instance_valid(target) or _reaching.has(target) or director.is_wrapped(target):
 			continue
 		var to := target.global_position
 		if Vector2(to.x - global_position.x, to.z - global_position.z).length() > RADIUS + REACH + 2.0:
@@ -302,6 +305,8 @@ func _nearest_life(at: Vector3, life: Array[Node3D], reach: float) -> Node3D:
 	var best: Node3D = null
 	var best_d := reach
 	for target in life:
+		if not is_instance_valid(target):
+			continue
 		var d := target.global_position.distance_to(at)
 		if d < best_d:
 			best_d = d
