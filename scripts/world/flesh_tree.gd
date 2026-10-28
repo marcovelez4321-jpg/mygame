@@ -23,7 +23,11 @@ extends Node3D
 ## can see the tree (_net_seen), the host regrows only when nobody can, and
 ## everyone builds the same tree from the same numbers (_net_build).
 
-const MUSCLE_TEXTURE := "res://New assets/Flesh_2.png"
+## Its skins (the user's, 2026-10-28): the tape worm's, the Eldritch pack's
+## M9 and M4, in patches (SKIN_SHADER).
+const SKIN_SHADER := preload("res://shaders/flesh_tree.gdshader")
+const SKINS := ["res://art/props/PSX Creatures/Textures/tape_worm.png", "res://New assets/Eldritch/Textures/M9.png",
+		"res://New assets/Eldritch/Textures/M4.png"]
 const CREATURE_DIR := "res://New assets/Eldritch/Separate_Objects/"
 ## A few of the user's eldritch creatures (the user's: not all of them).
 const CREATURE_KINDS := ["Creature_1.fbx", "Creature_4.fbx", "Creature_6.fbx", "Creature_10.fbx", "Creature_12.fbx"]
@@ -81,6 +85,10 @@ const FED_ROOTS := [
 @export var sides: int = 8
 @export_group("Look")
 @export var muscle_tint: Color = Color(1.0, 1.0, 1.0)
+## Its skins' patches: metres across one, and how softly they blend at their
+## edges (0: sharp, 1: very soft).
+@export var skin_patch_metres: float = 18.0
+@export var skin_blend: float = 0.35
 @export var bone_color: Color = Color(0.86, 0.8, 0.68)
 ## Metres one repeat of the muscle texture covers.
 @export var texture_metres: float = 6.0
@@ -149,7 +157,7 @@ var _creatures: Node3D
 var _notifier: VisibleOnScreenNotifier3D
 var _sound: AudioStreamPlayer
 
-static var _muscle: StandardMaterial3D
+static var _muscle: ShaderMaterial
 static var _bone: StandardMaterial3D
 static var _creature_scenes := {}
 static var _beat: AudioStreamWAV
@@ -715,20 +723,19 @@ static func _quad(tool: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vect
 		tool.add_vertex(pair[0])
 
 
-func _muscle_material() -> StandardMaterial3D:
+## Its skin: three in patches blending into each other (shaders/
+## flesh_tree.gdshader; the user's, 2026-10-28: the bright flesh stood out).
+## Fleshy, not shiny: matte, a dark red rim where it turns away from you.
+func _muscle_material() -> ShaderMaterial:
 	if _muscle == null:
-		_muscle = StandardMaterial3D.new()
-		_muscle.albedo_texture = load(MUSCLE_TEXTURE) as Texture2D if ResourceLoader.exists(MUSCLE_TEXTURE) else null
-		_muscle.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
-		# Fleshy, not shiny (the user's): matte, barely any highlight, and a dark
-		# red rim where it turns away from you, like thick tissue.
-		_muscle.roughness = 1.0
-		_muscle.metallic_specular = 0.08
-		_muscle.rim_enabled = true
-		_muscle.rim = 0.35
-		_muscle.rim_tint = 0.9
-		_muscle.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_muscle.albedo_color = muscle_tint
+		_muscle = ShaderMaterial.new()
+		_muscle.shader = SKIN_SHADER
+		for pair: Array in [[&"worm_skin", SKINS[0]], [&"veined_skin", SKINS[1]], [&"raw_skin", SKINS[2]]]:
+			if ResourceLoader.exists(pair[1]):
+				_muscle.set_shader_parameter(pair[0], load(pair[1]) as Texture2D)
+	_muscle.set_shader_parameter(&"tint", muscle_tint)
+	_muscle.set_shader_parameter(&"patch_metres", skin_patch_metres)
+	_muscle.set_shader_parameter(&"blend", skin_blend)
 	return _muscle
 
 
